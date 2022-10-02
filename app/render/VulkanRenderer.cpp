@@ -112,90 +112,112 @@ bool VulkanRenderer::init()
 
   printf("Initialising instance...");
   bool res = createInstance();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating debug messenger...");
   res &= setupDebugMessenger();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating surface...");
   res &= createSurface();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Picking physical device...");
   res &= pickPhysicalDevice();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating logical device...");
   res &= createLogicalDevice();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating swap chain...");
   res &= createSwapChain();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating swap chain image views...");
   res &= createImageViews();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating descriptor set layout...");
   res &= createDescriptorSetLayout();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating graphics pipeline...");
   res &= createGraphicsPipeline();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating command pool...");
   res &= createCommandPool();
+  if (!res) return false;
   printf("Done!\n");
   
   printf("Creating depth resources...");
   res &= createDepthResources();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Loading model...");
   res &= loadModel();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating texture image...");
   res &= createTextureImage();
+  if (!res) return false;
   printf("Done!\n");
   
   printf("Creating texture image view...");
   res &= createTextureImageView();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating texture sampler...");
   res &= createTextureSampler();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating vertex buffer...");
   res &= createVertexBuffer();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating index buffer...");
   res &= createIndexBuffer();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating uniform buffers...");
   res &= createUniformBuffers();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating descriptor pool...");
   res &= createDescriptorPool();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating descriptor sets...");
   res &= createDescriptorSets();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating command buffer...");
   res &= createCommandBuffers();
+  if (!res) return false;
   printf("Done!\n");
 
   printf("Creating sync objects...");
   res &= createSyncObjects();
+  if (!res) return false;
   printf("Done!\n");
 
   return res;
