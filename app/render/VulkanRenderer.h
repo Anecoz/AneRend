@@ -64,10 +64,8 @@ private:
   bool createSurface();
   bool createSwapChain();
   bool createImageViews();
-  bool createRenderPass();
   bool createDescriptorSetLayout();
   bool createGraphicsPipeline();
-  bool createFramebuffers();
   bool createCommandPool();
   bool createCommandBuffers();
   bool createSyncObjects();
@@ -141,15 +139,12 @@ private:
   VkFormat _swapChainImageFormat;
   VkExtent2D _swapChainExtent;
   std::vector<VkImageView> _swapChainImageViews;
-  std::vector<VkFramebuffer> _swapChainFramebuffers;
 
   VkImage _depthImage;
   VkDeviceMemory _depthImageMemory;
   VkImageView _depthImageView;
 
   bool _framebufferResized = false;
-
-  VkRenderPass _renderPass;
 
   VkDescriptorPool _descriptorPool;
   std::vector<VkDescriptorSet> _descriptorSets;
@@ -182,7 +177,8 @@ private:
   };
 
   const std::vector<const char*> _deviceExtensions = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    "VK_KHR_dynamic_rendering"
   };
 
   const int MAX_FRAMES_IN_FLIGHT = 2;
