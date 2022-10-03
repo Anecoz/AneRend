@@ -8,12 +8,13 @@
 
 #include <array>
 
+namespace render {
+
 struct Vertex
 {
   glm::vec3 pos;
   glm::vec3 color;
   glm::vec3 normal;
-  //glm::vec2 texCoord;
 
   //A vertex binding describes at which rate to load data from memory throughout the vertices.
   // It specifies the number of bytes between data entries and whether to move to the next data entry after each vertex or after each instance.
@@ -50,3 +51,4 @@ struct Vertex
     return attributeDescriptions;
   }
 };
+}

@@ -54,6 +54,10 @@ void Application::run()
     // Logic update
     glfwPollEvents();
 
+    if (KeyInput::isKeyClicked(GLFW_KEY_ESCAPE)) {
+      _running = false;
+    }
+
     // ImGui stuff
     //ImGui_ImplOpenGL3_NewFrame();
     //ImGui_ImplGlfw_NewFrame();
@@ -65,14 +69,12 @@ void Application::run()
     update(delta);
 
     // Render
-    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     render();
 
     // ImGui render
     //ImGui::Render();
     //ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    //glfwSwapBuffers(_window);
     // Render stop
 
     frames++;
@@ -91,10 +93,6 @@ void Application::run()
 
 void Application::initWindowHandle()
 {
-  // This should be a config, along with the hardcoded window size.
-  //glfwWindowHint(GLFW_SAMPLES, 8);
-  //glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
-
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   _window = glfwCreateWindow(1920, 1080, _title.c_str(), NULL, NULL);
 
@@ -104,33 +102,13 @@ void Application::initWindowHandle()
     exit(-2);
   }
 
-  //glfwMakeContextCurrent(_window);
-  //glfwSwapInterval(1); // Vsync or not
-
   // Set input callbacks
-  glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+  //glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+  glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
   glfwSetKeyCallback(_window, KeyInput::invoke);
   //glfwSetCursorPosCallback(_window, MousePosInput::invoke);
   MousePosInput::_window = _window;
   glfwSetMouseButtonCallback(_window, MouseButtonInput::invoke);
-
-  // Check for errors
-  /*GLenum err = glewInit();
-  if (err != GLEW_OK) {
-    std::cerr << "Error: " << glewGetErrorString(err) << std::endl;
-    exit(-3);
-  }
-
-  glClearColor((GLclampf)(5.0/255.0), (GLclampf)(209.0/255.0), (GLclampf)(255.0/255.0), (GLclampf)0.0);
-  glEnable(GL_DEPTH_TEST);
-  std::cout << "Vendor: " << glGetString(GL_VENDOR) << std::endl;
-  std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
-  std::cout << "Supported OpenGL version: " << glGetString(GL_VERSION) << std::endl;
-  GLint maxPatchVertices = 0;
-  glGetIntegerv(GL_MAX_PATCH_VERTICES, &maxPatchVertices);
-  std::cout << "Max supported patch vertices: " << std::to_string(maxPatchVertices) << std::endl;
-  glPatchParameteri(GL_PATCH_VERTICES, 3);
-  glEnable(GL_CULL_FACE);*/
 }
 
 /*void Application::initImgui()

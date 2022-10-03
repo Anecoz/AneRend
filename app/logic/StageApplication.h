@@ -3,6 +3,8 @@
 #include "Application.h"
 
 #include "../render/VulkanRenderer.h"
+#include "../render/Model.h"
+#include "../render/Camera.h"
 
 class StageApplication : public Application
 {
@@ -18,5 +20,12 @@ public:
   void notifyFramebufferResized();
 
 private:
-  VulkanRenderer _vkRenderer;
+  render::VulkanRenderer _vkRenderer;
+
+  render::Camera _camera;
+
+  render::Model _testModel;
+  render::Model _testModel2;
+  render::RenderableId _modelId;
+  render::RenderableId _modelId2;
 };
