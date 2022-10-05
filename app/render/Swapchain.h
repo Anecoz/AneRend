@@ -18,7 +18,7 @@ SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurface
 
 struct Swapchain
 {
-  bool create(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, const QueueFamilyIndices& familyIndices);
+  bool create(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, const QueueFamilyIndices& familyIndices, int width, int height);
   bool createImageViews(VkDevice device);
   bool cleanup(VkDevice device);
 
@@ -31,7 +31,7 @@ struct Swapchain
 private:
   VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
   VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
-  VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+  VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, int widthInitial, int heightInitial);
 };
 
 }

@@ -628,7 +628,9 @@ void VulkanRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDevice
 
 bool VulkanRenderer::createSwapChain()
 {
-  return _swapChain.create(_device, _physicalDevice, _surface, findQueueFamilies(_physicalDevice)) &&
+  int width, height;
+  glfwGetFramebufferSize(_window, &width, &height);
+  return _swapChain.create(_device, _physicalDevice, _surface, findQueueFamilies(_physicalDevice), width, height) &&
          _swapChain.createImageViews(_device);
 }
 
