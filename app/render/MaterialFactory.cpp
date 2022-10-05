@@ -96,8 +96,30 @@ Material MaterialFactory::createStandardMaterial(VkDevice device, VkFormat color
   dynamicState.pDynamicStates = dynamicStates.data();
 
   // Vertex input
-  auto bindingDescription = Vertex::getBindingDescription();
-  auto attributeDescriptions = Vertex::getAttributeDescriptions();
+  //A vertex binding describes at which rate to load data from memory throughout the vertices.
+  // It specifies the number of bytes between data entries and whether to move to the next data entry after each vertex or after each instance.
+  VkVertexInputBindingDescription bindingDescription{};
+  bindingDescription.binding = 0;
+  bindingDescription.stride = sizeof(Vertex);
+  bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+  //An attribute description struct describes how to extract a vertex attribute from a chunk of vertex data 
+  // originating from a binding description. We have two attributes, position and color, so we need two attribute description structs.
+  std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+  attributeDescriptions[0].binding = 0;
+  attributeDescriptions[0].location = 0;
+  attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+  attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+  attributeDescriptions[1].binding = 0;
+  attributeDescriptions[1].location = 1;
+  attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+  attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+  attributeDescriptions[2].binding = 0;
+  attributeDescriptions[2].location = 2;
+  attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+  attributeDescriptions[2].offset = offsetof(Vertex, normal);
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
   vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
