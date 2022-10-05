@@ -24,7 +24,7 @@ Camera::Camera(glm::vec3 initialPosition, ProjectionType type)
     _projection = glm::ortho(-100.0, 100.0, -100.0, 100.0, 1.0, 100.0);
   }
   else {
-    _projection = glm::perspective(glm::radians(75.0f), 16.0f/9.0f, 0.1f, 100.0f);
+    _projection = glm::perspective(glm::radians(75.0f), 16.0f/9.0f, 0.1f, 10000.0f);
   }
 }
 

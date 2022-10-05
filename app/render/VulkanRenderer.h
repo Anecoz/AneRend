@@ -11,10 +11,15 @@
 //#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 
+#include "vk_mem_alloc.h"
+
 #include "Vertex.h"
 #include "MaterialId.h"
 #include "Material.h"
 #include "Camera.h"
+#include "AllocatedBuffer.h"
+#include "AllocatedImage.h"
+#include "Swapchain.h"
 
 #include <array>
 #include <unordered_map>
@@ -59,7 +64,7 @@ public:
 
   // Goes through all registered renderables, updates any resource descriptor sets (like UBOs),
   // updates push constants, renders and queues for presentation.
-  void drawFrame(); // TODO: Take camera as parameter and update proj/view UBO
+  void drawFrame();
 
   // Will recreate swapchain to accomodate the new window size.
   void notifyFramebufferResized();
@@ -72,11 +77,8 @@ private:
 
     MaterialID _materialId;
 
-    VkBuffer _vertexBuffer;
-    VkDeviceMemory _vertexBufferMem;
-
-    VkBuffer _indexBuffer;
-    VkDeviceMemory _indexBufferMem;
+    AllocatedBuffer _vertexBuffer;
+    AllocatedBuffer _indexBuffer;
 
     std::size_t _numIndices;
   };
@@ -96,34 +98,21 @@ private:
   std::unordered_map<MaterialID, std::vector<VkDescriptorSet>> _materialDescriptorSets;
   bool materialIdExists(MaterialID) const;
 
-  struct QueueFamilyIndices {
-    std::optional<std::uint32_t> graphicsFamily;
-    std::optional<std::uint32_t> presentFamily;
-
-    bool isComplete() {
-      return graphicsFamily.has_value() && presentFamily.has_value();
-    }
-  };
-
-  struct SwapChainSupportDetails {
-    VkSurfaceCapabilitiesKHR capabilities;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR> presentModes;
-  };
-
   struct UniformBufferObject {
     glm::mat4 view;
     glm::mat4 proj;
     glm::vec4 cameraPos;
   };
 
+  VmaAllocator _vmaAllocator;
+
   bool createInstance();
   bool setupDebugMessenger();
   bool pickPhysicalDevice();
   bool createLogicalDevice();
+  bool createVmaAllocator();
   bool createSurface();
   bool createSwapChain();
-  bool createImageViews();
   bool loadKnownMaterials();
   bool createCommandPool();
   bool createCommandBuffers();
@@ -139,13 +128,11 @@ private:
   void cleanupSwapChain();
   void recreateSwapChain();
 
-  bool createIndexBuffer(const std::vector<std::uint32_t>& indices, VkBuffer& buffer, VkDeviceMemory& deviceMem);
-  bool createVertexBuffer(const std::vector<Vertex>& vertices, VkBuffer& buffer, VkDeviceMemory& deviceMem);
-  void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+  bool createIndexBuffer(const std::vector<std::uint32_t>& indices, AllocatedBuffer& buffer);
+  bool createVertexBuffer(const std::vector<Vertex>& vertices, AllocatedBuffer& buffer);
+  void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocationCreateFlags properties, AllocatedBuffer& buffer);
   void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
-  void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
-  VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
   void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
   void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
@@ -158,16 +145,9 @@ private:
   bool isDeviceSuitable(VkPhysicalDevice device);
   QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 
-  std::uint32_t findMemoryType(std::uint32_t typeFilter, VkMemoryPropertyFlags properties);
-
   VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
   VkFormat findDepthFormat();
   bool hasStencilComponent(VkFormat format);
-
-  SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
-  VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
-  VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
-  VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
   void updateUniformBuffer(std::uint32_t currentImage, const glm::vec4& cameraPos, const glm::mat4& view, const glm::mat4& projection);
 
@@ -186,22 +166,16 @@ private:
   VkDebugUtilsMessengerEXT _debugMessenger;
 
   VkSurfaceKHR _surface;
-  VkSwapchainKHR _swapChain;
-  std::vector<VkImage> _swapChainImages;
-  VkFormat _swapChainImageFormat;
-  VkExtent2D _swapChainExtent;
-  std::vector<VkImageView> _swapChainImageViews;
+  Swapchain _swapChain;
 
-  VkImage _depthImage;
-  VkDeviceMemory _depthImageMemory;
+  AllocatedImage _depthImage;
   VkImageView _depthImageView;
 
   bool _framebufferResized = false;
 
   VkDescriptorPool _descriptorPool;
 
-  std::vector<VkBuffer> _uniformBuffers;
-  std::vector<VkDeviceMemory> _uniformBuffersMemory;
+  std::vector<AllocatedBuffer> _uniformBuffers;
 
   std::vector<VkCommandBuffer> _commandBuffers;
   VkCommandPool _commandPool;
