@@ -2,7 +2,7 @@
 
 #include "../util/Utils.h"
 
-#include "Vertex.h" // For binding description...
+#include "Vertex.h" // For binding description offsets
 
 #include <vulkan/vulkan.h>
 

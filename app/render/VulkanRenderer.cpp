@@ -207,12 +207,14 @@ RenderableId VulkanRenderer::registerRenderable(
     return 0;
   }
 
-  renderable._id = ++_nextRenderableId;
+  auto id = _nextRenderableId++;
+
+  renderable._id = id;
   renderable._materialId = materialId;
   renderable._numIndices = indices.size();
 
   _currentRenderables.emplace_back(std::move(renderable));
-  return _nextRenderableId;
+  return id;
 }
 
 void VulkanRenderer::unregisterRenderable(RenderableId id)
