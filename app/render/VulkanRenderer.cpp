@@ -1044,6 +1044,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
   }
 
   // The swapchain image has to go from present layout to color attachment optimal
+  // TODO: Helper for transition
   VkImageMemoryBarrier preImageMemBarrier{};
   preImageMemBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
   preImageMemBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -1070,6 +1071,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
   );
 
   // Dynamic rendering
+  // TODO: Helper for starting this "pass". Want to add depth-only pass soon
   std::array<VkClearValue, 2> clearValues{};
   clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
   clearValues[1].depthStencil = {1.0f, 0};
@@ -1101,6 +1103,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
   vkCmdBeginRendering(commandBuffer, &renderInfo);
 
   // Since we used dynamic viewport and scissor setup earlier, we have to specify them now
+  // TODO: This should be part of the "pass" I guess, shadow pass for instance wants w and h to be that of the shadow map
   VkViewport viewport{};
   viewport.x = 0.0f;
   viewport.y = 0.0f;
@@ -1116,6 +1119,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
   // TODO: We've made sure that the vector isn't empty, so this is safe, but should probably be handled some other way
+  // TODO: Break this out to own function? We want to do a shadowpass for instance, need to call all of this again basically.
   // Renderables are sorted in material order, standard first
   for (int i = STANDARD_MATERIAL_ID; i <= STANDARD_INSTANCED_MATERIAL_ID; ++i) {
     auto& material = _materials[i];
@@ -1167,6 +1171,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
   vkCmdEndRendering(commandBuffer);
 
   // Layout transition of the swapchain image has to be done here.
+  // TODO: Helper for image transition
   VkImageMemoryBarrier postImageMemBarrier{};
   postImageMemBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
   postImageMemBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
