@@ -200,7 +200,9 @@ bool VulkanRenderer::init()
 RenderableId VulkanRenderer::registerRenderable(
   const std::vector<Vertex>& vertices,
   const std::vector<std::uint32_t>& indices,
-  MaterialID materialId)
+  MaterialID materialId,
+  std::size_t instanceCount,
+  std::vector<std::uint8_t> instanceData)
 {
   if (!materialIdExists(materialId)) {
     printf("Material id %zu does not exist!\n", materialId);
@@ -209,7 +211,8 @@ RenderableId VulkanRenderer::registerRenderable(
 
   Renderable renderable{};
 
-  if (!createVertexBuffer(vertices, renderable._vertexBuffer)) {
+  std::uint8_t* ptr = (std::uint8_t*)vertices.data();
+  if (!createVertexBuffer(ptr, sizeof(Vertex) * vertices.size(), renderable._vertexBuffer)) {
     printf("Could not create vertex buffer!\n");
     return 0;
   }
@@ -224,8 +227,24 @@ RenderableId VulkanRenderer::registerRenderable(
   renderable._id = id;
   renderable._materialId = materialId;
   renderable._numIndices = indices.size();
+  renderable._numInstances = 0;
+
+  if (instanceCount != 0) {
+    std::uint8_t* instancePtr = instanceData.data();
+    if (!createVertexBuffer(instancePtr, instanceData.size(), renderable._instanceData)) {
+      printf("Could not create instance buffer!\n");
+      return 0;
+    }
+    renderable._numInstances = instanceCount;
+  }
 
   _currentRenderables.emplace_back(std::move(renderable));
+
+  // Sort by material
+  std::sort(_currentRenderables.begin(), _currentRenderables.end(), [](const Renderable& a, const Renderable& b) {
+    return a._materialId < b._materialId;
+  });
+
   return id;
 }
 
@@ -244,10 +263,30 @@ void VulkanRenderer::cleanupRenderable(const Renderable& renderable)
 {
   vmaDestroyBuffer(_vmaAllocator, renderable._vertexBuffer._buffer, renderable._vertexBuffer._allocation);
   vmaDestroyBuffer(_vmaAllocator, renderable._indexBuffer._buffer, renderable._indexBuffer._allocation);
+  if (renderable._numInstances > 0) {
+    vmaDestroyBuffer(_vmaAllocator, renderable._instanceData._buffer, renderable._instanceData._allocation);
+  }
 }
 
 void VulkanRenderer::queuePushConstant(RenderableId id, std::uint32_t size, void* pushConstants)
 {
+  // Sanity check, does the material of this renderable support push constants?
+  // Also, does it even exist?
+  bool found = false;
+  for (auto& renderable: _currentRenderables) {
+    if (renderable._id == id) {
+      found = true;
+      if (!_materials[renderable._materialId]._supportsPushConstants) {
+        printf("Could not queue push constant, because material doesn't support it\n");
+      }
+    }
+  }
+
+  if (!found) {
+    printf("Could not queue push constant, because the renderable doesn't exist\n");
+    return;
+  }
+
   PushConstantQueueEntry entry;
 
   entry._renderableId = id;
@@ -658,6 +697,15 @@ bool VulkanRenderer::loadKnownMaterials()
   }
 
   _materials[STANDARD_MATERIAL_ID] = std::move(standardMaterial);
+
+  // Standard instanced material
+  auto standardInstancedMaterial = MaterialFactory::createStandardInstancedMaterial(_device, _swapChain._swapChainImageFormat, findDepthFormat());
+  if (!standardInstancedMaterial) {
+    printf("Could not create standard instanced material!\n");
+    return false;
+  }
+  _materials[STANDARD_INSTANCED_MATERIAL_ID] = std::move(standardInstancedMaterial);
+
   std::vector<VkDescriptorSet> descriptorSets;
 
   // Have to create a descriptor set (times num frames in flight) for the generic material UBO
@@ -869,17 +917,17 @@ void VulkanRenderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t 
   endSingleTimeCommands(commandBuffer);
 }
 
-bool VulkanRenderer::createVertexBuffer(const std::vector<Vertex>& vertices, AllocatedBuffer& buffer)
+bool VulkanRenderer::createVertexBuffer(std::uint8_t* data, std::size_t dataSize, AllocatedBuffer& buffer)
 {
-  VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+  VkDeviceSize bufferSize = dataSize;
 
   // Create a staging buffer
   AllocatedBuffer stagingBuffer;
   createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
 
-  void* data;
-  vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, &data);
-  memcpy(data, vertices.data(), (size_t) bufferSize);
+  void* mappedData;
+  vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, &mappedData);
+  memcpy(mappedData, data, (size_t) bufferSize);
   vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
 
   // Device local buffer, optimised for GPU
@@ -1067,37 +1115,49 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
   scissor.extent = _swapChain._swapChainExtent;
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-  // TODO: Group renderables by material, right now they all are standard material...
   // TODO: We've made sure that the vector isn't empty, so this is safe, but should probably be handled some other way
-  auto& material = _materials[_currentRenderables[0]._materialId];
+  // Renderables are sorted in material order, standard first
+  for (int i = STANDARD_MATERIAL_ID; i <= STANDARD_INSTANCED_MATERIAL_ID; ++i) {
+    auto& material = _materials[i];
 
-  // Bind pipeline and start actual rendering
-  vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipeline);
+    // Bind pipeline and start actual rendering
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipeline);
 
-  // Bind descriptor sets for UBOs
-  auto& descriptorSets = _materialDescriptorSets[_currentRenderables[0]._materialId];
-  vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayout, 0, 1, &descriptorSets[_currentFrame], 0, nullptr);
+    // Bind descriptor sets for UBOs
+    auto& descriptorSets = _materialDescriptorSets[_currentRenderables[0]._materialId];
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayout, 0, 1, &descriptorSets[_currentFrame], 0, nullptr);
 
-  for (auto& renderable: _currentRenderables) {
-    // NOTE:  Driver developers recommend that you also store multiple buffers, like the vertex and index buffer, 
-    //        into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers. (cache friendlier)
-    VkBuffer vertexBuffers[] = {renderable._vertexBuffer._buffer};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, renderable._indexBuffer._buffer, 0, VK_INDEX_TYPE_UINT32);
+    for (auto& renderable: _currentRenderables) {
+      // Move on to next material
+      if (renderable._materialId != i) continue;
 
-    // Bind specific push constants for this renderable
-    // TODO: This should be pre-sorted somehow
-    for (auto it = _pushQueue.begin(); it != _pushQueue.end(); ++it) {
-      if (it->_renderableId == renderable._id) {
-        vkCmdPushConstants(commandBuffer, material._pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, it->_size, &(it->_pushConstants[0]));
-        _pushQueue.erase(it);
-        break;
+      // NOTE:  Driver developers recommend that you also store multiple buffers, like the vertex and index buffer, 
+      //        into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers. (cache friendlier)
+      VkDeviceSize offsets[] = {0};
+      vkCmdBindVertexBuffers(commandBuffer, 0, 1, &renderable._vertexBuffer._buffer, offsets);
+      if (material._hasInstanceBuffer) {
+        vkCmdBindVertexBuffers(commandBuffer, 1, 1, &renderable._instanceData._buffer, offsets);
+      }
+      vkCmdBindIndexBuffer(commandBuffer, renderable._indexBuffer._buffer, 0, VK_INDEX_TYPE_UINT32);
+
+      // Bind specific push constants for this renderable
+      // TODO: This should be pre-sorted somehow
+      for (auto it = _pushQueue.begin(); it != _pushQueue.end(); ++it) {
+        if (it->_renderableId == renderable._id) {
+          vkCmdPushConstants(commandBuffer, material._pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, it->_size, &(it->_pushConstants[0]));
+          _pushQueue.erase(it);
+          break;
+        }
+      }
+
+      // Draw command
+      if (material._hasInstanceBuffer) {
+        vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), renderable._numInstances, 0, 0, 0);
+      }
+      else {
+        vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), 1, 0, 0, 0);
       }
     }
-
-    // Draw command
-    vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), 1, 0, 0, 0);
   }
 
   // Imgui

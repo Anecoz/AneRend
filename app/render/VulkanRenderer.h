@@ -48,7 +48,9 @@ public:
   RenderableId registerRenderable(
     const std::vector<Vertex>& vertices,
     const std::vector<std::uint32_t>& indices,
-    MaterialID materialId);
+    MaterialID materialId,
+    std::size_t instanceCount = 0,
+    std::vector<std::uint8_t> instanceData = {});
 
   // Completely removes all data related to this id and will stop rendering it.
   void unregisterRenderable(RenderableId id);
@@ -84,7 +86,10 @@ private:
     AllocatedBuffer _vertexBuffer;
     AllocatedBuffer _indexBuffer;
 
+    AllocatedBuffer _instanceData;
+
     std::size_t _numIndices;
+    std::size_t _numInstances;
   };
 
   struct PushConstantQueueEntry
@@ -134,7 +139,7 @@ private:
   void recreateSwapChain();
 
   bool createIndexBuffer(const std::vector<std::uint32_t>& indices, AllocatedBuffer& buffer);
-  bool createVertexBuffer(const std::vector<Vertex>& vertices, AllocatedBuffer& buffer);
+  bool createVertexBuffer(std::uint8_t* data, std::size_t dataSize, AllocatedBuffer& buffer);
   void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocationCreateFlags properties, AllocatedBuffer& buffer);
   void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 

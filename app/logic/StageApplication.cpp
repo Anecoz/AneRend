@@ -43,7 +43,23 @@ bool StageApplication::init()
     return false;
   }
 
-  _modelId = _vkRenderer.registerRenderable(_testModel._vertices, _testModel._indices, render::STANDARD_MATERIAL_ID);
+  // Create a bunch of test matrices
+  {
+    std::size_t numInstances = 100;
+    std::vector<glm::mat4> instanceMatrixData;
+    instanceMatrixData.reserve(numInstances * numInstances);
+    for (std::size_t x = 0; x < numInstances; ++x)
+    for (std::size_t y = 0; y < numInstances; ++y) {
+      auto matrix = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
+      instanceMatrixData.emplace_back(std::move(matrix));
+    }
+
+    std::vector<std::uint8_t> dataVec;
+    dataVec.resize(instanceMatrixData.size() * 4 * 4 * 4);
+    memcpy(dataVec.data(), instanceMatrixData.data(), instanceMatrixData.size() * 4 * 4 * 4);
+    _modelId = _vkRenderer.registerRenderable(_testModel._vertices, _testModel._indices, render::STANDARD_INSTANCED_MATERIAL_ID, numInstances * numInstances, dataVec);
+  }
+
   _modelId2 = _vkRenderer.registerRenderable(_testModel2._vertices, _testModel2._indices, render::STANDARD_MATERIAL_ID);
   printf("Renderable registered! Id1: %lld, id2: %lld\n", _modelId, _modelId2);
 
@@ -63,12 +79,12 @@ void StageApplication::update(double delta)
   _camera.update(delta);
   _vkRenderer.update(_camera, delta);
 
-  {
+  /*{
     static auto currAngle = 0.0f;
     currAngle += 1.0f * (float)delta;
     auto model = glm::rotate(glm::mat4(1.0f), currAngle * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     _vkRenderer.queuePushConstant(_modelId, 4 * 16, &model);
-  }
+  }*/
   {
     static auto currAngle = 0.0f;
     currAngle += 1.0f * (float)delta;
