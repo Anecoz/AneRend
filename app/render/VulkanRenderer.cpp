@@ -6,6 +6,9 @@
 
 #include "../util/Utils.h"
 #include "../LodePng/lodepng.h"
+#include "../imgui/imgui.h"
+#include "../imgui/imgui_impl_glfw.h"
+#include "../imgui/imgui_impl_vulkan.h"
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -68,6 +71,10 @@ VulkanRenderer::~VulkanRenderer()
   }
 
   vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
+  vkDestroyDescriptorPool(_device, _imguiDescriptorPool, nullptr);
+
+  ImGui_ImplVulkan_Shutdown();
+
   for (const auto& material: _materials) {
     vkDestroyDescriptorSetLayout(_device, material.second._descriptorSetLayout, nullptr);
     vkDestroyPipeline(_device, material.second._pipeline, nullptr);
@@ -179,6 +186,11 @@ bool VulkanRenderer::init()
 
   printf("Creating sync objects...");
   res &= createSyncObjects();
+  if (!res) return false;
+  printf("Done!\n");
+
+  printf("Init imgui...");
+  res &= initImgui();
   if (!res) return false;
   printf("Done!\n");
 
@@ -1088,6 +1100,9 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
     vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), 1, 0, 0, 0);
   }
 
+  // Imgui
+  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+
   // End
   vkCmdEndRendering(commandBuffer);
 
@@ -1148,19 +1163,93 @@ bool VulkanRenderer::createSyncObjects()
   return true;
 }
 
-/*
-Wait for the previous frame to finish
-Acquire an image from the swap chain
-Record a command buffer which draws the scene onto that image
-Submit the recorded command buffer
-Present the swap chain image
-*/
+bool VulkanRenderer::initImgui()
+{
+  //1: create descriptor pool for IMGUI
+  // the size of the pool is very oversize, but it's copied from imgui demo itself.
+  VkDescriptorPoolSize pool_sizes[] =
+  {
+    { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+    { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+    { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+    { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+    { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+    { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+    { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+    { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+    { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+  };
+
+  VkDescriptorPoolCreateInfo pool_info = {};
+  pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+  pool_info.maxSets = 1000;
+  pool_info.poolSizeCount = (uint32_t)std::size(pool_sizes);
+  pool_info.pPoolSizes = pool_sizes;
+
+  if (vkCreateDescriptorPool(_device, &pool_info, nullptr, &_imguiDescriptorPool) != VK_SUCCESS) {
+    printf("Could not create imgui descriptor pools!\n");
+    return false;
+  }
+
+  // 2: initialize imgui library
+
+  //this initializes the core structures of imgui
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+  ImGui::StyleColorsDark();
+
+  if (!ImGui_ImplGlfw_InitForVulkan(_window, true)) {
+    printf("Could not init glfw imgui\n");
+    return false;
+  }
+
+  //this initializes imgui for Vulkan
+  ImGui_ImplVulkan_InitInfo init_info = {};
+  init_info.Instance = _instance;
+  init_info.PhysicalDevice = _physicalDevice;
+  init_info.Device = _device;
+  init_info.Queue = _graphicsQ;
+  init_info.DescriptorPool = _imguiDescriptorPool;
+  init_info.MinImageCount = 3;
+  init_info.ImageCount = 3;
+  init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+  init_info.UseDynamicRendering = true;
+  init_info.ColorAttachmentFormat = _swapChain._swapChainImageFormat;
+
+  if (!ImGui_ImplVulkan_Init(&init_info, nullptr)) {
+    printf("Could not init impl vulkan for imgui!\n");
+    return false;
+  }
+
+  auto cmdBuffer = beginSingleTimeCommands();
+  ImGui_ImplVulkan_CreateFontsTexture(cmdBuffer);
+  endSingleTimeCommands(cmdBuffer);
+
+  // Destroy staging buffers (imgui internal)
+  ImGui_ImplVulkan_DestroyFontUploadObjects();
+
+  return true;
+}
+
+void VulkanRenderer::prepare()
+{
+  ImGui_ImplVulkan_NewFrame();
+  ImGui_ImplGlfw_NewFrame();
+
+  ImGui::NewFrame();
+}
 
 void VulkanRenderer::drawFrame()
 {
   if (_currentRenderables.empty()) return;
   // At the start of the frame, we want to wait until the previous frame has finished, so that the command buffer and semaphores are available to use.
   vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
+
+  ImGui::Render();
 
   // Acquire an image from the swap chain
   uint32_t imageIndex;

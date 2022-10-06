@@ -54,10 +54,6 @@ void Application::run()
     // Logic update
     glfwPollEvents();
 
-    if (KeyInput::isKeyClicked(GLFW_KEY_ESCAPE)) {
-      _running = false;
-    }
-
     // ImGui stuff
     //ImGui_ImplOpenGL3_NewFrame();
     //ImGui_ImplGlfw_NewFrame();
@@ -104,7 +100,7 @@ void Application::initWindowHandle()
 
   // Set input callbacks
   //glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
-  glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  //glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
   glfwSetKeyCallback(_window, KeyInput::invoke);
   //glfwSetCursorPosCallback(_window, MousePosInput::invoke);
   MousePosInput::_window = _window;

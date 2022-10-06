@@ -1,5 +1,8 @@
 #include "StageApplication.h"
 
+#include "../input/KeyInput.h"
+#include "../imgui/imgui.h"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -53,6 +56,10 @@ bool StageApplication::init()
 
 void StageApplication::update(double delta)
 {
+  if (KeyInput::isKeyClicked(GLFW_KEY_ESCAPE)) {
+    _camera._enabled = !_camera._enabled;
+  }
+
   _camera.update(delta);
   _vkRenderer.update(_camera, delta);
 
@@ -60,20 +67,22 @@ void StageApplication::update(double delta)
     static auto currAngle = 0.0f;
     currAngle += 1.0f * (float)delta;
     auto model = glm::rotate(glm::mat4(1.0f), currAngle * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    //auto unit = glm::mat4(1.0f);
     _vkRenderer.queuePushConstant(_modelId, 4 * 16, &model);
   }
   {
     static auto currAngle = 0.0f;
     currAngle += 1.0f * (float)delta;
     auto model = glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 0.0f, 0.0f));
-    //model *= glm::rotate(glm::mat4(1.0f), -1.0f* (currAngle * glm::radians(90.0f)), glm::vec3(0.0f, 1.0f, 0.0f));
     _vkRenderer.queuePushConstant(_modelId2, 4 * 16, &model);
   }
 }
 
 void StageApplication::render()
 {
+  _vkRenderer.prepare();
+
+  ImGui::ShowDemoWindow();
+
   _vkRenderer.drawFrame();
 }
 

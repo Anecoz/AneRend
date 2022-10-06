@@ -62,6 +62,10 @@ public:
 
   void update(const Camera& camera, double delta);
 
+  // Prepares some things for drawing (imgui stuff as of now).
+  // Has to be called before drawFrame()!
+  void prepare();
+
   // Goes through all registered renderables, updates any resource descriptor sets (like UBOs),
   // updates push constants, renders and queues for presentation.
   void drawFrame();
@@ -120,6 +124,7 @@ private:
   bool createUniformBuffers();
   bool createDescriptorPool();
   bool createDepthResources();
+  bool initImgui();
 
   bool checkValidationLayerSupport();
   bool checkDeviceExtensionSupport(VkPhysicalDevice device);
@@ -174,6 +179,7 @@ private:
   bool _framebufferResized = false;
 
   VkDescriptorPool _descriptorPool;
+  VkDescriptorPool _imguiDescriptorPool;
 
   std::vector<AllocatedBuffer> _uniformBuffers;
 
