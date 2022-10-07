@@ -46,7 +46,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL g_DebugCallback(
   void* pUserData) {
 
   if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-    printf("validation layer: %s\n", pCallbackData->pMessage);
+    printf("\nvalidation layer: %s\n", pCallbackData->pMessage);
   }
 
   return VK_FALSE;
@@ -67,8 +67,13 @@ VulkanRenderer::~VulkanRenderer()
   vkDeviceWaitIdle(_device);
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    vmaDestroyBuffer(_vmaAllocator, _uniformBuffers[i]._buffer, _uniformBuffers[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _standardUBOs[i]._buffer, _standardUBOs[i]._allocation);
   }
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    vmaDestroyBuffer(_vmaAllocator, _shadowUBOs[i]._buffer, _shadowUBOs[i]._allocation);
+  }
+
+  _shadowpass.cleanup(_vmaAllocator, _device);
 
   vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
   vkDestroyDescriptorPool(_device, _imguiDescriptorPool, nullptr);
@@ -79,6 +84,10 @@ VulkanRenderer::~VulkanRenderer()
     vkDestroyDescriptorSetLayout(_device, material.second._descriptorSetLayout, nullptr);
     vkDestroyPipeline(_device, material.second._pipeline, nullptr);
     vkDestroyPipelineLayout(_device, material.second._pipelineLayout, nullptr);
+
+    vkDestroyDescriptorSetLayout(_device, material.second._descriptorSetLayoutShadow, nullptr);
+    vkDestroyPipeline(_device, material.second._pipelineShadow, nullptr);
+    vkDestroyPipelineLayout(_device, material.second._pipelineLayoutShadow, nullptr);
   }
 
   cleanupSwapChain();
@@ -189,6 +198,11 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
+  printf("Init shadow pass...");
+  res &= initShadowpass();
+  if (!res) return false;
+  printf("Done!\n");
+
   printf("Init imgui...");
   res &= initImgui();
   if (!res) return false;
@@ -227,7 +241,6 @@ RenderableId VulkanRenderer::registerRenderable(
   renderable._id = id;
   renderable._materialId = materialId;
   renderable._numIndices = indices.size();
-  renderable._numInstances = 0;
 
   if (instanceCount != 0) {
     std::uint8_t* instancePtr = instanceData.data();
@@ -272,35 +285,30 @@ void VulkanRenderer::queuePushConstant(RenderableId id, std::uint32_t size, void
 {
   // Sanity check, does the material of this renderable support push constants?
   // Also, does it even exist?
-  bool found = false;
-  for (auto& renderable: _currentRenderables) {
-    if (renderable._id == id) {
-      found = true;
-      if (!_materials[renderable._materialId]._supportsPushConstants) {
+  Renderable* renderable = nullptr;
+  for (auto& r: _currentRenderables) {
+    if (r._id == id) {
+      renderable = &r;
+      if (!_materials[r._materialId]._supportsPushConstants) {
         printf("Could not queue push constant, because material doesn't support it\n");
       }
     }
   }
 
-  if (!found) {
+  if (!renderable) {
     printf("Could not queue push constant, because the renderable doesn't exist\n");
     return;
   }
 
-  PushConstantQueueEntry entry;
-
-  entry._renderableId = id;
-  entry._size = size;
-  memcpy(&entry._pushConstants[0], pushConstants, size);
-
-  _pushQueue.emplace_back(std::move(entry));
+  renderable->_pushConstantsSize = size;
+  memcpy(&renderable->_pushConstants[0], pushConstants, size);
 }
 
 void VulkanRenderer::update(const Camera& camera, double delta)
 {
   // Update UBO
   auto camPos = camera.getPosition();
-  updateUniformBuffer(_currentFrame, glm::vec4(camPos.x, camPos.y, camPos.z, 0.0f), camera.getCamMatrix(), camera.getProjection());
+  updateStandardUBO(_currentFrame, glm::vec4(camPos.x, camPos.y, camPos.z, 0.0f), camera.getCamMatrix(), camera.getProjection());
 }
 
 bool VulkanRenderer::materialIdExists(MaterialID id) const
@@ -529,11 +537,6 @@ VkFormat VulkanRenderer::findDepthFormat()
   );
 }
 
-bool VulkanRenderer::hasStencilComponent(VkFormat format)
-{
-  return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
-}
-
 VkFormat VulkanRenderer::findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
 {
   for (VkFormat format : candidates) {
@@ -706,41 +709,79 @@ bool VulkanRenderer::loadKnownMaterials()
   }
   _materials[STANDARD_INSTANCED_MATERIAL_ID] = std::move(standardInstancedMaterial);
 
-  std::vector<VkDescriptorSet> descriptorSets;
-
   // Have to create a descriptor set (times num frames in flight) for the generic material UBO
-  std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, _materials[STANDARD_MATERIAL_ID]._descriptorSetLayout);
-  VkDescriptorSetAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  allocInfo.descriptorPool = _descriptorPool;
-  allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-  allocInfo.pSetLayouts = layouts.data();
+  {
+    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, _materials[STANDARD_MATERIAL_ID]._descriptorSetLayout);
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = _descriptorPool;
+    allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    allocInfo.pSetLayouts = layouts.data();
 
-  descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-  if (vkAllocateDescriptorSets(_device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
-    printf("failed to allocate descriptor sets!\n");
-    return false;
+    std::vector<VkDescriptorSet> descriptorSets;
+    descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+    if (vkAllocateDescriptorSets(_device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+      printf("failed to allocate descriptor sets!\n");
+      return false;
+    }
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      VkDescriptorBufferInfo bufferInfo{};
+      bufferInfo.buffer = _standardUBOs[i]._buffer;
+      bufferInfo.offset = 0;
+      bufferInfo.range = sizeof(StandardUBO);
+
+      std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
+
+      descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      descriptorWrites[0].dstSet = descriptorSets[i];
+      descriptorWrites[0].dstBinding = 0;
+      descriptorWrites[0].dstArrayElement = 0;
+      descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      descriptorWrites[0].descriptorCount = 1;
+      descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+      vkUpdateDescriptorSets(_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+    }
+    _materialDescriptorSets[STANDARD_MATERIAL_ID] = std::move(descriptorSets);
   }
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    VkDescriptorBufferInfo bufferInfo{};
-    bufferInfo.buffer = _uniformBuffers[i]._buffer;
-    bufferInfo.offset = 0;
-    bufferInfo.range = sizeof(UniformBufferObject);
+  // Shadow
+  {
+    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, _materials[STANDARD_MATERIAL_ID]._descriptorSetLayoutShadow);
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = _descriptorPool;
+    allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    allocInfo.pSetLayouts = layouts.data();
 
-    std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
+    std::vector<VkDescriptorSet> descriptorSets;
+    descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+    if (vkAllocateDescriptorSets(_device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+      printf("failed to allocate shadow descriptor sets!\n");
+      return false;
+    }
 
-    descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[0].dstSet = descriptorSets[i];
-    descriptorWrites[0].dstBinding = 0;
-    descriptorWrites[0].dstArrayElement = 0;
-    descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    descriptorWrites[0].descriptorCount = 1;
-    descriptorWrites[0].pBufferInfo = &bufferInfo;
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      VkDescriptorBufferInfo bufferInfo{};
+      bufferInfo.buffer = _shadowUBOs[i]._buffer;
+      bufferInfo.offset = 0;
+      bufferInfo.range = sizeof(ShadowUBO);
 
-    vkUpdateDescriptorSets(_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+      std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
+
+      descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      descriptorWrites[0].dstSet = descriptorSets[i];
+      descriptorWrites[0].dstBinding = 0;
+      descriptorWrites[0].dstArrayElement = 0;
+      descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      descriptorWrites[0].descriptorCount = 1;
+      descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+      vkUpdateDescriptorSets(_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+    }
+    _materialDescriptorSetsShadow[STANDARD_MATERIAL_ID] = std::move(descriptorSets);
   }
-  _materialDescriptorSets[STANDARD_MATERIAL_ID] = std::move(descriptorSets);
 
   return true;
 }
@@ -766,11 +807,13 @@ bool VulkanRenderer::createDepthResources()
 {
   VkFormat depthFormat = findDepthFormat();
 
-  createImage(_swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL,
+  imageutil::createImage(_swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL,
     _vmaAllocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _depthImage);
-  _depthImageView = createImageView(_device, _depthImage._image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+  _depthImageView = imageutil::createImageView(_device, _depthImage._image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-  transitionImageLayout(_depthImage._image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+  auto cmdBuffer = beginSingleTimeCommands();
+  imageutil::transitionImageLayout(cmdBuffer, _depthImage._image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+  endSingleTimeCommands(cmdBuffer);
 
   return true;
 }
@@ -808,80 +851,6 @@ void VulkanRenderer::endSingleTimeCommands(VkCommandBuffer commandBuffer)
   vkQueueWaitIdle(_graphicsQ);
 
   vkFreeCommandBuffers(_device, _commandPool, 1, &commandBuffer);
-}
-
-void VulkanRenderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
-{
-  VkCommandBuffer commandBuffer = beginSingleTimeCommands();
-
-  VkImageMemoryBarrier barrier{};
-  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  barrier.oldLayout = oldLayout;
-  barrier.newLayout = newLayout;
-  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.image = image;
-  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  barrier.subresourceRange.baseMipLevel = 0;
-  barrier.subresourceRange.levelCount = 1;
-  barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount = 1;
-
-  VkPipelineStageFlags sourceStage;
-  VkPipelineStageFlags destinationStage;
-
-  if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-    barrier.srcAccessMask = 0;
-    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-    sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-  }
-  else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-    sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-  }
-  else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-    barrier.srcAccessMask = 0;
-    barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-    sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-  }
-  else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
-    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    barrier.dstAccessMask = 0;
-    sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-  }
-  else {
-    printf("unsupported layout transition!\n");
-  }
-
-  if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-    if (hasStencilComponent(format)) {
-      barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-    }
-  }
-  else {
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  }
-
-  vkCmdPipelineBarrier(
-    commandBuffer,
-    sourceStage, destinationStage,
-    0,
-    0, nullptr,
-    0, nullptr,
-    1, &barrier
-  );
-
-  endSingleTimeCommands(commandBuffer);
 }
 
 void VulkanRenderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
@@ -963,12 +932,25 @@ bool VulkanRenderer::createIndexBuffer(const std::vector<std::uint32_t>& indices
 
 bool VulkanRenderer::createUniformBuffers()
 {
-  VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+  // Standard UBOs
+  {
+    VkDeviceSize bufferSize = sizeof(StandardUBO);
 
-  _uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    _standardUBOs.resize(MAX_FRAMES_IN_FLIGHT);
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, _uniformBuffers[i]);
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, _standardUBOs[i]);
+    }
+  }
+
+  // Shadow UBOs
+  {
+    VkDeviceSize bufferSize = sizeof(ShadowUBO);
+    _shadowUBOs.resize(MAX_FRAMES_IN_FLIGHT);
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, _shadowUBOs[i]);
+    }
   }
 
   return true;
@@ -986,7 +968,7 @@ bool VulkanRenderer::createDescriptorPool()
   poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
   poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
   poolInfo.pPoolSizes = poolSizes.data();
-  poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+  poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
 
   if (vkCreateDescriptorPool(_device, &poolInfo, nullptr, &_descriptorPool) != VK_SUCCESS) {
     printf("failed to create descriptor pool!\n");
@@ -1013,9 +995,9 @@ bool VulkanRenderer::createCommandBuffers()
   return true;
 }
 
-void VulkanRenderer::updateUniformBuffer(std::uint32_t currentImage, const glm::vec4& cameraPos, const glm::mat4& view, const glm::mat4& projection)
+void VulkanRenderer::updateStandardUBO(std::uint32_t currentImage, const glm::vec4& cameraPos, const glm::mat4& view, const glm::mat4& projection)
 {
-  UniformBufferObject ubo{};
+  StandardUBO ubo{};
   ubo.view = view;
   ubo.proj = projection;
   ubo.cameraPos = cameraPos;
@@ -1026,9 +1008,58 @@ void VulkanRenderer::updateUniformBuffer(std::uint32_t currentImage, const glm::
   ubo.proj[1][1] *= -1;
 
   void* data;
-  vmaMapMemory(_vmaAllocator, _uniformBuffers[currentImage]._allocation, &data);
+  vmaMapMemory(_vmaAllocator, _standardUBOs[currentImage]._allocation, &data);
   memcpy(data, &ubo, sizeof(ubo));
-  vmaUnmapMemory(_vmaAllocator, _uniformBuffers[currentImage]._allocation);
+  vmaUnmapMemory(_vmaAllocator, _standardUBOs[currentImage]._allocation);
+}
+
+void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer)
+{
+  // Transition shadow map image to normal depth attachment
+
+  _shadowpass.beginRendering(commandBuffer);
+
+  _shadowpass.viewport(commandBuffer);
+  _shadowpass.scissor(commandBuffer);
+
+   for (int i = STANDARD_MATERIAL_ID; i <= STANDARD_INSTANCED_MATERIAL_ID; ++i) {
+    auto& material = _materials[i];
+    if (!material._supportsShadowPass) continue;
+
+    // Bind pipeline and start actual rendering
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineShadow);
+
+    // Bind descriptor sets for UBOs
+    // TODO: Always standard?
+    auto& descriptorSets = _materialDescriptorSetsShadow[STANDARD_MATERIAL_ID];
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayoutShadow, 0, 1, &descriptorSets[_currentFrame], 0, nullptr);
+
+    for (auto& renderable: _currentRenderables) {
+      // Move on to next material
+      if (renderable._materialId != i) continue;
+
+      // NOTE:  Driver developers recommend that you also store multiple buffers, like the vertex and index buffer, 
+      //        into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers. (cache friendlier)
+      VkDeviceSize offsets[] = {0};
+      vkCmdBindVertexBuffers(commandBuffer, 0, 1, &renderable._vertexBuffer._buffer, offsets);
+      if (material._hasInstanceBuffer) {
+        vkCmdBindVertexBuffers(commandBuffer, 1, 1, &renderable._instanceData._buffer, offsets);
+      }
+      vkCmdBindIndexBuffer(commandBuffer, renderable._indexBuffer._buffer, 0, VK_INDEX_TYPE_UINT32);
+
+      // Bind specific push constants for this renderable
+      if (renderable._pushConstantsSize > 0) {
+        vkCmdPushConstants(commandBuffer, material._pipelineLayoutShadow, VK_SHADER_STAGE_VERTEX_BIT, 0, renderable._pushConstantsSize, &renderable._pushConstants[0]);
+      }
+
+      // Draw command
+      vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), static_cast<std::uint32_t>(renderable._numInstances), 0, 0, 0);
+    }
+  }
+
+  vkCmdEndRendering(commandBuffer);
+
+  // Transition shadow map image to shader readable
 }
 
 void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex)
@@ -1043,32 +1074,12 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
     return;
   }
 
-  // The swapchain image has to go from present layout to color attachment optimal
-  // TODO: Helper for transition
-  VkImageMemoryBarrier preImageMemBarrier{};
-  preImageMemBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  preImageMemBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  preImageMemBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  preImageMemBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  preImageMemBarrier.image = _swapChain._swapChainImages[imageIndex];
-  preImageMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  preImageMemBarrier.subresourceRange.baseMipLevel = 0;
-  preImageMemBarrier.subresourceRange.levelCount = 1;
-  preImageMemBarrier.subresourceRange.baseArrayLayer = 0;
-  preImageMemBarrier.subresourceRange.layerCount = 1;
+  // Shadow pass
+  recordCommandBufferShadow(commandBuffer);
 
-  vkCmdPipelineBarrier(
-    commandBuffer,
-    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,  // srcStageMask
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // dstStageMask
-    0,
-    0,
-    nullptr,
-    0,
-    nullptr,
-    1, // imageMemoryBarrierCount
-    &preImageMemBarrier // pImageMemoryBarriers
-  );
+  // The swapchain image has to go from present layout to color attachment optimal
+  imageutil::transitionImageLayout(commandBuffer,  _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
+                        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
   // Dynamic rendering
   // TODO: Helper for starting this "pass". Want to add depth-only pass soon
@@ -1102,8 +1113,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
 
   vkCmdBeginRendering(commandBuffer, &renderInfo);
 
-  // Since we used dynamic viewport and scissor setup earlier, we have to specify them now
-  // TODO: This should be part of the "pass" I guess, shadow pass for instance wants w and h to be that of the shadow map
+  // See comment below
   VkViewport viewport{};
   viewport.x = 0.0f;
   viewport.y = 0.0f;
@@ -1111,12 +1121,10 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
   viewport.height = static_cast<float>(_swapChain._swapChainExtent.height);
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
-  vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
   VkRect2D scissor{};
   scissor.offset = {0, 0};
   scissor.extent = _swapChain._swapChainExtent;
-  vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
   // TODO: We've made sure that the vector isn't empty, so this is safe, but should probably be handled some other way
   // TODO: Break this out to own function? We want to do a shadowpass for instance, need to call all of this again basically.
@@ -1127,8 +1135,16 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
     // Bind pipeline and start actual rendering
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipeline);
 
+    // Since we used dynamic viewport and scissor setup earlier, we have to specify them now
+    // TODO: This should be part of the "pass" I guess, shadow pass for instance wants w and h to be that of the shadow map
+    // TODO: We have to call this _AFTER_ binding the pipeline above, else we get validation errors due to the previously bound
+    //       pipeline being that of the shadow pass.
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
     // Bind descriptor sets for UBOs
-    auto& descriptorSets = _materialDescriptorSets[_currentRenderables[0]._materialId];
+    // TODO: Always standard?
+    auto& descriptorSets = _materialDescriptorSets[STANDARD_MATERIAL_ID];
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayout, 0, 1, &descriptorSets[_currentFrame], 0, nullptr);
 
     for (auto& renderable: _currentRenderables) {
@@ -1145,22 +1161,12 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
       vkCmdBindIndexBuffer(commandBuffer, renderable._indexBuffer._buffer, 0, VK_INDEX_TYPE_UINT32);
 
       // Bind specific push constants for this renderable
-      // TODO: This should be pre-sorted somehow
-      for (auto it = _pushQueue.begin(); it != _pushQueue.end(); ++it) {
-        if (it->_renderableId == renderable._id) {
-          vkCmdPushConstants(commandBuffer, material._pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, it->_size, &(it->_pushConstants[0]));
-          _pushQueue.erase(it);
-          break;
-        }
+      if (renderable._pushConstantsSize > 0) {
+        vkCmdPushConstants(commandBuffer, material._pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, renderable._pushConstantsSize, &renderable._pushConstants[0]);
       }
 
       // Draw command
-      if (material._hasInstanceBuffer) {
-        vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), renderable._numInstances, 0, 0, 0);
-      }
-      else {
-        vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), 1, 0, 0, 0);
-      }
+      vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), static_cast<std::uint32_t>(renderable._numInstances), 0, 0, 0);
     }
   }
 
@@ -1171,31 +1177,8 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
   vkCmdEndRendering(commandBuffer);
 
   // Layout transition of the swapchain image has to be done here.
-  // TODO: Helper for image transition
-  VkImageMemoryBarrier postImageMemBarrier{};
-  postImageMemBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  postImageMemBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  postImageMemBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  postImageMemBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-  postImageMemBarrier.image = _swapChain._swapChainImages[imageIndex];
-  postImageMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  postImageMemBarrier.subresourceRange.baseMipLevel = 0;
-  postImageMemBarrier.subresourceRange.levelCount = 1;
-  postImageMemBarrier.subresourceRange.baseArrayLayer = 0;
-  postImageMemBarrier.subresourceRange.layerCount = 1;
-
-  vkCmdPipelineBarrier(
-    commandBuffer,
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  // srcStageMask
-    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // dstStageMask
-    0,
-    0,
-    nullptr,
-    0,
-    nullptr,
-    1, // imageMemoryBarrierCount
-    &postImageMemBarrier // pImageMemoryBarriers
-  );
+  imageutil::transitionImageLayout(commandBuffer, _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
   if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
     printf("failed to record command buffer!\n");
@@ -1224,6 +1207,14 @@ bool VulkanRenderer::createSyncObjects()
     }
   }
 
+  return true;
+}
+
+bool VulkanRenderer::initShadowpass()
+{
+  auto cmdBuffer = beginSingleTimeCommands();
+  _shadowpass.createShadowResources(_device, _vmaAllocator, cmdBuffer, findDepthFormat(), 2048, 2048);
+  endSingleTimeCommands(cmdBuffer);
 
   return true;
 }

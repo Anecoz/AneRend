@@ -20,6 +20,7 @@
 #include "AllocatedBuffer.h"
 #include "AllocatedImage.h"
 #include "Swapchain.h"
+#include "Shadowpass.h"
 
 #include <array>
 #include <unordered_map>
@@ -89,29 +90,32 @@ private:
     AllocatedBuffer _instanceData;
 
     std::size_t _numIndices;
-    std::size_t _numInstances;
-  };
+    std::size_t _numInstances = 1;
 
-  struct PushConstantQueueEntry
-  {
-    RenderableId _renderableId;
-    std::uint32_t _size;
     std::array<std::uint8_t, 128> _pushConstants;
+    std::uint32_t _pushConstantsSize = 0;
   };
 
-  std::vector<PushConstantQueueEntry> _pushQueue;
   std::vector<Renderable> _currentRenderables;
   void cleanupRenderable(const Renderable& renderable);
 
   std::unordered_map<MaterialID, Material> _materials;
   std::unordered_map<MaterialID, std::vector<VkDescriptorSet>> _materialDescriptorSets;
+  std::unordered_map<MaterialID, std::vector<VkDescriptorSet>> _materialDescriptorSetsShadow;
   bool materialIdExists(MaterialID) const;
 
-  struct UniformBufferObject {
+  struct StandardUBO {
     glm::mat4 view;
     glm::mat4 proj;
     glm::vec4 cameraPos;
   };
+
+  struct ShadowUBO {
+    glm::mat4 view;
+    glm::mat4 proj;
+  };
+
+  Shadowpass _shadowpass;
 
   VmaAllocator _vmaAllocator;
 
@@ -129,6 +133,7 @@ private:
   bool createUniformBuffers();
   bool createDescriptorPool();
   bool createDepthResources();
+  bool initShadowpass();
   bool initImgui();
 
   bool checkValidationLayerSupport();
@@ -145,8 +150,6 @@ private:
 
   void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
-  void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
-
   VkCommandBuffer beginSingleTimeCommands();
   void endSingleTimeCommands(VkCommandBuffer buffer);
 
@@ -157,11 +160,12 @@ private:
 
   VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
   VkFormat findDepthFormat();
-  bool hasStencilComponent(VkFormat format);
 
-  void updateUniformBuffer(std::uint32_t currentImage, const glm::vec4& cameraPos, const glm::mat4& view, const glm::mat4& projection);
+  void updateStandardUBO(std::uint32_t currentImage, const glm::vec4& cameraPos, const glm::mat4& view, const glm::mat4& projection);
+  void updateShadowUBO(std::uint32_t currentImage, const glm::mat4& view, const glm::mat4& projection);
 
   void recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex);
+  void recordCommandBufferShadow(VkCommandBuffer commandBuffer);
 
   GLFWwindow* _window;
   bool _enableValidationLayers;
@@ -186,7 +190,8 @@ private:
   VkDescriptorPool _descriptorPool;
   VkDescriptorPool _imguiDescriptorPool;
 
-  std::vector<AllocatedBuffer> _uniformBuffers;
+  std::vector<AllocatedBuffer> _standardUBOs;
+  std::vector<AllocatedBuffer> _shadowUBOs;
 
   std::vector<VkCommandBuffer> _commandBuffers;
   VkCommandPool _commandPool;

@@ -77,8 +77,7 @@ VkExtent2D Swapchain::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilit
 
 bool Swapchain::create(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, const QueueFamilyIndices& familyIndices, int width, int height)
 {
-SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice, surface);
-
+  SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice, surface);
   VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
   VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
   VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities, width, height);
@@ -136,7 +135,7 @@ bool Swapchain::createImageViews(VkDevice device)
   _swapChainImageViews.resize(_swapChainImages.size());
 
   for (uint32_t i = 0; i < _swapChainImages.size(); i++) {
-    _swapChainImageViews[i] = createImageView(device, _swapChainImages[i], _swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+    _swapChainImageViews[i] = imageutil::createImageView(device, _swapChainImages[i], _swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
   }
 
   return true;

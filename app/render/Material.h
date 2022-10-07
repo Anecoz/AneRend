@@ -15,8 +15,13 @@ struct Material
   VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
   VkDescriptorSetLayout _descriptorSetLayout = VK_NULL_HANDLE;
 
+  VkPipeline _pipelineShadow = VK_NULL_HANDLE;
+  VkPipelineLayout _pipelineLayoutShadow = VK_NULL_HANDLE;
+  VkDescriptorSetLayout _descriptorSetLayoutShadow = VK_NULL_HANDLE;
+
   bool _hasInstanceBuffer = false;
   bool _supportsPushConstants = false;
+  bool _supportsShadowPass = false;
 
   explicit inline operator bool() const {
     return

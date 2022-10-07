@@ -50,7 +50,11 @@ bool StageApplication::init()
     instanceMatrixData.reserve(numInstances * numInstances);
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
-      auto matrix = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
+      auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
+      auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
+
+      auto matrix = trans * rot;
+
       instanceMatrixData.emplace_back(std::move(matrix));
     }
 
@@ -87,9 +91,13 @@ void StageApplication::update(double delta)
   }*/
   {
     static auto currAngle = 0.0f;
-    currAngle += 1.0f * (float)delta;
-    auto model = glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 0.0f, 0.0f));
-    _vkRenderer.queuePushConstant(_modelId2, 4 * 16, &model);
+    static bool once = false;
+    if (!once) {
+      currAngle += 1.0f * (float)delta;
+      auto model = glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 0.0f, 0.0f));
+      _vkRenderer.queuePushConstant(_modelId2, 4 * 16, &model);
+      once = true;
+    }
   }
 }
 
