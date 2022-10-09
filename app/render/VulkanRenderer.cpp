@@ -1235,11 +1235,6 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
 
   if (debug) {
     // Shadow map overlay
-    //Camera dummy(glm::vec3(0.0f), ProjectionType::Perspective);
-    //dummy.setViewMatrix(glm::mat4(1.0f));
-    //dummy.setProjection(glm::mat4(1.0f));
-    //updateStandardUBO(_currentFrame, dummy, dummy);
-
     Renderable* rend = nullptr;
     for (auto& renderable : _currentRenderables) {
       if (renderable._id == _shadowpass._debugModelId) {

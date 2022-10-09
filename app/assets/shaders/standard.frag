@@ -16,23 +16,31 @@ layout(location = 3) in vec4 fragShadowPos;
 
 layout(location = 0) out vec4 outColor;
 
-int inShadow() {
+float inShadow() {
   vec3 projCoords = fragShadowPos.xyz / fragShadowPos.w;
 
   if (projCoords.x > 1.0 || projCoords.x < -1.0 ||
       projCoords.z > 1.0 || projCoords.z < -1.0 ||
       projCoords.y > 1.0 || projCoords.y < -1.0) {
-    return 0;
+    return 0.0;
   }
 
   vec2 shadowMapCoord = projCoords.xy * 0.5 + 0.5;
 
   float depth = projCoords.z;
-  float sampledDepth = texture(shadowMap, shadowMapCoord.xy).r;
-  if (depth > sampledDepth) {
-    return 1;
+  //float sampledDepth = texture(shadowMap, shadowMapCoord.xy).r;
+  int stepsPerAxis = 8;
+  float total = 0.0;
+  for (int x = 0; x < stepsPerAxis; ++x) {
+    for (int y = 0; y < stepsPerAxis; ++y) {
+      float sampledDepth = texture(shadowMap, vec2(shadowMapCoord + vec2(0.0005 * x, 0.0005 * y))).r;
+      if (depth > sampledDepth) {
+        total += 1.0;
+      }
+    }
   }
-  return 0;
+
+  return total / float(stepsPerAxis * stepsPerAxis);
 }
 
 void main() {
@@ -45,23 +53,23 @@ void main() {
   vec3 normal = normalize(fragNormal);
   vec3 lightDirNorm = normalize(lightDir);
 
-  int shadow = inShadow();
+  float shadow = inShadow();
 
   // Ambient
   float ambientStrength = 0.1;
   vec3 ambient = ambientStrength * ambientColor;
 
-  if (shadow == 1) {
-    ambient *= 0.5;
-  }
+  /*if (shadow > 0.0) {
+    ambient *= clamp(0.5 * (1.0 - shadow), 0.5, 1.0);
+  }*/
 
   // Diffuse
   float diff = max(dot(normal, lightDirNorm), 0.2);
   vec3 diffuse = diff * diffuseColor;
 
-  if (shadow == 1) {
-    diffuse *= 0.2;
-  }
+  /*if (shadow > 0.0) {
+    diffuse *= clamp(0.2 * (1.0 - shadow), 0.2, 1.0);
+  }*/
 
   // Specular
   vec3 viewDir = normalize(vec3(ubo.cameraPos) - fragPosition);
@@ -69,7 +77,7 @@ void main() {
   float spec = pow(max(dot(viewDir, reflectDir), 0.0), 324);
   vec3 specular = 0.1 * spec * specColor;
 
-  vec3 result = (ambient + diffuse + specular);
+  vec3 result = (ambient + diffuse + specular) * clamp(1.0 - shadow, 0.3, 1.0);
 
   outColor = vec4(result, 1.0);
 }
