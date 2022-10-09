@@ -20,9 +20,12 @@ public:
   void notifyFramebufferResized();
 
 private:
+  
+
   render::VulkanRenderer _vkRenderer;
 
   render::Camera _camera;
+  render::Camera _shadowCamera;
 
   render::Model _testModel;
   render::Model _testModel2;

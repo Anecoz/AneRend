@@ -183,11 +183,6 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
-  printf("Loading known materials...");
-  res &= loadKnownMaterials();
-  if (!res) return false;
-  printf("Done!\n");
-
   printf("Creating command buffer...");
   res &= createCommandBuffers();
   if (!res) return false;
@@ -200,6 +195,16 @@ bool VulkanRenderer::init()
 
   printf("Init shadow pass...");
   res &= initShadowpass();
+  if (!res) return false;
+  printf("Done!\n");
+
+  printf("Loading known materials...");
+  res &= loadKnownMaterials();
+  if (!res) return false;
+  printf("Done!\n");
+
+  printf("Init shadow debug...");
+  res &= initShadowDebug();
   if (!res) return false;
   printf("Done!\n");
 
@@ -231,9 +236,11 @@ RenderableId VulkanRenderer::registerRenderable(
     return 0;
   }
 
-  if (!createIndexBuffer(indices, renderable._indexBuffer)) {
-    printf("Could not create index buffer!\n");
-    return 0;
+  if (!indices.empty()) {
+    if (!createIndexBuffer(indices, renderable._indexBuffer)) {
+      printf("Could not create index buffer!\n");
+      return 0;
+    }
   }
 
   auto id = _nextRenderableId++;
@@ -241,6 +248,7 @@ RenderableId VulkanRenderer::registerRenderable(
   renderable._id = id;
   renderable._materialId = materialId;
   renderable._numIndices = indices.size();
+  renderable._numVertices = vertices.size();
 
   if (instanceCount != 0) {
     std::uint8_t* instancePtr = instanceData.data();
@@ -268,6 +276,16 @@ void VulkanRenderer::unregisterRenderable(RenderableId id)
       cleanupRenderable(*it);
       _currentRenderables.erase(it);
       break;
+    }
+  }
+}
+
+void VulkanRenderer::setRenderableVisible(RenderableId id, bool visible)
+{
+  for (auto& rend : _currentRenderables) {
+    if (rend._id == id) {
+      rend._visible = visible;
+      return;
     }
   }
 }
@@ -304,11 +322,11 @@ void VulkanRenderer::queuePushConstant(RenderableId id, std::uint32_t size, void
   memcpy(&renderable->_pushConstants[0], pushConstants, size);
 }
 
-void VulkanRenderer::update(const Camera& camera, double delta)
+void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, double delta)
 {
   // Update UBO
-  auto camPos = camera.getPosition();
-  updateStandardUBO(_currentFrame, glm::vec4(camPos.x, camPos.y, camPos.z, 0.0f), camera.getCamMatrix(), camera.getProjection());
+  updateStandardUBO(_currentFrame, camera, shadowCamera);
+  updateShadowUBO(_currentFrame, shadowCamera);
 }
 
 bool VulkanRenderer::materialIdExists(MaterialID id) const
@@ -709,6 +727,14 @@ bool VulkanRenderer::loadKnownMaterials()
   }
   _materials[STANDARD_INSTANCED_MATERIAL_ID] = std::move(standardInstancedMaterial);
 
+  // Shadow debug
+  auto shadowDebugMat = MaterialFactory::createShadowDebugMaterial(_device, _swapChain._swapChainImageFormat, findDepthFormat());
+  if (!shadowDebugMat) {
+    printf("Could not create shadow debug material!\n");
+    return false;
+  }
+  _materials[SHADOW_DEBUG_MATERIAL_ID] = std::move(shadowDebugMat);
+
   // Have to create a descriptor set (times num frames in flight) for the generic material UBO
   {
     std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, _materials[STANDARD_MATERIAL_ID]._descriptorSetLayout);
@@ -731,7 +757,12 @@ bool VulkanRenderer::loadKnownMaterials()
       bufferInfo.offset = 0;
       bufferInfo.range = sizeof(StandardUBO);
 
-      std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
+      VkDescriptorImageInfo imageInfo{};
+      imageInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+      imageInfo.imageView = _shadowpass._shadowImageView;
+      imageInfo.sampler = _shadowpass._shadowSampler;
+
+      std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 
       descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       descriptorWrites[0].dstSet = descriptorSets[i];
@@ -740,6 +771,14 @@ bool VulkanRenderer::loadKnownMaterials()
       descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
       descriptorWrites[0].descriptorCount = 1;
       descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+      descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      descriptorWrites[1].dstSet = descriptorSets[i];
+      descriptorWrites[1].dstBinding = 1;
+      descriptorWrites[1].dstArrayElement = 0;
+      descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      descriptorWrites[1].descriptorCount = 1;
+      descriptorWrites[1].pImageInfo = &imageInfo;
 
       vkUpdateDescriptorSets(_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
     }
@@ -958,11 +997,11 @@ bool VulkanRenderer::createUniformBuffers()
 
 bool VulkanRenderer::createDescriptorPool()
 {
-  std::array<VkDescriptorPoolSize, 1> poolSizes{};
+  std::array<VkDescriptorPoolSize, 2> poolSizes{};
   poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
   poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-  //poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-  //poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+  poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
   VkDescriptorPoolCreateInfo poolInfo{};
   poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -995,17 +1034,21 @@ bool VulkanRenderer::createCommandBuffers()
   return true;
 }
 
-void VulkanRenderer::updateStandardUBO(std::uint32_t currentImage, const glm::vec4& cameraPos, const glm::mat4& view, const glm::mat4& projection)
+void VulkanRenderer::updateStandardUBO(std::uint32_t currentImage, const Camera& camera, const Camera& shadowCamera)
 {
   StandardUBO ubo{};
-  ubo.view = view;
-  ubo.proj = projection;
-  ubo.cameraPos = cameraPos;
+  ubo.view = camera.getCamMatrix();
+  ubo.proj = camera.getProjection();
+  ubo.cameraPos = glm::vec4(camera.getPosition(), 1.0);
+
+  auto shadowProj = shadowCamera.getProjection();
 
   // GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted.
   // The easiest way to compensate for that is to flip the sign on the scaling factor of the Y axis in the projection matrix. 
   // If you don't do this, then the image will be rendered upside down.
   ubo.proj[1][1] *= -1;
+  shadowProj[1][1] *= -1;
+  ubo.shadowMatrix = shadowProj * shadowCamera.getCamMatrix();
 
   void* data;
   vmaMapMemory(_vmaAllocator, _standardUBOs[currentImage]._allocation, &data);
@@ -1013,9 +1056,25 @@ void VulkanRenderer::updateStandardUBO(std::uint32_t currentImage, const glm::ve
   vmaUnmapMemory(_vmaAllocator, _standardUBOs[currentImage]._allocation);
 }
 
-void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer)
+void VulkanRenderer::updateShadowUBO(std::uint32_t currentImage,const Camera& shadowCamera)
+{
+  ShadowUBO ubo{};
+
+  auto shadowProj = shadowCamera.getProjection();
+  shadowProj[1][1] *= -1;
+  ubo.shadowMatrix = shadowProj * shadowCamera.getCamMatrix();
+
+  void* data;
+  vmaMapMemory(_vmaAllocator, _shadowUBOs[currentImage]._allocation, &data);
+  memcpy(data, &ubo, sizeof(ubo));
+  vmaUnmapMemory(_vmaAllocator, _shadowUBOs[currentImage]._allocation);
+}
+
+void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bool debug)
 {
   // Transition shadow map image to normal depth attachment
+  imageutil::transitionImageLayout(commandBuffer, _shadowpass._shadowImage._image, findDepthFormat(),
+    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
   _shadowpass.beginRendering(commandBuffer);
 
@@ -1037,6 +1096,7 @@ void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer)
     for (auto& renderable: _currentRenderables) {
       // Move on to next material
       if (renderable._materialId != i) continue;
+      if (!renderable._visible) continue;
 
       // NOTE:  Driver developers recommend that you also store multiple buffers, like the vertex and index buffer, 
       //        into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers. (cache friendlier)
@@ -1060,9 +1120,11 @@ void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer)
   vkCmdEndRendering(commandBuffer);
 
   // Transition shadow map image to shader readable
+  imageutil::transitionImageLayout(commandBuffer, _shadowpass._shadowImage._image, findDepthFormat(),
+    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 }
 
-void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex)
+void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug)
 {
   VkCommandBufferBeginInfo beginInfo{};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1075,7 +1137,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
   }
 
   // Shadow pass
-  recordCommandBufferShadow(commandBuffer);
+  recordCommandBufferShadow(commandBuffer, debug);
 
   // The swapchain image has to go from present layout to color attachment optimal
   imageutil::transitionImageLayout(commandBuffer,  _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
@@ -1150,6 +1212,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
     for (auto& renderable: _currentRenderables) {
       // Move on to next material
       if (renderable._materialId != i) continue;
+      if (!renderable._visible) continue;
 
       // NOTE:  Driver developers recommend that you also store multiple buffers, like the vertex and index buffer, 
       //        into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers. (cache friendlier)
@@ -1168,6 +1231,30 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
       // Draw command
       vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), static_cast<std::uint32_t>(renderable._numInstances), 0, 0, 0);
     }
+  }
+
+  if (debug) {
+    // Shadow map overlay
+    //Camera dummy(glm::vec3(0.0f), ProjectionType::Perspective);
+    //dummy.setViewMatrix(glm::mat4(1.0f));
+    //dummy.setProjection(glm::mat4(1.0f));
+    //updateStandardUBO(_currentFrame, dummy, dummy);
+
+    Renderable* rend = nullptr;
+    for (auto& renderable : _currentRenderables) {
+      if (renderable._id == _shadowpass._debugModelId) {
+        rend = &renderable;
+        break;
+      }
+    }
+
+    auto& material = _materials[SHADOW_DEBUG_MATERIAL_ID];
+    auto& descriptorSets = _materialDescriptorSets[STANDARD_MATERIAL_ID];
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipeline);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayout, 0, 1, &descriptorSets[_currentFrame], 0, nullptr);
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &rend->_vertexBuffer._buffer, offsets);
+    vkCmdDraw(commandBuffer, (uint32_t)rend->_numVertices, 1, 0, 0);
   }
 
   // Imgui
@@ -1215,6 +1302,14 @@ bool VulkanRenderer::initShadowpass()
   auto cmdBuffer = beginSingleTimeCommands();
   _shadowpass.createShadowResources(_device, _vmaAllocator, cmdBuffer, findDepthFormat(), 2048, 2048);
   endSingleTimeCommands(cmdBuffer);
+
+  return true;
+}
+
+bool VulkanRenderer::initShadowDebug()
+{
+  _shadowpass._debugModelId = registerRenderable(_shadowpass._debugModel._vertices, {}, STANDARD_MATERIAL_ID);
+  setRenderableVisible(_shadowpass._debugModelId, false);
 
   return true;
 }
@@ -1299,7 +1394,7 @@ void VulkanRenderer::prepare()
   ImGui::NewFrame();
 }
 
-void VulkanRenderer::drawFrame()
+void VulkanRenderer::drawFrame(bool debug)
 {
   if (_currentRenderables.empty()) return;
   // At the start of the frame, we want to wait until the previous frame has finished, so that the command buffer and semaphores are available to use.
@@ -1326,7 +1421,7 @@ void VulkanRenderer::drawFrame()
 
   // Recording command buffer
   vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
-  recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex);
+  recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex, debug);
 
   // Submit the command buffer
   VkSubmitInfo submitInfo{};

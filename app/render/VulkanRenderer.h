@@ -8,7 +8,6 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 
-//#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 
 #include "vk_mem_alloc.h"
@@ -56,6 +55,8 @@ public:
   // Completely removes all data related to this id and will stop rendering it.
   void unregisterRenderable(RenderableId id);
 
+  void setRenderableVisible(RenderableId id, bool visible);
+
   // Queues push constant data to be used with the specific renderable next frame.
   // Typically per-object type stuff here, such as model matrix.
   // The material for the renderable has to be compatible with the push constant.
@@ -63,7 +64,7 @@ public:
   // NOTE: There is a size limit to push constants... good luck!
   void queuePushConstant(RenderableId id, std::uint32_t size, void* pushConstants);
 
-  void update(const Camera& camera, double delta);
+  void update(const Camera& camera, const Camera& shadowCamera, double delta);
 
   // Prepares some things for drawing (imgui stuff as of now).
   // Has to be called before drawFrame()!
@@ -71,7 +72,7 @@ public:
 
   // Goes through all registered renderables, updates any resource descriptor sets (like UBOs),
   // updates push constants, renders and queues for presentation.
-  void drawFrame();
+  void drawFrame(bool debug);
 
   // Will recreate swapchain to accomodate the new window size.
   void notifyFramebufferResized();
@@ -84,12 +85,15 @@ private:
 
     MaterialID _materialId;
 
+    bool _visible = true;
+
     AllocatedBuffer _vertexBuffer;
     AllocatedBuffer _indexBuffer;
 
     AllocatedBuffer _instanceData;
 
     std::size_t _numIndices;
+    std::size_t _numVertices;
     std::size_t _numInstances = 1;
 
     std::array<std::uint8_t, 128> _pushConstants;
@@ -107,12 +111,12 @@ private:
   struct StandardUBO {
     glm::mat4 view;
     glm::mat4 proj;
+    glm::mat4 shadowMatrix;
     glm::vec4 cameraPos;
   };
 
   struct ShadowUBO {
-    glm::mat4 view;
-    glm::mat4 proj;
+    glm::mat4 shadowMatrix;
   };
 
   Shadowpass _shadowpass;
@@ -134,6 +138,7 @@ private:
   bool createDescriptorPool();
   bool createDepthResources();
   bool initShadowpass();
+  bool initShadowDebug();
   bool initImgui();
 
   bool checkValidationLayerSupport();
@@ -161,11 +166,11 @@ private:
   VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
   VkFormat findDepthFormat();
 
-  void updateStandardUBO(std::uint32_t currentImage, const glm::vec4& cameraPos, const glm::mat4& view, const glm::mat4& projection);
-  void updateShadowUBO(std::uint32_t currentImage, const glm::mat4& view, const glm::mat4& projection);
+  void updateStandardUBO(std::uint32_t currentImage, const Camera& camera, const Camera& shadowCamera);
+  void updateShadowUBO(std::uint32_t currentImage,const Camera& shadowCamera);
 
-  void recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex);
-  void recordCommandBufferShadow(VkCommandBuffer commandBuffer);
+  void recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug);
+  void recordCommandBufferShadow(VkCommandBuffer commandBuffer, bool debug);
 
   GLFWwindow* _window;
   bool _enableValidationLayers;

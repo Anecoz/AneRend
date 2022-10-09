@@ -7,6 +7,7 @@ add_executable(stage ${src})
 
 add_definitions(-DASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/")
 add_definitions(-DSHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/")
+add_definitions(-DGLM_FORCE_DEPTH_ZERO_TO_ONE=1)
 
 if (WIN32)
   add_definitions(-DGLEW_STATIC)
