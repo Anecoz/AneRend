@@ -98,6 +98,7 @@ struct Shadowpass
 
   std::int64_t _debugModelId;
   Model _debugModel;
+  
   VkExtent2D _shadowExtent;
   AllocatedImage _shadowImage;
   VkImageView _shadowImageView;

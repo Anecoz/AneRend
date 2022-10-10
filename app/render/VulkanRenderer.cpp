@@ -1081,7 +1081,7 @@ void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bo
   _shadowpass.viewport(commandBuffer);
   _shadowpass.scissor(commandBuffer);
 
-   for (int i = STANDARD_MATERIAL_ID; i <= STANDARD_INSTANCED_MATERIAL_ID; ++i) {
+   for (int i = 0; i <= MAX_MATERIAL_ID - 1; ++i) {
     auto& material = _materials[i];
     if (!material._supportsShadowPass) continue;
 
@@ -1191,7 +1191,8 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
   // TODO: We've made sure that the vector isn't empty, so this is safe, but should probably be handled some other way
   // TODO: Break this out to own function? We want to do a shadowpass for instance, need to call all of this again basically.
   // Renderables are sorted in material order, standard first
-  for (int i = STANDARD_MATERIAL_ID; i <= STANDARD_INSTANCED_MATERIAL_ID; ++i) {
+  for (int i = 0; i <= MAX_MATERIAL_ID - 1; ++i) {
+    if (_materials.find(i) == _materials.end()) continue;
     auto& material = _materials[i];
 
     // Bind pipeline and start actual rendering
@@ -1295,7 +1296,7 @@ bool VulkanRenderer::createSyncObjects()
 bool VulkanRenderer::initShadowpass()
 {
   auto cmdBuffer = beginSingleTimeCommands();
-  _shadowpass.createShadowResources(_device, _vmaAllocator, cmdBuffer, findDepthFormat(), 2048, 2048);
+  _shadowpass.createShadowResources(_device, _vmaAllocator, cmdBuffer, findDepthFormat(), 4096, 4096);
   endSingleTimeCommands(cmdBuffer);
 
   return true;
