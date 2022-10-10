@@ -1,6 +1,14 @@
 #pragma once
 
+#include "AllocatedBuffer.h"
+#include "StandardUBO.h"
+#include "ShadowUBO.h"
+
+#include "vk_mem_alloc.h"
+
 #include <vulkan/vulkan.h>
+
+#include <vector>
 
 namespace render {
 
@@ -14,6 +22,14 @@ struct Material
   VkPipeline _pipeline = VK_NULL_HANDLE;
   VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
   VkDescriptorSetLayout _descriptorSetLayout = VK_NULL_HANDLE;
+
+  // Several copies, to account for multiple swap chain images etc (triple buffering for instance)
+  std::vector<VkDescriptorSet> _descriptorSets;
+  std::vector<VkDescriptorSet> _descriptorSetsShadow;
+  std::vector<AllocatedBuffer> _ubos;
+  std::vector<AllocatedBuffer> _ubosShadow;
+
+  void updateUbos(std::uint32_t index, VmaAllocator& vmaAllocator, const StandardUBO& standardUbo, const ShadowUBO& shadowUbo);
 
   VkPipeline _pipelineShadow = VK_NULL_HANDLE;
   VkPipelineLayout _pipelineLayoutShadow = VK_NULL_HANDLE;

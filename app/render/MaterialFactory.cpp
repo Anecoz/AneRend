@@ -1,12 +1,15 @@
 #include "MaterialFactory.h"
 
 #include "../util/Utils.h"
+#include "BufferHelpers.h"
+#include "StandardUBO.h"
+#include "ShadowUBO.h"
 
 #include "Vertex.h" // For binding description offsets
 
 #include <vulkan/vulkan.h>
 
-#include <array>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <optional>
@@ -30,10 +33,77 @@ std::optional<VkShaderModule> createShaderModule(const std::vector<char>& code, 
   return shaderModule;
 }
 
+bool internalCreateDescriptorSets(
+  VkDevice device,
+  VkDescriptorSetLayout& descriptorSetLayout, std::vector<VkDescriptorSet>& descriptorSets,
+  std::size_t numCopies,
+  VkDescriptorPool& descriptorPool,
+  const std::vector<render::AllocatedBuffer>& uboBuffers, std::size_t uboBufferRange,
+  VkImageView* imageView, VkSampler* sampler, VkImageLayout imageLayout,
+  int uboBinding, int samplerBinding)
+{
+  std::vector<VkDescriptorSetLayout> layouts(numCopies, descriptorSetLayout);
+  VkDescriptorSetAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  allocInfo.descriptorPool = descriptorPool;
+  allocInfo.descriptorSetCount = static_cast<uint32_t>(numCopies);
+  allocInfo.pSetLayouts = layouts.data();
+
+  descriptorSets.resize(numCopies);
+  if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+    printf("failed to allocate descriptor sets!\n");
+    return false;
+  }
+
+  for (size_t i = 0; i < numCopies; i++) {
+    std::vector<VkWriteDescriptorSet> descriptorWrites;
+
+    VkDescriptorBufferInfo bufferInfo{};
+    VkWriteDescriptorSet bufWrite{};
+    if (!uboBuffers.empty()) {
+      bufferInfo.buffer = uboBuffers[i]._buffer;
+      bufferInfo.offset = 0;
+      bufferInfo.range = uboBufferRange;
+      
+      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      bufWrite.dstSet = descriptorSets[i];
+      bufWrite.dstBinding = uboBinding;
+      bufWrite.dstArrayElement = 0;
+      bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      bufWrite.descriptorCount = 1;
+      bufWrite.pBufferInfo = &bufferInfo;
+
+      descriptorWrites.emplace_back(std::move(bufWrite));
+    }
+
+    VkDescriptorImageInfo imageInfo{};
+    VkWriteDescriptorSet imWrite{};
+    if (imageView && sampler) {
+      imageInfo.imageLayout = imageLayout;
+      imageInfo.imageView = *imageView;
+      imageInfo.sampler = *sampler;
+    
+      imWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      imWrite.dstSet = descriptorSets[i];
+      imWrite.dstBinding = samplerBinding;
+      imWrite.dstArrayElement = 0;
+      imWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      imWrite.descriptorCount = 1;
+      imWrite.pImageInfo = &imageInfo;
+
+      descriptorWrites.emplace_back(std::move(imWrite));
+    }
+
+    vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+  }
+
+  return true;
+}
+
 bool internalCreate(
   VkDescriptorSetLayout& descriptorSetLayout, VkPipelineLayout& pipelineLayout, VkPipeline& pipeline,
   VkDevice device, VkFormat colorFormat, VkFormat depthFormat,
-  bool ubo, bool sampler,
+  int uboBinding, int samplerBinding,
   const std::string& vertShader, const std::string& fragShader,
   bool instanceBuffer,
   int posLoc, int colorLoc, int normalLoc, int uvLoc,
@@ -46,18 +116,18 @@ bool internalCreate(
 {
   // Descriptor set layout
   std::vector<VkDescriptorSetLayoutBinding> bindings;
-  if (ubo) {
-    VkDescriptorSetLayoutBinding uboLayoutBinding{};
-    uboLayoutBinding.binding = 0;
+  VkDescriptorSetLayoutBinding uboLayoutBinding{};
+  if (uboBinding != -1) {
+    uboLayoutBinding.binding = uboBinding;
     uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     uboLayoutBinding.descriptorCount = 1;
     uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     bindings.emplace_back(std::move(uboLayoutBinding));
   }
 
-  if (sampler) {
-    VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-    samplerLayoutBinding.binding = 1;
+  VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+  if (samplerBinding != -1) {
+    samplerLayoutBinding.binding = samplerBinding;
     samplerLayoutBinding.descriptorCount = 1;
     samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     samplerLayoutBinding.pImmutableSamplers = nullptr;
@@ -373,17 +443,21 @@ bool internalCreate(
 
 namespace render {
 
-Material MaterialFactory::createStandardMaterial(VkDevice device, VkFormat colorFormat, VkFormat depthFormat)
+Material MaterialFactory::createStandardMaterial(
+  VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
+  VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
+  VkImageView* imageView, VkSampler* sampler, VkImageLayout imageLayout)
 {
   Material output;
 
   output._supportsPushConstants = true;
   output._supportsShadowPass = true;
 
+  // Non-shadow
   internalCreate(
     output._descriptorSetLayout, output._pipelineLayout, output._pipeline,
     device, colorFormat, depthFormat,
-    true, true,
+    0, 1,
     "standard_vert.spv", "standard_frag.spv",
     false,
     0, 1, 2, -1,
@@ -396,7 +470,7 @@ Material MaterialFactory::createStandardMaterial(VkDevice device, VkFormat color
   internalCreate(
     output._descriptorSetLayoutShadow, output._pipelineLayoutShadow, output._pipelineShadow,
     device, colorFormat, depthFormat,
-    true, false,
+    0, -1,
     "standard_shadow_vert.spv", "",
     false, 
     0, -1, -1, -1,
@@ -407,17 +481,58 @@ Material MaterialFactory::createStandardMaterial(VkDevice device, VkFormat color
     true
   );
 
+  // Non-shadow descriptor sets
+  {
+    VkDeviceSize bufferSize = sizeof(StandardUBO);
+
+    output._ubos.resize(numCopies);
+
+    for (size_t i = 0; i < numCopies; i++) {
+      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubos[i]);
+    }
+
+    if (!internalCreateDescriptorSets(
+          device, output._descriptorSetLayout, output._descriptorSets,
+          numCopies, descriptorPool, output._ubos, bufferSize,
+          imageView, sampler, imageLayout, 0, 1)) {
+      printf("Could not create descriptor set!\n");
+      return output;
+    }
+  }
+
+  // shadow descriptor sets
+  {
+    VkDeviceSize bufferSize = sizeof(ShadowUBO);
+
+    output._ubosShadow.resize(numCopies);
+
+    for (size_t i = 0; i < numCopies; i++) {
+      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubosShadow[i]);
+    }
+
+    if (!internalCreateDescriptorSets(
+          device, output._descriptorSetLayoutShadow, output._descriptorSetsShadow,
+          numCopies, descriptorPool, output._ubosShadow, bufferSize,
+          nullptr, nullptr, imageLayout, 0, -1)) {
+      printf("Could not create descriptor set!\n");
+      return output;
+    }
+  }
+
   return output;
 }
 
-Material MaterialFactory::createShadowDebugMaterial(VkDevice device, VkFormat colorFormat, VkFormat depthFormat)
+Material MaterialFactory::createShadowDebugMaterial(
+  VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
+  VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
+  VkImageView* imageView, VkSampler* sampler, VkImageLayout imageLayout)
 {
   Material output;
 
   internalCreate(
     output._descriptorSetLayout, output._pipelineLayout, output._pipeline,
     device, colorFormat, depthFormat,
-    true, true,
+    -1, 0,
     "shadow_debug_vert.spv", "shadow_debug_frag.spv",
     false,
     0, -1, -1, 1,
@@ -428,10 +543,21 @@ Material MaterialFactory::createShadowDebugMaterial(VkDevice device, VkFormat co
     false
   );
 
+  if (!internalCreateDescriptorSets(
+        device, output._descriptorSetLayout, output._descriptorSets,
+        numCopies, descriptorPool, {}, 0,
+        imageView, sampler, imageLayout, -1, 0)) {
+    printf("Could not create descriptor set!\n");
+    return output;
+  }
+
   return output;
 }
 
-Material MaterialFactory::createStandardInstancedMaterial(VkDevice device, VkFormat colorFormat, VkFormat depthFormat)
+Material MaterialFactory::createStandardInstancedMaterial(
+  VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
+  VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
+  VkImageView* imageView, VkSampler* sampler, VkImageLayout imageLayout)
 {
   Material output;
 
@@ -441,7 +567,7 @@ Material MaterialFactory::createStandardInstancedMaterial(VkDevice device, VkFor
   internalCreate(
     output._descriptorSetLayout, output._pipelineLayout, output._pipeline,
     device, colorFormat, depthFormat,
-    true, true,
+    0, 1,
     "standard_instanced_vert.spv", "standard_frag.spv",
     true,
     0, 1, 2, -1,
@@ -455,7 +581,7 @@ Material MaterialFactory::createStandardInstancedMaterial(VkDevice device, VkFor
   internalCreate(
     output._descriptorSetLayoutShadow, output._pipelineLayoutShadow, output._pipelineShadow,
     device, colorFormat, depthFormat,
-    true, false,
+    0, -1,
     "standard_instanced_shadow_vert.spv", "",
     true,
     0, -1, -1, -1,
@@ -465,6 +591,44 @@ Material MaterialFactory::createStandardInstancedMaterial(VkDevice device, VkFor
     false,
     false
   );
+
+  // Non-shadow descriptor sets
+  {
+    VkDeviceSize bufferSize = sizeof(StandardUBO);
+
+    output._ubos.resize(numCopies);
+
+    for (size_t i = 0; i < numCopies; i++) {
+      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubos[i]);
+    }
+
+    if (!internalCreateDescriptorSets(
+          device, output._descriptorSetLayout, output._descriptorSets,
+          numCopies, descriptorPool, output._ubos, bufferSize,
+          imageView, sampler, imageLayout, 0, 1)) {
+      printf("Could not create descriptor set!\n");
+      return output;
+    }
+  }
+
+  // shadow descriptor sets
+  {
+    VkDeviceSize bufferSize = sizeof(ShadowUBO);
+
+    output._ubosShadow.resize(numCopies);
+
+    for (size_t i = 0; i < numCopies; i++) {
+      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubosShadow[i]);
+    }
+
+    if (!internalCreateDescriptorSets(
+          device, output._descriptorSetLayoutShadow, output._descriptorSetsShadow,
+          numCopies, descriptorPool, output._ubosShadow, bufferSize,
+          nullptr, nullptr, imageLayout, 0, -1)) {
+      printf("Could not create descriptor set!\n");
+      return output;
+    }
+  }
 
   return output;
 }

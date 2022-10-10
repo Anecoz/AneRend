@@ -104,20 +104,7 @@ private:
   void cleanupRenderable(const Renderable& renderable);
 
   std::unordered_map<MaterialID, Material> _materials;
-  std::unordered_map<MaterialID, std::vector<VkDescriptorSet>> _materialDescriptorSets;
-  std::unordered_map<MaterialID, std::vector<VkDescriptorSet>> _materialDescriptorSetsShadow;
   bool materialIdExists(MaterialID) const;
-
-  struct StandardUBO {
-    glm::mat4 view;
-    glm::mat4 proj;
-    glm::mat4 shadowMatrix;
-    glm::vec4 cameraPos;
-  };
-
-  struct ShadowUBO {
-    glm::mat4 shadowMatrix;
-  };
 
   Shadowpass _shadowpass;
 
@@ -134,7 +121,6 @@ private:
   bool createCommandPool();
   bool createCommandBuffers();
   bool createSyncObjects();
-  bool createUniformBuffers();
   bool createDescriptorPool();
   bool createDepthResources();
   bool initShadowpass();
@@ -150,7 +136,6 @@ private:
 
   bool createIndexBuffer(const std::vector<std::uint32_t>& indices, AllocatedBuffer& buffer);
   bool createVertexBuffer(std::uint8_t* data, std::size_t dataSize, AllocatedBuffer& buffer);
-  void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocationCreateFlags properties, AllocatedBuffer& buffer);
   void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
   void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
@@ -165,9 +150,6 @@ private:
 
   VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
   VkFormat findDepthFormat();
-
-  void updateStandardUBO(std::uint32_t currentImage, const Camera& camera, const Camera& shadowCamera);
-  void updateShadowUBO(std::uint32_t currentImage,const Camera& shadowCamera);
 
   void recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug);
   void recordCommandBufferShadow(VkCommandBuffer commandBuffer, bool debug);
@@ -194,9 +176,6 @@ private:
 
   VkDescriptorPool _descriptorPool;
   VkDescriptorPool _imguiDescriptorPool;
-
-  std::vector<AllocatedBuffer> _standardUBOs;
-  std::vector<AllocatedBuffer> _shadowUBOs;
 
   std::vector<VkCommandBuffer> _commandBuffers;
   VkCommandPool _commandPool;

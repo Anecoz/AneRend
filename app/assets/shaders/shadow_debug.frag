@@ -1,13 +1,6 @@
 #version 450
 
-layout(binding = 0) uniform UniformBufferObject {
-  mat4 view;
-  mat4 proj;
-  mat4 shadowMatrix;
-  vec4 cameraPos;
-} ubo;
-
-layout(binding = 1) uniform sampler2D shadowMap;
+layout(binding = 0) uniform sampler2D shadowMap;
 
 layout(location = 0) in vec2 fragTexCoords;
 
