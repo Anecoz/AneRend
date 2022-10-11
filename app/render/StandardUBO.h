@@ -9,6 +9,7 @@ struct StandardUBO {
   glm::mat4 proj;
   glm::mat4 shadowMatrix;
   glm::vec4 cameraPos;
+  glm::vec4 lightDir;
 };
 
 }

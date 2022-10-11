@@ -5,6 +5,7 @@ layout(binding = 0) uniform UniformBufferObject {
   mat4 proj;
   mat4 shadowMatrix;
   vec4 cameraPos;
+  vec4 lightDir;
 } ubo;
 
 layout(binding = 1) uniform sampler2D shadowMap;
@@ -20,7 +21,7 @@ float inShadow() {
   vec3 projCoords = fragShadowPos.xyz / fragShadowPos.w;
 
   if (projCoords.x > 1.0 || projCoords.x < -1.0 ||
-      projCoords.z > 1.0 || projCoords.z < -1.0 ||
+      projCoords.z > 1.0 || projCoords.z < 0.0 ||
       projCoords.y > 1.0 || projCoords.y < -1.0) {
     return 0.0;
   }
@@ -28,7 +29,6 @@ float inShadow() {
   vec2 shadowMapCoord = projCoords.xy * 0.5 + 0.5;
 
   float depth = projCoords.z;
-  //float sampledDepth = texture(shadowMap, shadowMapCoord.xy).r;
   int stepsPerAxis = 8;
   float total = 0.0;
   for (int x = 0; x < stepsPerAxis; ++x) {
@@ -44,14 +44,13 @@ float inShadow() {
 }
 
 void main() {
-  vec3 lightDir = vec3(0.7, 0.7, 0.7);
-
+  vec3 lightD = -ubo.lightDir.xyz;
   vec3 ambientColor = vec3(1.0, 1.0, 1.0);
   vec3 diffuseColor = fragColor;
   vec3 specColor = vec3(0.5, 0.5, 0.5);
 
   vec3 normal = normalize(fragNormal);
-  vec3 lightDirNorm = normalize(lightDir);
+  vec3 lightDirNorm = normalize(lightD);
 
   float shadow = inShadow();
 
@@ -59,17 +58,9 @@ void main() {
   float ambientStrength = 0.1;
   vec3 ambient = ambientStrength * ambientColor;
 
-  /*if (shadow > 0.0) {
-    ambient *= clamp(0.5 * (1.0 - shadow), 0.5, 1.0);
-  }*/
-
   // Diffuse
   float diff = max(dot(normal, lightDirNorm), 0.2);
   vec3 diffuse = diff * diffuseColor;
-
-  /*if (shadow > 0.0) {
-    diffuse *= clamp(0.2 * (1.0 - shadow), 0.2, 1.0);
-  }*/
 
   // Specular
   vec3 viewDir = normalize(vec3(ubo.cameraPos) - fragPosition);

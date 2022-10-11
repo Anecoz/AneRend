@@ -2,6 +2,8 @@
 
 #include "Application.h"
 
+#include <glm/glm.hpp>
+
 #include "../render/VulkanRenderer.h"
 #include "../render/Model.h"
 #include "../render/Camera.h"
@@ -20,7 +22,11 @@ public:
   void notifyFramebufferResized();
 
 private:
-  
+  void calculateShadowMatrix();
+
+  glm::vec3 _lastCamPos;
+
+  glm::vec3 _sunDir;
 
   render::VulkanRenderer _vkRenderer;
 

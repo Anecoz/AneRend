@@ -64,7 +64,7 @@ public:
   // NOTE: There is a size limit to push constants... good luck!
   void queuePushConstant(RenderableId id, std::uint32_t size, void* pushConstants);
 
-  void update(const Camera& camera, const Camera& shadowCamera, double delta);
+  void update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta);
 
   // Prepares some things for drawing (imgui stuff as of now).
   // Has to be called before drawFrame()!

@@ -305,6 +305,7 @@ void VulkanRenderer::queuePushConstant(RenderableId id, std::uint32_t size, void
       renderable = &r;
       if (!_materials[r._materialId]._supportsPushConstants) {
         printf("Could not queue push constant, because material doesn't support it\n");
+        return;
       }
     }
   }
@@ -318,13 +319,20 @@ void VulkanRenderer::queuePushConstant(RenderableId id, std::uint32_t size, void
   memcpy(&renderable->_pushConstants[0], pushConstants, size);
 }
 
-void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, double delta)
+void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta)
 {
+  // TODO: We can't write to this frames UBO's until the GPU is finished with it.
+  // If we run unlimited FPS we are quite likely to end up doing just that.
+  // The ubo memory write _will_ be visible by the next queueSubmit, so that isn't the issue.
+  // but we might be writing into memory that is currently accessed by the GPU.
+  vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
+
   // Update UBOs
   StandardUBO standardUbo{};
   standardUbo.view = camera.getCamMatrix();
   standardUbo.proj = camera.getProjection();
   standardUbo.cameraPos = glm::vec4(camera.getPosition(), 1.0);
+  standardUbo.lightDir = lightDir;
 
   auto shadowProj = shadowCamera.getProjection();
   standardUbo.proj[1][1] *= -1;
@@ -1049,7 +1057,6 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
   scissor.offset = {0, 0};
   scissor.extent = _swapChain._swapChainExtent;
 
-  // TODO: We've made sure that the vector isn't empty, so this is safe, but should probably be handled some other way
   // TODO: Break this out to own function? We want to do a shadowpass for instance, need to call all of this again basically.
   // Renderables are sorted in material order, standard first
   for (int i = 0; i <= MAX_MATERIAL_ID - 1; ++i) {
@@ -1061,12 +1068,12 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
 
     // Since we used dynamic viewport and scissor setup earlier, we have to specify them now
     // TODO: This should be part of the "pass" I guess, shadow pass for instance wants w and h to be that of the shadow map
-    // TODO: We have to call this _AFTER_ binding the pipeline above, else we get validation errors due to the previously bound
+    // Note: We have to call this _AFTER_ binding the pipeline above, else we get validation errors due to the previously bound
     //       pipeline being that of the shadow pass.
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    // Bind descriptor sets for UBOs
+    // Bind descriptor sets
     auto& descriptorSets = material._descriptorSets[_currentFrame];
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayout, 0, 1, &descriptorSets, 0, nullptr);
 
@@ -1156,7 +1163,7 @@ bool VulkanRenderer::createSyncObjects()
 bool VulkanRenderer::initShadowpass()
 {
   auto cmdBuffer = beginSingleTimeCommands();
-  _shadowpass.createShadowResources(_device, _vmaAllocator, cmdBuffer, findDepthFormat(), 4096, 4096);
+  _shadowpass.createShadowResources(_device, _vmaAllocator, cmdBuffer, findDepthFormat(), 8196, 8196);
   endSingleTimeCommands(cmdBuffer);
 
   return true;
