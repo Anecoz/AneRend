@@ -708,4 +708,16 @@ Material MaterialFactory::createPPBlurMaterial(
     "pp_vert.spv", "pp_blur_frag.spv");
 }
 
+Material MaterialFactory::createPPFxaaMaterial(
+  VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
+  VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
+  VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout)
+{
+  return internalCreatePP(
+    device, colorFormat, depthFormat,
+    numCopies, descriptorPool, vmaAllocator,
+    imageView, sampler, samplerImageLayout,
+    "pp_vert.spv", "pp_fxaa_frag.spv");
+}
+
 }

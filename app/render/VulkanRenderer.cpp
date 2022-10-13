@@ -765,8 +765,24 @@ bool VulkanRenderer::loadKnownMaterials()
   // Post processing
   auto cmdBuffer = beginSingleTimeCommands();
 
-  // Blur
+  // FXAA
   {
+    std::size_t idx;
+    _ppPass.createResources(_device, _vmaAllocator, cmdBuffer, &idx);
+    auto ppMat = MaterialFactory::createPPFxaaMaterial(
+      _device, _swapChain._swapChainImageFormat, findDepthFormat(),
+      MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
+      &_ppPass._ppResources[idx]._ppInputImageView, &_ppPass._ppResources[idx]._ppSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    if (!ppMat) {
+      printf("Could not create pp material!\n");
+      return false;
+    }
+    _ppMaterials.emplace_back(std::make_pair(std::move(ppMat), idx));
+  }
+
+  // Blur
+  /*{
     std::size_t idx;
     _ppPass.createResources(_device, _vmaAllocator, cmdBuffer, &idx);
     auto ppMat = MaterialFactory::createPPBlurMaterial(
@@ -779,7 +795,7 @@ bool VulkanRenderer::loadKnownMaterials()
       return false;
     }
     _ppMaterials.emplace_back(std::make_pair(std::move(ppMat), idx));
-  }
+  }*/
 
   /*// Flip
   {
