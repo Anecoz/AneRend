@@ -12,7 +12,7 @@ static bool hasStencilComponent(VkFormat format)
   return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
-static void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VmaAllocator allocator, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, AllocatedImage& image)
+static void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VmaAllocator allocator, VkImageUsageFlags usage, AllocatedImage& image)
 {
   VkImageCreateInfo imageInfo{};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -123,6 +123,12 @@ static void transitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, 
     barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+  }
+  else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
   }
   else {
     printf("unsupported layout transition!\n");

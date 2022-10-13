@@ -67,7 +67,8 @@ VulkanRenderer::~VulkanRenderer()
   // Let logical device finish operations first
   vkDeviceWaitIdle(_device);
 
-  _shadowpass.cleanup(_vmaAllocator, _device);
+  _shadowPass.cleanup(_vmaAllocator, _device);
+  _ppPass.cleanup(_vmaAllocator, _device);
 
   vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
   vkDestroyDescriptorPool(_device, _imguiDescriptorPool, nullptr);
@@ -75,20 +76,26 @@ VulkanRenderer::~VulkanRenderer()
   ImGui_ImplVulkan_Shutdown();
 
   for (const auto& material: _materials) {
-    for (auto& ubo: material.second._ubos) {
+    for (auto& ubo: material.second._ubos[Material::STANDARD_INDEX]) {
       vmaDestroyBuffer(_vmaAllocator, ubo._buffer, ubo._allocation);
     }
-    for (auto& ubo: material.second._ubosShadow) {
+    for (auto& ubo: material.second._ubos[Material::SHADOW_INDEX]) {
       vmaDestroyBuffer(_vmaAllocator, ubo._buffer, ubo._allocation);
     }
 
-    vkDestroyDescriptorSetLayout(_device, material.second._descriptorSetLayout, nullptr);
-    vkDestroyPipeline(_device, material.second._pipeline, nullptr);
-    vkDestroyPipelineLayout(_device, material.second._pipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(_device, material.second._descriptorSetLayouts[Material::STANDARD_INDEX], nullptr);
+    vkDestroyPipeline(_device, material.second._pipelines[Material::STANDARD_INDEX], nullptr);
+    vkDestroyPipelineLayout(_device, material.second._pipelineLayouts[Material::STANDARD_INDEX], nullptr);
 
-    vkDestroyDescriptorSetLayout(_device, material.second._descriptorSetLayoutShadow, nullptr);
-    vkDestroyPipeline(_device, material.second._pipelineShadow, nullptr);
-    vkDestroyPipelineLayout(_device, material.second._pipelineLayoutShadow, nullptr);
+    vkDestroyDescriptorSetLayout(_device, material.second._descriptorSetLayouts[Material::SHADOW_INDEX], nullptr);
+    vkDestroyPipeline(_device, material.second._pipelines[Material::SHADOW_INDEX], nullptr);
+    vkDestroyPipelineLayout(_device, material.second._pipelineLayouts[Material::SHADOW_INDEX], nullptr);
+  }
+
+  for (const auto& material: _ppMaterials) {
+    vkDestroyDescriptorSetLayout(_device, material.first._descriptorSetLayouts[Material::POST_PROCESSING_INDEX], nullptr);
+    vkDestroyPipeline(_device, material.first._pipelines[Material::POST_PROCESSING_INDEX], nullptr);
+    vkDestroyPipelineLayout(_device, material.first._pipelineLayouts[Material::POST_PROCESSING_INDEX], nullptr);
   }
 
   cleanupSwapChain();
@@ -194,6 +201,11 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
+  printf("Init pp pass...");
+  res &= initPostProcessingPass();
+  if (!res) return false;
+  printf("Done!\n");
+
   printf("Loading known materials...");
   res &= loadKnownMaterials();
   if (!res) return false;
@@ -201,6 +213,11 @@ bool VulkanRenderer::init()
 
   printf("Init shadow debug...");
   res &= initShadowDebug();
+  if (!res) return false;
+  printf("Done!\n");
+
+  printf("Init pp renderable...");
+  res &= initPostProcessingRenderable();
   if (!res) return false;
   printf("Done!\n");
 
@@ -712,7 +729,7 @@ bool VulkanRenderer::loadKnownMaterials()
   auto standardMaterial = MaterialFactory::createStandardMaterial(
     _device, _swapChain._swapChainImageFormat, findDepthFormat(),
     MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-    &_shadowpass._shadowImageView, &_shadowpass._shadowSampler, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+    &_shadowPass._shadowImageView, &_shadowPass._shadowSampler, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
   if (!standardMaterial) {
     printf("Could not create standard material!\n");
@@ -725,7 +742,7 @@ bool VulkanRenderer::loadKnownMaterials()
   auto standardInstancedMaterial = MaterialFactory::createStandardInstancedMaterial(
     _device, _swapChain._swapChainImageFormat, findDepthFormat(),
     MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-    &_shadowpass._shadowImageView, &_shadowpass._shadowSampler, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+    &_shadowPass._shadowImageView, &_shadowPass._shadowSampler, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
   if (!standardInstancedMaterial) {
     printf("Could not create standard instanced material!\n");
@@ -737,13 +754,50 @@ bool VulkanRenderer::loadKnownMaterials()
   auto shadowDebugMat = MaterialFactory::createShadowDebugMaterial(
     _device, _swapChain._swapChainImageFormat, findDepthFormat(),
     MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-    &_shadowpass._shadowImageView, &_shadowpass._shadowSampler, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+    &_shadowPass._shadowImageView, &_shadowPass._shadowSampler, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
   if (!shadowDebugMat) {
     printf("Could not create shadow debug material!\n");
     return false;
   }
   _materials[SHADOW_DEBUG_MATERIAL_ID] = std::move(shadowDebugMat);
+
+  // Post processing
+  auto cmdBuffer = beginSingleTimeCommands();
+
+  // Flip
+  {
+    std::size_t idx;
+    _ppPass.createResources(_device, _vmaAllocator, cmdBuffer, &idx);
+    auto flipMat = MaterialFactory::createPPFlipMaterial(
+      _device, _swapChain._swapChainImageFormat, findDepthFormat(),
+      MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
+      &_ppPass._ppResources[idx]._ppInputImageView, &_ppPass._ppResources[idx]._ppSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    if (!flipMat) {
+      printf("Could not create pp flip material!\n");
+      return false;
+    }
+    _ppMaterials.emplace_back(std::make_pair(std::move(flipMat), idx));
+  }
+
+  // Color inv
+  {
+    std::size_t idx;
+    _ppPass.createResources(_device, _vmaAllocator, cmdBuffer, &idx);
+    auto ppMat = MaterialFactory::createPPColorInvMaterial(
+      _device, _swapChain._swapChainImageFormat, findDepthFormat(),
+      MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
+      &_ppPass._ppResources[idx]._ppInputImageView, &_ppPass._ppResources[idx]._ppSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    if (!ppMat) {
+      printf("Could not create pp material!\n");
+      return false;
+    }
+    _ppMaterials.emplace_back(std::make_pair(std::move(ppMat), idx));
+  }
+
+  endSingleTimeCommands(cmdBuffer);
 
   return true;
 }
@@ -770,7 +824,7 @@ bool VulkanRenderer::createDepthResources()
   VkFormat depthFormat = findDepthFormat();
 
   imageutil::createImage(_swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL,
-    _vmaAllocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _depthImage);
+    _vmaAllocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, _depthImage);
   _depthImageView = imageutil::createImageView(_device, _depthImage._image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 
   auto cmdBuffer = beginSingleTimeCommands();
@@ -940,27 +994,28 @@ bool VulkanRenderer::createCommandBuffers()
   return true;
 }
 
-void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bool debug)
+void VulkanRenderer::drawRenderables(
+  VkCommandBuffer& commandBuffer,
+  std::size_t materialIndex,
+  bool shadowSupportRequired,
+  VkViewport& viewport, VkRect2D& scissor)
 {
-  // Transition shadow map image to normal depth attachment
-  imageutil::transitionImageLayout(commandBuffer, _shadowpass._shadowImage._image, findDepthFormat(),
-    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
-  _shadowpass.beginRendering(commandBuffer);
-
-  _shadowpass.viewport(commandBuffer);
-  _shadowpass.scissor(commandBuffer);
-
-   for (int i = 0; i <= MAX_MATERIAL_ID - 1; ++i) {
+  for (int i = 0; i <= MAX_MATERIAL_ID - 1; ++i) {
+    if (_materials.find(i) == _materials.end()) continue;
     auto& material = _materials[i];
-    if (!material._supportsShadowPass) continue;
+    if (shadowSupportRequired && !material._supportsShadowPass) continue;
+    // TODO:
+    if (material._supportsPostProcessingPass) continue;
 
     // Bind pipeline and start actual rendering
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineShadow);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelines[materialIndex]);
+
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
     // Bind descriptor sets for UBOs
-    auto& descriptorSets = material._descriptorSetsShadow[_currentFrame];
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayoutShadow, 0, 1, &descriptorSets, 0, nullptr);
+    auto& descriptorSets = material._descriptorSets[materialIndex][_currentFrame];
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayouts[materialIndex], 0, 1, &descriptorSets, 0, nullptr);
 
     for (auto& renderable: _currentRenderables) {
       // Move on to next material
@@ -978,19 +1033,80 @@ void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bo
 
       // Bind specific push constants for this renderable
       if (renderable._pushConstantsSize > 0) {
-        vkCmdPushConstants(commandBuffer, material._pipelineLayoutShadow, VK_SHADER_STAGE_VERTEX_BIT, 0, renderable._pushConstantsSize, &renderable._pushConstants[0]);
+        vkCmdPushConstants(commandBuffer, material._pipelineLayouts[materialIndex], VK_SHADER_STAGE_VERTEX_BIT, 0, renderable._pushConstantsSize, &renderable._pushConstants[0]);
       }
 
       // Draw command
       vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), static_cast<std::uint32_t>(renderable._numInstances), 0, 0, 0);
     }
   }
+}
 
-  vkCmdEndRendering(commandBuffer);
+void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bool debug)
+{
+  drawRenderables(commandBuffer, Material::SHADOW_INDEX, true, _shadowPass.viewport(), _shadowPass.scissor());
+}
 
-  // Transition shadow map image to shader readable
-  imageutil::transitionImageLayout(commandBuffer, _shadowpass._shadowImage._image, findDepthFormat(),
-    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+void VulkanRenderer::recordCommandBufferGeometry(VkCommandBuffer commandBuffer, bool debug)
+{
+  auto viewport = _geometryPass.viewport(_swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height);
+  auto scissor = _geometryPass.scissor( _swapChain._swapChainExtent);
+
+  drawRenderables(commandBuffer, Material::STANDARD_INDEX, false, viewport, scissor);
+}
+
+void VulkanRenderer::recordCommandBufferPP(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug)
+{
+  Renderable* rend = nullptr;
+  for (auto& renderable : _currentRenderables) {
+    if (renderable._id == _ppPass._quadModelId) {
+      rend = &renderable;
+      break;
+    }
+  }
+
+  auto viewport = _ppPass.viewport(_swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height);
+  auto scissor = _ppPass.scissor(_swapChain._swapChainExtent);
+
+  for (std::size_t i = 0; i < _ppMaterials.size(); ++i) {
+    bool isLast = i == (_ppMaterials.size() - 1);
+    std::size_t nextIndex = isLast? 0 : _ppMaterials[i+1].second;
+  
+    auto& material = _ppMaterials[i];
+
+    // Transition ppInput image to shader read
+    imageutil::transitionImageLayout(commandBuffer, _ppPass._ppResources[material.second]._ppInputImage._image, _ppPass._ppImageFormat,
+      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    // Transition the image we render to to color attachment (need to do before start rendering)
+    if (!isLast) {
+      imageutil::transitionImageLayout(commandBuffer, _ppPass._ppResources[nextIndex]._ppInputImage._image, _ppPass._ppImageFormat,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    }
+
+    if (isLast) {
+      _ppPass.beginRendering(commandBuffer, _swapChain._swapChainImageViews[imageIndex], _swapChain._swapChainExtent);
+    }
+    else {
+      _ppPass.beginRendering(commandBuffer, _ppPass._ppResources[nextIndex]._ppInputImageView, _swapChain._swapChainExtent);
+    }
+
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    auto& descriptorSets = material.first._descriptorSets[Material::POST_PROCESSING_INDEX][_currentFrame];
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material.first._pipelines[Material::POST_PROCESSING_INDEX]);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material.first._pipelineLayouts[Material::POST_PROCESSING_INDEX], 0, 1, &descriptorSets, 0, nullptr);
+
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &rend->_vertexBuffer._buffer, offsets);
+    vkCmdDraw(commandBuffer, (uint32_t)rend->_numVertices, 1, 0, 0);
+
+    if (!isLast) {
+      vkCmdEndRendering(commandBuffer);
+    }
+  }
 }
 
 void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug)
@@ -1005,128 +1121,66 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
     return;
   }
 
-  // Shadow pass
-  recordCommandBufferShadow(commandBuffer, debug);
-
   // The swapchain image has to go from present layout to color attachment optimal
   imageutil::transitionImageLayout(commandBuffer,  _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
                         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-  // Dynamic rendering
-  // TODO: Helper for starting this "pass". Want to add depth-only pass soon
-  std::array<VkClearValue, 2> clearValues{};
-  clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-  clearValues[1].depthStencil = {1.0f, 0};
-  VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
-  colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-  colorAttachmentInfo.imageView = _swapChain._swapChainImageViews[imageIndex];
-  colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-  colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  colorAttachmentInfo.clearValue = clearValues[0];
+  // Shadow pass
+  // Transition shadow map image to normal depth attachment
+  imageutil::transitionImageLayout(commandBuffer, _shadowPass._shadowImage._image, _shadowPass._shadowImageFormat,
+    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
-  VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
-  depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-  depthAttachmentInfo.imageView = _depthImageView;
-  depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-  depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  depthAttachmentInfo.clearValue = clearValues[1];
+  _shadowPass.beginRendering(commandBuffer);
+  recordCommandBufferShadow(commandBuffer, debug);
+  vkCmdEndRendering(commandBuffer);
 
-  VkRenderingInfoKHR renderInfo{};
-  renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-  renderInfo.renderArea.extent = _swapChain._swapChainExtent;
-  renderInfo.renderArea.offset = {0, 0};
-  renderInfo.layerCount = 1;
-  renderInfo.colorAttachmentCount = 1;
-  renderInfo.pColorAttachments = &colorAttachmentInfo;
-  renderInfo.pDepthAttachment = &depthAttachmentInfo;
+  // Transition shadow map image to shader readable
+  imageutil::transitionImageLayout(commandBuffer, _shadowPass._shadowImage._image, _shadowPass._shadowImageFormat,
+    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
-  vkCmdBeginRendering(commandBuffer, &renderInfo);
+  // Geometry pass
+  // Transition the ppInput image to color attachment
+  imageutil::transitionImageLayout(commandBuffer, _ppPass._ppResources[0]._ppInputImage._image, _ppPass._ppImageFormat,
+    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-  // See comment below
-  VkViewport viewport{};
-  viewport.x = 0.0f;
-  viewport.y = 0.0f;
-  viewport.width = static_cast<float>(_swapChain._swapChainExtent.width);
-  viewport.height = static_cast<float>(_swapChain._swapChainExtent.height);
-  viewport.minDepth = 0.0f;
-  viewport.maxDepth = 1.0f;
+  _geometryPass.beginRendering(
+    commandBuffer,
+     _ppPass._ppResources[0]._ppInputImageView,
+    _depthImageView,
+    _swapChain._swapChainExtent);
+  recordCommandBufferGeometry(commandBuffer, debug);
+  vkCmdEndRendering(commandBuffer);
 
-  VkRect2D scissor{};
-  scissor.offset = {0, 0};
-  scissor.extent = _swapChain._swapChainExtent;
-
-  // TODO: Break this out to own function? We want to do a shadowpass for instance, need to call all of this again basically.
-  // Renderables are sorted in material order, standard first
-  for (int i = 0; i <= MAX_MATERIAL_ID - 1; ++i) {
-    if (_materials.find(i) == _materials.end()) continue;
-    auto& material = _materials[i];
-
-    // Bind pipeline and start actual rendering
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipeline);
-
-    // Since we used dynamic viewport and scissor setup earlier, we have to specify them now
-    // TODO: This should be part of the "pass" I guess, shadow pass for instance wants w and h to be that of the shadow map
-    // Note: We have to call this _AFTER_ binding the pipeline above, else we get validation errors due to the previously bound
-    //       pipeline being that of the shadow pass.
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-    // Bind descriptor sets
-    auto& descriptorSets = material._descriptorSets[_currentFrame];
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayout, 0, 1, &descriptorSets, 0, nullptr);
-
-    for (auto& renderable: _currentRenderables) {
-      // Move on to next material
-      if (renderable._materialId != i) continue;
-      if (!renderable._visible) continue;
-
-      // NOTE:  Driver developers recommend that you also store multiple buffers, like the vertex and index buffer, 
-      //        into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers. (cache friendlier)
-      VkDeviceSize offsets[] = {0};
-      vkCmdBindVertexBuffers(commandBuffer, 0, 1, &renderable._vertexBuffer._buffer, offsets);
-      if (material._hasInstanceBuffer) {
-        vkCmdBindVertexBuffers(commandBuffer, 1, 1, &renderable._instanceData._buffer, offsets);
-      }
-      vkCmdBindIndexBuffer(commandBuffer, renderable._indexBuffer._buffer, 0, VK_INDEX_TYPE_UINT32);
-
-      // Bind specific push constants for this renderable
-      if (renderable._pushConstantsSize > 0) {
-        vkCmdPushConstants(commandBuffer, material._pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, renderable._pushConstantsSize, &renderable._pushConstants[0]);
-      }
-
-      // Draw command
-      vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), static_cast<std::uint32_t>(renderable._numInstances), 0, 0, 0);
-    }
-  }
+  // Post-processing pass
+  recordCommandBufferPP(commandBuffer, imageIndex, debug);
 
   if (debug) {
     // Shadow map overlay
+    // TODO: Stack debug texture overlays, not just shadow map
     Renderable* rend = nullptr;
     for (auto& renderable : _currentRenderables) {
-      if (renderable._id == _shadowpass._debugModelId) {
+      if (renderable._id == _shadowPass._debugModelId) {
         rend = &renderable;
         break;
       }
     }
 
+    // Hijack begin render from geometry pass...
     auto& material = _materials[SHADOW_DEBUG_MATERIAL_ID];
-    auto& descriptorSets = material._descriptorSets[_currentFrame];
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipeline);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayout, 0, 1, &descriptorSets, 0, nullptr);
+    auto& descriptorSets = material._descriptorSets[Material::STANDARD_INDEX][_currentFrame];
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelines[Material::STANDARD_INDEX]);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayouts[Material::STANDARD_INDEX], 0, 1, &descriptorSets, 0, nullptr);
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, &rend->_vertexBuffer._buffer, offsets);
     vkCmdDraw(commandBuffer, (uint32_t)rend->_numVertices, 1, 0, 0);
   }
 
-  // Imgui
+  // Imgui, hijack geometrypass begin...
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 
-  // End
   vkCmdEndRendering(commandBuffer);
 
-  // Layout transition of the swapchain image has to be done here.
+  // Swapchain image has to go from color attachment to present.
   imageutil::transitionImageLayout(commandBuffer, _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
@@ -1163,7 +1217,7 @@ bool VulkanRenderer::createSyncObjects()
 bool VulkanRenderer::initShadowpass()
 {
   auto cmdBuffer = beginSingleTimeCommands();
-  _shadowpass.createShadowResources(_device, _vmaAllocator, cmdBuffer, findDepthFormat(), 8196, 8196);
+  _shadowPass.createShadowResources(_device, _vmaAllocator, cmdBuffer, findDepthFormat(), 8196, 8196);
   endSingleTimeCommands(cmdBuffer);
 
   return true;
@@ -1171,8 +1225,23 @@ bool VulkanRenderer::initShadowpass()
 
 bool VulkanRenderer::initShadowDebug()
 {
-  _shadowpass._debugModelId = registerRenderable(_shadowpass._debugModel._vertices, {}, STANDARD_MATERIAL_ID);
-  setRenderableVisible(_shadowpass._debugModelId, false);
+  _shadowPass._debugModelId = registerRenderable(_shadowPass._debugModel._vertices, {}, STANDARD_MATERIAL_ID);
+  setRenderableVisible(_shadowPass._debugModelId, false);
+
+  return true;
+}
+
+bool VulkanRenderer::initPostProcessingRenderable()
+{
+  _ppPass._quadModelId = registerRenderable(_ppPass._quadModel._vertices, {}, STANDARD_MATERIAL_ID);
+  setRenderableVisible(_ppPass._quadModelId, false);
+
+  return true;
+}
+
+bool VulkanRenderer::initPostProcessingPass()
+{
+  _ppPass.init(_swapChain._swapChainImageFormat, _swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height);
 
   return true;
 }

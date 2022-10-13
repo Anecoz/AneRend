@@ -20,11 +20,14 @@
 #include "AllocatedImage.h"
 #include "Swapchain.h"
 #include "Shadowpass.h"
+#include "Geometrypass.h"
+#include "PostProcessingPass.h"
 
 #include <array>
 #include <unordered_map>
 #include <optional>
 #include <vector>
+#include <tuple>
 
 namespace render {
 
@@ -104,9 +107,19 @@ private:
   void cleanupRenderable(const Renderable& renderable);
 
   std::unordered_map<MaterialID, Material> _materials;
+  std::vector<std::pair<Material, std::size_t>> _ppMaterials; //size_t is index into pp render pass resources
   bool materialIdExists(MaterialID) const;
 
-  Shadowpass _shadowpass;
+  void drawRenderables(
+    VkCommandBuffer& commandBuffer,
+    std::size_t materialIndex,
+    bool shadowSupportRequired,
+    VkViewport& viewport,
+    VkRect2D& scissor);
+
+  Shadowpass _shadowPass;
+  Geometrypass _geometryPass;
+  PostProcessingPass _ppPass;
 
   VmaAllocator _vmaAllocator;
 
@@ -125,6 +138,8 @@ private:
   bool createDepthResources();
   bool initShadowpass();
   bool initShadowDebug();
+  bool initPostProcessingPass();
+  bool initPostProcessingRenderable();
   bool initImgui();
 
   bool checkValidationLayerSupport();
@@ -153,6 +168,8 @@ private:
 
   void recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug);
   void recordCommandBufferShadow(VkCommandBuffer commandBuffer, bool debug);
+  void recordCommandBufferGeometry(VkCommandBuffer commandBuffer, bool debug);
+  void recordCommandBufferPP(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug);
 
   GLFWwindow* _window;
   bool _enableValidationLayers;

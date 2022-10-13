@@ -446,7 +446,7 @@ namespace render {
 Material MaterialFactory::createStandardMaterial(
   VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
   VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
-  VkImageView* imageView, VkSampler* sampler, VkImageLayout imageLayout)
+  VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout)
 {
   Material output;
 
@@ -455,7 +455,7 @@ Material MaterialFactory::createStandardMaterial(
 
   // Non-shadow
   internalCreate(
-    output._descriptorSetLayout, output._pipelineLayout, output._pipeline,
+    output._descriptorSetLayouts[Material::STANDARD_INDEX], output._pipelineLayouts[Material::STANDARD_INDEX], output._pipelines[Material::STANDARD_INDEX],
     device, colorFormat, depthFormat,
     0, 1,
     "standard_vert.spv", "standard_frag.spv",
@@ -468,7 +468,7 @@ Material MaterialFactory::createStandardMaterial(
     true);
 
   internalCreate(
-    output._descriptorSetLayoutShadow, output._pipelineLayoutShadow, output._pipelineShadow,
+    output._descriptorSetLayouts[Material::SHADOW_INDEX], output._pipelineLayouts[Material::SHADOW_INDEX], output._pipelines[Material::SHADOW_INDEX],
     device, colorFormat, depthFormat,
     0, -1,
     "standard_shadow_vert.spv", "",
@@ -485,16 +485,16 @@ Material MaterialFactory::createStandardMaterial(
   {
     VkDeviceSize bufferSize = sizeof(StandardUBO);
 
-    output._ubos.resize(numCopies);
+    output._ubos[Material::STANDARD_INDEX].resize(numCopies);
 
     for (size_t i = 0; i < numCopies; i++) {
-      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubos[i]);
+      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubos[Material::STANDARD_INDEX][i]);
     }
 
     if (!internalCreateDescriptorSets(
-          device, output._descriptorSetLayout, output._descriptorSets,
-          numCopies, descriptorPool, output._ubos, bufferSize,
-          imageView, sampler, imageLayout, 0, 1)) {
+          device, output._descriptorSetLayouts[Material::STANDARD_INDEX], output._descriptorSets[Material::STANDARD_INDEX],
+          numCopies, descriptorPool, output._ubos[Material::STANDARD_INDEX], bufferSize,
+          imageView, sampler, samplerImageLayout, 0, 1)) {
       printf("Could not create descriptor set!\n");
       return output;
     }
@@ -504,16 +504,16 @@ Material MaterialFactory::createStandardMaterial(
   {
     VkDeviceSize bufferSize = sizeof(ShadowUBO);
 
-    output._ubosShadow.resize(numCopies);
+    output._ubos[Material::SHADOW_INDEX].resize(numCopies);
 
     for (size_t i = 0; i < numCopies; i++) {
-      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubosShadow[i]);
+      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubos[Material::SHADOW_INDEX][i]);
     }
 
     if (!internalCreateDescriptorSets(
-          device, output._descriptorSetLayoutShadow, output._descriptorSetsShadow,
-          numCopies, descriptorPool, output._ubosShadow, bufferSize,
-          nullptr, nullptr, imageLayout, 0, -1)) {
+          device, output._descriptorSetLayouts[Material::SHADOW_INDEX], output._descriptorSets[Material::SHADOW_INDEX],
+          numCopies, descriptorPool, output._ubos[Material::SHADOW_INDEX], bufferSize,
+          nullptr, nullptr, samplerImageLayout, 0, -1)) {
       printf("Could not create descriptor set!\n");
       return output;
     }
@@ -525,12 +525,12 @@ Material MaterialFactory::createStandardMaterial(
 Material MaterialFactory::createShadowDebugMaterial(
   VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
   VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
-  VkImageView* imageView, VkSampler* sampler, VkImageLayout imageLayout)
+  VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout)
 {
   Material output;
 
   internalCreate(
-    output._descriptorSetLayout, output._pipelineLayout, output._pipeline,
+    output._descriptorSetLayouts[Material::STANDARD_INDEX], output._pipelineLayouts[Material::STANDARD_INDEX], output._pipelines[Material::STANDARD_INDEX],
     device, colorFormat, depthFormat,
     -1, 0,
     "shadow_debug_vert.spv", "shadow_debug_frag.spv",
@@ -544,9 +544,9 @@ Material MaterialFactory::createShadowDebugMaterial(
   );
 
   if (!internalCreateDescriptorSets(
-        device, output._descriptorSetLayout, output._descriptorSets,
+        device, output._descriptorSetLayouts[Material::STANDARD_INDEX], output._descriptorSets[Material::STANDARD_INDEX],
         numCopies, descriptorPool, {}, 0,
-        imageView, sampler, imageLayout, -1, 0)) {
+        imageView, sampler, samplerImageLayout, -1, 0)) {
     printf("Could not create descriptor set!\n");
     return output;
   }
@@ -557,7 +557,7 @@ Material MaterialFactory::createShadowDebugMaterial(
 Material MaterialFactory::createStandardInstancedMaterial(
   VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
   VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
-  VkImageView* imageView, VkSampler* sampler, VkImageLayout imageLayout)
+  VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout)
 {
   Material output;
 
@@ -565,7 +565,7 @@ Material MaterialFactory::createStandardInstancedMaterial(
   output._supportsShadowPass = true;
 
   internalCreate(
-    output._descriptorSetLayout, output._pipelineLayout, output._pipeline,
+    output._descriptorSetLayouts[Material::STANDARD_INDEX], output._pipelineLayouts[Material::STANDARD_INDEX], output._pipelines[Material::STANDARD_INDEX],
     device, colorFormat, depthFormat,
     0, 1,
     "standard_instanced_vert.spv", "standard_frag.spv",
@@ -579,7 +579,7 @@ Material MaterialFactory::createStandardInstancedMaterial(
   );
 
   internalCreate(
-    output._descriptorSetLayoutShadow, output._pipelineLayoutShadow, output._pipelineShadow,
+    output._descriptorSetLayouts[Material::SHADOW_INDEX], output._pipelineLayouts[Material::SHADOW_INDEX], output._pipelines[Material::SHADOW_INDEX],
     device, colorFormat, depthFormat,
     0, -1,
     "standard_instanced_shadow_vert.spv", "",
@@ -596,16 +596,16 @@ Material MaterialFactory::createStandardInstancedMaterial(
   {
     VkDeviceSize bufferSize = sizeof(StandardUBO);
 
-    output._ubos.resize(numCopies);
+    output._ubos[Material::STANDARD_INDEX].resize(numCopies);
 
     for (size_t i = 0; i < numCopies; i++) {
-      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubos[i]);
+      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubos[Material::STANDARD_INDEX][i]);
     }
 
     if (!internalCreateDescriptorSets(
-          device, output._descriptorSetLayout, output._descriptorSets,
-          numCopies, descriptorPool, output._ubos, bufferSize,
-          imageView, sampler, imageLayout, 0, 1)) {
+          device, output._descriptorSetLayouts[Material::STANDARD_INDEX], output._descriptorSets[Material::STANDARD_INDEX],
+          numCopies, descriptorPool, output._ubos[Material::STANDARD_INDEX], bufferSize,
+          imageView, sampler, samplerImageLayout, 0, 1)) {
       printf("Could not create descriptor set!\n");
       return output;
     }
@@ -615,19 +615,95 @@ Material MaterialFactory::createStandardInstancedMaterial(
   {
     VkDeviceSize bufferSize = sizeof(ShadowUBO);
 
-    output._ubosShadow.resize(numCopies);
+    output._ubos[Material::SHADOW_INDEX].resize(numCopies);
 
     for (size_t i = 0; i < numCopies; i++) {
-      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubosShadow[i]);
+      bufferutil::createBuffer(vmaAllocator, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, output._ubos[Material::SHADOW_INDEX][i]);
     }
 
     if (!internalCreateDescriptorSets(
-          device, output._descriptorSetLayoutShadow, output._descriptorSetsShadow,
-          numCopies, descriptorPool, output._ubosShadow, bufferSize,
-          nullptr, nullptr, imageLayout, 0, -1)) {
+          device, output._descriptorSetLayouts[Material::SHADOW_INDEX], output._descriptorSets[Material::SHADOW_INDEX],
+          numCopies, descriptorPool, output._ubos[Material::SHADOW_INDEX], bufferSize,
+          nullptr, nullptr, samplerImageLayout, 0, -1)) {
       printf("Could not create descriptor set!\n");
       return output;
     }
+  }
+
+  return output;
+}
+
+Material MaterialFactory::createPPColorInvMaterial(
+    VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
+    VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
+    VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout)
+{
+  Material output;
+  output._supportsPostProcessingPass = true;
+
+  if (!internalCreate(
+    output._descriptorSetLayouts[Material::POST_PROCESSING_INDEX], output._pipelineLayouts[Material::POST_PROCESSING_INDEX], output._pipelines[Material::POST_PROCESSING_INDEX],
+    device, colorFormat, depthFormat,
+    -1, 0,
+    "pp_vert.spv", "pp_color_inv_frag.spv",
+    false,
+    0, -1, -1, 1,
+    VK_CULL_MODE_BACK_BIT,
+    false, 0.0f, 0.0f,
+    false,
+    true,
+    false)) {
+    printf("Could not create pp color inv mat!\n");
+    return output;
+  }
+
+  if (!internalCreateDescriptorSets(
+    device,
+    output._descriptorSetLayouts[Material::POST_PROCESSING_INDEX], output._descriptorSets[Material::POST_PROCESSING_INDEX],
+    numCopies, descriptorPool,
+    {}, 0,
+    imageView, sampler, samplerImageLayout,
+    -1, 0)) {
+    printf("Could not create pp color inv descriptor sets!\n");
+    return output;
+  }
+
+  return output;
+}
+
+Material MaterialFactory::createPPFlipMaterial(
+    VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
+    VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
+    VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout)
+{
+  Material output;
+  output._supportsPostProcessingPass = true;
+
+  if (!internalCreate(
+    output._descriptorSetLayouts[Material::POST_PROCESSING_INDEX], output._pipelineLayouts[Material::POST_PROCESSING_INDEX], output._pipelines[Material::POST_PROCESSING_INDEX],
+    device, colorFormat, depthFormat,
+    -1, 0,
+    "pp_vert.spv", "pp_flip_frag.spv",
+    false,
+    0, -1, -1, 1,
+    VK_CULL_MODE_BACK_BIT,
+    false, 0.0f, 0.0f,
+    false,
+    true,
+    false)) {
+    printf("Could not create pp flip mat!\n");
+    return output;
+  }
+
+  if (!internalCreateDescriptorSets(
+    device,
+    output._descriptorSetLayouts[Material::POST_PROCESSING_INDEX], output._descriptorSets[Material::POST_PROCESSING_INDEX],
+    numCopies, descriptorPool,
+    {}, 0,
+    imageView, sampler, samplerImageLayout,
+    -1, 0)) {
+    printf("Could not create pp flip descriptor sets!\n");
+    return output;
   }
 
   return output;

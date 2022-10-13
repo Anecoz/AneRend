@@ -36,7 +36,7 @@ struct Shadowpass
     vkCmdBeginRendering(cmdBuffer, &renderInfo);
   }
 
-  void viewport(VkCommandBuffer cmdBuffer)
+  VkViewport viewport()
   {
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -45,15 +45,15 @@ struct Shadowpass
     viewport.height = static_cast<float>(_shadowExtent.height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+    return viewport;
   }
 
-  void scissor(VkCommandBuffer cmdBuffer)
+  VkRect2D scissor()
   {
     VkRect2D scissor{};
     scissor.offset = {0, 0};
     scissor.extent = _shadowExtent;
-    vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+    return scissor;
   }
 
   void cleanup(VmaAllocator vmaAllocator, VkDevice device)
@@ -68,7 +68,7 @@ struct Shadowpass
     _shadowExtent.height = height;
     _shadowExtent.width = width;
 
-    imageutil::createImage(width, height, depthFormat, VK_IMAGE_TILING_OPTIMAL, vmaAllocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _shadowImage);
+    imageutil::createImage(width, height, depthFormat, VK_IMAGE_TILING_OPTIMAL, vmaAllocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, _shadowImage);
     _shadowImageView = imageutil::createImageView(device, _shadowImage._image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
     imageutil::transitionImageLayout(cmdBuffer, _shadowImage._image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
@@ -91,7 +91,8 @@ struct Shadowpass
       return false;
     }
 
-    _debugModel._vertices = graphicsutil::createScreenQuad();
+    _debugModel._vertices = graphicsutil::createScreenQuad(0.25f, 0.25f);
+    _shadowImageFormat = depthFormat;
 
     return true;
   }
@@ -103,6 +104,7 @@ struct Shadowpass
   AllocatedImage _shadowImage;
   VkImageView _shadowImageView;
   VkSampler _shadowSampler;
+  VkFormat _shadowImageFormat;
 };
 
 }

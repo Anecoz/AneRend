@@ -212,7 +212,7 @@ void StageApplication::calculateShadowMatrix()
   cornersWorld.emplace_back(wFarLeftTop);
 
   midPoint = wNearLeftBottom + wNearLeftTop + wNearRightBottom + wNearRightTop + wFarLeftBottom + wFarRightBottom + wFarRightTop + wFarLeftTop;
-  midPoint /= 8.0;
+  midPoint /= 8.0f;
   
   glm::mat4 lvMatrix = glm::lookAt(glm::vec3(midPoint) - glm::normalize(_sunDir), glm::vec3(midPoint), glm::vec3(0.0, 1.0, 0.0));
 
@@ -224,11 +224,8 @@ void StageApplication::calculateShadowMatrix()
   float minY = transf.y;
   float maxY = transf.y;
 
-  //printf("Corner world pos: %lf %lf %lf\n", cornersWorld[0].x, cornersWorld[0].y, cornersWorld[0].z);
   for (unsigned int i = 1; i < 8; i++) {
     transf = lvMatrix * cornersWorld[i];
-
-    //printf("Corner world pos: %lf %lf %lf\n", cornersWorld[i].x, cornersWorld[i].y, cornersWorld[i].z);
 
     if (transf.z > maxZ) maxZ = transf.z;
     if (transf.z < minZ) minZ = transf.z;
@@ -237,12 +234,6 @@ void StageApplication::calculateShadowMatrix()
     if (transf.y > maxY) maxY = transf.y;
     if (transf.y < minY) minY = transf.y;
   }
-
-  //printf("minx, maxx, miny, maxy, minz, maxz: %lf %lf %lf %lf %lf %lf\n", minX, maxX, minY, maxY, minZ, maxZ);
-  /*auto nearMinX = (lvMatrix * wNearLeftTop).x;
-  auto nearMaxX = (lvMatrix * wNearRightTop).x;
-  auto nearMinY = (lvMatrix * wNearLeftBottom).y;
-  auto nearMaxY = (lvMatrix * wNearRightTop).y;*/
 
   glm::mat4 lpMatrix = glm::ortho(minX, maxX, minY, maxY, minZ, maxZ);
 

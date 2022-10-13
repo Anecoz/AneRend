@@ -29,7 +29,7 @@ float inShadow() {
   vec2 shadowMapCoord = projCoords.xy * 0.5 + 0.5;
 
   float depth = projCoords.z;
-  int stepsPerAxis = 8;
+  int stepsPerAxis = 4;
   float total = 0.0;
   for (int x = 0; x < stepsPerAxis; ++x) {
     for (int y = 0; y < stepsPerAxis; ++y) {
