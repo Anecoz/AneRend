@@ -31,6 +31,11 @@ public:
     VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
     VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
     VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout);
+
+  static Material createPPBlurMaterial(
+    VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
+    VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
+    VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout);
 };
 
 }

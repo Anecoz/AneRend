@@ -765,7 +765,23 @@ bool VulkanRenderer::loadKnownMaterials()
   // Post processing
   auto cmdBuffer = beginSingleTimeCommands();
 
-  // Flip
+  // Blur
+  {
+    std::size_t idx;
+    _ppPass.createResources(_device, _vmaAllocator, cmdBuffer, &idx);
+    auto ppMat = MaterialFactory::createPPBlurMaterial(
+      _device, _swapChain._swapChainImageFormat, findDepthFormat(),
+      MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
+      &_ppPass._ppResources[idx]._ppInputImageView, &_ppPass._ppResources[idx]._ppSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    if (!ppMat) {
+      printf("Could not create pp material!\n");
+      return false;
+    }
+    _ppMaterials.emplace_back(std::make_pair(std::move(ppMat), idx));
+  }
+
+  /*// Flip
   {
     std::size_t idx;
     _ppPass.createResources(_device, _vmaAllocator, cmdBuffer, &idx);
@@ -795,8 +811,7 @@ bool VulkanRenderer::loadKnownMaterials()
       return false;
     }
     _ppMaterials.emplace_back(std::make_pair(std::move(ppMat), idx));
-  }
-
+  }*/
   endSingleTimeCommands(cmdBuffer);
 
   return true;
@@ -1109,7 +1124,7 @@ void VulkanRenderer::recordCommandBufferPP(VkCommandBuffer commandBuffer, std::u
   }
 }
 
-void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug)
+void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool pp, bool debug)
 {
   VkCommandBufferBeginInfo beginInfo{};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1140,19 +1155,30 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
 
   // Geometry pass
   // Transition the ppInput image to color attachment
-  imageutil::transitionImageLayout(commandBuffer, _ppPass._ppResources[0]._ppInputImage._image, _ppPass._ppImageFormat,
-    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+  if (!_ppMaterials.empty() && pp) {
+    imageutil::transitionImageLayout(commandBuffer, _ppPass._ppResources[0]._ppInputImage._image, _ppPass._ppImageFormat,
+      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-  _geometryPass.beginRendering(
-    commandBuffer,
-     _ppPass._ppResources[0]._ppInputImageView,
-    _depthImageView,
-    _swapChain._swapChainExtent);
-  recordCommandBufferGeometry(commandBuffer, debug);
-  vkCmdEndRendering(commandBuffer);
+    _geometryPass.beginRendering(
+      commandBuffer,
+      _ppPass._ppResources[0]._ppInputImageView,
+      _depthImageView,
+      _swapChain._swapChainExtent);
+    recordCommandBufferGeometry(commandBuffer, debug);
+    vkCmdEndRendering(commandBuffer);
 
-  // Post-processing pass
-  recordCommandBufferPP(commandBuffer, imageIndex, debug);
+    // Post-processing pass
+    recordCommandBufferPP(commandBuffer, imageIndex, debug);
+  }
+  else {
+    // No post process effects, simply do the geometry pass
+    _geometryPass.beginRendering(
+      commandBuffer,
+      _swapChain._swapChainImageViews[imageIndex],
+      _depthImageView,
+      _swapChain._swapChainExtent);
+    recordCommandBufferGeometry(commandBuffer, debug);
+  }
 
   if (debug) {
     // Shadow map overlay
@@ -1326,7 +1352,7 @@ void VulkanRenderer::prepare()
   ImGui::NewFrame();
 }
 
-void VulkanRenderer::drawFrame(bool debug)
+void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
 {
   if (_currentRenderables.empty()) return;
   // At the start of the frame, we want to wait until the previous frame has finished, so that the command buffer and semaphores are available to use.
@@ -1353,7 +1379,7 @@ void VulkanRenderer::drawFrame(bool debug)
 
   // Recording command buffer
   vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
-  recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex, debug);
+  recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex, applyPostProcessing, debug);
 
   // Submit the command buffer
   VkSubmitInfo submitInfo{};

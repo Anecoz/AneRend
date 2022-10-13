@@ -20,13 +20,13 @@ static std::vector<render::Vertex> createScreenQuad(float widthPercent, float he
   float y = -1.0f + heightPercent * 2.0f;
 
   return { 
-    {{-1.0f, -1.0f, depth}, color, normal, {0.0f, 1.0f}},
-    {{-1.0f, y, depth}, color, normal, {0.0f, 0.0f}},
-    {{x, -1.0f, depth}, color, normal, {1.0f, 1.0f}},
+    {{-1.0f, -1.0f, depth}, color, normal, {0.0f, 0.0f}},
+    {{-1.0f, y, depth}, color, normal, {0.0f, 1.0f}},
+    {{x, -1.0f, depth}, color, normal, {1.0f, 0.0f}},
 
-    {{x, -1.0f, depth}, color, normal, {1.0f, 1.0f}},
-    {{-1.0f, y, depth}, color, normal, {0.0f, 0.0f}},
-    {{x, y, depth}, color, normal, {1.0f, 0.0f}}
+    {{x, -1.0f, depth}, color, normal, {1.0f, 0.0f}},
+    {{-1.0f, y, depth}, color, normal, {0.0f, 1.0f}},
+    {{x, y, depth}, color, normal, {1.0f, 1.0f}}
   };
 }
 

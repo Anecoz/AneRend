@@ -439,6 +439,45 @@ bool internalCreate(
   return true;
 }
 
+render::Material internalCreatePP(
+  VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
+  VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
+  VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout,
+  const std::string& vert, const std::string& frag)
+{
+  render::Material output;
+  output._supportsPostProcessingPass = true;
+
+  if (!internalCreate(
+    output._descriptorSetLayouts[render::Material::POST_PROCESSING_INDEX], output._pipelineLayouts[render::Material::POST_PROCESSING_INDEX], output._pipelines[render::Material::POST_PROCESSING_INDEX],
+    device, colorFormat, depthFormat,
+    -1, 0,
+    vert, frag,
+    false,
+    0, -1, -1, 1,
+    VK_CULL_MODE_BACK_BIT,
+    false, 0.0f, 0.0f,
+    false,
+    true,
+    false)) {
+    printf("Could not create pp flip mat!\n");
+    return output;
+  }
+
+  if (!internalCreateDescriptorSets(
+    device,
+    output._descriptorSetLayouts[render::Material::POST_PROCESSING_INDEX], output._descriptorSets[render::Material::POST_PROCESSING_INDEX],
+    numCopies, descriptorPool,
+    {}, 0,
+    imageView, sampler, samplerImageLayout,
+    -1, 0)) {
+    printf("Could not create pp flip descriptor sets!\n");
+    return output;
+  }
+
+  return output;
+}
+
 }
 
 namespace render {
@@ -638,37 +677,11 @@ Material MaterialFactory::createPPColorInvMaterial(
     VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
     VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout)
 {
-  Material output;
-  output._supportsPostProcessingPass = true;
-
-  if (!internalCreate(
-    output._descriptorSetLayouts[Material::POST_PROCESSING_INDEX], output._pipelineLayouts[Material::POST_PROCESSING_INDEX], output._pipelines[Material::POST_PROCESSING_INDEX],
+  return internalCreatePP(
     device, colorFormat, depthFormat,
-    -1, 0,
-    "pp_vert.spv", "pp_color_inv_frag.spv",
-    false,
-    0, -1, -1, 1,
-    VK_CULL_MODE_BACK_BIT,
-    false, 0.0f, 0.0f,
-    false,
-    true,
-    false)) {
-    printf("Could not create pp color inv mat!\n");
-    return output;
-  }
-
-  if (!internalCreateDescriptorSets(
-    device,
-    output._descriptorSetLayouts[Material::POST_PROCESSING_INDEX], output._descriptorSets[Material::POST_PROCESSING_INDEX],
-    numCopies, descriptorPool,
-    {}, 0,
+    numCopies, descriptorPool, vmaAllocator,
     imageView, sampler, samplerImageLayout,
-    -1, 0)) {
-    printf("Could not create pp color inv descriptor sets!\n");
-    return output;
-  }
-
-  return output;
+    "pp_vert.spv", "pp_color_inv_frag.spv");
 }
 
 Material MaterialFactory::createPPFlipMaterial(
@@ -676,37 +689,23 @@ Material MaterialFactory::createPPFlipMaterial(
     VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
     VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout)
 {
-  Material output;
-  output._supportsPostProcessingPass = true;
-
-  if (!internalCreate(
-    output._descriptorSetLayouts[Material::POST_PROCESSING_INDEX], output._pipelineLayouts[Material::POST_PROCESSING_INDEX], output._pipelines[Material::POST_PROCESSING_INDEX],
+  return internalCreatePP(
     device, colorFormat, depthFormat,
-    -1, 0,
-    "pp_vert.spv", "pp_flip_frag.spv",
-    false,
-    0, -1, -1, 1,
-    VK_CULL_MODE_BACK_BIT,
-    false, 0.0f, 0.0f,
-    false,
-    true,
-    false)) {
-    printf("Could not create pp flip mat!\n");
-    return output;
-  }
-
-  if (!internalCreateDescriptorSets(
-    device,
-    output._descriptorSetLayouts[Material::POST_PROCESSING_INDEX], output._descriptorSets[Material::POST_PROCESSING_INDEX],
-    numCopies, descriptorPool,
-    {}, 0,
+    numCopies, descriptorPool, vmaAllocator,
     imageView, sampler, samplerImageLayout,
-    -1, 0)) {
-    printf("Could not create pp flip descriptor sets!\n");
-    return output;
-  }
+    "pp_vert.spv", "pp_flip_frag.spv");
+}
 
-  return output;
+Material MaterialFactory::createPPBlurMaterial(
+    VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
+    VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
+    VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout)
+{
+  return internalCreatePP(
+    device, colorFormat, depthFormat,
+    numCopies, descriptorPool, vmaAllocator,
+    imageView, sampler, samplerImageLayout,
+    "pp_vert.spv", "pp_blur_frag.spv");
 }
 
 }

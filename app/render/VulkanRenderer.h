@@ -75,7 +75,7 @@ public:
 
   // Goes through all registered renderables, updates any resource descriptor sets (like UBOs),
   // updates push constants, renders and queues for presentation.
-  void drawFrame(bool debug);
+  void drawFrame(bool applyPostProcessing, bool debug);
 
   // Will recreate swapchain to accomodate the new window size.
   void notifyFramebufferResized();
@@ -166,7 +166,7 @@ private:
   VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
   VkFormat findDepthFormat();
 
-  void recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug);
+  void recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool pp, bool debug);
   void recordCommandBufferShadow(VkCommandBuffer commandBuffer, bool debug);
   void recordCommandBufferGeometry(VkCommandBuffer commandBuffer, bool debug);
   void recordCommandBufferPP(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug);

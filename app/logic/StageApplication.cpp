@@ -27,6 +27,7 @@ StageApplication::~StageApplication()
 }
 
 static bool g_DebugShadow = true;
+static bool g_PP = true;
 
 bool StageApplication::init()
 {
@@ -137,10 +138,11 @@ void StageApplication::render()
       _sunDir.z = dir[1];
     }
     ImGui::Checkbox("Shadow debug", &g_DebugShadow);
+    ImGui::Checkbox("Apply post processing", &g_PP);
     ImGui::End();
   }
 
-  _vkRenderer.drawFrame(g_DebugShadow);
+  _vkRenderer.drawFrame(g_PP, g_DebugShadow);
 }
 
 void StageApplication::calculateShadowMatrix()
