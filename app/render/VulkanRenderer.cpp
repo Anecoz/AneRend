@@ -70,6 +70,17 @@ VulkanRenderer::~VulkanRenderer()
   _shadowPass.cleanup(_vmaAllocator, _device);
   _ppPass.cleanup(_vmaAllocator, _device);
 
+  for (auto& light: _lights) {
+    for (auto& v: light._shadowImageViews) {
+      vkDestroyImageView(_device, v, nullptr);
+    }
+    vkDestroyImageView(_device, light._cubeShadowView, nullptr);
+
+    vmaDestroyImage(_vmaAllocator, light._shadowImage._image, light._shadowImage._allocation);
+    vkDestroySampler(_device, light._sampler, nullptr);
+    light._shadowImageViews.clear();
+  }
+
   vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
   vkDestroyDescriptorPool(_device, _imguiDescriptorPool, nullptr);
 
@@ -198,6 +209,11 @@ bool VulkanRenderer::init()
 
   printf("Init shadow pass...");
   res &= initShadowpass();
+  if (!res) return false;
+  printf("Done!\n");
+
+  printf("Init lights...");
+  res &= initLights();
   if (!res) return false;
   printf("Done!\n");
 
@@ -350,14 +366,24 @@ void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, co
   standardUbo.proj = camera.getProjection();
   standardUbo.cameraPos = glm::vec4(camera.getPosition(), 1.0);
   standardUbo.lightDir = lightDir;
-
-  auto shadowProj = shadowCamera.getProjection();
   standardUbo.proj[1][1] *= -1;
-  shadowProj[1][1] *= -1;
-  standardUbo.shadowMatrix = shadowProj * shadowCamera.getCamMatrix();
+
+  for (std::size_t i = 0; i < _lights.size(); ++i) {
+    auto shadowProj = _lights[i]._proj;
+    shadowProj[1][1] *= -1;
+
+    _lights[i].debugUpdatePos(delta);
+    _lights[i].updateViewMatrices();
+    for (std::size_t v = 0; v < 6; ++v) {
+      standardUbo.shadowMatrix[i * 6 + v] = shadowProj * _lights[i]._view[v];
+    }
+
+    standardUbo.lightPos[i] = glm::vec4(_lights[i]._pos, 1.0f);
+    standardUbo.lightColor[i] = glm::vec4(_lights[i]._color, 1.0f);
+  }
 
   ShadowUBO shadowUbo{};
-  shadowUbo.shadowMatrix = standardUbo.shadowMatrix;
+  shadowUbo.shadowMatrix = standardUbo.shadowMatrix[0];
 
   for (auto& mat: _materials) {
     mat.second.updateUbos(_currentFrame, _vmaAllocator, standardUbo, shadowUbo);
@@ -725,11 +751,19 @@ bool VulkanRenderer::createSwapChain()
 
 bool VulkanRenderer::loadKnownMaterials()
 {
+  // Create vectors for the light cubemap textures and samplers
+  std::vector<VkImageView*> lightCubeViews;
+  std::vector<VkSampler*> lightSamplers;
+  for (auto& light: _lights) {
+    lightCubeViews.emplace_back(&light._cubeShadowView);
+    lightSamplers.emplace_back(&light._sampler);
+  }
+
   // Standard material
   auto standardMaterial = MaterialFactory::createStandardMaterial(
     _device, _swapChain._swapChainImageFormat, findDepthFormat(),
     MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-    &_shadowPass._shadowImageView, &_shadowPass._shadowSampler, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+    lightCubeViews, lightSamplers, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
   if (!standardMaterial) {
     printf("Could not create standard material!\n");
@@ -742,7 +776,7 @@ bool VulkanRenderer::loadKnownMaterials()
   auto standardInstancedMaterial = MaterialFactory::createStandardInstancedMaterial(
     _device, _swapChain._swapChainImageFormat, findDepthFormat(),
     MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-    &_shadowPass._shadowImageView, &_shadowPass._shadowSampler, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+    lightCubeViews, lightSamplers, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
   if (!standardInstancedMaterial) {
     printf("Could not create standard instanced material!\n");
@@ -754,7 +788,7 @@ bool VulkanRenderer::loadKnownMaterials()
   auto shadowDebugMat = MaterialFactory::createShadowDebugMaterial(
     _device, _swapChain._swapChainImageFormat, findDepthFormat(),
     MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-    &_shadowPass._shadowImageView, &_shadowPass._shadowSampler, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+    &_lights[0]._shadowImageViews[0], &_shadowPass._shadowSampler, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
   if (!shadowDebugMat) {
     printf("Could not create shadow debug material!\n");
@@ -1029,7 +1063,9 @@ void VulkanRenderer::drawRenderables(
   VkCommandBuffer& commandBuffer,
   std::size_t materialIndex,
   bool shadowSupportRequired,
-  VkViewport& viewport, VkRect2D& scissor)
+  VkViewport& viewport, VkRect2D& scissor,
+  void* extraPushConstants,
+  std::size_t extraPushConstantsSize)
 {
   for (int i = 0; i <= MAX_MATERIAL_ID - 1; ++i) {
     if (_materials.find(i) == _materials.end()) continue;
@@ -1064,7 +1100,15 @@ void VulkanRenderer::drawRenderables(
 
       // Bind specific push constants for this renderable
       if (renderable._pushConstantsSize > 0) {
-        vkCmdPushConstants(commandBuffer, material._pipelineLayouts[materialIndex], VK_SHADER_STAGE_VERTEX_BIT, 0, renderable._pushConstantsSize, &renderable._pushConstants[0]);
+        uint32_t pushSize = renderable._pushConstantsSize;
+        if (extraPushConstants) {
+          std::memcpy(&renderable._pushConstants[0] + renderable._pushConstantsSize, extraPushConstants, extraPushConstantsSize);
+          pushSize += (uint32_t)extraPushConstantsSize;
+        }
+        vkCmdPushConstants(commandBuffer, material._pipelineLayouts[materialIndex], VK_SHADER_STAGE_VERTEX_BIT, 0, pushSize, &renderable._pushConstants[0]);
+      }
+      else if (extraPushConstants) {
+        vkCmdPushConstants(commandBuffer, material._pipelineLayouts[materialIndex], VK_SHADER_STAGE_VERTEX_BIT, 0, (uint32_t)extraPushConstantsSize, extraPushConstants);
       }
 
       // Draw command
@@ -1075,7 +1119,26 @@ void VulkanRenderer::drawRenderables(
 
 void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bool debug)
 {
-  drawRenderables(commandBuffer, Material::SHADOW_INDEX, true, _shadowPass.viewport(), _shadowPass.scissor());
+  for (auto& light: _lights) {
+    auto shadowProj = light._proj;
+    shadowProj[1][1] *= -1;
+    for (std::size_t view = 0; view < light._shadowImageViews.size(); ++view) {
+      imageutil::transitionImageLayout(commandBuffer, light._shadowImage._image, _shadowPass._shadowImageFormat,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, (uint32_t)view, 1);
+
+      _shadowPass.beginRendering(commandBuffer, light._shadowImageViews[view]);
+      
+      auto shadowMatrix = shadowProj * light._view[view];
+      drawRenderables(commandBuffer, Material::SHADOW_INDEX, true, _shadowPass.viewport(), _shadowPass.scissor(),
+        (void*)&shadowMatrix, 4 * 4 * 4);
+
+      vkCmdEndRendering(commandBuffer);
+
+      // Transition shadow map image to shader readable
+      imageutil::transitionImageLayout(commandBuffer, light._shadowImage._image, _shadowPass._shadowImageFormat,
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, (uint32_t)view, 1);
+    }
+  }
 }
 
 void VulkanRenderer::recordCommandBufferGeometry(VkCommandBuffer commandBuffer, bool debug)
@@ -1157,17 +1220,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
                         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
   // Shadow pass
-  // Transition shadow map image to normal depth attachment
-  imageutil::transitionImageLayout(commandBuffer, _shadowPass._shadowImage._image, _shadowPass._shadowImageFormat,
-    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
-  _shadowPass.beginRendering(commandBuffer);
   recordCommandBufferShadow(commandBuffer, debug);
-  vkCmdEndRendering(commandBuffer);
-
-  // Transition shadow map image to shader readable
-  imageutil::transitionImageLayout(commandBuffer, _shadowPass._shadowImage._image, _shadowPass._shadowImageFormat,
-    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
   // Geometry pass
   // Transition the ppInput image to color attachment
@@ -1259,7 +1312,74 @@ bool VulkanRenderer::createSyncObjects()
 bool VulkanRenderer::initShadowpass()
 {
   auto cmdBuffer = beginSingleTimeCommands();
-  _shadowPass.createShadowResources(_device, _vmaAllocator, cmdBuffer, findDepthFormat(), 8196, 8196);
+  _shadowPass.createShadowResources(_device, _vmaAllocator, cmdBuffer, findDepthFormat(), 1024, 1024);
+  endSingleTimeCommands(cmdBuffer);
+
+  return true;
+}
+
+bool VulkanRenderer::initLights()
+{
+  _lights.resize(4);
+
+  auto cmdBuffer = beginSingleTimeCommands();
+  auto depthFormat = findDepthFormat();
+  for (std::size_t i = 0; i < _lights.size(); ++i) {
+    auto& light = _lights[i];
+    float zNear = 0.1f;
+    float zFar = 50.0f;
+
+    light._type = Light::Point;
+    light._color = glm::vec3(1.0f, 1.0f * i / (_lights.size() - 1), 0.0f);
+    light._pos = glm::vec3(1.0f * i * 3, 5.0f, 0.0f);
+    light._proj = glm::perspective(glm::radians(90.0f), 1.0f, zNear, zFar);
+    light._debugCircleRadius = 5.0 + 15.0 * (double)i;
+    light._debugOrigX = light._pos.x;
+    light._debugOrigZ = light._pos.z;
+
+    // Construct view matrices
+    light.updateViewMatrices();
+
+    // Construct the image
+    imageutil::createImage(
+      _shadowPass._shadowExtent.width, _shadowPass._shadowExtent.height,
+      depthFormat, VK_IMAGE_TILING_OPTIMAL, _vmaAllocator,
+      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, light._shadowImage,
+      6, VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
+
+    // Create views
+    light._cubeShadowView = imageutil::createImageView(_device, light._shadowImage._image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 0, 6, VK_IMAGE_VIEW_TYPE_CUBE);
+
+    for (std::size_t view = 0; view < 6; ++view) {
+      light._shadowImageViews.emplace_back(
+        imageutil::createImageView(
+          _device, light._shadowImage._image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, (uint32_t)view, 1));
+
+      // Transition image
+      imageutil::transitionImageLayout(cmdBuffer, light._shadowImage._image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, (uint32_t)view, 1);
+    }
+
+    // Create the sampler
+    VkSamplerCreateInfo sampler{};
+    sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler.magFilter = VK_FILTER_NEAREST;
+    sampler.minFilter = VK_FILTER_NEAREST;
+    sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    sampler.addressModeV = sampler.addressModeU;
+    sampler.addressModeW = sampler.addressModeU;
+    sampler.mipLodBias = 0.0f;
+    sampler.maxAnisotropy = 1.0f;
+    sampler.compareOp = VK_COMPARE_OP_NEVER;
+    sampler.minLod = 0.0f;
+    sampler.maxLod = 1.0f;
+    sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+
+    if (vkCreateSampler(_device, &sampler, nullptr, &light._sampler) != VK_SUCCESS) {
+      printf("Could not create shadow map sampler!\n");
+      return false;
+    }
+  }
   endSingleTimeCommands(cmdBuffer);
 
   return true;

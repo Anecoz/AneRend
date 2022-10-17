@@ -12,14 +12,14 @@ namespace render {
 
 struct Shadowpass
 {
-  void beginRendering(VkCommandBuffer cmdBuffer)
+  void beginRendering(VkCommandBuffer cmdBuffer, VkImageView& imageView)
   {
     VkClearValue clearValue;
     clearValue.depthStencil = {1.0f, 0};
 
     VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
     depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-    depthAttachmentInfo.imageView = _shadowImageView;
+    depthAttachmentInfo.imageView = imageView;
     depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
     depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;

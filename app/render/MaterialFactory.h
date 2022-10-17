@@ -2,6 +2,8 @@
 
 #include "Material.h"
 
+#include <vector>
+
 namespace render {
 
 class MaterialFactory
@@ -10,12 +12,12 @@ public:
   static Material createStandardMaterial(
     VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
     VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
-    VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout);
+    const std::vector<VkImageView*>& textureImageViews, const std::vector<VkSampler*>& samplers, VkImageLayout samplerImageLayout);
 
   static Material createStandardInstancedMaterial(
     VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
     VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
-    VkImageView* imageView, VkSampler* sampler, VkImageLayout samplerImageLayout);
+    const std::vector<VkImageView*>& textureImageViews, const std::vector<VkSampler*>& samplers, VkImageLayout samplerImageLayout);
 
   static Material createShadowDebugMaterial(
     VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,

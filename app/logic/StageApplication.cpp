@@ -66,7 +66,7 @@ bool StageApplication::init()
     std::vector<std::uint8_t> dataVec;
     dataVec.resize(instanceMatrixData.size() * 4 * 4 * 4);
     memcpy(dataVec.data(), instanceMatrixData.data(), instanceMatrixData.size() * 4 * 4 * 4);
-    _modelId = _vkRenderer.registerRenderable(_testModel._vertices, _testModel._indices, render::STANDARD_INSTANCED_MATERIAL_ID, numInstances * numInstances, dataVec);
+    //_modelId = _vkRenderer.registerRenderable(_testModel._vertices, _testModel._indices, render::STANDARD_INSTANCED_MATERIAL_ID, numInstances * numInstances, dataVec);
   }
 
   // Do a couple of the big models
@@ -84,6 +84,7 @@ bool StageApplication::init()
     dataVec.resize(instanceMatrixData.size() * 4 * 4 * 4);
     memcpy(dataVec.data(), instanceMatrixData.data(), instanceMatrixData.size() * 4 * 4 * 4);
     _modelId2 = _vkRenderer.registerRenderable(_testModel2._vertices, _testModel2._indices, render::STANDARD_INSTANCED_MATERIAL_ID, numInstances * numInstances, dataVec);
+    //_modelId2 = _vkRenderer.registerRenderable(_testModel2._vertices, _testModel2._indices, render::STANDARD_MATERIAL_ID);
   }
 
   printf("Renderable registered! Id1: %lld, id2: %lld\n", _modelId, _modelId2);

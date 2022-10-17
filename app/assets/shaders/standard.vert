@@ -3,9 +3,11 @@
 layout(binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
-  mat4 shadowMatrix;
+  mat4 shadowMatrix[24];
   vec4 cameraPos;
   vec4 lightDir;
+  vec4 lightPos[4];
+  vec4 lightColor[4];
 } ubo;
 
 layout(push_constant) uniform constants {
@@ -23,7 +25,8 @@ layout(location = 3) out vec4 fragShadowPos;
 
 void main() {
   fragPosition = vec3(pushConstants.model * vec4(inPosition, 1.0));
-  fragShadowPos = ubo.shadowMatrix * vec4(fragPosition, 1.0);
+  fragShadowPos = ubo.shadowMatrix[0] * vec4(fragPosition, 1.0);
+
   gl_Position = ubo.proj * ubo.view * pushConstants.model * vec4(inPosition, 1.0);
   fragColor = inColor;
   fragNormal = mat3(pushConstants.model) * inNormal;

@@ -6,10 +6,11 @@ layout(binding = 0) uniform UniformBufferObject {
 
 layout(push_constant) uniform constants {
   mat4 model;
+  mat4 shadowMatrix;
 } pushConstants;
 
 layout(location = 0) in vec3 inPosition;
 
 void main() {
-  gl_Position = ubo.shadowMatrix * pushConstants.model * vec4(inPosition, 1.0);
+  gl_Position = pushConstants.shadowMatrix * pushConstants.model * vec4(inPosition, 1.0);
 }

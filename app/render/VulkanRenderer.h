@@ -22,6 +22,7 @@
 #include "Shadowpass.h"
 #include "Geometrypass.h"
 #include "PostProcessingPass.h"
+#include "Light.h"
 
 #include <array>
 #include <unordered_map>
@@ -115,11 +116,15 @@ private:
     std::size_t materialIndex,
     bool shadowSupportRequired,
     VkViewport& viewport,
-    VkRect2D& scissor);
+    VkRect2D& scissor,
+    void* extraPushConstants = nullptr,
+    std::size_t extraPushConstantsSize = 0);
 
   Shadowpass _shadowPass;
   Geometrypass _geometryPass;
   PostProcessingPass _ppPass;
+
+  std::vector<Light> _lights;
 
   VmaAllocator _vmaAllocator;
 
@@ -137,6 +142,7 @@ private:
   bool createDescriptorPool();
   bool createDepthResources();
   bool initShadowpass();
+  bool initLights();
   bool initShadowDebug();
   bool initPostProcessingPass();
   bool initPostProcessingRenderable();

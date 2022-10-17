@@ -3,12 +3,14 @@
 layout(binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
-  mat4 shadowMatrix;
+  mat4 shadowMatrix[24];
   vec4 cameraPos;
   vec4 lightDir;
+  vec4 lightPos[4];
+  vec4 lightColor[4];
 } ubo;
 
-layout(binding = 1) uniform sampler2D shadowMap;
+layout(binding = 1) uniform samplerCube shadowMap[4];
 
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) flat in vec3 fragNormal;
@@ -17,8 +19,30 @@ layout(location = 3) in vec4 fragShadowPos;
 
 layout(location = 0) out vec4 outColor;
 
+#define NUM_LIGHTS 4
+
+float linearize_depth(float d, float zNear, float zFar)
+{
+  return zNear * zFar / (zFar + d * (zNear - zFar));
+}
+
 float inShadow() {
-  vec3 projCoords = fragShadowPos.xyz / fragShadowPos.w;
+  float total = 0.0;
+  for (int i = 0; i < NUM_LIGHTS; ++i) {
+    vec3 lightVec = fragPosition - ubo.lightPos[i].xyz;
+
+    float sampledDepth = texture(shadowMap[i], lightVec).r;
+    sampledDepth = linearize_depth(sampledDepth, 0.1, 50.0);
+
+    float testDepth = length(lightVec);
+    if (sampledDepth < testDepth) {
+      total += 1.0;
+    }
+  }
+
+  return total/NUM_LIGHTS;
+
+  /*vec3 projCoords = fragShadowPos.xyz / fragShadowPos.w;
 
   if (projCoords.x > 1.0 || projCoords.x < -1.0 ||
       projCoords.z > 1.0 || projCoords.z < 0.0 ||
@@ -40,35 +64,44 @@ float inShadow() {
     }
   }
 
-  return total / float(stepsPerAxis * stepsPerAxis);
+  return total / float(stepsPerAxis * stepsPerAxis);*/
 }
 
 void main() {
-  vec3 lightD = -ubo.lightDir.xyz;
   vec3 ambientColor = vec3(1.0, 1.0, 1.0);
   vec3 diffuseColor = fragColor;
-  vec3 specColor = vec3(0.5, 0.5, 0.5);
+  vec3 specColor = vec3(1.0, 1.0, 1.0);
 
   vec3 normal = normalize(fragNormal);
-  vec3 lightDirNorm = normalize(lightD);
 
   float shadow = inShadow();
 
   // Ambient
-  float ambientStrength = 0.1;
+  float ambientStrength = 0.01;
   vec3 ambient = ambientStrength * ambientColor;
 
-  // Diffuse
-  float diff = max(dot(normal, lightDirNorm), 0.2);
-  vec3 diffuse = diff * diffuseColor;
+  // Per light
+  float lightPower = 40.0;
+  vec3 totalLight = vec3(0.0, 0.0, 0.0);
+  for (int i = 0; i < NUM_LIGHTS; ++i) {
+    vec3 lightDir =  ubo.lightPos[i].xyz - fragPosition;
+    float dist = length(lightDir);
+    dist = dist * dist;
+    lightDir = normalize(lightDir);
 
-  // Specular
-  vec3 viewDir = normalize(vec3(ubo.cameraPos) - fragPosition);
-  vec3 reflectDir = reflect(-lightDirNorm, normal);  
-  float spec = pow(max(dot(viewDir, reflectDir), 0.0), 324);
-  vec3 specular = 0.1 * spec * specColor;
+    // Diffuse
+    float diff = max(dot(normal, lightDir), 0.0);
+    vec3 diffuse = diff * diffuseColor * ubo.lightColor[i].xyz * lightPower / dist;
 
-  vec3 result = (ambient + diffuse + specular) * clamp(1.0 - shadow, 0.3, 1.0);
+    // Specular
+    /*vec3 viewDir = normalize(vec3(ubo.cameraPos) - fragPosition);
+    vec3 reflectDir = reflect(-lightDirNorm, normal);  
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 324);
+    vec3 specular = 0.1 * spec * specColor;*/
 
-  outColor = vec4(result, 1.0);
+    vec3 result = ambient + diffuse * clamp(1.0 - shadow, 0.3, 1.0);
+    totalLight = totalLight + result;
+  }
+
+  outColor = vec4(totalLight, 1.0);
 }
