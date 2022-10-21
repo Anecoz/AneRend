@@ -24,10 +24,10 @@ layout(location = 2) out vec3 fragPosition;
 layout(location = 3) out vec4 fragShadowPos;
 
 void main() {
-  fragPosition = vec3(pushConstants.model * vec4(inPosition, 1.0));
+  fragPosition = /*vec3(pushConstants.model **/ inPosition;
   fragShadowPos = ubo.shadowMatrix[0] * vec4(fragPosition, 1.0);
 
-  gl_Position = ubo.proj * ubo.view * pushConstants.model * vec4(inPosition, 1.0);
+  gl_Position = ubo.proj * ubo.view * /*pushConstants.model **/ vec4(inPosition, 1.0);
   fragColor = inColor;
-  fragNormal = mat3(pushConstants.model) * inNormal;
+  fragNormal = /*mat3(pushConstants.model) **/ inNormal;
 }

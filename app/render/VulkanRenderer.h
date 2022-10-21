@@ -33,6 +33,7 @@
 namespace render {
 
 typedef std::int64_t RenderableId;
+typedef std::int64_t MeshId;
 
 class VulkanRenderer 
 {
@@ -48,17 +49,23 @@ public:
   // Initializes surface, device, all material pipelines etc.
   bool init();
 
+  // Registers a mesh that a renderable can reference.
+  MeshId registerMesh(
+    const std::vector<Vertex>& vertices,
+    const std::vector<std::uint32_t>& indices);
+
   // After doing this, the renderable will be rendered every frame with the given material, until unregistered.
   RenderableId registerRenderable(
-    const std::vector<Vertex>& vertices,
-    const std::vector<std::uint32_t>& indices,
+    MeshId meshId,
     MaterialID materialId,
-    std::size_t instanceCount = 0,
-    std::vector<std::uint8_t> instanceData = {});
+    const glm::mat4& transform,
+    const glm::vec3& sphereBoundCenter,
+    float sphereBoundRadius);
 
   // Completely removes all data related to this id and will stop rendering it.
   void unregisterRenderable(RenderableId id);
 
+  // Hide or show a renderable.
   void setRenderableVisible(RenderableId id, bool visible);
 
   // Queues push constant data to be used with the specific renderable next frame.
@@ -83,22 +90,33 @@ public:
 
 private:
   RenderableId _nextRenderableId = 1;
+  MeshId _nextMeshId = 0;
+
+  struct Mesh {
+    MeshId _id;
+
+    // Offsets into the fat mesh buffer
+    std::size_t _vertexOffset;
+    std::size_t _indexOffset;
+
+    std::size_t _numVertices;
+    std::size_t _numIndices;
+  };
+
+  bool meshIdExists(MeshId meshId) const;
+  std::vector<Mesh> _currentMeshes;
 
   struct Renderable {
     RenderableId _id;
 
+    MeshId _meshId;
     MaterialID _materialId;
 
     bool _visible = true;
 
-    AllocatedBuffer _vertexBuffer;
-    AllocatedBuffer _indexBuffer;
-
-    AllocatedBuffer _instanceData;
-
-    std::size_t _numIndices;
-    std::size_t _numVertices;
-    std::size_t _numInstances = 1;
+    glm::mat4 _transform;
+    glm::vec3 _boundingSphereCenter;
+    float _boundingSphereRadius;
 
     std::array<std::uint8_t, 128> _pushConstants;
     std::uint32_t _pushConstantsSize = 0;
@@ -110,6 +128,16 @@ private:
   std::unordered_map<MaterialID, Material> _materials;
   std::vector<std::pair<Material, std::size_t>> _ppMaterials; //size_t is index into pp render pass resources
   bool materialIdExists(MaterialID) const;
+
+  // Fat mesh buffer that contains both vertex and index data of all currently registered meshes
+  static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 256;
+  struct GigaMeshBuffer {
+    AllocatedBuffer _buffer;
+
+    std::size_t _size = 1024 * 1024 * GIGA_MESH_BUFFER_SIZE_MB; // in bytes
+
+    std::size_t _freeSpacePointer = 0; // points to where we currently can insert things into the buffer
+  } _gigaMeshBuffer;
 
   void drawRenderables(
     VkCommandBuffer& commandBuffer,
@@ -147,6 +175,7 @@ private:
   bool initPostProcessingPass();
   bool initPostProcessingRenderable();
   bool initImgui();
+  bool initGigaMeshBuffer();
 
   bool checkValidationLayerSupport();
   bool checkDeviceExtensionSupport(VkPhysicalDevice device);

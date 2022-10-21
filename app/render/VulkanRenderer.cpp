@@ -70,6 +70,8 @@ VulkanRenderer::~VulkanRenderer()
   _shadowPass.cleanup(_vmaAllocator, _device);
   _ppPass.cleanup(_vmaAllocator, _device);
 
+  vmaDestroyBuffer(_vmaAllocator, _gigaMeshBuffer._buffer._buffer, _gigaMeshBuffer._buffer._allocation);
+
   for (auto& light: _lights) {
     for (auto& v: light._shadowImageViews) {
       vkDestroyImageView(_device, v, nullptr);
@@ -227,6 +229,11 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
+  printf("Init fat mesh buffer...");
+  res &= initGigaMeshBuffer();
+  if (!res) return false;
+  printf("Done!\n");
+
   printf("Init shadow debug...");
   res &= initShadowDebug();
   if (!res) return false;
@@ -245,21 +252,83 @@ bool VulkanRenderer::init()
   return res;
 }
 
+MeshId VulkanRenderer::registerMesh(const std::vector<Vertex>& vertices, const std::vector<std::uint32_t>& indices)
+{
+  // Check if we need to pad with 0's before the vertices
+  std::vector<std::uint8_t> verticesCopy;
+  verticesCopy.resize(vertices.size() * sizeof(Vertex));
+  memcpy(verticesCopy.data(), vertices.data(), verticesCopy.size());
+  
+  std::size_t numZeroes = sizeof(Vertex) - (_gigaMeshBuffer._freeSpacePointer % sizeof(Vertex));
+
+  if (numZeroes != 0) {
+    std::vector<std::uint8_t> zeroVec(numZeroes, 0);
+    verticesCopy.insert(verticesCopy.begin(), zeroVec.begin(), zeroVec.end());
+  }
+
+  // Create a staging buffer on CPU side first
+  AllocatedBuffer stagingBuffer;
+  std::size_t vertSize = verticesCopy.size();
+  std::size_t indSize = indices.size() * sizeof(std::uint32_t);
+  std::size_t dataSize = vertSize + indSize;
+
+  bufferutil::createBuffer(_vmaAllocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
+
+  void* mappedData;
+  vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, &mappedData);
+  memcpy(mappedData, verticesCopy.data(), vertSize);
+  if (indSize > 0) {
+    memcpy((uint8_t*)mappedData + vertSize, indices.data(), indSize);
+  }
+  vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
+
+  // Find where to copy data in the fat buffer
+  auto cmdBuffer = beginSingleTimeCommands();
+
+  VkBufferCopy copyRegion{};
+  copyRegion.dstOffset = _gigaMeshBuffer._freeSpacePointer;
+  copyRegion.size = dataSize;
+  vkCmdCopyBuffer(cmdBuffer, stagingBuffer._buffer, _gigaMeshBuffer._buffer._buffer, 1, &copyRegion);
+
+  endSingleTimeCommands(cmdBuffer);
+
+  Mesh mesh {};
+  mesh._id = ++_nextMeshId;
+  mesh._numVertices = verticesCopy.size();
+  mesh._numIndices = indices.size();
+  mesh._vertexOffset = (_gigaMeshBuffer._freeSpacePointer + numZeroes) / sizeof(Vertex);
+  mesh._indexOffset = (_gigaMeshBuffer._freeSpacePointer + vertSize) / sizeof(uint32_t);
+
+  _currentMeshes.emplace_back(std::move(mesh));
+
+  // Advance free space pointer
+  _gigaMeshBuffer._freeSpacePointer += dataSize;
+
+  vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
+
+  return _currentMeshes.size() - 1;
+}
+
 RenderableId VulkanRenderer::registerRenderable(
-  const std::vector<Vertex>& vertices,
-  const std::vector<std::uint32_t>& indices,
+  MeshId meshId,
   MaterialID materialId,
-  std::size_t instanceCount,
-  std::vector<std::uint8_t> instanceData)
+  const glm::mat4& transform,
+  const glm::vec3& sphereBoundCenter,
+  float sphereBoundRadius)
 {
   if (!materialIdExists(materialId)) {
     printf("Material id %zu does not exist!\n", materialId);
     return 0;
   }
 
+  if (!meshIdExists(meshId)) {
+    printf("Mesh id %zu does not exist!\n", meshId);
+    return 0;
+  }
+
   Renderable renderable{};
 
-  std::uint8_t* ptr = (std::uint8_t*)vertices.data();
+  /*std::uint8_t* ptr = (std::uint8_t*)vertices.data();
   if (!createVertexBuffer(ptr, sizeof(Vertex) * vertices.size(), renderable._vertexBuffer)) {
     printf("Could not create vertex buffer!\n");
     return 0;
@@ -270,23 +339,16 @@ RenderableId VulkanRenderer::registerRenderable(
       printf("Could not create index buffer!\n");
       return 0;
     }
-  }
+  }*/
 
   auto id = _nextRenderableId++;
 
   renderable._id = id;
   renderable._materialId = materialId;
-  renderable._numIndices = indices.size();
-  renderable._numVertices = vertices.size();
-
-  if (instanceCount != 0) {
-    std::uint8_t* instancePtr = instanceData.data();
-    if (!createVertexBuffer(instancePtr, instanceData.size(), renderable._instanceData)) {
-      printf("Could not create instance buffer!\n");
-      return 0;
-    }
-    renderable._numInstances = instanceCount;
-  }
+  renderable._meshId = meshId;
+  renderable._transform = transform;
+  renderable._boundingSphereCenter = sphereBoundCenter;
+  renderable._boundingSphereRadius = sphereBoundRadius;
 
   _currentRenderables.emplace_back(std::move(renderable));
 
@@ -321,11 +383,11 @@ void VulkanRenderer::setRenderableVisible(RenderableId id, bool visible)
 
 void VulkanRenderer::cleanupRenderable(const Renderable& renderable)
 {
-  vmaDestroyBuffer(_vmaAllocator, renderable._vertexBuffer._buffer, renderable._vertexBuffer._allocation);
+  /*vmaDestroyBuffer(_vmaAllocator, renderable._vertexBuffer._buffer, renderable._vertexBuffer._allocation);
   vmaDestroyBuffer(_vmaAllocator, renderable._indexBuffer._buffer, renderable._indexBuffer._allocation);
   if (renderable._numInstances > 0) {
     vmaDestroyBuffer(_vmaAllocator, renderable._instanceData._buffer, renderable._instanceData._allocation);
-  }
+  }*/
 }
 
 void VulkanRenderer::queuePushConstant(RenderableId id, std::uint32_t size, void* pushConstants)
@@ -393,6 +455,11 @@ void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, co
 bool VulkanRenderer::materialIdExists(MaterialID id) const
 {
   return _materials.find(id) != _materials.end();
+}
+
+bool VulkanRenderer::meshIdExists(MeshId meshId) const
+{
+  return meshId < (int64_t)_currentMeshes.size();
 }
 
 std::vector<const char*> VulkanRenderer::getRequiredExtensions()
@@ -1067,6 +1134,10 @@ void VulkanRenderer::drawRenderables(
   void* extraPushConstants,
   std::size_t extraPushConstantsSize)
 {
+  VkDeviceSize offsets[] = {0};
+  vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaMeshBuffer._buffer._buffer, offsets);
+  vkCmdBindIndexBuffer(commandBuffer, _gigaMeshBuffer._buffer._buffer, 0, VK_INDEX_TYPE_UINT32);
+
   for (int i = 0; i <= MAX_MATERIAL_ID - 1; ++i) {
     if (_materials.find(i) == _materials.end()) continue;
     auto& material = _materials[i];
@@ -1089,14 +1160,7 @@ void VulkanRenderer::drawRenderables(
       if (renderable._materialId != i) continue;
       if (!renderable._visible) continue;
 
-      // NOTE:  Driver developers recommend that you also store multiple buffers, like the vertex and index buffer, 
-      //        into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers. (cache friendlier)
-      VkDeviceSize offsets[] = {0};
-      vkCmdBindVertexBuffers(commandBuffer, 0, 1, &renderable._vertexBuffer._buffer, offsets);
-      if (material._hasInstanceBuffer) {
-        vkCmdBindVertexBuffers(commandBuffer, 1, 1, &renderable._instanceData._buffer, offsets);
-      }
-      vkCmdBindIndexBuffer(commandBuffer, renderable._indexBuffer._buffer, 0, VK_INDEX_TYPE_UINT32);
+      auto& mesh = _currentMeshes[renderable._meshId];
 
       // Bind specific push constants for this renderable
       if (renderable._pushConstantsSize > 0) {
@@ -1112,7 +1176,13 @@ void VulkanRenderer::drawRenderables(
       }
 
       // Draw command
-      vkCmdDrawIndexed(commandBuffer, static_cast<std::uint32_t>(renderable._numIndices), static_cast<std::uint32_t>(renderable._numInstances), 0, 0, 0);
+      vkCmdDrawIndexed(
+        commandBuffer, 
+        (uint32_t)mesh._numIndices,
+        1,
+        (uint32_t)mesh._indexOffset,
+        (uint32_t)mesh._vertexOffset,
+        0);
     }
   }
 }
@@ -1151,7 +1221,7 @@ void VulkanRenderer::recordCommandBufferGeometry(VkCommandBuffer commandBuffer, 
 
 void VulkanRenderer::recordCommandBufferPP(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug)
 {
-  Renderable* rend = nullptr;
+  /*Renderable* rend = nullptr;
   for (auto& renderable : _currentRenderables) {
     if (renderable._id == _ppPass._quadModelId) {
       rend = &renderable;
@@ -1200,11 +1270,13 @@ void VulkanRenderer::recordCommandBufferPP(VkCommandBuffer commandBuffer, std::u
     if (!isLast) {
       vkCmdEndRendering(commandBuffer);
     }
-  }
+  }*/
 }
 
 void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool pp, bool debug)
 {
+  pp = false;
+
   VkCommandBufferBeginInfo beginInfo{};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   beginInfo.flags = 0; // Optional
@@ -1220,7 +1292,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
                         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
   // Shadow pass
-  recordCommandBufferShadow(commandBuffer, debug);
+  //recordCommandBufferShadow(commandBuffer, debug);
 
   // Geometry pass
   // Transition the ppInput image to color attachment
@@ -1249,7 +1321,8 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
     recordCommandBufferGeometry(commandBuffer, debug);
   }
 
-  if (debug) {
+  // TODO: Vertex offset for rendering the quad...
+  /*if (debug) {
     // Shadow map overlay
     // TODO: Stack debug texture overlays, not just shadow map
     Renderable* rend = nullptr;
@@ -1268,7 +1341,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, &rend->_vertexBuffer._buffer, offsets);
     vkCmdDraw(commandBuffer, (uint32_t)rend->_numVertices, 1, 0, 0);
-  }
+  }*/
 
   // Imgui, hijack geometrypass begin...
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
@@ -1387,7 +1460,8 @@ bool VulkanRenderer::initLights()
 
 bool VulkanRenderer::initShadowDebug()
 {
-  _shadowPass._debugModelId = registerRenderable(_shadowPass._debugModel._vertices, {}, STANDARD_MATERIAL_ID);
+  auto meshId = registerMesh(_shadowPass._debugModel._vertices, {});
+  _shadowPass._debugModelId = registerRenderable(meshId, STANDARD_MATERIAL_ID, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
   setRenderableVisible(_shadowPass._debugModelId, false);
 
   return true;
@@ -1395,7 +1469,8 @@ bool VulkanRenderer::initShadowDebug()
 
 bool VulkanRenderer::initPostProcessingRenderable()
 {
-  _ppPass._quadModelId = registerRenderable(_ppPass._quadModel._vertices, {}, STANDARD_MATERIAL_ID);
+  auto meshId = registerMesh(_ppPass._quadModel._vertices, {});
+  _ppPass._quadModelId = registerRenderable(meshId, STANDARD_MATERIAL_ID, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
   setRenderableVisible(_ppPass._quadModelId, false);
 
   return true;
@@ -1405,6 +1480,13 @@ bool VulkanRenderer::initPostProcessingPass()
 {
   _ppPass.init(_swapChain._swapChainImageFormat, _swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height);
 
+  return true;
+}
+
+bool VulkanRenderer::initGigaMeshBuffer()
+{
+  // Allocate "big enough" size... 
+  bufferutil::createBuffer(_vmaAllocator, _gigaMeshBuffer._size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 0, _gigaMeshBuffer._buffer);
   return true;
 }
 

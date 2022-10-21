@@ -48,6 +48,9 @@ bool StageApplication::init()
     return false;
   }
 
+  _meshId = _vkRenderer.registerMesh(_testModel._vertices, _testModel._indices);
+  _meshId2 = _vkRenderer.registerMesh(_testModel2._vertices, _testModel2._indices);
+
   // Create a bunch of test matrices
   {
     std::size_t numInstances = 100;
@@ -67,6 +70,7 @@ bool StageApplication::init()
     dataVec.resize(instanceMatrixData.size() * 4 * 4 * 4);
     memcpy(dataVec.data(), instanceMatrixData.data(), instanceMatrixData.size() * 4 * 4 * 4);
     //_modelId = _vkRenderer.registerRenderable(_testModel._vertices, _testModel._indices, render::STANDARD_INSTANCED_MATERIAL_ID, numInstances * numInstances, dataVec);
+    _modelId = _vkRenderer.registerRenderable(_meshId, render::STANDARD_MATERIAL_ID, glm::translate(glm::mat4(1.0f), glm::vec3(1.0f)), glm::vec3(1.0f), 1.0f);
   }
 
   // Do a couple of the big models
@@ -83,7 +87,7 @@ bool StageApplication::init()
     std::vector<std::uint8_t> dataVec;
     dataVec.resize(instanceMatrixData.size() * 4 * 4 * 4);
     memcpy(dataVec.data(), instanceMatrixData.data(), instanceMatrixData.size() * 4 * 4 * 4);
-    _modelId2 = _vkRenderer.registerRenderable(_testModel2._vertices, _testModel2._indices, render::STANDARD_INSTANCED_MATERIAL_ID, numInstances * numInstances, dataVec);
+    _modelId2 = _vkRenderer.registerRenderable(_meshId2, render::STANDARD_MATERIAL_ID, glm::translate(glm::mat4(1.0f), glm::vec3(1.0f)), glm::vec3(1.0f), 1.0f);
     //_modelId2 = _vkRenderer.registerRenderable(_testModel2._vertices, _testModel2._indices, render::STANDARD_MATERIAL_ID);
   }
 
