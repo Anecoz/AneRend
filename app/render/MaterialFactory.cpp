@@ -39,8 +39,9 @@ bool internalCreateDescriptorSets(
   std::size_t numCopies,
   VkDescriptorPool& descriptorPool,
   const std::vector<render::AllocatedBuffer>& uboBuffers, std::size_t uboBufferRange,
+  const std::vector<render::AllocatedBuffer>& gpuRenderableBuffers, const std::vector<render::AllocatedBuffer>& gpuTranslationBuffers,
   const std::vector<VkImageView*> imageViews, const std::vector<VkSampler*> samplers, VkImageLayout imageLayout,
-  int uboBinding, int samplerBinding)
+  int uboBinding, int samplerBinding, int gpuRenderableBinding, int gpuTranslationBinding)
 {
   std::vector<VkDescriptorSetLayout> layouts(numCopies, descriptorSetLayout);
   VkDescriptorSetAllocateInfo allocInfo{};
@@ -70,6 +71,44 @@ bool internalCreateDescriptorSets(
       bufWrite.dstBinding = uboBinding;
       bufWrite.dstArrayElement = 0;
       bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      bufWrite.descriptorCount = 1;
+      bufWrite.pBufferInfo = &bufferInfo;
+
+      descriptorWrites.emplace_back(std::move(bufWrite));
+    }
+
+    if (!gpuRenderableBuffers.empty()) {
+      VkDescriptorBufferInfo bufferInfo{};
+      VkWriteDescriptorSet bufWrite{};
+
+      bufferInfo.buffer = gpuRenderableBuffers[i]._buffer;
+      bufferInfo.offset = 0;
+      bufferInfo.range = VK_WHOLE_SIZE;
+
+      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      bufWrite.dstSet = descriptorSets[i];
+      bufWrite.dstBinding = gpuRenderableBinding;
+      bufWrite.dstArrayElement = 0;
+      bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      bufWrite.descriptorCount = 1;
+      bufWrite.pBufferInfo = &bufferInfo;
+
+      descriptorWrites.emplace_back(std::move(bufWrite));
+    }
+
+    if (!gpuTranslationBuffers.empty()) {
+      VkDescriptorBufferInfo bufferInfo{};
+      VkWriteDescriptorSet bufWrite{};
+
+      bufferInfo.buffer = gpuTranslationBuffers[i]._buffer;
+      bufferInfo.offset = 0;
+      bufferInfo.range = VK_WHOLE_SIZE;
+
+      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      bufWrite.dstSet = descriptorSets[i];
+      bufWrite.dstBinding = gpuTranslationBinding;
+      bufWrite.dstArrayElement = 0;
+      bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       bufWrite.descriptorCount = 1;
       bufWrite.pBufferInfo = &bufferInfo;
 
@@ -107,7 +146,8 @@ bool internalCreateDescriptorSets(
 bool internalCreate(
   VkDescriptorSetLayout& descriptorSetLayout, VkPipelineLayout& pipelineLayout, VkPipeline& pipeline,
   VkDevice device, VkFormat colorFormat, VkFormat depthFormat,
-  int uboBinding, int samplerBinding, std::size_t samplerCount,
+  int uboBinding, int samplerBinding, int gpuRenderableBinding, int gpuTranslationBinding,
+  std::size_t samplerCount,
   const std::string& vertShader, const std::string& fragShader,
   bool instanceBuffer,
   int posLoc, int colorLoc, int normalLoc, int uvLoc,
@@ -128,6 +168,24 @@ bool internalCreate(
     uboLayoutBinding.descriptorCount = 1;
     uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     bindings.emplace_back(std::move(uboLayoutBinding));
+  }
+
+  if (gpuRenderableBinding != - 1) {
+    VkDescriptorSetLayoutBinding renderableLayoutBinding{};
+    renderableLayoutBinding.binding = gpuRenderableBinding;
+    renderableLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    renderableLayoutBinding.descriptorCount = 1;
+    renderableLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    bindings.emplace_back(std::move(renderableLayoutBinding));
+  }
+
+  if (gpuTranslationBinding != -1) {
+    VkDescriptorSetLayoutBinding translationBinding{};
+    translationBinding.binding = gpuTranslationBinding;
+    translationBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    translationBinding.descriptorCount = 1;
+    translationBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    bindings.emplace_back(std::move(translationBinding));
   }
 
   VkDescriptorSetLayoutBinding samplerLayoutBinding{};
@@ -428,7 +486,6 @@ bool internalCreate(
   pipelineInfo.pRasterizationState = &rasterizer;
   pipelineInfo.pMultisampleState = &multisampling;
   pipelineInfo.pDepthStencilState = nullptr; // Optional
-  pipelineInfo.pDepthStencilState = nullptr; // Optional
   pipelineInfo.pColorBlendState = &colorBlending;
   pipelineInfo.pDynamicState = &dynamicState;
   pipelineInfo.layout = pipelineLayout;
@@ -456,7 +513,7 @@ render::Material internalCreatePP(
   if (!internalCreate(
     output._descriptorSetLayouts[render::Material::POST_PROCESSING_INDEX], output._pipelineLayouts[render::Material::POST_PROCESSING_INDEX], output._pipelines[render::Material::POST_PROCESSING_INDEX],
     device, colorFormat, depthFormat,
-    -1, 0, 1,
+    -1, 0, -1, -1, 1,
     vert, frag,
     false,
     0, -1, -1, 1,
@@ -474,8 +531,9 @@ render::Material internalCreatePP(
     output._descriptorSetLayouts[render::Material::POST_PROCESSING_INDEX], output._descriptorSets[render::Material::POST_PROCESSING_INDEX],
     numCopies, descriptorPool,
     {}, 0,
+    {}, {},
     {imageView}, {sampler}, samplerImageLayout,
-    -1, 0)) {
+    -1, 0, -1, -1)) {
     printf("Could not create pp flip descriptor sets!\n");
     return output;
   }
@@ -490,6 +548,7 @@ namespace render {
 Material MaterialFactory::createStandardMaterial(
   VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
   VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
+  const std::vector<AllocatedBuffer>& gpuRenderableBuffers, const std::vector<AllocatedBuffer>& gpuTranslationBuffers,
   const std::vector<VkImageView*>& textureImageViews, const std::vector<VkSampler*>& samplers, VkImageLayout samplerImageLayout)
 {
   Material output;
@@ -501,7 +560,7 @@ Material MaterialFactory::createStandardMaterial(
   internalCreate(
     output._descriptorSetLayouts[Material::STANDARD_INDEX], output._pipelineLayouts[Material::STANDARD_INDEX], output._pipelines[Material::STANDARD_INDEX],
     device, colorFormat, depthFormat,
-    0, 1, textureImageViews.size(),
+    0, 1, 2, 3, textureImageViews.size(),
     "standard_vert.spv", "standard_frag.spv",
     false,
     0, 1, 2, -1,
@@ -514,7 +573,7 @@ Material MaterialFactory::createStandardMaterial(
   internalCreate(
     output._descriptorSetLayouts[Material::SHADOW_INDEX], output._pipelineLayouts[Material::SHADOW_INDEX], output._pipelines[Material::SHADOW_INDEX],
     device, colorFormat, depthFormat,
-    0, -1, 0,
+    0, -1, 1, 2, 0,
     "standard_shadow_vert.spv", "",
     false, 
     0, -1, -1, -1,
@@ -522,7 +581,7 @@ Material MaterialFactory::createStandardMaterial(
     true, 4.0f, 1.5f,
     true,
     false,
-    true, 4 * 4 * 4 * 2);
+    true, 4 * 4 * 4);
 
   // Non-shadow descriptor sets
   {
@@ -537,7 +596,8 @@ Material MaterialFactory::createStandardMaterial(
     if (!internalCreateDescriptorSets(
           device, output._descriptorSetLayouts[Material::STANDARD_INDEX], output._descriptorSets[Material::STANDARD_INDEX],
           numCopies, descriptorPool, output._ubos[Material::STANDARD_INDEX], bufferSize,
-          textureImageViews, samplers, samplerImageLayout, 0, 1)) {
+          gpuRenderableBuffers, gpuTranslationBuffers,
+          textureImageViews, samplers, samplerImageLayout, 0, 1, 2, 3)) {
       printf("Could not create descriptor set!\n");
       return output;
     }
@@ -556,7 +616,8 @@ Material MaterialFactory::createStandardMaterial(
     if (!internalCreateDescriptorSets(
           device, output._descriptorSetLayouts[Material::SHADOW_INDEX], output._descriptorSets[Material::SHADOW_INDEX],
           numCopies, descriptorPool, output._ubos[Material::SHADOW_INDEX], bufferSize,
-          {}, {}, samplerImageLayout, 0, -1)) {
+          gpuRenderableBuffers, gpuTranslationBuffers,
+          {}, {}, samplerImageLayout, 0, -1, 1, 2)) {
       printf("Could not create descriptor set!\n");
       return output;
     }
@@ -575,7 +636,7 @@ Material MaterialFactory::createShadowDebugMaterial(
   internalCreate(
     output._descriptorSetLayouts[Material::STANDARD_INDEX], output._pipelineLayouts[Material::STANDARD_INDEX], output._pipelines[Material::STANDARD_INDEX],
     device, colorFormat, depthFormat,
-    -1, 0, 1,
+    -1, 0, -1, -1,  1,
     "shadow_debug_vert.spv", "shadow_debug_frag.spv",
     false,
     0, -1, -1, 1,
@@ -588,8 +649,8 @@ Material MaterialFactory::createShadowDebugMaterial(
 
   if (!internalCreateDescriptorSets(
         device, output._descriptorSetLayouts[Material::STANDARD_INDEX], output._descriptorSets[Material::STANDARD_INDEX],
-        numCopies, descriptorPool, {}, 0,
-        {imageView}, {sampler}, samplerImageLayout, -1, 0)) {
+        numCopies, descriptorPool, {}, 0, {}, {},
+        {imageView}, {sampler}, samplerImageLayout, -1, 0, -1, -1)) {
     printf("Could not create descriptor set!\n");
     return output;
   }
@@ -610,7 +671,7 @@ Material MaterialFactory::createStandardInstancedMaterial(
   internalCreate(
     output._descriptorSetLayouts[Material::STANDARD_INDEX], output._pipelineLayouts[Material::STANDARD_INDEX], output._pipelines[Material::STANDARD_INDEX],
     device, colorFormat, depthFormat,
-    0, 1, (uint32_t)samplers.size(),
+    0, 1, -1, -1, (uint32_t)samplers.size(),
     "standard_instanced_vert.spv", "standard_frag.spv",
     true,
     0, 1, 2, -1,
@@ -624,7 +685,7 @@ Material MaterialFactory::createStandardInstancedMaterial(
   internalCreate(
     output._descriptorSetLayouts[Material::SHADOW_INDEX], output._pipelineLayouts[Material::SHADOW_INDEX], output._pipelines[Material::SHADOW_INDEX],
     device, colorFormat, depthFormat,
-    0, -1, 0,
+    0, -1, -1, -1, 0,
     "standard_instanced_shadow_vert.spv", "",
     true,
     0, -1, -1, -1,
@@ -648,7 +709,8 @@ Material MaterialFactory::createStandardInstancedMaterial(
     if (!internalCreateDescriptorSets(
           device, output._descriptorSetLayouts[Material::STANDARD_INDEX], output._descriptorSets[Material::STANDARD_INDEX],
           numCopies, descriptorPool, output._ubos[Material::STANDARD_INDEX], bufferSize,
-          textureImageViews, samplers, samplerImageLayout, 0, 1)) {
+          {}, {},
+          textureImageViews, samplers, samplerImageLayout, 0, 1, -1, -1)) {
       printf("Could not create descriptor set!\n");
       return output;
     }
@@ -667,7 +729,8 @@ Material MaterialFactory::createStandardInstancedMaterial(
     if (!internalCreateDescriptorSets(
           device, output._descriptorSetLayouts[Material::SHADOW_INDEX], output._descriptorSets[Material::SHADOW_INDEX],
           numCopies, descriptorPool, output._ubos[Material::SHADOW_INDEX], bufferSize,
-          {}, {}, samplerImageLayout, 0, -1)) {
+          {}, {},
+          {}, {}, samplerImageLayout, 0, -1, -1, -1)) {
       printf("Could not create descriptor set!\n");
       return output;
     }

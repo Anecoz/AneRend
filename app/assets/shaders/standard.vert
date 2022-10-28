@@ -1,6 +1,6 @@
 #version 450
 
-layout(binding = 0) uniform UniformBufferObject {
+layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
   mat4 shadowMatrix[24];
@@ -9,6 +9,21 @@ layout(binding = 0) uniform UniformBufferObject {
   vec4 lightPos[4];
   vec4 lightColor[4];
 } ubo;
+
+struct Renderable
+{
+  mat4 transform;
+  vec4 bounds;
+  uint meshId;
+};
+
+layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {
+  Renderable renderables[];
+} renderableBuffer;
+
+layout(std430, set = 0, binding = 3) buffer TranslationBuffer {
+  uint ids[];
+} translationBuffer;
 
 layout(push_constant) uniform constants {
   mat4 model;
@@ -21,13 +36,14 @@ layout(location = 2) in vec3 inNormal;
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) flat out vec3 fragNormal;
 layout(location = 2) out vec3 fragPosition;
-layout(location = 3) out vec4 fragShadowPos;
 
 void main() {
-  fragPosition = /*vec3(pushConstants.model **/ inPosition;
-  fragShadowPos = ubo.shadowMatrix[0] * vec4(fragPosition, 1.0);
+  uint renderableId = translationBuffer.ids[gl_InstanceIndex];
+  mat4 model = renderableBuffer.renderables[renderableId].transform;
 
-  gl_Position = ubo.proj * ubo.view * /*pushConstants.model **/ vec4(inPosition, 1.0);
+  fragPosition = vec3(model * vec4(inPosition, 1.0));
+
+  gl_Position = ubo.proj * ubo.view * model * vec4(inPosition, 1.0);
   fragColor = inColor;
-  fragNormal = /*mat3(pushConstants.model) **/ inNormal;
+  fragNormal = mat3(model) * inNormal;
 }

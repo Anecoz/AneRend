@@ -16,7 +16,9 @@ enum class ProjectionType
 class Camera
 {
 public:
+  Camera() = default;
   Camera(glm::vec3 initialPosition, ProjectionType type);
+  Camera& operator=(const Camera&) = default;
   ~Camera() = default;
 
   void update(double delta);
@@ -33,6 +35,7 @@ public:
   glm::mat4 getCombined() const { return _projection * _cameraMatrix; }
   glm::vec3 getForward() const { return _forward; }
 
+  Frustum& getFrustum() { return _frustum; }
   bool insideFrustum(const glm::vec3& point) const;
   bool insideFrustum(const Box3D& box) const;
 
@@ -56,7 +59,7 @@ private:
   glm::vec3 _forward;
   glm::vec3 _right;
   glm::vec3 _up;
-  const double _speed = 5.0;
+  double _speed = 5.0;
   double _sensitivity = 0.005;
 };
 

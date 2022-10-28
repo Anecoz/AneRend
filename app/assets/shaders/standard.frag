@@ -15,7 +15,6 @@ layout(binding = 1) uniform samplerCube shadowMap[4];
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) flat in vec3 fragNormal;
 layout(location = 2) in vec3 fragPosition;
-layout(location = 3) in vec4 fragShadowPos;
 
 layout(location = 0) out vec4 outColor;
 

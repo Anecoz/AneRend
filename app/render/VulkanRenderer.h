@@ -14,6 +14,7 @@
 
 #include "Vertex.h"
 #include "MaterialId.h"
+#include "MeshId.h"
 #include "Material.h"
 #include "Camera.h"
 #include "AllocatedBuffer.h"
@@ -33,7 +34,6 @@
 namespace render {
 
 typedef std::int64_t RenderableId;
-typedef std::int64_t MeshId;
 
 class VulkanRenderer 
 {
@@ -75,7 +75,7 @@ public:
   // NOTE: There is a size limit to push constants... good luck!
   void queuePushConstant(RenderableId id, std::uint32_t size, void* pushConstants);
 
-  void update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta);
+  void update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, bool lockCulling);
 
   // Prepares some things for drawing (imgui stuff as of now).
   // Has to be called before drawFrame()!
@@ -89,8 +89,16 @@ public:
   void notifyFramebufferResized();
 
 private:
+  static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
+  static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
+  static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 256;
+  static const std::size_t MAX_NUM_RENDERABLES = std::size_t(1e5);
+  static const std::size_t MAX_NUM_MESHES = std::size_t(1e3);
+
   RenderableId _nextRenderableId = 1;
   MeshId _nextMeshId = 0;
+
+  Camera _latestCamera;
 
   struct Mesh {
     MeshId _id;
@@ -105,6 +113,7 @@ private:
 
   bool meshIdExists(MeshId meshId) const;
   std::vector<Mesh> _currentMeshes;
+  std::unordered_map<MeshId, std::size_t> _currentMeshUsage;
 
   struct Renderable {
     RenderableId _id;
@@ -118,7 +127,7 @@ private:
     glm::vec3 _boundingSphereCenter;
     float _boundingSphereRadius;
 
-    std::array<std::uint8_t, 128> _pushConstants;
+    std::array<std::uint8_t, MAX_PUSH_CONSTANT_SIZE> _pushConstants;
     std::uint32_t _pushConstantsSize = 0;
   };
 
@@ -126,11 +135,12 @@ private:
   void cleanupRenderable(const Renderable& renderable);
 
   std::unordered_map<MaterialID, Material> _materials;
+  std::unordered_map<MaterialID, std::size_t> _materialUsage; // size_t is how many are using material
   std::vector<std::pair<Material, std::size_t>> _ppMaterials; //size_t is index into pp render pass resources
   bool materialIdExists(MaterialID) const;
+  bool materialIdCurrentlyInUse(MaterialID) const;
 
-  // Fat mesh buffer that contains both vertex and index data of all currently registered meshes
-  static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 256;
+  // Giga mesh buffer that contains both vertex and index data of all currently registered meshes
   struct GigaMeshBuffer {
     AllocatedBuffer _buffer;
 
@@ -138,6 +148,29 @@ private:
 
     std::size_t _freeSpacePointer = 0; // points to where we currently can insert things into the buffer
   } _gigaMeshBuffer;
+
+  void createComputeDescriptorSet();
+
+  // Contains renderable info for compute culling shader.
+  std::vector<AllocatedBuffer> _gpuRenderableBuffer;
+
+  // Contains draw commands pre-filled on CPU and then updated by compute culling shader.
+  std::vector<AllocatedBuffer> _gpuDrawCmdBuffer;
+
+  // Translates from gl_InstanceID to renderableID in vertex shader. Written by compute. gl_InstanceID is offset by firstInstance of each draw call.
+  std::vector<AllocatedBuffer> _gpuTranslationBuffer;
+
+  // Fills gpu renderable buffer with current renderable information (could be done async)
+  void prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer);
+
+  // Fills gpu draw cmd buffer, so that compute shader only has to do numInstance++ for each respective mesh draw command.
+  void prefillGPUDrawCmdBuffer(VkCommandBuffer& commandBuffer);
+
+  // Fills gpu translation buffer with 0's
+  void prefillGPUTranslationBuffer(VkCommandBuffer& commandBuffer);
+
+  Material _computeMaterial;
+  std::vector<VkDescriptorSet> _computeDescriptorSets;
 
   void drawRenderables(
     VkCommandBuffer& commandBuffer,
@@ -176,6 +209,8 @@ private:
   bool initPostProcessingRenderable();
   bool initImgui();
   bool initGigaMeshBuffer();
+  bool initGpuBuffers();
+  bool initComputePipelines();
 
   bool checkValidationLayerSupport();
   bool checkDeviceExtensionSupport(VkPhysicalDevice device);
@@ -205,6 +240,7 @@ private:
   void recordCommandBufferShadow(VkCommandBuffer commandBuffer, bool debug);
   void recordCommandBufferGeometry(VkCommandBuffer commandBuffer, bool debug);
   void recordCommandBufferPP(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug);
+  void executeGpuCullDispatch(VkCommandBuffer commandBuffer, Camera& cullCamera);
 
   GLFWwindow* _window;
   bool _enableValidationLayers;
@@ -213,6 +249,8 @@ private:
   VkPhysicalDevice _physicalDevice = VK_NULL_HANDLE;
   VkDevice _device;
 
+  QueueFamilyIndices _queueIndices;
+  VkQueue _computeQ;
   VkQueue _graphicsQ;
   VkQueue _presentQ;
 
@@ -245,7 +283,6 @@ private:
     VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME
   };
 
-  const int MAX_FRAMES_IN_FLIGHT = 2;
   std::uint32_t _currentFrame = 0;
 };
 }

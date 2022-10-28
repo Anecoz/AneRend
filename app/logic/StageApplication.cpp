@@ -27,6 +27,7 @@ StageApplication::~StageApplication()
 }
 
 static bool g_DebugShadow = true;
+static bool g_LockFrustumCulling = false;
 static bool g_PP = true;
 
 bool StageApplication::init()
@@ -54,23 +55,26 @@ bool StageApplication::init()
   // Create a bunch of test matrices
   {
     std::size_t numInstances = 100;
-    std::vector<glm::mat4> instanceMatrixData;
-    instanceMatrixData.reserve(numInstances * numInstances);
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
       auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
 
       auto matrix = trans * rot;
+      glm::vec4 sphereBoundCenter(1.0f);
+      //sphereBoundCenter = trans * sphereBoundCenter;
 
-      instanceMatrixData.emplace_back(std::move(matrix));
+      auto ret = _modelId = _vkRenderer.registerRenderable(
+        _meshId,
+        render::STANDARD_MATERIAL_ID,
+        matrix,
+        glm::vec3(sphereBoundCenter.x, sphereBoundCenter.y, sphereBoundCenter.z),
+        1.0f);
+
+      if (ret == 0) {
+        break;
+      }
     }
-
-    std::vector<std::uint8_t> dataVec;
-    dataVec.resize(instanceMatrixData.size() * 4 * 4 * 4);
-    memcpy(dataVec.data(), instanceMatrixData.data(), instanceMatrixData.size() * 4 * 4 * 4);
-    //_modelId = _vkRenderer.registerRenderable(_testModel._vertices, _testModel._indices, render::STANDARD_INSTANCED_MATERIAL_ID, numInstances * numInstances, dataVec);
-    _modelId = _vkRenderer.registerRenderable(_meshId, render::STANDARD_MATERIAL_ID, glm::translate(glm::mat4(1.0f), glm::vec3(1.0f)), glm::vec3(1.0f), 1.0f);
   }
 
   // Do a couple of the big models
@@ -110,7 +114,7 @@ void StageApplication::update(double delta)
   }
 
   _camera.update(delta);
-  _vkRenderer.update(_camera, _shadowCamera, glm::vec4(_sunDir, 0.0f), delta);
+  _vkRenderer.update(_camera, _shadowCamera, glm::vec4(_sunDir, 0.0f), delta, g_LockFrustumCulling);
 
   static auto currAngle = 0.0f;
   currAngle += 1.0f * (float)delta;
@@ -144,6 +148,7 @@ void StageApplication::render()
     }
     ImGui::Checkbox("Shadow debug", &g_DebugShadow);
     ImGui::Checkbox("Apply post processing", &g_PP);
+    ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
     ImGui::End();
   }
 

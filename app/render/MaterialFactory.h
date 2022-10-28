@@ -12,6 +12,7 @@ public:
   static Material createStandardMaterial(
     VkDevice device, VkFormat colorFormat, VkFormat depthFormat, std::size_t numCopies,
     VkDescriptorPool& descriptorPool, VmaAllocator& vmaAllocator,
+    const std::vector<AllocatedBuffer>& gpuRenderableBuffers, const std::vector<AllocatedBuffer>& gpuTranslationBuffers,
     const std::vector<VkImageView*>& textureImageViews, const std::vector<VkSampler*>& samplers, VkImageLayout samplerImageLayout);
 
   static Material createStandardInstancedMaterial(

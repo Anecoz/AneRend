@@ -1,0 +1,74 @@
+#version 450
+
+layout (local_size_x = 256) in;
+
+struct DrawCommand
+{
+  uint indexCount;
+  uint instanceCount;
+  uint firstIndex;
+  int vertexOffset;
+  uint firstInstance;
+};
+
+struct Renderable
+{
+  mat4 transform;
+  vec4 bounds;
+  uint meshId;
+};
+
+layout(std430, set = 0, binding = 0) buffer DrawBuffer {
+  DrawCommand draws[];
+} drawBuffer;
+
+layout(std430, set = 0, binding = 1) readonly buffer RenderableBuffer {
+  Renderable renderables[];
+} renderableBuffer;
+
+layout(std430, set = 0, binding = 2) buffer TranslationBuffer {
+  uint ids[];
+} translationBuffer;
+
+layout(push_constant) uniform constants {
+  mat4 view;
+  vec4 frustumPlanes[4];
+  uint drawCount;
+} pushConstants;
+
+void main()
+{
+  uint gID = gl_GlobalInvocationID.x;
+
+  if (gID >= pushConstants.drawCount) {
+    return;
+  }
+
+  // Check visibility against frustum planes
+  mat4 model = renderableBuffer.renderables[gID].transform;
+  vec4 sphereBounds = renderableBuffer.renderables[gID].bounds;
+  float radius = sphereBounds.w;
+  vec3 sphereCenterView = vec3(pushConstants.view * model * vec4(sphereBounds.xyz, 1.0));
+  vec3 sphereCenter = vec3(model * vec4(sphereBounds.xyz, 1.0));
+
+  //bool visible = true;
+  bool visible = sphereCenterView.z > -100.0;
+  visible = visible && sphereCenterView.z < 0.0;
+  for (int i = 0; i < 4; i++) {
+    vec3 frustumNormal = pushConstants.frustumPlanes[i].xyz;
+    float frustumD = pushConstants.frustumPlanes[i].w;
+    bool inFrustum = (dot(sphereCenter, frustumNormal) + frustumD + radius) >= 0.0;
+    visible = visible && inFrustum;
+  }
+
+  if (!visible) {
+    return;
+  }
+
+  uint meshId = renderableBuffer.renderables[gID].meshId;
+  uint countBefore = atomicAdd(drawBuffer.draws[meshId].instanceCount, 1);
+
+  // Update translation buffer (from gl_InstanceIndex to renderableId)
+  uint instanceIndex = drawBuffer.draws[meshId].firstInstance + countBefore;
+  translationBuffer.ids[instanceIndex] = gID;
+}
