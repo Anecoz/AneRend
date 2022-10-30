@@ -151,6 +151,9 @@ private:
 
   void createComputeDescriptorSet();
 
+  // Staging buffer for copying data to the gpu buffers.
+  std::vector<AllocatedBuffer> _gpuStagingBuffer;
+
   // Contains renderable info for compute culling shader.
   std::vector<AllocatedBuffer> _gpuRenderableBuffer;
 

@@ -9,6 +9,7 @@ struct Renderable
   mat4 transform;
   vec4 bounds;
   uint meshId;
+  uint visible;
 };
 
 layout(std430, set = 0, binding = 1) readonly buffer RenderableBuffer {

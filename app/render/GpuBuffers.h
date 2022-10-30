@@ -17,6 +17,7 @@ struct alignas(16) GPURenderable {
   glm::mat4 _transform;
   glm::vec4 _bounds;
   uint32_t _meshId; // Also index into the mesh GPU buffer
+  uint32_t _visible; // TODO: Not sure about if there is a bool type...
 };
 
 // One per mesh

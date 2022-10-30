@@ -132,6 +132,7 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _gpuTranslationBuffer[i]._buffer, _gpuTranslationBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuDrawCmdBuffer[i]._buffer, _gpuDrawCmdBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuRenderableBuffer[i]._buffer, _gpuRenderableBuffer[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _gpuStagingBuffer[i]._buffer, _gpuStagingBuffer[i]._allocation);
   }
 
   vkDestroyCommandPool(_device, _commandPool, nullptr);
@@ -250,15 +251,15 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
-  /*printf("Init shadow debug...");
+  printf("Init shadow debug...");
   res &= initShadowDebug();
   if (!res) return false;
-  printf("Done!\n");*/
+  printf("Done!\n");
 
-  /*printf("Init pp renderable...");
+  printf("Init pp renderable...");
   res &= initPostProcessingRenderable();
   if (!res) return false;
-  printf("Done!\n");*/
+  printf("Done!\n");
 
   printf("Init compute pipelines...");
   res &= initComputePipelines();
@@ -329,7 +330,7 @@ MeshId VulkanRenderer::registerMesh(const std::vector<Vertex>& vertices, const s
 
   MeshId idOut = (std::uint32_t)_currentMeshes.size() - 1;
 
-  printf("Mesh registered, id: %u\n", idOut);
+  //printf("Mesh registered, id: %u\n", idOut);
   return idOut;
 }
 
@@ -1249,7 +1250,7 @@ void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bo
     for (std::size_t view = 0; view < light._shadowImageViews.size(); ++view) {
       // For each light and its view, rerun the GPU culling to generate the (current) draw cmds
       Camera shadowCam;
-      shadowCam.setProjection(shadowProj);
+      shadowCam.setProjection(light._proj);
       shadowCam.setViewMatrix(light._view[view]);
 
       executeGpuCullDispatch(commandBuffer, shadowCam);
@@ -1282,13 +1283,15 @@ void VulkanRenderer::recordCommandBufferGeometry(VkCommandBuffer commandBuffer, 
 
 void VulkanRenderer::recordCommandBufferPP(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug)
 {
-  /*Renderable* rend = nullptr;
+  Renderable* rend = nullptr;
   for (auto& renderable : _currentRenderables) {
     if (renderable._id == _ppPass._quadModelId) {
       rend = &renderable;
       break;
     }
   }
+
+  if (!rend) return;
 
   auto viewport = _ppPass.viewport(_swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height);
   auto scissor = _ppPass.scissor(_swapChain._swapChainExtent);
@@ -1324,14 +1327,16 @@ void VulkanRenderer::recordCommandBufferPP(VkCommandBuffer commandBuffer, std::u
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material.first._pipelines[Material::POST_PROCESSING_INDEX]);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material.first._pipelineLayouts[Material::POST_PROCESSING_INDEX], 0, 1, &descriptorSets, 0, nullptr);
 
+    auto& mesh = _currentMeshes[rend->_meshId];
+
     VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &rend->_vertexBuffer._buffer, offsets);
-    vkCmdDraw(commandBuffer, (uint32_t)rend->_numVertices, 1, 0, 0);
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaMeshBuffer._buffer._buffer, offsets);
+    vkCmdDraw(commandBuffer, 6, 1, mesh._vertexOffset, 0);
 
     if (!isLast) {
       vkCmdEndRendering(commandBuffer);
     }
-  }*/
+  }
 }
 
 void VulkanRenderer::createComputeDescriptorSet()
@@ -1411,15 +1416,9 @@ void VulkanRenderer::createComputeDescriptorSet()
 void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 {
   // Each renderable that we currently have on the CPU needs to be udpated for the GPU buffer.
-
-  // TODO: This is stupid. Create one buffer and reuse it for application lifetime.
-  AllocatedBuffer stagingBuffer;
   std::size_t dataSize = _currentRenderables.size() * sizeof(gpu::GPURenderable);
-
-  bufferutil::createBuffer(_vmaAllocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
-
   gpu::GPURenderable* mappedData;
-  vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, (void**)&mappedData);
+  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&mappedData);
 
   // Also fill mesh usage buffer while we're looping through renderables anyway
   _currentMeshUsage.clear();
@@ -1432,15 +1431,14 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     mappedData[i]._transform = renderable._transform;
     mappedData[i]._meshId = (uint32_t)renderable._meshId;
     mappedData[i]._bounds = glm::vec4(renderable._boundingSphereCenter, renderable._boundingSphereRadius);
-    // TODO: What if renderable is not visible?
+    mappedData[i]._visible = renderable._visible ? 1 : 0;
   }
 
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
   copyRegion.srcOffset = 0;
   copyRegion.size = dataSize;
-  auto cmd = beginSingleTimeCommands();
-  vkCmdCopyBuffer(cmd, stagingBuffer._buffer, _gpuRenderableBuffer[_currentFrame]._buffer, 1, &copyRegion);
+  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuRenderableBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
   VkBufferMemoryBarrier memBarr{};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -1453,28 +1451,23 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
   memBarr.size = VK_WHOLE_SIZE;
 
   vkCmdPipelineBarrier(
-    cmd,
+    commandBuffer,
     VK_PIPELINE_STAGE_TRANSFER_BIT,
     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
     0, 0, nullptr, 
     1, &memBarr,
     0, nullptr);
 
-  endSingleTimeCommands(cmd);
-  vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
-  vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
+  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
 }
 
 void VulkanRenderer::prefillGPUDrawCmdBuffer(VkCommandBuffer& commandBuffer)
 {
   // Create one draw command for currently available meshes.
-  // TODO: This is stupid. Create one buffer and reuse it for application lifetime.
-  AllocatedBuffer stagingBuffer;
   std::size_t dataSize = _currentMeshes.size() * sizeof(gpu::GPUDrawCallCmd);
-  bufferutil::createBuffer(_vmaAllocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
 
   gpu::GPUDrawCallCmd* mappedData;
-  vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, (void**)&mappedData);
+  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&mappedData);
   for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
     auto& mesh = _currentMeshes[i];
     mappedData[i]._command.indexCount = (uint32_t)mesh._numIndices;
@@ -1487,8 +1480,7 @@ void VulkanRenderer::prefillGPUDrawCmdBuffer(VkCommandBuffer& commandBuffer)
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
   copyRegion.size = dataSize;
-  auto cmd = beginSingleTimeCommands();
-  vkCmdCopyBuffer(cmd, stagingBuffer._buffer, _gpuDrawCmdBuffer[_currentFrame]._buffer, 1, &copyRegion);
+  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuDrawCmdBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
   VkBufferMemoryBarrier memBarr {};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -1501,16 +1493,14 @@ void VulkanRenderer::prefillGPUDrawCmdBuffer(VkCommandBuffer& commandBuffer)
   memBarr.size = VK_WHOLE_SIZE;
 
   vkCmdPipelineBarrier(
-    cmd,
+    commandBuffer,
     VK_PIPELINE_STAGE_TRANSFER_BIT,
     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
     0, 0, nullptr, 
     1, &memBarr,
     0, nullptr);
 
-  endSingleTimeCommands(cmd);
-  vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
-  vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
+  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
 }
 
 void VulkanRenderer::prefillGPUTranslationBuffer(VkCommandBuffer& commandBuffer)
@@ -1611,8 +1601,6 @@ void VulkanRenderer::executeGpuCullDispatch(VkCommandBuffer commandBuffer, Camer
 
 void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool pp, bool debug)
 {
-  pp = false;
-
   VkCommandBufferBeginInfo beginInfo{};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   beginInfo.flags = 0; // Optional
@@ -1630,7 +1618,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
                         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
   // Shadow pass
-  //recordCommandBufferShadow(commandBuffer, debug);
+  recordCommandBufferShadow(commandBuffer, debug);
 
   // Geometry pass
   // Transition the ppInput image to color attachment
@@ -1663,8 +1651,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
     recordCommandBufferGeometry(commandBuffer, debug);
   }
 
-  // TODO: Vertex offset for rendering the quad...
-  /*if (debug) {
+  if (debug) {
     // Shadow map overlay
     // TODO: Stack debug texture overlays, not just shadow map
     Renderable* rend = nullptr;
@@ -1675,15 +1662,19 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
       }
     }
 
-    // Hijack begin render from geometry pass...
-    auto& material = _materials[SHADOW_DEBUG_MATERIAL_ID];
-    auto& descriptorSets = material._descriptorSets[Material::STANDARD_INDEX][_currentFrame];
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelines[Material::STANDARD_INDEX]);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayouts[Material::STANDARD_INDEX], 0, 1, &descriptorSets, 0, nullptr);
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &rend->_vertexBuffer._buffer, offsets);
-    vkCmdDraw(commandBuffer, (uint32_t)rend->_numVertices, 1, 0, 0);
-  }*/
+    if (rend) {
+      // Hijack begin render from geometry pass...
+      auto& material = _materials[SHADOW_DEBUG_MATERIAL_ID];
+      auto& descriptorSets = material._descriptorSets[Material::STANDARD_INDEX][_currentFrame];
+      vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelines[Material::STANDARD_INDEX]);
+      vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayouts[Material::STANDARD_INDEX], 0, 1, &descriptorSets, 0, nullptr);
+      VkDeviceSize offsets[] = { 0 };
+      vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaMeshBuffer._buffer._buffer, offsets);
+
+      auto& mesh = _currentMeshes[rend->_meshId];
+      vkCmdDraw(commandBuffer, 6, 1, (uint32_t)mesh._vertexOffset, 0);
+    }
+  }
 
   // Imgui, hijack geometrypass begin...
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
@@ -1841,11 +1832,20 @@ bool VulkanRenderer::initGigaMeshBuffer()
 
 bool VulkanRenderer::initGpuBuffers()
 {
+  _gpuStagingBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuRenderableBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuDrawCmdBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuTranslationBuffer.resize(MAX_FRAMES_IN_FLIGHT);
 
   for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    // Create a staging buffer that will be used to temporarily hold data that is to be copied to the gpu buffers.
+    bufferutil::createBuffer(
+      _vmaAllocator,
+      MAX_NUM_RENDERABLES * sizeof(gpu::GPURenderable), // We use this as the size, as the GPU buffers can never get bigger than this
+      VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+      _gpuStagingBuffer[i]);
+
     // Create a buffer that will contain renderable information for use by the frustum culling compute shader.
     bufferutil::createBuffer(
       _vmaAllocator,

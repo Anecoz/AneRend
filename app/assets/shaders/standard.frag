@@ -73,7 +73,7 @@ void main() {
 
   vec3 normal = normalize(fragNormal);
 
-  float shadow = 0.0;//inShadow();
+  float shadow = inShadow();
 
   // Ambient
   float ambientStrength = 0.01;
