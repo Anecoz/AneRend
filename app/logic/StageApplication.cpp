@@ -250,7 +250,7 @@ void StageApplication::calculateShadowMatrix()
   glm::mat4 lpMatrix = glm::ortho(minX, maxX, minY, maxY, minZ, maxZ);
 
   _shadowCamera.setViewMatrix(lvMatrix);
-  _shadowCamera.setProjection(lpMatrix);
+  _shadowCamera.setProjection(lpMatrix, minZ, maxZ);
 }
 
 void StageApplication::notifyFramebufferResized()

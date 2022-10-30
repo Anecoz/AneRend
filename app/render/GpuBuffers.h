@@ -29,6 +29,8 @@ struct GPUDrawCallCmd {
 struct GPUCullPushConstants {
   glm::mat4 _view;             // 4 * 4 * 4 = 64 bytes
   glm::vec4 _frustumPlanes[4]; // 4 * 4 * 4 = 64 bytes
+  float _nearDist;
+  float _farDist;
   uint32_t _drawCount;         // 4 bytes
                                // Total: 132 bytes
 };

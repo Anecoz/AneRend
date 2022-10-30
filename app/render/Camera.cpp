@@ -22,10 +22,14 @@ Camera::Camera(glm::vec3 initialPosition, ProjectionType type)
 {
   if (type == ProjectionType::Orthogonal) {
     _projection = glm::ortho(-20.0f, 20.0f, -20.0f, 20.0f, 0.1f, 50.0f);
+    _far = 50.0f;
   }
   else {
     _projection = glm::perspective(glm::radians(55.0f), 16.0f/9.0f, 0.1f, 100.0f);
+    _far = 100.0f;
   }
+
+  _near = 0.1f;
 }
 
 bool Camera::insideFrustum(const glm::vec3& point) const
@@ -88,9 +92,11 @@ void Camera::setViewMatrix(const glm::mat4& viewMatrix)
   updateFrustum();
 }
 
-void Camera::setProjection(const glm::mat4& matrix)
+void Camera::setProjection(const glm::mat4& matrix, float near, float far)
 {
   _projection = matrix;
+  _near = near;
+  _far = far;
   updateFrustum();
 }
 

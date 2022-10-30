@@ -28,7 +28,10 @@ public:
   void setPosition(const glm::vec3& posIn);
   void setYawPitchRoll(double yawDeg, double pitchDeg, double rollDeg);
   void setViewMatrix(const glm::mat4& matrix);
-  void setProjection(const glm::mat4& matrix);
+  void setProjection(const glm::mat4& matrix, float near, float far);
+
+  float getFar() const { return _far; }
+  float getNear() const { return _near; }
   glm::vec3 getPosition() const { return _position; }
   const glm::mat4& getProjection() const { return _projection; }
   const glm::mat4& getCamMatrix() const { return _cameraMatrix; }
@@ -59,6 +62,9 @@ private:
   glm::vec3 _forward;
   glm::vec3 _right;
   glm::vec3 _up;
+
+  float _far;
+  float _near;
   double _speed = 5.0;
   double _sensitivity = 0.005;
 };

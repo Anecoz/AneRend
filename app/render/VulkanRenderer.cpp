@@ -1250,7 +1250,7 @@ void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bo
     for (std::size_t view = 0; view < light._shadowImageViews.size(); ++view) {
       // For each light and its view, rerun the GPU culling to generate the (current) draw cmds
       Camera shadowCam;
-      shadowCam.setProjection(light._proj);
+      shadowCam.setProjection(light._proj, 0.1f, 20.0f);
       shadowCam.setViewMatrix(light._view[view]);
 
       executeGpuCullDispatch(commandBuffer, shadowCam);
@@ -1558,6 +1558,8 @@ void VulkanRenderer::executeGpuCullDispatch(VkCommandBuffer commandBuffer, Camer
   cullPushConstants._frustumPlanes[2] = cullCamera.getFrustum().getPlane(Frustum::Top);
   cullPushConstants._frustumPlanes[3] = cullCamera.getFrustum().getPlane(Frustum::Bottom);
   cullPushConstants._view = cullCamera.getCamMatrix();
+  cullPushConstants._farDist = cullCamera.getFar();
+  cullPushConstants._nearDist = cullCamera.getNear();
 
   vkCmdPushConstants(commandBuffer, _computeMaterial._pipelineLayouts[Material::STANDARD_INDEX], VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(gpu::GPUCullPushConstants), &cullPushConstants);
 
