@@ -451,7 +451,7 @@ bool internalCreate(
     // TODO: Configurable
     pushConstant.offset = 0;
     pushConstant.size = (uint32_t)pushConstantsSize;
-    pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
   }
 
   // Pipeline layout
@@ -574,14 +574,14 @@ Material MaterialFactory::createStandardMaterial(
     output._descriptorSetLayouts[Material::SHADOW_INDEX], output._pipelineLayouts[Material::SHADOW_INDEX], output._pipelines[Material::SHADOW_INDEX],
     device, colorFormat, depthFormat,
     0, -1, 1, 2, 0,
-    "standard_shadow_vert.spv", "",
+    "standard_shadow_vert.spv", "standard_shadow_frag.spv",
     false, 
     0, -1, -1, -1,
     VK_CULL_MODE_BACK_BIT,
     true, 4.0f, 1.5f,
     true,
     false,
-    true, 4 * 4 * 4);
+    true, 4 * 4 * 4 + 4 * 4); //mat4 and vec4
 
   // Non-shadow descriptor sets
   {

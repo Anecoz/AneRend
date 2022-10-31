@@ -1204,7 +1204,7 @@ void VulkanRenderer::drawRenderables(
       vkCmdPushConstants(
         commandBuffer,
         material._pipelineLayouts[materialIndex],
-        VK_SHADER_STAGE_VERTEX_BIT,
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         0,
         (uint32_t)extraPushConstantsSize, extraPushConstants);
     }
@@ -1261,8 +1261,14 @@ void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bo
       _shadowPass.beginRendering(commandBuffer, light._shadowImageViews[view]);
       
       auto shadowMatrix = shadowProj * light._view[view];
+      glm::vec4 camPos{ light._pos.x, light._pos.y, light._pos.z, 1.0 };
+
+      const std::size_t dataSize = 4 * 4 * 4 + 4 * 4;
+      std::uint8_t data[dataSize];
+      std::memcpy(data, &shadowMatrix, 4 * 4 * 4);
+      std::memcpy(data + 4 * 4 * 4, &camPos, 4 * 4);
       drawRenderables(commandBuffer, Material::SHADOW_INDEX, true, _shadowPass.viewport(), _shadowPass.scissor(),
-        (void*)&shadowMatrix, 4 * 4 * 4);
+        (void*)data, dataSize);
 
       vkCmdEndRendering(commandBuffer);
 
@@ -1331,7 +1337,7 @@ void VulkanRenderer::recordCommandBufferPP(VkCommandBuffer commandBuffer, std::u
 
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaMeshBuffer._buffer._buffer, offsets);
-    vkCmdDraw(commandBuffer, 6, 1, mesh._vertexOffset, 0);
+    vkCmdDraw(commandBuffer, 6, 1, (uint32_t)mesh._vertexOffset, 0);
 
     if (!isLast) {
       vkCmdEndRendering(commandBuffer);

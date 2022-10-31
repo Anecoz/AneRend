@@ -20,50 +20,20 @@ layout(location = 0) out vec4 outColor;
 
 #define NUM_LIGHTS 4
 
-float linearize_depth(float d, float zNear, float zFar)
-{
-  return zNear * zFar / (zFar + d * (zNear - zFar));
-}
-
 float inShadow() {
   float total = 0.0;
   for (int i = 0; i < NUM_LIGHTS; ++i) {
     vec3 lightVec = fragPosition - ubo.lightPos[i].xyz;
 
     float sampledDepth = texture(shadowMap[i], lightVec).r;
-    sampledDepth = linearize_depth(sampledDepth, 0.1, 50.0);
 
-    float testDepth = length(lightVec);
+    float testDepth = length(lightVec) / 50.0;
     if (sampledDepth < testDepth) {
       total += 1.0;
     }
   }
 
   return total/NUM_LIGHTS;
-
-  /*vec3 projCoords = fragShadowPos.xyz / fragShadowPos.w;
-
-  if (projCoords.x > 1.0 || projCoords.x < -1.0 ||
-      projCoords.z > 1.0 || projCoords.z < 0.0 ||
-      projCoords.y > 1.0 || projCoords.y < -1.0) {
-    return 0.0;
-  }
-
-  vec2 shadowMapCoord = projCoords.xy * 0.5 + 0.5;
-
-  float depth = projCoords.z;
-  int stepsPerAxis = 4;
-  float total = 0.0;
-  for (int x = 0; x < stepsPerAxis; ++x) {
-    for (int y = 0; y < stepsPerAxis; ++y) {
-      float sampledDepth = texture(shadowMap, vec2(shadowMapCoord + vec2(0.0005 * x, 0.0005 * y))).r;
-      if (depth > sampledDepth) {
-        total += 1.0;
-      }
-    }
-  }
-
-  return total / float(stepsPerAxis * stepsPerAxis);*/
 }
 
 void main() {

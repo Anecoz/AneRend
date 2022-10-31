@@ -1,5 +1,6 @@
 C:/VulkanSDK/1.3.224.1/Bin/glslc.exe %1/standard.vert -o %2/standard_vert.spv
 C:/VulkanSDK/1.3.224.1/Bin/glslc.exe %1/standard_shadow.vert -o %2/standard_shadow_vert.spv
+C:/VulkanSDK/1.3.224.1/Bin/glslc.exe %1/standard_shadow.frag -o %2/standard_shadow_frag.spv
 C:/VulkanSDK/1.3.224.1/Bin/glslc.exe %1/standard_instanced.vert -o %2/standard_instanced_vert.spv
 C:/VulkanSDK/1.3.224.1/Bin/glslc.exe %1/standard_instanced_shadow.vert -o %2/standard_instanced_shadow_vert.spv
 C:/VulkanSDK/1.3.224.1/Bin/glslc.exe %1/standard.frag -o %2/standard_frag.spv

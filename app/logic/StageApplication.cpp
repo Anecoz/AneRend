@@ -80,19 +80,12 @@ bool StageApplication::init()
   // Do a couple of the big models
   {
     std::size_t numInstances = 20;
-    std::vector<glm::mat4> instanceMatrixData;
 
     for (int x = 0; x < numInstances; ++x)
     for (int y = 0; y < numInstances; ++y) {
       auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(30.0f * x, 0.0f, 30.0f * y));
-      instanceMatrixData.emplace_back(std::move(mat));
+      _modelId2 = _vkRenderer.registerRenderable(_meshId2, render::STANDARD_MATERIAL_ID, mat, glm::vec3(1.0f), 30.0f);
     }
-
-    std::vector<std::uint8_t> dataVec;
-    dataVec.resize(instanceMatrixData.size() * 4 * 4 * 4);
-    memcpy(dataVec.data(), instanceMatrixData.data(), instanceMatrixData.size() * 4 * 4 * 4);
-    _modelId2 = _vkRenderer.registerRenderable(_meshId2, render::STANDARD_MATERIAL_ID, glm::translate(glm::mat4(1.0f), glm::vec3(1.0f)), glm::vec3(1.0f), 1.0f);
-    //_modelId2 = _vkRenderer.registerRenderable(_testModel2._vertices, _testModel2._indices, render::STANDARD_MATERIAL_ID);
   }
 
   printf("Renderable registered! Id1: %lld, id2: %lld\n", _modelId, _modelId2);

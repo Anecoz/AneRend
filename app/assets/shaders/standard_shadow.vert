@@ -22,12 +22,16 @@ layout(std430, set = 0, binding = 2) buffer TranslationBuffer {
 
 layout(push_constant) uniform constants {
   mat4 shadowMatrix;
+  vec4 camPosition;
 } pushConstants;
 
 layout(location = 0) in vec3 inPosition;
 
+layout(location = 0) out vec3 fragPositionWorld;
+
 void main() {
   uint renderableId = translationBuffer.ids[gl_InstanceIndex];
   mat4 model = renderableBuffer.renderables[renderableId].transform;
-  gl_Position = pushConstants.shadowMatrix * model * vec4(inPosition, 1.0);
+  gl_Position = pushConstants.shadowMatrix  * model * vec4(inPosition, 1.0);
+  fragPositionWorld= vec3(model * vec4(inPosition, 1.0));
 }

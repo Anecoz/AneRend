@@ -37,7 +37,7 @@ struct Light
 
   void debugUpdatePos(double delta)
   {
-    _lastAngle += delta;
+    _lastAngle += delta * 0.1;
     _pos.x = (float)_debugOrigX + (float)cos(_lastAngle) * (float)_debugCircleRadius;
     _pos.z = (float)_debugOrigZ + (float)sin(_lastAngle) * (float)_debugCircleRadius;
   }
