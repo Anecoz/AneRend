@@ -1250,7 +1250,7 @@ void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bo
     for (std::size_t view = 0; view < light._shadowImageViews.size(); ++view) {
       // For each light and its view, rerun the GPU culling to generate the (current) draw cmds
       Camera shadowCam;
-      shadowCam.setProjection(light._proj, 0.1f, 20.0f);
+      shadowCam.setProjection(light._proj, 0.1f, 50.0f);
       shadowCam.setViewMatrix(light._view[view]);
 
       executeGpuCullDispatch(commandBuffer, shadowCam);
@@ -1271,6 +1271,16 @@ void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bo
         (void*)data, dataSize);
 
       vkCmdEndRendering(commandBuffer);
+
+      // TESTING: Execution barrier to prevent writing to cull buffers (in next iteration) before drawing has concluded
+      vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        0, nullptr);
 
       // Transition shadow map image to shader readable
       imageutil::transitionImageLayout(commandBuffer, light._shadowImage._image, _shadowPass._shadowImageFormat,
@@ -1432,6 +1442,8 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
   for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
     auto& renderable = _currentRenderables[i];
 
+    if (!renderable._visible) continue;
+
     _currentMeshUsage[renderable._meshId]++;
     
     mappedData[i]._transform = renderable._transform;
@@ -1578,7 +1590,7 @@ void VulkanRenderer::executeGpuCullDispatch(VkCommandBuffer commandBuffer, Camer
   VkBufferMemoryBarrier memBarrDraws{};
   memBarrDraws.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
   memBarrDraws.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-  memBarrDraws.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+  memBarrDraws.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT;
   memBarrDraws.srcQueueFamilyIndex = _queueIndices.graphicsFamily.value();
   memBarrDraws.dstQueueFamilyIndex = _queueIndices.graphicsFamily.value();
   memBarrDraws.buffer = _gpuDrawCmdBuffer[_currentFrame]._buffer;
@@ -1588,7 +1600,7 @@ void VulkanRenderer::executeGpuCullDispatch(VkCommandBuffer commandBuffer, Camer
   VkBufferMemoryBarrier memBarrTranslation{};
   memBarrTranslation.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
   memBarrTranslation.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-  memBarrTranslation.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+  memBarrTranslation.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT;
   memBarrTranslation.srcQueueFamilyIndex = _queueIndices.graphicsFamily.value();
   memBarrTranslation.dstQueueFamilyIndex = _queueIndices.graphicsFamily.value();
   memBarrTranslation.buffer = _gpuTranslationBuffer[_currentFrame]._buffer;
@@ -1601,7 +1613,7 @@ void VulkanRenderer::executeGpuCullDispatch(VkCommandBuffer commandBuffer, Camer
   vkCmdPipelineBarrier(
     commandBuffer,
     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+    VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
     0, 0, nullptr,
     2, memBarrs,
     0, nullptr);

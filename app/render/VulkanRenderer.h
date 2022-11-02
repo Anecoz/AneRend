@@ -278,7 +278,8 @@ private:
   std::vector<VkFence> _inFlightFences;
 
   std::vector<const char*> _validationLayers = {
-    "VK_LAYER_KHRONOS_validation"
+    "VK_LAYER_KHRONOS_validation",
+    "VK_LAYER_KHRONOS_synchronization2"
   };
 
   const std::vector<const char*> _deviceExtensions = {
