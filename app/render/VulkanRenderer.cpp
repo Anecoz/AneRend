@@ -6,6 +6,9 @@
 #include "BufferHelpers.h"
 #include "GpuBuffers.h"
 #include "ComputePipeline.h"
+#include "FrameGraphBuilder.h"
+#include "RenderResourceVault.h"
+#include "RenderResource.h"
 
 #include "../util/Utils.h"
 #include "../LodePng/lodepng.h"
@@ -270,6 +273,285 @@ bool VulkanRenderer::init()
   res &= initImgui();
   if (!res) return false;
   printf("Done!\n");
+
+  printf("DEBUG FRAME GRAPH BUILDING TEST!\n");
+  RenderResourceVault vault;
+  FrameGraphBuilder fgb(&vault);
+
+  {
+    vault.addResource("FrustumCulledTranslationBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
+    ResourceInitUsage initUsage{};
+    fgb.registerResourceInitExe("FrustumCulledTranslationBuffer", std::move(initUsage), [](IRenderResource*) {});
+  }
+  {
+    vault.addResource("FrustumCulledDrawCmdBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
+    ResourceInitUsage initUsage{};
+    fgb.registerResourceInitExe("FrustumCulledDrawCmdBuffer", std::move(initUsage), [](IRenderResource*) {});
+  }
+  {
+    vault.addResource("FinalCullTranslationBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
+    ResourceInitUsage initUsage{};
+    fgb.registerResourceInitExe("FinalCullTranslationBuffer", std::move(initUsage), [](IRenderResource*) {});
+  }
+  {
+    vault.addResource("FinalCullDrawCmdBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
+    ResourceInitUsage initUsage{};
+    fgb.registerResourceInitExe("FinalCullDrawCmdBuffer", std::move(initUsage), [](IRenderResource*) {});
+  }
+
+  {
+    // Cull
+    RenderPassRegisterInfo info{};
+    info._name = "FrustumCullCompute";
+
+    std::vector<RenderPassResourceUsage> resourceUsage;
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FrustumCulledTranslationBuffer";
+      usage._access.set((std::size_t)Access::Write);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FrustumCulledDrawCmdBuffer";
+      usage._access.set((std::size_t)Access::Write);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+
+    info._resourceUsages = std::move(resourceUsage);
+    fgb.registerRenderPass(std::move(info));
+    fgb.registerRenderPassExe("FrustumCullCompute", [](RenderResourceVault*) {});
+  }
+  {
+    // LDP
+    RenderPassRegisterInfo info{};
+    info._name = "LDP";
+    
+    std::vector<RenderPassResourceUsage> resourceUsage;
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "LowResDepthBuffer";
+      usage._access.set((std::size_t)Access::Write);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FrustumCulledTranslationBuffer";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FrustumCulledDrawCmdBuffer";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+
+    info._resourceUsages = std::move(resourceUsage);
+    fgb.registerRenderPass(std::move(info));
+    fgb.registerRenderPassExe("LDP", [](RenderResourceVault*) {});
+  }
+
+  {
+    // Cull
+    RenderPassRegisterInfo info{};
+    info._name = "FinalCullCompute";
+
+    std::vector<RenderPassResourceUsage> resourceUsage;
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalCullTranslationBuffer";
+      usage._access.set((std::size_t)Access::Write);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "LowResDepthBuffer";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalCullDrawCmdBuffer";
+      usage._access.set((std::size_t)Access::Write);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+
+    info._resourceUsages = std::move(resourceUsage);
+    fgb.registerRenderPass(std::move(info));
+    fgb.registerRenderPassExe("FinalCullCompute", [](RenderResourceVault*) {});
+  }
+
+  {
+    // SP0
+    RenderPassRegisterInfo info{};
+    info._name = "ShadowPass0";
+
+    std::vector<RenderPassResourceUsage> resourceUsage;
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalCullTranslationBuffer";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalCullDrawCmdBuffer";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "ShadowCube0";
+      usage._access.set((std::size_t)Access::Write);
+      usage._type = Type::DepthAttachment;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+
+    info._resourceUsages = std::move(resourceUsage);
+    fgb.registerRenderPass(std::move(info));
+    fgb.registerRenderPassExe("ShadowPass0", [](RenderResourceVault*) {});
+  }
+
+  {
+    // SP0
+    RenderPassRegisterInfo info{};
+    info._name = "ShadowPass1";
+
+    std::vector<RenderPassResourceUsage> resourceUsage;
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalCullTranslationBuffer";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalCullDrawCmdBuffer";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "ShadowCube1";
+      usage._access.set((std::size_t)Access::Write);
+      usage._type = Type::DepthAttachment;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+
+    info._resourceUsages = std::move(resourceUsage);
+    fgb.registerRenderPass(std::move(info));
+    fgb.registerRenderPassExe("ShadowPass1", [](RenderResourceVault*) {});
+  }
+
+  {
+    // Geometry
+    RenderPassRegisterInfo info{};
+    info._name = "Geometry";
+
+    std::vector<RenderPassResourceUsage> resourceUsage;
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalCullTranslationBuffer";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalCullDrawCmdBuffer";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SSBO;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "ShadowCube0";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SampledTexture;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "ShadowCube1";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SampledTexture;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalImage";
+      usage._access.set((std::size_t)Access::Write);
+      usage._type = Type::ColorAttachment;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+
+    info._resourceUsages = std::move(resourceUsage);
+    fgb.registerRenderPass(std::move(info));
+    fgb.registerRenderPassExe("Geometry", [](RenderResourceVault*) {});
+  }
+
+  {
+    // PP
+    RenderPassRegisterInfo info{};
+    info._name = "PostProcess";
+
+    std::vector<RenderPassResourceUsage> resourceUsage;
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalImage";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::SampledTexture;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalImagePP";
+      usage._access.set((std::size_t)Access::Write);
+      usage._type = Type::ColorAttachment;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+
+    info._resourceUsages = std::move(resourceUsage);
+    fgb.registerRenderPass(std::move(info));
+    fgb.registerRenderPassExe("PostProcess", [](RenderResourceVault*) {});
+  }
+
+  {
+    // Present
+    RenderPassRegisterInfo info{};
+    info._name = "Present";
+    info._present = true;
+
+    std::vector<RenderPassResourceUsage> resourceUsage;
+    {
+      RenderPassResourceUsage usage{};
+      usage._resourceName = "FinalImagePP";
+      usage._access.set((std::size_t)Access::Read);
+      usage._type = Type::Present;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+
+    info._resourceUsages = std::move(resourceUsage);
+    fgb.registerRenderPass(std::move(info));
+    fgb.registerRenderPassExe("Present", [](RenderResourceVault*) {});
+  }
+
+  fgb.build();
+
+  fgb.printBuiltGraphDebug();
 
   return res;
 }
