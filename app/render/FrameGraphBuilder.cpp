@@ -38,7 +38,7 @@ void FrameGraphBuilder::reset()
   _resourceInits.clear();
 }
 
-void FrameGraphBuilder::registerResourceInitExe(const std::string& resource, ResourceInitUsage&& initUsage, ResourceInitFcn initFcn)
+void FrameGraphBuilder::registerResourceInitExe(const std::string& resource, ResourceUsage&& initUsage, ResourceInitFcn initFcn)
 {
   ResourceInit resInit;
   resInit._resource = resource;
@@ -119,16 +119,23 @@ FrameGraphBuilder::ResourceInit* FrameGraphBuilder::findResourceInit(const std::
   return nullptr;
 }
 
-FrameGraphBuilder::Submission* FrameGraphBuilder::findResourceProducer(const std::string& resource)
+std::vector<FrameGraphBuilder::Submission*> FrameGraphBuilder::findResourceProducers(const std::string& resource, const std::string& excludePass)
 {
+  std::vector<Submission*> out;
   for (auto& sub : _submissions) {
+    if (sub._regInfo._name == excludePass) {
+      break;
+    }
+
     for (auto& resourceUsage : sub._regInfo._resourceUsages) {
       if (resourceUsage._resourceName == resource && resourceUsage._access.test((std::size_t)Access::Write)) {
-        return &sub;
+        if (excludePass != sub._regInfo._name) {
+          out.emplace_back(&sub);
+        }
       }
     }
   }
-  return nullptr;
+  return out;
 }
 
 void FrameGraphBuilder::build()
@@ -191,12 +198,15 @@ void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, S
         continue;
       }
 
-      // Find the producer
-      auto producer = findResourceProducer(resourceUsage._resourceName);
-      if (!producer) {
+      // Find the producers, skip ourselves and any already present producers in the stack
+      auto producers = findResourceProducers(resourceUsage._resourceName, submission->_regInfo._name);
+      if (producers.empty()) {
         printf("FATAL: Frame graph could not find a producer for resource %s\n", resourceUsage._resourceName.c_str());
         return;
       }
+
+      // Choose the last producer in the chain (submission order sensitive)
+      auto producer = producers.back();
 
       // See what else this producer produces, in case we need more resources that turn out are produced by this producer
       GraphNode node{};
@@ -219,6 +229,7 @@ void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, S
 
           GraphNode node{};
           node._resourceInit = resInit;
+          node._resourceUsages = { resInit->_initUsage };
           node._debugName = std::string(resInit->_resource);
 
           localStack.emplace_back(std::move(node));
@@ -242,6 +253,9 @@ std::pair<VkImageLayout, VkImageLayout> FrameGraphBuilder::findImageLayoutUsage(
     }
     else if (prevType == Type::ColorAttachment && newType == Type::SampledTexture) {
       return { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    }
+    else if (prevType == Type::ColorAttachment && newType == Type::ColorAttachment) {
+      return { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
     }
     else if (prevType == Type::ColorAttachment && newType == Type::Present) {
       return { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
@@ -320,8 +334,24 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
 
     for (auto& usage : node._resourceUsages) {
 
+      // Find (maybe) a previous usage
+      ResourceUsage* prevUsage = nullptr;
+      for (std::size_t j = 0; j < i; ++j) {
+        auto& prevNode = stack[j];
+        for (auto& prev : prevNode._resourceUsages) {
+          if (prev._resourceName == usage._resourceName) {
+            prevUsage = &prev;
+            break;
+          }
+        }
+        // If we found something (or called break) in inner loop, break outer loop
+        if (prevUsage) {
+          break;
+        }
+      }
+
       // Find next nodes equivalent of the resource
-      RenderPassResourceUsage* nextUsage = nullptr;
+      ResourceUsage* nextUsage = nullptr;
       for (std::size_t j = i + 1; j < stack.size(); ++j) {
         auto& nextNode = stack[j];
         for (auto& next : nextNode._resourceUsages) {
@@ -329,6 +359,10 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
             nextUsage = &next;
             break;
           }
+        }
+        // If we found something (or called break) in inner loop, break outer loop
+        if (nextUsage) {
+          break;
         }
       }
 
@@ -339,31 +373,42 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
 
       // Do either a execution barrier, buffer memory barrier or image transition
       if (isTypeImage(usage._type)) {
-        // Initial layout transition (before writing)
+        // If the _previous_ usage wrote to this image, and we now read from it, and the type is the same, skip the pre-barrier
+        bool skipPreBarrier = false;
+        if (prevUsage) {
+          if (prevUsage->_access.test((std::size_t)Access::Write) && prevUsage->_type == usage._type) {
+            skipPreBarrier = true;
+          }
+        }
+
         std::uint32_t baseLayer = usage._imageBaseLayer;
-        auto initialLayout = findInitialImageLayout(usage._access, usage._type);
 
-        BarrierContext beforeWriteBarrier{};
-        beforeWriteBarrier._resourceName = usage._resourceName;
-        beforeWriteBarrier._barrierFcn = [baseLayer, initialLayout](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
-          auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
+        // Initial layout transition (before writing)
+        if (!skipPreBarrier) {
+          auto initialLayout = findInitialImageLayout(usage._access, usage._type);
 
-          imageutil::transitionImageLayout(
-            cmdBuffer,
-            imageResource->_image._image,
-            imageResource->_format,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            initialLayout,
-            baseLayer);
-        };
+          BarrierContext beforeWriteBarrier{};
+          beforeWriteBarrier._resourceName = usage._resourceName;
+          beforeWriteBarrier._barrierFcn = [baseLayer, initialLayout](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
+            auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
 
-        // Add the pre-write barrier _before_ writing
-        GraphNode beforeWriteNode{};
-        auto beforeName = debugConstructImageBarrierName(VK_IMAGE_LAYOUT_UNDEFINED, initialLayout);
-        beforeWriteNode._debugName = "Before write " + usage._resourceName + " (" + beforeName + ")";
-        beforeWriteNode._barrier = std::move(beforeWriteBarrier);
+            imageutil::transitionImageLayout(
+              cmdBuffer,
+              imageResource->_image._image,
+              imageResource->_format,
+              VK_IMAGE_LAYOUT_UNDEFINED,
+              initialLayout,
+              baseLayer);
+          };
 
-        updatedStack.insert(updatedStack.end() - 1, std::move(beforeWriteNode));
+          // Add the pre-write barrier _before_ writing
+          GraphNode beforeWriteNode{};
+          auto beforeName = debugConstructImageBarrierName(VK_IMAGE_LAYOUT_UNDEFINED, initialLayout);
+          beforeWriteNode._debugName = "Before write " + usage._resourceName + " (" + beforeName + ")";
+          beforeWriteNode._barrier = std::move(beforeWriteBarrier);
+
+          updatedStack.insert(updatedStack.end() - 1, std::move(beforeWriteNode));
+        }
 
         // Add the post-write transition here
         BarrierContext afterWriteBarrier{};
@@ -372,25 +417,29 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         // Gather some metadata about the image resource usage
         auto transitionPair = findImageLayoutUsage(usage._access, usage._type, nextUsage->_access, nextUsage->_type);
 
-        afterWriteBarrier._barrierFcn = [transitionPair, baseLayer](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
-          auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
+        // If the next usage is the same as the current, no need to have a barrier...?
+        // Probably an execution barrier is still needed?
+        if (transitionPair.first != transitionPair.second) {
+          afterWriteBarrier._barrierFcn = [transitionPair, baseLayer](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
+            auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
 
-          imageutil::transitionImageLayout(
-            cmdBuffer,
-            imageResource->_image._image,
-            imageResource->_format,
-            transitionPair.first,
-            transitionPair.second,
-            baseLayer);
-        };
+            imageutil::transitionImageLayout(
+              cmdBuffer,
+              imageResource->_image._image,
+              imageResource->_format,
+              transitionPair.first,
+              transitionPair.second,
+              baseLayer);
+          };
 
-        GraphNode afterWriteNode{};
-        auto afterName = debugConstructImageBarrierName(transitionPair.first, transitionPair.second);
-        afterWriteNode._debugName = "After write " + usage._resourceName + " (" + afterName + ")";
-        afterWriteNode._barrier = std::move(afterWriteBarrier);
+          GraphNode afterWriteNode{};
+          auto afterName = debugConstructImageBarrierName(transitionPair.first, transitionPair.second);
+          afterWriteNode._debugName = "After write " + usage._resourceName + " (" + afterName + ")";
+          afterWriteNode._barrier = std::move(afterWriteBarrier);
 
-        // Add this to very end of current stack
-        updatedStack.emplace_back(std::move(afterWriteNode));
+          // Add this to very end of current stack
+          updatedStack.emplace_back(std::move(afterWriteNode));
+        }
       }
       else if (isTypeBuffer(usage._type)) {
         // TODO: Memory buffers similarly to the image buffers

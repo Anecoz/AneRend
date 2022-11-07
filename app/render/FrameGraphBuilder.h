@@ -54,14 +54,7 @@ enum class Type
 typedef std::bitset<(std::size_t)Access::Count> AccessBits;
 typedef std::bitset<(std::size_t)Stage::Count> StageBits;
 
-struct ResourceInitUsage
-{
-  AccessBits _access;
-  StageBits _stage;
-  Type _type;
-};
-
-struct RenderPassResourceUsage
+struct ResourceUsage
 {  
   AccessBits _access;
   StageBits _stage;
@@ -76,7 +69,7 @@ struct RenderPassResourceUsage
 struct RenderPassRegisterInfo
 {
   std::string _name;
-  std::vector<RenderPassResourceUsage> _resourceUsages;
+  std::vector<ResourceUsage> _resourceUsages;
   bool _present = false;
 };
 
@@ -94,7 +87,7 @@ public:
 
   void reset();
 
-  void registerResourceInitExe(const std::string& resource, ResourceInitUsage&& initUsage, ResourceInitFcn initFcn);
+  void registerResourceInitExe(const std::string& resource, ResourceUsage&& initUsage, ResourceInitFcn initFcn);
 
   void registerRenderPass(RenderPassRegisterInfo&& registerInfo);
   void registerRenderPassExe(const std::string& renderPass, RenderPassExeFcn exeFcn);
@@ -117,7 +110,7 @@ private:
   struct ResourceInit
   {
     std::string _resource;
-    ResourceInitUsage _initUsage;
+    ResourceUsage _initUsage;
     ResourceInitFcn _initFcn;
   };
  
@@ -134,7 +127,7 @@ private:
     std::optional<BarrierContext> _barrier;
 
     std::vector<std::string> _producedResources;
-    std::vector<RenderPassResourceUsage> _resourceUsages;
+    std::vector<ResourceUsage> _resourceUsages;
 
     std::string _debugName;
   };
@@ -142,7 +135,7 @@ private:
   bool stackContainsProducer(const std::vector<GraphNode>& stack, const std::string& resource);
   Submission* findSubmission(const std::string& name);
   ResourceInit* findResourceInit(const std::string& resource);
-  Submission* findResourceProducer(const std::string& resource);
+  std::vector<Submission*> findResourceProducers(const std::string& resource, const std::string& excludePass);
 
   void findDependenciesRecurse(std::vector<GraphNode>& stack, Submission* submission);
 

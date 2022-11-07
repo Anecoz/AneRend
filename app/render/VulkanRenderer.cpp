@@ -280,22 +280,22 @@ bool VulkanRenderer::init()
 
   {
     vault.addResource("FrustumCulledTranslationBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
-    ResourceInitUsage initUsage{};
+    ResourceUsage initUsage{};
     fgb.registerResourceInitExe("FrustumCulledTranslationBuffer", std::move(initUsage), [](IRenderResource*) {});
   }
   {
     vault.addResource("FrustumCulledDrawCmdBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
-    ResourceInitUsage initUsage{};
+    ResourceUsage initUsage{};
     fgb.registerResourceInitExe("FrustumCulledDrawCmdBuffer", std::move(initUsage), [](IRenderResource*) {});
   }
   {
     vault.addResource("FinalCullTranslationBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
-    ResourceInitUsage initUsage{};
+    ResourceUsage initUsage{};
     fgb.registerResourceInitExe("FinalCullTranslationBuffer", std::move(initUsage), [](IRenderResource*) {});
   }
   {
     vault.addResource("FinalCullDrawCmdBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
-    ResourceInitUsage initUsage{};
+    ResourceUsage initUsage{};
     fgb.registerResourceInitExe("FinalCullDrawCmdBuffer", std::move(initUsage), [](IRenderResource*) {});
   }
 
@@ -304,16 +304,16 @@ bool VulkanRenderer::init()
     RenderPassRegisterInfo info{};
     info._name = "FrustumCullCompute";
 
-    std::vector<RenderPassResourceUsage> resourceUsage;
+    std::vector<ResourceUsage> resourceUsage;
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FrustumCulledTranslationBuffer";
       usage._access.set((std::size_t)Access::Write);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FrustumCulledDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Write);
       usage._type = Type::SSBO;
@@ -329,23 +329,23 @@ bool VulkanRenderer::init()
     RenderPassRegisterInfo info{};
     info._name = "LDP";
     
-    std::vector<RenderPassResourceUsage> resourceUsage;
+    std::vector<ResourceUsage> resourceUsage;
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "LowResDepthBuffer";
       usage._access.set((std::size_t)Access::Write);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FrustumCulledTranslationBuffer";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FrustumCulledDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SSBO;
@@ -362,23 +362,23 @@ bool VulkanRenderer::init()
     RenderPassRegisterInfo info{};
     info._name = "FinalCullCompute";
 
-    std::vector<RenderPassResourceUsage> resourceUsage;
+    std::vector<ResourceUsage> resourceUsage;
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalCullTranslationBuffer";
       usage._access.set((std::size_t)Access::Write);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "LowResDepthBuffer";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalCullDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Write);
       usage._type = Type::SSBO;
@@ -395,23 +395,23 @@ bool VulkanRenderer::init()
     RenderPassRegisterInfo info{};
     info._name = "ShadowPass0";
 
-    std::vector<RenderPassResourceUsage> resourceUsage;
+    std::vector<ResourceUsage> resourceUsage;
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalCullTranslationBuffer";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalCullDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "ShadowCube0";
       usage._access.set((std::size_t)Access::Write);
       usage._type = Type::DepthAttachment;
@@ -428,23 +428,23 @@ bool VulkanRenderer::init()
     RenderPassRegisterInfo info{};
     info._name = "ShadowPass1";
 
-    std::vector<RenderPassResourceUsage> resourceUsage;
+    std::vector<ResourceUsage> resourceUsage;
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalCullTranslationBuffer";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalCullDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "ShadowCube1";
       usage._access.set((std::size_t)Access::Write);
       usage._type = Type::DepthAttachment;
@@ -461,37 +461,37 @@ bool VulkanRenderer::init()
     RenderPassRegisterInfo info{};
     info._name = "Geometry";
 
-    std::vector<RenderPassResourceUsage> resourceUsage;
+    std::vector<ResourceUsage> resourceUsage;
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalCullTranslationBuffer";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalCullDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "ShadowCube0";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SampledTexture;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "ShadowCube1";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SampledTexture;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalImage";
       usage._access.set((std::size_t)Access::Write);
       usage._type = Type::ColorAttachment;
@@ -508,16 +508,16 @@ bool VulkanRenderer::init()
     RenderPassRegisterInfo info{};
     info._name = "PostProcess";
 
-    std::vector<RenderPassResourceUsage> resourceUsage;
+    std::vector<ResourceUsage> resourceUsage;
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalImage";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::SampledTexture;
       resourceUsage.emplace_back(std::move(usage));
     }
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalImagePP";
       usage._access.set((std::size_t)Access::Write);
       usage._type = Type::ColorAttachment;
@@ -530,14 +530,54 @@ bool VulkanRenderer::init()
   }
 
   {
+    // Debug shadow texture output
+    RenderPassRegisterInfo info{};
+    info._name = "DebugShadow";
+
+    std::vector<ResourceUsage> resourceUsage;
+    {
+      ResourceUsage usage{};
+      usage._resourceName = "FinalImagePP";
+      usage._access.set((std::size_t)Access::Read);
+      usage._access.set((std::size_t)Access::Write);
+      usage._type = Type::ColorAttachment;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+
+    info._resourceUsages = std::move(resourceUsage);
+    fgb.registerRenderPass(std::move(info));
+    fgb.registerRenderPassExe("DebugShadow", [](RenderResourceVault*) {});
+  }
+
+  {
+    // Debug shadow texture output
+    RenderPassRegisterInfo info{};
+    info._name = "UI";
+
+    std::vector<ResourceUsage> resourceUsage;
+    {
+      ResourceUsage usage{};
+      usage._resourceName = "FinalImagePP";
+      usage._access.set((std::size_t)Access::Read);
+      usage._access.set((std::size_t)Access::Write);
+      usage._type = Type::ColorAttachment;
+      resourceUsage.emplace_back(std::move(usage));
+    }
+
+    info._resourceUsages = std::move(resourceUsage);
+    fgb.registerRenderPass(std::move(info));
+    fgb.registerRenderPassExe("UI", [](RenderResourceVault*) {});
+  }
+
+  {
     // Present
     RenderPassRegisterInfo info{};
     info._name = "Present";
     info._present = true;
 
-    std::vector<RenderPassResourceUsage> resourceUsage;
+    std::vector<ResourceUsage> resourceUsage;
     {
-      RenderPassResourceUsage usage{};
+      ResourceUsage usage{};
       usage._resourceName = "FinalImagePP";
       usage._access.set((std::size_t)Access::Read);
       usage._type = Type::Present;
