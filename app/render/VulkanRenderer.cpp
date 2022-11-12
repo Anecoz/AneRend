@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <chrono>
 #include <cstring>
 #include <limits>
 #include <iostream>
@@ -325,7 +326,6 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FrustumCulledTranslationBuffer";
       usage._access.set((std::size_t)Access::Write);
-      //usage._access.set((std::size_t)Access::Read);
       usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
@@ -334,7 +334,6 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FrustumCulledDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Write);
-      //usage._access.set((std::size_t)Access::Read);
       usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
@@ -390,7 +389,6 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FinalCullTranslationBuffer";
       usage._access.set((std::size_t)Access::Write);
-      //usage._access.set((std::size_t)Access::Read);
       usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
@@ -407,7 +405,6 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FinalCullDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Write);
-      //usage._access.set((std::size_t)Access::Read);
       usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
@@ -584,7 +581,7 @@ bool VulkanRenderer::init()
   }
 
   {
-    // Debug shadow texture output
+    // UI Pass
     RenderPassRegisterInfo info{};
     info._name = "UI";
 
@@ -623,9 +620,16 @@ bool VulkanRenderer::init()
     fgb.registerRenderPassExe("Present", [](RenderResourceVault*) {});
   }
 
+
+  auto before = std::chrono::system_clock::now();
   fgb.build();
+  auto after = std::chrono::system_clock::now();
+
+  auto msFgbBuild = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
 
   fgb.printBuiltGraphDebug();
+
+  printf("Building frame graph took %lf ms\n", double(msFgbBuild) / 1000.0);
 
   return res;
 }
@@ -1729,12 +1733,12 @@ void VulkanRenderer::createComputeDescriptorSet()
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     std::vector<VkWriteDescriptorSet> descriptorWrites;
 
+    VkDescriptorBufferInfo drawBufferInfo{};
     {
-      VkDescriptorBufferInfo bufferInfo{};
       VkWriteDescriptorSet bufWrite{};
-      bufferInfo.buffer = _gpuDrawCmdBuffer[i]._buffer;
-      bufferInfo.offset = 0;
-      bufferInfo.range = VK_WHOLE_SIZE;
+      drawBufferInfo.buffer = _gpuDrawCmdBuffer[i]._buffer;
+      drawBufferInfo.offset = 0;
+      drawBufferInfo.range = VK_WHOLE_SIZE;
 
       bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       bufWrite.dstSet = _computeDescriptorSets[i];
@@ -1742,16 +1746,17 @@ void VulkanRenderer::createComputeDescriptorSet()
       bufWrite.dstArrayElement = 0;
       bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       bufWrite.descriptorCount = 1;
-      bufWrite.pBufferInfo = &bufferInfo;
+      bufWrite.pBufferInfo = &drawBufferInfo;
 
       descriptorWrites.emplace_back(std::move(bufWrite));
     }
+
+    VkDescriptorBufferInfo rendBufferInfo{};
     {
-      VkDescriptorBufferInfo bufferInfo{};
       VkWriteDescriptorSet bufWrite{};
-      bufferInfo.buffer = _gpuRenderableBuffer[i]._buffer;
-      bufferInfo.offset = 0;
-      bufferInfo.range = VK_WHOLE_SIZE;
+      rendBufferInfo.buffer = _gpuRenderableBuffer[i]._buffer;
+      rendBufferInfo.offset = 0;
+      rendBufferInfo.range = VK_WHOLE_SIZE;
 
       bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       bufWrite.dstSet = _computeDescriptorSets[i];
@@ -1759,16 +1764,17 @@ void VulkanRenderer::createComputeDescriptorSet()
       bufWrite.dstArrayElement = 0;
       bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       bufWrite.descriptorCount = 1;
-      bufWrite.pBufferInfo = &bufferInfo;
+      bufWrite.pBufferInfo = &rendBufferInfo;
 
       descriptorWrites.emplace_back(std::move(bufWrite));
     }
+
+    VkDescriptorBufferInfo transBufferInfo{};
     {
-      VkDescriptorBufferInfo bufferInfo{};
       VkWriteDescriptorSet bufWrite{};
-      bufferInfo.buffer = _gpuTranslationBuffer[i]._buffer;
-      bufferInfo.offset = 0;
-      bufferInfo.range = VK_WHOLE_SIZE;
+      transBufferInfo.buffer = _gpuTranslationBuffer[i]._buffer;
+      transBufferInfo.offset = 0;
+      transBufferInfo.range = VK_WHOLE_SIZE;
 
       bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       bufWrite.dstSet = _computeDescriptorSets[i];
@@ -1776,7 +1782,7 @@ void VulkanRenderer::createComputeDescriptorSet()
       bufWrite.dstArrayElement = 0;
       bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       bufWrite.descriptorCount = 1;
-      bufWrite.pBufferInfo = &bufferInfo;
+      bufWrite.pBufferInfo = &transBufferInfo;
 
       descriptorWrites.emplace_back(std::move(bufWrite));
     }

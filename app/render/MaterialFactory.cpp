@@ -77,13 +77,13 @@ bool internalCreateDescriptorSets(
       descriptorWrites.emplace_back(std::move(bufWrite));
     }
 
+    VkDescriptorBufferInfo rendBufferInfo{};
     if (!gpuRenderableBuffers.empty()) {
-      VkDescriptorBufferInfo bufferInfo{};
       VkWriteDescriptorSet bufWrite{};
 
-      bufferInfo.buffer = gpuRenderableBuffers[i]._buffer;
-      bufferInfo.offset = 0;
-      bufferInfo.range = VK_WHOLE_SIZE;
+      rendBufferInfo.buffer = gpuRenderableBuffers[i]._buffer;
+      rendBufferInfo.offset = 0;
+      rendBufferInfo.range = VK_WHOLE_SIZE;
 
       bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       bufWrite.dstSet = descriptorSets[i];
@@ -91,18 +91,18 @@ bool internalCreateDescriptorSets(
       bufWrite.dstArrayElement = 0;
       bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       bufWrite.descriptorCount = 1;
-      bufWrite.pBufferInfo = &bufferInfo;
+      bufWrite.pBufferInfo = &rendBufferInfo;
 
       descriptorWrites.emplace_back(std::move(bufWrite));
     }
 
+    VkDescriptorBufferInfo transBufferInfo{};
     if (!gpuTranslationBuffers.empty()) {
-      VkDescriptorBufferInfo bufferInfo{};
       VkWriteDescriptorSet bufWrite{};
 
-      bufferInfo.buffer = gpuTranslationBuffers[i]._buffer;
-      bufferInfo.offset = 0;
-      bufferInfo.range = VK_WHOLE_SIZE;
+      transBufferInfo.buffer = gpuTranslationBuffers[i]._buffer;
+      transBufferInfo.offset = 0;
+      transBufferInfo.range = VK_WHOLE_SIZE;
 
       bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       bufWrite.dstSet = descriptorSets[i];
@@ -110,7 +110,7 @@ bool internalCreateDescriptorSets(
       bufWrite.dstArrayElement = 0;
       bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       bufWrite.descriptorCount = 1;
-      bufWrite.pBufferInfo = &bufferInfo;
+      bufWrite.pBufferInfo = &transBufferInfo;
 
       descriptorWrites.emplace_back(std::move(bufWrite));
     }

@@ -16,6 +16,7 @@ IRenderResource* RenderResourceVault::getResource(const std::string& name)
       return internal._resource.get();
     }
   }
+  return nullptr;
 }
 
 bool RenderResourceVault::isPersistentResource(const std::string& name)

@@ -181,7 +181,7 @@ void FrameGraphBuilder::build()
 
   // TODO: Barrier insertion particularly for buffers is overly ambitious... 
   //       Should be able to go through after insertions and tidy it up. Execution
-  //       barriers for instance can be treacherous.
+  //       barriers for instance can be treacherous. 
 }
 
 void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, Submission* submission)
