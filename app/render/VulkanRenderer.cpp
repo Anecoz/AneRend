@@ -281,21 +281,37 @@ bool VulkanRenderer::init()
   {
     vault.addResource("FrustumCulledTranslationBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
     ResourceUsage initUsage{};
+    initUsage._resourceName = "FrustumCulledTranslationBuffer";
+    initUsage._type = Type::SSBO;
+    initUsage._access.set((std::size_t)Access::Write);
+    initUsage._stage.set((std::size_t)Stage::Transfer);
     fgb.registerResourceInitExe("FrustumCulledTranslationBuffer", std::move(initUsage), [](IRenderResource*) {});
   }
   {
     vault.addResource("FrustumCulledDrawCmdBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
     ResourceUsage initUsage{};
+    initUsage._resourceName = "FrustumCulledDrawCmdBuffer";
+    initUsage._type = Type::SSBO;
+    initUsage._access.set((std::size_t)Access::Write);
+    initUsage._stage.set((std::size_t)Stage::Transfer);
     fgb.registerResourceInitExe("FrustumCulledDrawCmdBuffer", std::move(initUsage), [](IRenderResource*) {});
   }
   {
     vault.addResource("FinalCullTranslationBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
     ResourceUsage initUsage{};
+    initUsage._resourceName = "FinalCullTranslationBuffer";
+    initUsage._type = Type::SSBO;
+    initUsage._access.set((std::size_t)Access::Write);
+    initUsage._stage.set((std::size_t)Stage::Transfer);
     fgb.registerResourceInitExe("FinalCullTranslationBuffer", std::move(initUsage), [](IRenderResource*) {});
   }
   {
     vault.addResource("FinalCullDrawCmdBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
     ResourceUsage initUsage{};
+    initUsage._resourceName = "FinalCullDrawCmdBuffer";
+    initUsage._type = Type::SSBO;
+    initUsage._access.set((std::size_t)Access::Write);
+    initUsage._stage.set((std::size_t)Stage::Transfer);
     fgb.registerResourceInitExe("FinalCullDrawCmdBuffer", std::move(initUsage), [](IRenderResource*) {});
   }
 
@@ -309,6 +325,8 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FrustumCulledTranslationBuffer";
       usage._access.set((std::size_t)Access::Write);
+      //usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -316,6 +334,8 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FrustumCulledDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Write);
+      //usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -334,6 +354,7 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "LowResDepthBuffer";
       usage._access.set((std::size_t)Access::Write);
+      usage._stage.set((std::size_t)Stage::Fragment);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -341,6 +362,7 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FrustumCulledTranslationBuffer";
       usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Vertex);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -348,6 +370,7 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FrustumCulledDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::IndirectDraw);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -367,6 +390,8 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FinalCullTranslationBuffer";
       usage._access.set((std::size_t)Access::Write);
+      //usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -374,6 +399,7 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "LowResDepthBuffer";
       usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -381,6 +407,8 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FinalCullDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Write);
+      //usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -400,6 +428,7 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FinalCullTranslationBuffer";
       usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Vertex);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -407,6 +436,7 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FinalCullDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::IndirectDraw);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -433,6 +463,7 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FinalCullTranslationBuffer";
       usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Vertex);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -440,6 +471,7 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FinalCullDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::IndirectDraw);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -466,6 +498,7 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FinalCullTranslationBuffer";
       usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Vertex);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }
@@ -473,6 +506,7 @@ bool VulkanRenderer::init()
       ResourceUsage usage{};
       usage._resourceName = "FinalCullDrawCmdBuffer";
       usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::IndirectDraw);
       usage._type = Type::SSBO;
       resourceUsage.emplace_back(std::move(usage));
     }

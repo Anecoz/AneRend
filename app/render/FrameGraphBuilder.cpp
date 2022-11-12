@@ -282,7 +282,6 @@ VkImageLayout FrameGraphBuilder::findInitialImageLayout(AccessBits access, Type 
 std::string FrameGraphBuilder::debugConstructImageBarrierName(VkImageLayout old, VkImageLayout newLayout)
 {
   std::string output;
-
   std::string from, to;
 
   if (old == VK_IMAGE_LAYOUT_UNDEFINED) {
@@ -321,6 +320,171 @@ std::string FrameGraphBuilder::debugConstructImageBarrierName(VkImageLayout old,
   return output;
 }
 
+std::pair<VkAccessFlagBits, VkAccessFlagBits> FrameGraphBuilder::findBufferAccessFlags(AccessBits prevAccess, StageBits prevStage, AccessBits newAccess, StageBits newStage)
+{
+  if (prevAccess.test((std::size_t)Access::Write)) {
+    if (prevStage.test((std::size_t)Stage::Transfer)) {
+
+      if (newAccess.test((std::size_t)Access::Write)) {
+        // Going from transfer (probably from staging buffer) to rw in a shader
+        if (newStage.test((std::size_t)Stage::Compute)) {
+          return { VK_ACCESS_TRANSFER_WRITE_BIT, (VkAccessFlagBits)(VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT) };
+        }
+      }
+      else if (newAccess.test((std::size_t)Access::Read)) {
+        if (newStage.test((std::size_t)Stage::Compute)) {
+          return { VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT };
+        }
+      }
+    }
+    else if (prevStage.test((std::size_t)Stage::Compute)) {
+
+      if (newAccess.test((std::size_t)Access::Read)) {
+        if (newStage.test((std::size_t)Stage::IndirectDraw)) {
+          // Going from compute output to indirect drawing
+          return { VK_ACCESS_SHADER_WRITE_BIT, (VkAccessFlagBits)(VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT) };
+        }
+        else if (newStage.test((std::size_t)Stage::Vertex)) {
+          return { VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT };
+        }
+        else if (newStage.test((std::size_t)Stage::Compute)) {
+          return { VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT };
+        }
+      }
+    }
+    else if (prevStage.test((std::size_t)Stage::Fragment)) {
+
+      if (newAccess.test((std::size_t)Access::Read)) {
+        if (newStage.test((std::size_t)Stage::Compute)) {
+          return { VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT };
+        }
+      }
+    }
+  }
+
+  return std::pair<VkAccessFlagBits, VkAccessFlagBits>();
+}
+
+std::pair<VkPipelineStageFlagBits, VkPipelineStageFlagBits> FrameGraphBuilder::translateStageBits(StageBits prevStage, StageBits newStage)
+{
+  VkPipelineStageFlagBits prev;
+  VkPipelineStageFlagBits next;
+
+  if (prevStage.test((std::size_t)Stage::Transfer)) {
+    prev = VK_PIPELINE_STAGE_TRANSFER_BIT;
+  }
+  else if (prevStage.test((std::size_t)Stage::Compute)) {
+    prev = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+  }
+  else if (prevStage.test((std::size_t)Stage::IndirectDraw)) {
+    prev = VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+  }
+  else if (prevStage.test((std::size_t)Stage::Vertex)) {
+    prev = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+  }
+  else if (prevStage.test((std::size_t)Stage::Fragment)) {
+    prev = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+  }
+
+  if (newStage.test((std::size_t)Stage::Transfer)) {
+    next = VK_PIPELINE_STAGE_TRANSFER_BIT;
+  }
+  else if (newStage.test((std::size_t)Stage::Compute)) {
+    next = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+  }
+  else if (newStage.test((std::size_t)Stage::IndirectDraw)) {
+    next = VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+  }
+  else if (newStage.test((std::size_t)Stage::Vertex)) {
+    next = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+  }
+  else if (newStage.test((std::size_t)Stage::Fragment)) {
+    next = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+  }
+
+  return std::pair<VkPipelineStageFlagBits, VkPipelineStageFlagBits>(prev, next);
+}
+
+std::string FrameGraphBuilder::debugConstructBufferBarrierName(VkAccessFlagBits oldAccess, VkPipelineStageFlagBits oldStage, VkAccessFlagBits newAccess, VkPipelineStageFlagBits newStage)
+{
+  std::string output;
+  std::string dstAccess, srcAccess, dstStage, srcStage;
+
+  if (oldAccess & VK_ACCESS_TRANSFER_WRITE_BIT) {
+    srcAccess.append(" | TRANSFER_WRITE");
+  }
+  if (oldAccess & VK_ACCESS_SHADER_WRITE_BIT) {
+    srcAccess.append(" | SHADER_WRITE");
+  }
+  if (oldAccess & VK_ACCESS_SHADER_READ_BIT) {
+    srcAccess.append(" | SHADER_READ");
+  }
+  if (oldAccess & VK_ACCESS_INDIRECT_COMMAND_READ_BIT) {
+    srcAccess.append(" | INDIRECT_COMMAND_READ");
+  }
+  if (newAccess & VK_ACCESS_TRANSFER_WRITE_BIT) {
+    dstAccess.append(" | TRANSFER_WRITE");
+  }
+  if (newAccess & VK_ACCESS_SHADER_WRITE_BIT) {
+    dstAccess.append(" | SHADER_WRITE");
+  }
+  if (newAccess & VK_ACCESS_SHADER_READ_BIT) {
+    dstAccess.append(" | SHADER_READ");
+  }
+  if (newAccess & VK_ACCESS_INDIRECT_COMMAND_READ_BIT) {
+    dstAccess.append(" | INDIRECT_COMMAND_READ");
+  }
+
+  if (oldStage & VK_PIPELINE_STAGE_TRANSFER_BIT) {
+    srcStage.append(" | TRANSFER");
+  }
+  if (oldStage & VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT) {
+    srcStage.append(" | COMPUTE");
+  }
+  if (oldStage & VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT) {
+    srcStage.append(" | DRAW_INDIRECT");
+  }
+  if (oldStage & VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) {
+    srcStage.append(" | FRAGMENT");
+  }
+  if (oldStage & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
+    srcStage.append(" | VERTEX");
+  }
+  if (oldStage & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
+    srcStage.append(" | VERTEX");
+  }
+  if (newStage & VK_PIPELINE_STAGE_TRANSFER_BIT) {
+    dstStage.append(" | TRANSFER");
+  }
+  if (newStage & VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT) {
+    dstStage.append(" | COMPUTE");
+  }
+  if (newStage & VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT) {
+    dstStage.append(" | DRAW_INDIRECT");
+  }
+  if (newStage & VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) {
+    dstStage.append(" | FRAGMENT");
+  }
+  if (newStage & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
+    dstStage.append(" | VERTEX");
+  }
+  if (newStage & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
+    dstStage.append(" | VERTEX");
+  }
+
+  output.append("Buffer barrier: ");
+  output.append("SRCACC: ");
+  output.append(srcAccess);
+  output.append(", DSTACC: ");
+  output.append(dstAccess); 
+  output.append(", SRCSTAGE: ");
+  output.append(srcStage); 
+  output.append(", DSTSTAGE: ");
+  output.append(dstStage);
+
+  return output;
+}
+
 void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
 {
   std::vector<GraphNode> updatedStack;
@@ -331,6 +495,9 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
     auto& node = stack[i];
 
     updatedStack.emplace_back(node);
+
+    // Keep track of where the current node is placed in the updatedStack
+    std::size_t currentNodeIdx = updatedStack.size() - 1;
 
     for (auto& usage : node._resourceUsages) {
 
@@ -389,7 +556,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
 
           BarrierContext beforeWriteBarrier{};
           beforeWriteBarrier._resourceName = usage._resourceName;
-          beforeWriteBarrier._barrierFcn = [baseLayer, initialLayout](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
+          beforeWriteBarrier._barrierFcn = [baseLayer, initialLayout](IRenderResource* resource, VkCommandBuffer& cmdBuffer, uint32_t) {
             auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
 
             imageutil::transitionImageLayout(
@@ -407,7 +574,9 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
           beforeWriteNode._debugName = "Before write " + usage._resourceName + " (" + beforeName + ")";
           beforeWriteNode._barrier = std::move(beforeWriteBarrier);
 
-          updatedStack.insert(updatedStack.end() - 1, std::move(beforeWriteNode));
+          updatedStack.insert(updatedStack.begin() + currentNodeIdx, std::move(beforeWriteNode));
+          // The currentNodeIdx has now been updated (since we added this node _before_)
+          currentNodeIdx++;
         }
 
         // Add the post-write transition here
@@ -420,7 +589,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         // If the next usage is the same as the current, no need to have a barrier...?
         // Probably an execution barrier is still needed?
         if (transitionPair.first != transitionPair.second) {
-          afterWriteBarrier._barrierFcn = [transitionPair, baseLayer](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
+          afterWriteBarrier._barrierFcn = [transitionPair, baseLayer](IRenderResource* resource, VkCommandBuffer& cmdBuffer, uint32_t) {
             auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
 
             imageutil::transitionImageLayout(
@@ -437,12 +606,44 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
           afterWriteNode._debugName = "After write " + usage._resourceName + " (" + afterName + ")";
           afterWriteNode._barrier = std::move(afterWriteBarrier);
 
-          // Add this to very end of current stack
-          updatedStack.emplace_back(std::move(afterWriteNode));
+          // Add this after the current idx
+          updatedStack.insert(updatedStack.begin() + currentNodeIdx + 1, std::move(afterWriteNode));
         }
       }
       else if (isTypeBuffer(usage._type)) {
-        // TODO: Memory buffers similarly to the image buffers
+        auto accessFlagPair = findBufferAccessFlags(usage._access, usage._stage, nextUsage->_access, nextUsage->_stage);
+        auto transStagePair = translateStageBits(usage._stage, nextUsage->_stage);
+
+        BarrierContext bufBarrier{};
+        bufBarrier._resourceName = usage._resourceName;
+        bufBarrier._barrierFcn = [accessFlagPair, transStagePair](IRenderResource* resource, VkCommandBuffer& cmdBuffer, uint32_t graphicsFamilyQ) {
+          BufferRenderResource* buf = dynamic_cast<BufferRenderResource*>(resource);
+
+          VkBufferMemoryBarrier memBarr{};
+          memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+          memBarr.srcAccessMask = accessFlagPair.first;
+          memBarr.dstAccessMask = accessFlagPair.second;
+          memBarr.srcQueueFamilyIndex = graphicsFamilyQ;
+          memBarr.dstQueueFamilyIndex = graphicsFamilyQ;
+          memBarr.buffer = buf->_buffer._buffer;
+          memBarr.offset = 0;
+          memBarr.size = VK_WHOLE_SIZE;
+
+          vkCmdPipelineBarrier(
+            cmdBuffer,
+            transStagePair.first,
+            transStagePair.second,
+            0, 0, nullptr,
+            1, &memBarr,
+            0, nullptr);
+        };
+
+        GraphNode bufBarrNode{};
+        bufBarrNode._debugName = std::string("(") + std::string(usage._resourceName) + std::string(") ") + debugConstructBufferBarrierName(accessFlagPair.first, transStagePair.first, accessFlagPair.second, transStagePair.second);
+        bufBarrNode._barrier = std::move(bufBarrier);
+
+        // This needs to be added after the current node (because it protects the next operation)
+        updatedStack.insert(updatedStack.begin() + currentNodeIdx + 1, std::move(bufBarrNode));
       }
       // TODO: Execution barrier when doing init of resources (?)
       //       Basically write-after-read needs execution barrier
@@ -463,7 +664,7 @@ void FrameGraphBuilder::printBuiltGraphDebug()
 
   for (auto& node : _builtGraph) {
     if (node._barrier) {
-      printf("\tBarrier: %s\n\n", node._debugName.c_str());
+      printf("\t%s\n\n", node._debugName.c_str());
     }
     else if (node._resourceInit) {
       printf("\tResource init: %s\n\n", node._debugName.c_str());

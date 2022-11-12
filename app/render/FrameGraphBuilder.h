@@ -19,7 +19,7 @@ typedef std::function<void(RenderResourceVault* resourceVault)> RenderPassExeFcn
 
 typedef std::function<void(IRenderResource* resource)> ResourceInitFcn;
 
-typedef std::function<void(IRenderResource* resource, VkCommandBuffer& cmdBuffer)> BarrierFcn;
+typedef std::function<void(IRenderResource* resource, VkCommandBuffer& cmdBuffer, uint32_t graphicsFamilyQ)> BarrierFcn;
 
 enum class Access
 {
@@ -142,6 +142,11 @@ private:
   std::pair<VkImageLayout, VkImageLayout> findImageLayoutUsage(AccessBits prevAccess, Type prevType, AccessBits newAccess, Type newType);
   VkImageLayout findInitialImageLayout(AccessBits access, Type type);
   std::string debugConstructImageBarrierName(VkImageLayout old, VkImageLayout newLayout);
+
+  std::pair<VkAccessFlagBits, VkAccessFlagBits> findBufferAccessFlags(AccessBits prevAccess, StageBits prevStage, AccessBits newAccess, StageBits newStage);
+  std::pair<VkPipelineStageFlagBits, VkPipelineStageFlagBits> translateStageBits(StageBits prevStage, StageBits newStage);
+  std::string debugConstructBufferBarrierName(VkAccessFlagBits oldAccess, VkPipelineStageFlagBits oldStage, VkAccessFlagBits newAccess, VkPipelineStageFlagBits newStage);
+
   void insertBarriers(std::vector<GraphNode>& stack);
 
   std::vector<ResourceInit> _resourceInits;
