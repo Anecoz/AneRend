@@ -450,9 +450,6 @@ std::string FrameGraphBuilder::debugConstructBufferBarrierName(VkAccessFlagBits 
   if (oldStage & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
     srcStage.append(" | VERTEX");
   }
-  if (oldStage & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
-    srcStage.append(" | VERTEX");
-  }
   if (newStage & VK_PIPELINE_STAGE_TRANSFER_BIT) {
     dstStage.append(" | TRANSFER");
   }
@@ -464,9 +461,6 @@ std::string FrameGraphBuilder::debugConstructBufferBarrierName(VkAccessFlagBits 
   }
   if (newStage & VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) {
     dstStage.append(" | FRAGMENT");
-  }
-  if (newStage & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
-    dstStage.append(" | VERTEX");
   }
   if (newStage & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
     dstStage.append(" | VERTEX");
@@ -619,23 +613,36 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         bufBarrier._barrierFcn = [accessFlagPair, transStagePair](IRenderResource* resource, VkCommandBuffer& cmdBuffer, uint32_t graphicsFamilyQ) {
           BufferRenderResource* buf = dynamic_cast<BufferRenderResource*>(resource);
 
-          VkBufferMemoryBarrier memBarr{};
-          memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-          memBarr.srcAccessMask = accessFlagPair.first;
-          memBarr.dstAccessMask = accessFlagPair.second;
-          memBarr.srcQueueFamilyIndex = graphicsFamilyQ;
-          memBarr.dstQueueFamilyIndex = graphicsFamilyQ;
-          memBarr.buffer = buf->_buffer._buffer;
-          memBarr.offset = 0;
-          memBarr.size = VK_WHOLE_SIZE;
+          // If there is no access, an execution barrier is enough
+          if (accessFlagPair.first == 0 && accessFlagPair.second == 0) {
+            vkCmdPipelineBarrier(
+              cmdBuffer,
+              transStagePair.first,
+              transStagePair.second,
+              0,
+              0, nullptr,
+              0, nullptr,
+              0, nullptr);
+          }
+          else {
+            VkBufferMemoryBarrier memBarr{};
+            memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            memBarr.srcAccessMask = accessFlagPair.first;
+            memBarr.dstAccessMask = accessFlagPair.second;
+            memBarr.srcQueueFamilyIndex = graphicsFamilyQ;
+            memBarr.dstQueueFamilyIndex = graphicsFamilyQ;
+            memBarr.buffer = buf->_buffer._buffer;
+            memBarr.offset = 0;
+            memBarr.size = VK_WHOLE_SIZE;
 
-          vkCmdPipelineBarrier(
-            cmdBuffer,
-            transStagePair.first,
-            transStagePair.second,
-            0, 0, nullptr,
-            1, &memBarr,
-            0, nullptr);
+            vkCmdPipelineBarrier(
+              cmdBuffer,
+              transStagePair.first,
+              transStagePair.second,
+              0, 0, nullptr,
+              1, &memBarr,
+              0, nullptr);
+          }
         };
 
         GraphNode bufBarrNode{};
