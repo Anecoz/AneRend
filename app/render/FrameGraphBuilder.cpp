@@ -178,6 +178,10 @@ void FrameGraphBuilder::build()
 
   // Frame graph is built, now we need to insert barriers at the appropriate positions
   insertBarriers(_builtGraph);
+
+  // TODO: Barrier insertion particularly for buffers is overly ambitious... 
+  //       Should be able to go through after insertions and tidy it up. Execution
+  //       barriers for instance can be treacherous.
 }
 
 void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, Submission* submission)
@@ -652,8 +656,6 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         // This needs to be added after the current node (because it protects the next operation)
         updatedStack.insert(updatedStack.begin() + currentNodeIdx + 1, std::move(bufBarrNode));
       }
-      // TODO: Execution barrier when doing init of resources (?)
-      //       Basically write-after-read needs execution barrier
     }
   }
 
