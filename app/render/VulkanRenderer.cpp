@@ -6,9 +6,10 @@
 #include "BufferHelpers.h"
 #include "GpuBuffers.h"
 #include "ComputePipeline.h"
-#include "FrameGraphBuilder.h"
-#include "RenderResourceVault.h"
 #include "RenderResource.h"
+#include "CullRenderPass.h"
+#include "GeometryRenderPass.h"
+#include "PresentationRenderPass.h"
 
 #include "../util/Utils.h"
 #include "../LodePng/lodepng.h"
@@ -66,7 +67,10 @@ VKAPI_ATTR VkBool32 VKAPI_CALL g_DebugCallback(
 namespace render {
 
 VulkanRenderer::VulkanRenderer(GLFWwindow* window)
-  : _window(window)
+  : _currentSwapChainIndex(0)
+  , _vault(MAX_FRAMES_IN_FLIGHT)
+  , _fgb(&_vault)
+  , _window(window)
   , _enableValidationLayers(true)
 {}
 
@@ -99,6 +103,13 @@ VulkanRenderer::~VulkanRenderer()
   vkDestroyDescriptorSetLayout(_device, _computeMaterial._descriptorSetLayouts[Material::STANDARD_INDEX], nullptr);
   vkDestroyPipeline(_device, _computeMaterial._pipelines[Material::STANDARD_INDEX], nullptr);
   vkDestroyPipelineLayout(_device, _computeMaterial._pipelineLayouts[Material::STANDARD_INDEX], nullptr);
+
+  vkDestroyDescriptorSetLayout(_device, _bindlessDescSetLayout, nullptr);
+  vkDestroyPipelineLayout(_device, _bindlessPipelineLayout, nullptr);
+
+  for (auto& rp : _renderPasses) {
+    rp->cleanup(this, &_vault);
+  }
 
   for (const auto& material: _materials) {
     for (auto& ubo: material.second._ubos[Material::STANDARD_INDEX]) {
@@ -137,6 +148,7 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _gpuDrawCmdBuffer[i]._buffer, _gpuDrawCmdBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuRenderableBuffer[i]._buffer, _gpuRenderableBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuStagingBuffer[i]._buffer, _gpuStagingBuffer[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _gpuSceneDataBuffer[i]._buffer, _gpuSceneDataBuffer[i]._allocation);
   }
 
   vkDestroyCommandPool(_device, _commandPool, nullptr);
@@ -270,13 +282,23 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
+  printf("Init bindless...");
+  res &= initBindless();
+  if (!res) return false;
+  printf("Done!\n");
+
+  printf("Init frame graph builder...");
+  res &= initFrameGraphBuilder();
+  if (!res) return false;
+  printf("Done!\n");
+
   printf("Init imgui...");
   res &= initImgui();
   if (!res) return false;
   printf("Done!\n");
 
   printf("DEBUG FRAME GRAPH BUILDING TEST!\n");
-  RenderResourceVault vault;
+  RenderResourceVault vault(MAX_FRAMES_IN_FLIGHT);
   FrameGraphBuilder fgb(&vault);
 
   {
@@ -286,7 +308,7 @@ bool VulkanRenderer::init()
     initUsage._type = Type::SSBO;
     initUsage._access.set((std::size_t)Access::Write);
     initUsage._stage.set((std::size_t)Stage::Transfer);
-    fgb.registerResourceInitExe("FrustumCulledTranslationBuffer", std::move(initUsage), [](IRenderResource*) {});
+    fgb.registerResourceInitExe("FrustumCulledTranslationBuffer", std::move(initUsage), [](IRenderResource*, VkCommandBuffer&, RenderContext*) {});
   }
   {
     vault.addResource("FrustumCulledDrawCmdBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
@@ -295,7 +317,7 @@ bool VulkanRenderer::init()
     initUsage._type = Type::SSBO;
     initUsage._access.set((std::size_t)Access::Write);
     initUsage._stage.set((std::size_t)Stage::Transfer);
-    fgb.registerResourceInitExe("FrustumCulledDrawCmdBuffer", std::move(initUsage), [](IRenderResource*) {});
+    fgb.registerResourceInitExe("FrustumCulledDrawCmdBuffer", std::move(initUsage), [](IRenderResource*, VkCommandBuffer&, RenderContext*) {});
   }
   {
     vault.addResource("FinalCullTranslationBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
@@ -304,7 +326,7 @@ bool VulkanRenderer::init()
     initUsage._type = Type::SSBO;
     initUsage._access.set((std::size_t)Access::Write);
     initUsage._stage.set((std::size_t)Stage::Transfer);
-    fgb.registerResourceInitExe("FinalCullTranslationBuffer", std::move(initUsage), [](IRenderResource*) {});
+    fgb.registerResourceInitExe("FinalCullTranslationBuffer", std::move(initUsage), [](IRenderResource*, VkCommandBuffer&, RenderContext*) {});
   }
   {
     vault.addResource("FinalCullDrawCmdBuffer", std::unique_ptr<IRenderResource>(new BufferRenderResource()));
@@ -313,7 +335,7 @@ bool VulkanRenderer::init()
     initUsage._type = Type::SSBO;
     initUsage._access.set((std::size_t)Access::Write);
     initUsage._stage.set((std::size_t)Stage::Transfer);
-    fgb.registerResourceInitExe("FinalCullDrawCmdBuffer", std::move(initUsage), [](IRenderResource*) {});
+    fgb.registerResourceInitExe("FinalCullDrawCmdBuffer", std::move(initUsage), [](IRenderResource*, VkCommandBuffer&, RenderContext*) {});
   }
 
   {
@@ -341,7 +363,7 @@ bool VulkanRenderer::init()
 
     info._resourceUsages = std::move(resourceUsage);
     fgb.registerRenderPass(std::move(info));
-    fgb.registerRenderPassExe("FrustumCullCompute", [](RenderResourceVault*) {});
+    fgb.registerRenderPassExe("FrustumCullCompute", [](RenderResourceVault*, RenderContext*, VkCommandBuffer*, int) {});
   }
   {
     // LDP
@@ -376,7 +398,7 @@ bool VulkanRenderer::init()
 
     info._resourceUsages = std::move(resourceUsage);
     fgb.registerRenderPass(std::move(info));
-    fgb.registerRenderPassExe("LDP", [](RenderResourceVault*) {});
+    fgb.registerRenderPassExe("LDP", [](RenderResourceVault*, RenderContext*, VkCommandBuffer*, int) {});
   }
 
   {
@@ -412,7 +434,7 @@ bool VulkanRenderer::init()
 
     info._resourceUsages = std::move(resourceUsage);
     fgb.registerRenderPass(std::move(info));
-    fgb.registerRenderPassExe("FinalCullCompute", [](RenderResourceVault*) {});
+    fgb.registerRenderPassExe("FinalCullCompute", [](RenderResourceVault*, RenderContext*, VkCommandBuffer*, int) {});
   }
 
   {
@@ -447,7 +469,7 @@ bool VulkanRenderer::init()
 
     info._resourceUsages = std::move(resourceUsage);
     fgb.registerRenderPass(std::move(info));
-    fgb.registerRenderPassExe("ShadowPass0", [](RenderResourceVault*) {});
+    fgb.registerRenderPassExe("ShadowPass0", [](RenderResourceVault*, RenderContext*, VkCommandBuffer*, int) {});
   }
 
   {
@@ -482,7 +504,7 @@ bool VulkanRenderer::init()
 
     info._resourceUsages = std::move(resourceUsage);
     fgb.registerRenderPass(std::move(info));
-    fgb.registerRenderPassExe("ShadowPass1", [](RenderResourceVault*) {});
+    fgb.registerRenderPassExe("ShadowPass1", [](RenderResourceVault*, RenderContext*, VkCommandBuffer*, int) {});
   }
 
   {
@@ -531,7 +553,7 @@ bool VulkanRenderer::init()
 
     info._resourceUsages = std::move(resourceUsage);
     fgb.registerRenderPass(std::move(info));
-    fgb.registerRenderPassExe("Geometry", [](RenderResourceVault*) {});
+    fgb.registerRenderPassExe("Geometry", [](RenderResourceVault*, RenderContext*, VkCommandBuffer*, int) {});
   }
 
   {
@@ -557,7 +579,7 @@ bool VulkanRenderer::init()
 
     info._resourceUsages = std::move(resourceUsage);
     fgb.registerRenderPass(std::move(info));
-    fgb.registerRenderPassExe("PostProcess", [](RenderResourceVault*) {});
+    fgb.registerRenderPassExe("PostProcess", [](RenderResourceVault*, RenderContext*, VkCommandBuffer*, int) {});
   }
 
   {
@@ -577,7 +599,7 @@ bool VulkanRenderer::init()
 
     info._resourceUsages = std::move(resourceUsage);
     fgb.registerRenderPass(std::move(info));
-    fgb.registerRenderPassExe("DebugShadow", [](RenderResourceVault*) {});
+    fgb.registerRenderPassExe("DebugShadow", [](RenderResourceVault*, RenderContext*, VkCommandBuffer*, int) {});
   }
 
   {
@@ -597,7 +619,7 @@ bool VulkanRenderer::init()
 
     info._resourceUsages = std::move(resourceUsage);
     fgb.registerRenderPass(std::move(info));
-    fgb.registerRenderPassExe("UI", [](RenderResourceVault*) {});
+    fgb.registerRenderPassExe("UI", [](RenderResourceVault*, RenderContext*, VkCommandBuffer*, int) {});
   }
 
   {
@@ -617,9 +639,8 @@ bool VulkanRenderer::init()
 
     info._resourceUsages = std::move(resourceUsage);
     fgb.registerRenderPass(std::move(info));
-    fgb.registerRenderPassExe("Present", [](RenderResourceVault*) {});
+    fgb.registerRenderPassExe("Present", [](RenderResourceVault*, RenderContext*, VkCommandBuffer*, int) {});
   }
-
 
   auto before = std::chrono::system_clock::now();
   fgb.build();
@@ -828,6 +849,17 @@ void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, co
 
   ShadowUBO shadowUbo{};
   shadowUbo.shadowMatrix = standardUbo.shadowMatrix[0];
+
+  gpu::GPUSceneData ubo{};
+  ubo.cameraPos = standardUbo.cameraPos;
+  ubo.lightDir = standardUbo.lightDir;
+  ubo.proj = standardUbo.proj;
+  ubo.view = standardUbo.view;
+
+  void* data;
+  vmaMapMemory(_vmaAllocator, _gpuSceneDataBuffer[_currentFrame]._allocation, &data);
+  memcpy(data, &standardUbo, sizeof(gpu::GPUSceneData));
+  vmaUnmapMemory(_vmaAllocator, _gpuSceneDataBuffer[_currentFrame]._allocation);
 
   for (auto& mat: _materials) {
     mat.second.updateUbos(_currentFrame, _vmaAllocator, standardUbo, shadowUbo);
@@ -1535,6 +1567,9 @@ void VulkanRenderer::drawRenderables(
   std::size_t extraPushConstantsSize)
 {
   VkDeviceSize offsets[] = {0};
+  // Have to bind these after bindpipeline... Even tho they are independent of material.
+  vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaMeshBuffer._buffer._buffer, offsets);
+  vkCmdBindIndexBuffer(commandBuffer, _gigaMeshBuffer._buffer._buffer, 0, VK_INDEX_TYPE_UINT32);
 
   for (int i = 0; i <= MAX_MATERIAL_ID - 1; ++i) {
 
@@ -1547,10 +1582,6 @@ void VulkanRenderer::drawRenderables(
 
     // Bind pipeline and start actual rendering
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelines[materialIndex]);
-
-    // Have to bind these after bindpipeline... Even tho they are independent of material.
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaMeshBuffer._buffer._buffer, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, _gigaMeshBuffer._buffer._buffer, 0, VK_INDEX_TYPE_UINT32);
 
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
@@ -1995,7 +2026,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uin
 
   prefillGPURenderableBuffer(commandBuffer);
 
-  // The swapchain image has to go from present layout to color attachment optimal
+  // The swapchain image has to go from present yout to color attachment optimal
   imageutil::transitionImageLayout(commandBuffer,  _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
                         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
@@ -2198,6 +2229,209 @@ bool VulkanRenderer::initComputePipelines()
   return true;
 }
 
+bool VulkanRenderer::initBindless()
+{
+  // Create a "use-for-all" pipeline layout, descriptor set layout and descriptor sets.
+
+  /*
+  * Bindings:
+  * 0: Scene UBO (UBO)
+  * 1: Shadow samplers (Sampler)
+  * 2: Renderable buffer (SSBO)
+  * 3: Index translation buffer (SSBO)
+  */
+
+  uint32_t uboBinding = 0;
+  uint32_t samplerBinding = 1;
+  uint32_t renderableBinding = 2;
+  uint32_t translationBinding = 3;
+
+  // Descriptor set layout
+  {
+    uint32_t samplerCount = 4; // 4 point lights
+
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
+    VkDescriptorSetLayoutBinding uboLayoutBinding{};
+    uboLayoutBinding.binding = uboBinding;
+    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uboLayoutBinding.descriptorCount = 1;
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    bindings.emplace_back(std::move(uboLayoutBinding));
+
+    VkDescriptorSetLayoutBinding renderableLayoutBinding{};
+    renderableLayoutBinding.binding = renderableBinding;
+    renderableLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    renderableLayoutBinding.descriptorCount = 1;
+    renderableLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+    bindings.emplace_back(std::move(renderableLayoutBinding));
+
+    VkDescriptorSetLayoutBinding translationLayoutBinding{};
+    translationLayoutBinding.binding = translationBinding;
+    translationLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    translationLayoutBinding.descriptorCount = 1;
+    translationLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+    bindings.emplace_back(std::move(translationLayoutBinding));
+
+    VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+    samplerLayoutBinding.binding = samplerBinding;
+    samplerLayoutBinding.descriptorCount = (uint32_t)samplerCount;
+    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerLayoutBinding.pImmutableSamplers = nullptr;
+    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    bindings.emplace_back(std::move(samplerLayoutBinding));
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = (uint32_t)bindings.size();
+    layoutInfo.pBindings = bindings.data();
+
+    if (vkCreateDescriptorSetLayout(_device, &layoutInfo, nullptr, &_bindlessDescSetLayout) != VK_SUCCESS) {
+      printf("failed to create descriptor set layout!\n");
+      return false;
+    }
+  }
+
+  // Pipeline layout
+  {
+    uint32_t pushConstantsSize = 4 * 4 * 4;
+
+    // Push constants
+    VkPushConstantRange pushConstant;
+    pushConstant.offset = 0;
+    pushConstant.size = 256;// (uint32_t)pushConstantsSize;
+    pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &_bindlessDescSetLayout;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
+
+    if (vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_bindlessPipelineLayout) != VK_SUCCESS) {
+      printf("failed to create pipeline layout!\n");
+      return false;
+    }
+  }
+
+  // Descriptor sets (for each frame)
+  {
+    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, _bindlessDescSetLayout);
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = _descriptorPool;
+    allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    allocInfo.pSetLayouts = layouts.data();
+
+    _bindlessDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+    if (vkAllocateDescriptorSets(_device, &allocInfo, _bindlessDescriptorSets.data()) != VK_SUCCESS) {
+      printf("failed to allocate descriptor sets!\n");
+      return false;
+    }
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      std::vector<VkWriteDescriptorSet> descriptorWrites;
+
+      // Scene data UBO
+      VkDescriptorBufferInfo bufferInfo{};
+      VkWriteDescriptorSet sceneBufWrite{};
+      bufferInfo.buffer = _gpuSceneDataBuffer[i]._buffer;
+      bufferInfo.offset = 0;
+      bufferInfo.range = sizeof(gpu::GPUSceneData);
+
+      sceneBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      sceneBufWrite.dstSet = _bindlessDescriptorSets[i];
+      sceneBufWrite.dstBinding = uboBinding;
+      sceneBufWrite.dstArrayElement = 0;
+      sceneBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      sceneBufWrite.descriptorCount = 1;
+      sceneBufWrite.pBufferInfo = &bufferInfo;
+
+      descriptorWrites.emplace_back(std::move(sceneBufWrite));
+
+      // Renderable SSBO
+      VkDescriptorBufferInfo rendBufferInfo{};
+      VkWriteDescriptorSet rendBufWrite{};
+
+      rendBufferInfo.buffer = _gpuRenderableBuffer[i]._buffer;
+      rendBufferInfo.offset = 0;
+      rendBufferInfo.range = VK_WHOLE_SIZE;
+
+      rendBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      rendBufWrite.dstSet = _bindlessDescriptorSets[i];
+      rendBufWrite.dstBinding = renderableBinding;
+      rendBufWrite.dstArrayElement = 0;
+      rendBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      rendBufWrite.descriptorCount = 1;
+      rendBufWrite.pBufferInfo = &rendBufferInfo;
+
+      descriptorWrites.emplace_back(std::move(rendBufWrite));
+
+      // Translation SSBO
+      VkDescriptorBufferInfo transBufferInfo{};
+      VkWriteDescriptorSet bufWrite{};
+
+      transBufferInfo.buffer = _gpuTranslationBuffer[i]._buffer;
+      transBufferInfo.offset = 0;
+      transBufferInfo.range = VK_WHOLE_SIZE;
+
+      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      bufWrite.dstSet = _bindlessDescriptorSets[i];
+      bufWrite.dstBinding = translationBinding;
+      bufWrite.dstArrayElement = 0;
+      bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      bufWrite.descriptorCount = 1;
+      bufWrite.pBufferInfo = &transBufferInfo;
+
+      descriptorWrites.emplace_back(std::move(bufWrite));
+
+      // Samplers
+      /*std::vector<VkDescriptorImageInfo> imageInfos;
+      VkWriteDescriptorSet imWrite{};
+      if (!imageViews.empty()) {
+        for (std::size_t i = 0; i < imageViews.size(); ++i) {
+          VkDescriptorImageInfo imageInfo{};
+          imageInfo.imageLayout = imageLayout;
+          imageInfo.imageView = *(imageViews[i]);
+          imageInfo.sampler = *(samplers[i]);
+          imageInfos.emplace_back(std::move(imageInfo));
+        }
+
+        imWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        imWrite.dstSet = descriptorSets[i];
+        imWrite.dstBinding = samplerBinding;
+        imWrite.dstArrayElement = 0;
+        imWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        imWrite.descriptorCount = (uint32_t)imageViews.size();
+        imWrite.pImageInfo = imageInfos.data();
+
+        descriptorWrites.emplace_back(std::move(imWrite));
+      }*/
+
+      vkUpdateDescriptorSets(_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+    }
+  }
+
+  return true;
+}
+
+bool VulkanRenderer::initFrameGraphBuilder()
+{
+  _renderPasses.emplace_back(new CullRenderPass());
+  _renderPasses.emplace_back(new GeometryRenderPass());
+  _renderPasses.emplace_back(new PresentationRenderPass());
+
+  for (auto* rp : _renderPasses) {
+    rp->init(this, &_vault);
+    rp->registerToGraph(_fgb);
+  }
+
+  _fgb.build();
+  _fgb.printBuiltGraphDebug();
+
+  return true;
+}
+
 bool VulkanRenderer::initPostProcessingPass()
 {
   _ppPass.init(_swapChain._swapChainImageFormat, _swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height);
@@ -2218,6 +2452,7 @@ bool VulkanRenderer::initGpuBuffers()
   _gpuRenderableBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuDrawCmdBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuTranslationBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuSceneDataBuffer.resize(MAX_FRAMES_IN_FLIGHT);
 
   for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     // Create a staging buffer that will be used to temporarily hold data that is to be copied to the gpu buffers.
@@ -2251,6 +2486,14 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuTranslationBuffer[i]);
+
+    // Used as a UBO in most shaders for accessing scene data.
+    bufferutil::createBuffer(
+      _vmaAllocator,
+      sizeof(gpu::GPUSceneData),
+      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, // If this turns out to be a bottle neck we have to switch to a staging buffer
+      _gpuSceneDataBuffer[i]);
   }
 
   return true;
@@ -2348,6 +2591,8 @@ void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
   uint32_t imageIndex;
   VkResult result = vkAcquireNextImageKHR(_device, _swapChain._swapChain, UINT64_MAX, _imageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, &imageIndex);
 
+  _currentSwapChainIndex = imageIndex;
+
   // Window has resized for instance
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     recreateSwapChain();
@@ -2363,7 +2608,8 @@ void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
 
   // Recording command buffer
   vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
-  recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex, applyPostProcessing, debug);
+  //recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex, applyPostProcessing, debug);
+  executeFrameGraph(_commandBuffers[_currentFrame], imageIndex);
 
   // Submit the command buffer
   VkSubmitInfo submitInfo{};
@@ -2417,8 +2663,160 @@ void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
   _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
+void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageIndex)
+{
+  // Start cmd buffer
+  VkCommandBufferBeginInfo beginInfo{};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = 0; // Optional
+  beginInfo.pInheritanceInfo = nullptr; // Optional
+
+  if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+    printf("failed to begin recording command buffer!\n");
+    return;
+  }
+
+  // The swapchain image has to go to transfer DST, which is the last thing the frame graph does.
+  imageutil::transitionImageLayout(commandBuffer, _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
+    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+  // Prefill renderable buffer
+  // This is unnecessary to do every frame!
+  prefillGPURenderableBuffer(commandBuffer);
+
+  // Bind giga buffers and bindless descriptors
+  VkDeviceSize offsets[] = { 0 };
+  vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaMeshBuffer._buffer._buffer, offsets);
+  vkCmdBindIndexBuffer(commandBuffer, _gigaMeshBuffer._buffer._buffer, 0, VK_INDEX_TYPE_UINT32);
+
+  vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _bindlessPipelineLayout, 0, 1, &_bindlessDescriptorSets[_currentFrame], 0, nullptr);
+  vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _bindlessPipelineLayout, 0, 1, &_bindlessDescriptorSets[_currentFrame], 0, nullptr);
+
+  _fgb.executeGraph(commandBuffer, this, _queueIndices.graphicsFamily.value());
+
+  // The swapchain image has to go to present, which is the last thing the frame graph does.
+  imageutil::transitionImageLayout(commandBuffer, _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+  if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+    printf("failed to record command buffer!\n");
+  }
+}
+
 void VulkanRenderer::notifyFramebufferResized()
 {
   _framebufferResized = true;
 }
+
+VkDevice& VulkanRenderer::device()
+{
+  return _device;
+}
+
+VkDescriptorPool& VulkanRenderer::descriptorPool()
+{
+  return _descriptorPool;
+}
+
+VmaAllocator VulkanRenderer::vmaAllocator()
+{
+  return _vmaAllocator;
+}
+
+VkPipelineLayout& VulkanRenderer::bindlessPipelineLayout()
+{
+  return _bindlessPipelineLayout;
+}
+
+VkDescriptorSetLayout& VulkanRenderer::bindlessDescriptorSetLayout()
+{
+  return _bindlessDescSetLayout;
+}
+
+VkExtent2D VulkanRenderer::swapChainExtent()
+{
+  return _swapChain._swapChainExtent;
+}
+
+void VulkanRenderer::drawGigaBuffer(VkCommandBuffer* commandBuffer)
+{
+  // There is an assumption that the giga buffers have been bound already.
+
+  for (auto& renderable : _currentRenderables) {
+    if (!renderable._visible) continue;
+
+    auto& mesh = _currentMeshes[renderable._meshId];
+
+    // Draw command
+    vkCmdDrawIndexed(
+      *commandBuffer,
+      (uint32_t)mesh._numIndices,
+      1,
+      (uint32_t)mesh._indexOffset,
+      (uint32_t)mesh._vertexOffset,
+      0);
+  }
+}
+
+void VulkanRenderer::drawGigaBufferIndirect(VkCommandBuffer* commandBuffer, VkBuffer drawCalls)
+{
+  vkCmdDrawIndexedIndirect(*commandBuffer, drawCalls, 0, (uint32_t)_currentMeshes.size(), sizeof(gpu::GPUDrawCallCmd));
+}
+
+VkImage& VulkanRenderer::getCurrentSwapImage()
+{
+  return _swapChain._swapChainImages[_currentSwapChainIndex];
+}
+
+int VulkanRenderer::getCurrentMultiBufferIdx()
+{
+  return _currentFrame;
+}
+
+int VulkanRenderer::getMultiBufferSize()
+{
+  return MAX_FRAMES_IN_FLIGHT;
+}
+
+size_t VulkanRenderer::getMaxNumMeshes()
+{
+  return MAX_NUM_MESHES;
+}
+
+size_t VulkanRenderer::getMaxNumRenderables()
+{
+  return MAX_NUM_RENDERABLES;
+}
+
+std::vector<Mesh>& VulkanRenderer::getCurrentMeshes()
+{
+  return _currentMeshes;
+}
+
+std::unordered_map<MeshId, std::size_t>& VulkanRenderer::getCurrentMeshUsage()
+{
+  return _currentMeshUsage;
+}
+
+size_t VulkanRenderer::getCurrentNumRenderables()
+{
+  return _currentRenderables.size();
+}
+
+gpu::GPUCullPushConstants VulkanRenderer::getCullParams()
+{
+  gpu::GPUCullPushConstants cullPushConstants{};
+  cullPushConstants._drawCount = (uint32_t)_currentRenderables.size();
+
+  cullPushConstants._frustumPlanes[0] = _latestCamera.getFrustum().getPlane(Frustum::Left);
+  cullPushConstants._frustumPlanes[1] = _latestCamera.getFrustum().getPlane(Frustum::Right);
+  cullPushConstants._frustumPlanes[2] = _latestCamera.getFrustum().getPlane(Frustum::Top);
+  cullPushConstants._frustumPlanes[3] = _latestCamera.getFrustum().getPlane(Frustum::Bottom);
+  cullPushConstants._view = _latestCamera.getCamMatrix();
+  cullPushConstants._farDist = _latestCamera.getFar();
+  cullPushConstants._nearDist = _latestCamera.getNear();
+
+  return cullPushConstants;
+}
+
 }

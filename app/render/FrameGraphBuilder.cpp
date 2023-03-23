@@ -2,6 +2,7 @@
 
 #include "RenderResourceVault.h"
 #include "ImageHelpers.h"
+#include "RenderContext.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -71,18 +72,19 @@ void FrameGraphBuilder::registerRenderPassExe(const std::string& renderPass, Ren
   sub->_exe = exeFcn;
 }
 
-void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer)
+void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* renderContext, uint32_t graphicsFamilyQ)
 {
   for (auto& node : _builtGraph) {
     if (node._resourceInit) {
-      auto resource = _vault->getResource(node._resourceInit.value()->_resource);
-      node._resourceInit.value()->_initFcn(resource);
+      auto resource = _vault->getResource(node._resourceInit.value()->_resource, renderContext->getCurrentMultiBufferIdx());
+      node._resourceInit.value()->_initFcn(resource, cmdBuffer, renderContext);
     }
     else if (node._barrier) {
-      //node._barrier.value()();
+      auto resource = _vault->getResource(node._barrier->_resourceName, renderContext->getCurrentMultiBufferIdx());
+      node._barrier.value()._barrierFcn(resource, cmdBuffer, graphicsFamilyQ);
     }
     else if (node._rpExe) {
-      node._rpExe.value()(_vault);
+      node._rpExe.value()(_vault, renderContext, &cmdBuffer, renderContext->getCurrentMultiBufferIdx());
     }
   }
 }
@@ -262,7 +264,8 @@ std::pair<VkImageLayout, VkImageLayout> FrameGraphBuilder::findImageLayoutUsage(
       return { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
     }
     else if (prevType == Type::ColorAttachment && newType == Type::Present) {
-      return { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
+      //return { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
+      return { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL };
     }
   }
 
@@ -316,6 +319,9 @@ std::string FrameGraphBuilder::debugConstructImageBarrierName(VkImageLayout old,
   else if (newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
     to = "PRESENT_SRC_KHR";
   }
+  else if (newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+    to = "TRANSFER_SRC_OPTIMAL";
+  }
 
   output.append("Barrier: FROM ");
   output.append(from);
@@ -346,7 +352,7 @@ std::pair<VkAccessFlagBits, VkAccessFlagBits> FrameGraphBuilder::findBufferAcces
       if (newAccess.test((std::size_t)Access::Read)) {
         if (newStage.test((std::size_t)Stage::IndirectDraw)) {
           // Going from compute output to indirect drawing
-          return { VK_ACCESS_SHADER_WRITE_BIT, (VkAccessFlagBits)(VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT) };
+          return { VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT };
         }
         else if (newStage.test((std::size_t)Stage::Vertex)) {
           return { VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT };

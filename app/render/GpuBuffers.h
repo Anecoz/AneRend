@@ -12,6 +12,7 @@ namespace gpu {
 // If the alignment is wrong, the validation layers _sometimes_ tell you.
 // Other times you just get extremely weird behaviour since the strides between
 // shader invocations etc. will be off/wrong.
+// Spec part about alignments: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#interfaces-resources-layout
 
 struct alignas(16) GPURenderable {
   glm::mat4 _transform;
@@ -33,6 +34,17 @@ struct GPUCullPushConstants {
   float _farDist;
   uint32_t _drawCount;         // 4 bytes
                                // Total: 132 bytes
+};
+
+// This is used as a UBO and has follows std140 rules (use 4-byte things basically...)
+struct GPUSceneData {
+  glm::mat4 view;
+  glm::mat4 proj;
+  glm::mat4 shadowMatrix[24];
+  glm::vec4 cameraPos;
+  glm::vec4 lightDir;
+  glm::vec4 lightPos[4];
+  glm::vec4 lightColor[4];
 };
 
 }

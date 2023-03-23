@@ -43,14 +43,14 @@ void main() {
 
   vec3 normal = normalize(fragNormal);
 
-  float shadow = inShadow();
+  //float shadow = inShadow();
 
   // Ambient
-  float ambientStrength = 0.01;
+  float ambientStrength = 0.1;
   vec3 ambient = ambientStrength * ambientColor;
 
   // Per light
-  float lightPower = 40.0;
+  /*float lightPower = 40.0;
   vec3 totalLight = vec3(0.0, 0.0, 0.0);
   for (int i = 0; i < NUM_LIGHTS; ++i) {
     vec3 lightDir =  ubo.lightPos[i].xyz - fragPosition;
@@ -60,7 +60,7 @@ void main() {
 
     // Diffuse
     float diff = max(dot(normal, lightDir), 0.0);
-    vec3 diffuse = diff * diffuseColor * ubo.lightColor[i].xyz * lightPower / dist;
+    vec3 diffuse = diff * diffuseColor * ubo.lightColor[i].xyz * lightPower / dist;*/
 
     // Specular
     /*vec3 viewDir = normalize(vec3(ubo.cameraPos) - fragPosition);
@@ -68,9 +68,12 @@ void main() {
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 324);
     vec3 specular = 0.1 * spec * specColor;*/
 
-    vec3 result = ambient + diffuse * clamp(1.0 - shadow, 0.3, 1.0);
+    /*vec3 result = ambient + diffuse * clamp(1.0 - shadow, 0.3, 1.0);
     totalLight = totalLight + result;
-  }
+  }*/
 
-  outColor = vec4(totalLight, 1.0);
+  float diff = max(dot(normal, -ubo.lightDir.xyz), 0.0);
+  vec3 diffuse = diff * vec3(1.0, 1.0, 1.0);
+  vec3 result = (ambient + diffuse) * diffuseColor;
+  outColor = vec4(result, 1.0);
 }

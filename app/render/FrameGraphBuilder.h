@@ -12,12 +12,12 @@
 namespace render {
 
 class RenderResourceVault;
+class RenderContext;
 struct IRenderResource;
 
-// TODO: Render pass needs a RenderContext to render stuff.
-typedef std::function<void(RenderResourceVault* resourceVault)> RenderPassExeFcn;
+typedef std::function<void(RenderResourceVault* resourceVault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx)> RenderPassExeFcn;
 
-typedef std::function<void(IRenderResource* resource)> ResourceInitFcn;
+typedef std::function<void(IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext)> ResourceInitFcn;
 
 typedef std::function<void(IRenderResource* resource, VkCommandBuffer& cmdBuffer, uint32_t graphicsFamilyQ)> BarrierFcn;
 
@@ -92,7 +92,7 @@ public:
   void registerRenderPass(RenderPassRegisterInfo&& registerInfo);
   void registerRenderPassExe(const std::string& renderPass, RenderPassExeFcn exeFcn);
 
-  void executeGraph(VkCommandBuffer& cmdBuffer);
+  void executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* renderContext, uint32_t graphicsFamilyQ);
 
   void build();
 

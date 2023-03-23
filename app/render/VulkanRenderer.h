@@ -24,6 +24,11 @@
 #include "Geometrypass.h"
 #include "PostProcessingPass.h"
 #include "Light.h"
+#include "RenderContext.h"
+#include "RenderPass.h"
+#include "RenderResourceVault.h"
+#include "FrameGraphBuilder.h"
+#include "Mesh.h"
 
 #include <array>
 #include <unordered_map>
@@ -35,7 +40,7 @@ namespace render {
 
 typedef std::int64_t RenderableId;
 
-class VulkanRenderer 
+class VulkanRenderer : public RenderContext
 {
 public:
   VulkanRenderer(GLFWwindow* window);
@@ -88,6 +93,31 @@ public:
   // Will recreate swapchain to accomodate the new window size.
   void notifyFramebufferResized();
 
+  // Render Context interface
+  VkDevice& device() override final;
+  VkDescriptorPool& descriptorPool() override final;
+  VmaAllocator vmaAllocator() override final;
+  
+  VkPipelineLayout& bindlessPipelineLayout() override final;
+  VkDescriptorSetLayout& bindlessDescriptorSetLayout() override final;
+  VkExtent2D swapChainExtent() override final;
+
+  void drawGigaBuffer(VkCommandBuffer* commandBuffer) override final;
+  void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls) override final;
+
+  VkImage& getCurrentSwapImage() override final;
+  int getCurrentMultiBufferIdx() override final;
+  int getMultiBufferSize() override final;
+
+  size_t getMaxNumMeshes() override final;
+  size_t getMaxNumRenderables() override final;
+
+  std::vector<Mesh>& getCurrentMeshes() override final;
+  std::unordered_map<MeshId, std::size_t>& getCurrentMeshUsage() override final;
+  size_t getCurrentNumRenderables() override final;
+
+  gpu::GPUCullPushConstants getCullParams() override final;
+
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
@@ -100,16 +130,8 @@ private:
 
   Camera _latestCamera;
 
-  struct Mesh {
-    MeshId _id;
-
-    // Offsets into the fat mesh buffer
-    std::size_t _vertexOffset;
-    std::size_t _indexOffset;
-
-    std::size_t _numVertices;
-    std::size_t _numIndices;
-  };
+  // This is dangerous, but points to "current" image index in the swap chain
+  uint32_t _currentSwapChainIndex;
 
   bool meshIdExists(MeshId meshId) const;
   std::vector<Mesh> _currentMeshes;
@@ -133,6 +155,20 @@ private:
 
   std::vector<Renderable> _currentRenderables;
   void cleanupRenderable(const Renderable& renderable);
+
+  /* "Bindless" descriptor set layout and pipeline layout, used for every render pass.
+  * The render passes create their own pipelines, specifying these on creation (accessed via RenderContext).
+  * Only one descriptor set gets bound before all rendering.
+  */
+  VkPipelineLayout _bindlessPipelineLayout;
+  VkDescriptorSetLayout _bindlessDescSetLayout;
+  std::vector<VkDescriptorSet> _bindlessDescriptorSets;
+
+  RenderResourceVault _vault;
+  FrameGraphBuilder _fgb;
+  std::vector<RenderPass*> _renderPasses;
+
+  void executeFrameGraph(VkCommandBuffer commandBuffer, int imageIndex);
 
   std::unordered_map<MaterialID, Material> _materials;
   std::unordered_map<MaterialID, std::size_t> _materialUsage; // size_t is how many are using material
@@ -162,6 +198,9 @@ private:
 
   // Translates from gl_InstanceID to renderableID in vertex shader. Written by compute. gl_InstanceID is offset by firstInstance of each draw call.
   std::vector<AllocatedBuffer> _gpuTranslationBuffer;
+
+  // Contains scene data needed in shaders (view and proj matrices etc.)
+  std::vector<AllocatedBuffer> _gpuSceneDataBuffer;
 
   // Fills gpu renderable buffer with current renderable information (could be done async)
   void prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer);
@@ -214,6 +253,8 @@ private:
   bool initGigaMeshBuffer();
   bool initGpuBuffers();
   bool initComputePipelines();
+  bool initBindless();
+  bool initFrameGraphBuilder();
 
   bool checkValidationLayerSupport();
   bool checkDeviceExtensionSupport(VkPhysicalDevice device);

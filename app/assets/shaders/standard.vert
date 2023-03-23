@@ -22,7 +22,7 @@ layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {
   Renderable renderables[];
 } renderableBuffer;
 
-layout(std430, set = 0, binding = 3) buffer TranslationBuffer {
+layout(std430, set = 1, binding = 0) buffer TranslationBuffer {
   uint ids[];
 } translationBuffer;
 

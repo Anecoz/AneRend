@@ -2,6 +2,7 @@
 
 #include "RenderResource.h"
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -12,7 +13,8 @@ namespace render {
 class RenderResourceVault
 {
 public:
-  RenderResourceVault() = default;
+  RenderResourceVault() = delete;
+  RenderResourceVault(int multiBufferSize);
   ~RenderResourceVault() = default;
 
   RenderResourceVault(const RenderResourceVault&) = delete;
@@ -20,10 +22,10 @@ public:
   RenderResourceVault& operator=(const RenderResourceVault&) = delete;
   RenderResourceVault& operator=(RenderResourceVault&&) = delete;
 
-  void addResource(const std::string& name, std::unique_ptr<IRenderResource> resource);
+  void addResource(const std::string& name, std::unique_ptr<IRenderResource> resource, bool multiBuffered = false, int multiBufferIdx = 0);
   void deleteResource(const std::string& name);
   
-  IRenderResource* getResource(const std::string& name);
+  IRenderResource* getResource(const std::string& name, int multiBufferIdx = 0);
 
   bool isPersistentResource(const std::string& name);
 
@@ -34,10 +36,13 @@ public:
   }
 
 private:
+  const std::size_t _multiBufferSize;
+
   struct InternalResource
   {
     std::string _name;
-    std::unique_ptr<IRenderResource> _resource;
+    bool _multiBuffered = false;
+    std::vector<std::unique_ptr<IRenderResource>> _resource;
   };
 
   std::vector<InternalResource> _resources;
