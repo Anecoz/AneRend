@@ -10,6 +10,7 @@
 #include "CullRenderPass.h"
 #include "GeometryRenderPass.h"
 #include "PresentationRenderPass.h"
+#include "UIRenderPass.h"
 
 #include "../util/Utils.h"
 #include "../LodePng/lodepng.h"
@@ -297,7 +298,7 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
-  printf("DEBUG FRAME GRAPH BUILDING TEST!\n");
+  /*printf("DEBUG FRAME GRAPH BUILDING TEST!\n");
   RenderResourceVault vault(MAX_FRAMES_IN_FLIGHT);
   FrameGraphBuilder fgb(&vault);
 
@@ -650,7 +651,7 @@ bool VulkanRenderer::init()
 
   fgb.printBuiltGraphDebug();
 
-  printf("Building frame graph took %lf ms\n", double(msFgbBuild) / 1000.0);
+  printf("Building frame graph took %lf ms\n", double(msFgbBuild) / 1000.0);*/
 
   return res;
 }
@@ -2419,6 +2420,7 @@ bool VulkanRenderer::initFrameGraphBuilder()
 {
   _renderPasses.emplace_back(new CullRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());
+  _renderPasses.emplace_back(new UIRenderPass());
   _renderPasses.emplace_back(new PresentationRenderPass());
 
   for (auto* rp : _renderPasses) {
