@@ -39,7 +39,7 @@ void PresentationRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   info._resourceUsages = std::move(resourceUsage);
   fgb.registerRenderPass(std::move(info));
   fgb.registerRenderPassExe("Present",
-    [](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx) {
+    [](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra) {
 
       // Copy to the present image from the swap chain
       auto geomIm = (ImageRenderResource*)vault->getResource("GeometryColorImage");

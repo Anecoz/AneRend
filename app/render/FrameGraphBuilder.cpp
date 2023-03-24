@@ -84,16 +84,22 @@ void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* 
       node._barrier.value()._barrierFcn(resource, cmdBuffer, graphicsFamilyQ);
     }
     else if (node._rpExe) {
-      node._rpExe.value()(_vault, renderContext, &cmdBuffer, renderContext->getCurrentMultiBufferIdx());
+      if (node._hasExtraRpExeData) {
+        node._rpExe.value()(_vault, renderContext, &cmdBuffer, renderContext->getCurrentMultiBufferIdx(), (int)node._extraRpExeDataSz, &node._extraRpExeData);
+      }
+      else {
+        node._rpExe.value()(_vault, renderContext, &cmdBuffer, renderContext->getCurrentMultiBufferIdx(), 0, nullptr);
+      }
     }
   }
 }
 
-bool FrameGraphBuilder::stackContainsProducer(const std::vector<GraphNode>& stack, const std::string& resource)
+bool FrameGraphBuilder::stackContainsProducer(std::vector<GraphNode>& stack, const std::string& resource, GraphNode** nodeOut)
 {
   for (auto& node : stack) {
     for (auto& produced : node._producedResources) {
       if (produced == resource) {
+        *nodeOut = &node;
         return true;
       }
     }
@@ -200,7 +206,14 @@ void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, S
       }
 
       // Does our local stack already contain a producer for this resource?
-      if (stackContainsProducer(localStack, resourceUsage._resourceName)) {
+      GraphNode* nodeOut;
+      if (stackContainsProducer(localStack, resourceUsage._resourceName, &nodeOut)) {
+        if (resourceUsage._hasExtraRpExeData && !nodeOut->_hasExtraRpExeData) {
+          nodeOut->_hasExtraRpExeData = true;
+          nodeOut->_extraRpExeDataSz = resourceUsage._extraRpExeDataSz;
+          std::memcpy((void*)&nodeOut->_extraRpExeData, (void*)&resourceUsage._extraRpExeData, resourceUsage._extraRpExeDataSz);
+        }
+
         continue;
       }
 
@@ -224,6 +237,11 @@ void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, S
       node._rpExe = producer->_exe;
       node._debugName = std::string(producer->_regInfo._name);
       node._resourceUsages = producer->_regInfo._resourceUsages;
+      if (resourceUsage._hasExtraRpExeData) {
+        node._hasExtraRpExeData = true;
+        node._extraRpExeDataSz = resourceUsage._extraRpExeDataSz;
+        std::memcpy((void*)&node._extraRpExeData, (void*)&resourceUsage._extraRpExeData, resourceUsage._extraRpExeDataSz);
+      }
 
       auto producersCopy = node._producedResources;
 

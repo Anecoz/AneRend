@@ -51,35 +51,18 @@ bool GeometryRenderPass::init(RenderContext* renderContext, RenderResourceVault*
 
   DescriptorSetLayoutCreateParams descLayoutParam{};
   descLayoutParam.bindInfos.emplace_back(transBufferInfo);
-  descLayoutParam.device = renderContext->device();
+  descLayoutParam.renderContext = renderContext;
 
   buildDescriptorSetLayout(descLayoutParam);
 
-  // Pipeline layout
-  PipelineLayoutCreateParams pipeLayoutParam{};
-  pipeLayoutParam.device = renderContext->device();
-  pipeLayoutParam.descriptorSetLayouts.emplace_back(renderContext->bindlessDescriptorSetLayout()); // set 0
-  pipeLayoutParam.descriptorSetLayouts.emplace_back(_descriptorSetLayout); // set 1
-  pipeLayoutParam.pushConstantsSize = 256;
-  pipeLayoutParam.pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-
-  buildPipelineLayout(pipeLayoutParam);
-
   // Descriptor (multi buffered) containing draw buffer SSBO
   DescriptorSetsCreateParams descParam{};
-  descParam.device = renderContext->device();
-  descParam.descriptorPool = renderContext->descriptorPool();
-  descParam.descriptorSetLayout = _descriptorSetLayout;
-  descParam.numMultiBuffer = renderContext->getMultiBufferSize();
+  descParam.renderContext = renderContext;
 
   auto allocator = renderContext->vmaAllocator();
   for (int i = 0; i < renderContext->getMultiBufferSize(); ++i) {
     auto buf = (BufferRenderResource*)vault->getResource("CullTransBuf", i);
 
-    DescriptorBindInfo transBufferInfo{};
-    transBufferInfo.binding = 0;
-    transBufferInfo.stages = VK_SHADER_STAGE_VERTEX_BIT;
-    transBufferInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     transBufferInfo.buffer = buf->_buffer._buffer;
     descParam.bindInfos.emplace_back(transBufferInfo);
   }
@@ -105,8 +88,15 @@ bool GeometryRenderPass::init(RenderContext* renderContext, RenderResourceVault*
   auto depthViewRes = new ImageViewRenderResource();
   depthViewRes->_format = VK_FORMAT_D32_SFLOAT;
 
-  imageutil::createImage(extent.width, extent.height, depthRes->_format, VK_IMAGE_TILING_OPTIMAL,
-    renderContext->vmaAllocator(), VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, depthRes->_image);
+  imageutil::createImage(
+    extent.width,
+    extent.height,
+    depthRes->_format,
+    VK_IMAGE_TILING_OPTIMAL,
+    renderContext->vmaAllocator(),
+    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    depthRes->_image);
+
   depthViewRes->_view = imageutil::createImageView(renderContext->device(), depthRes->_image._image, depthRes->_format, VK_IMAGE_ASPECT_DEPTH_BIT);
 
   vault->addResource("GeometryDepthImage", std::unique_ptr<IRenderResource>(depthRes));
@@ -119,8 +109,15 @@ bool GeometryRenderPass::init(RenderContext* renderContext, RenderResourceVault*
   colRes->_format = VK_FORMAT_B8G8R8A8_SRGB;
   colViewRes->_format = VK_FORMAT_B8G8R8A8_SRGB;
 
-  imageutil::createImage(extent.width, extent.height, colRes->_format, VK_IMAGE_TILING_OPTIMAL,
-    renderContext->vmaAllocator(), VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, colRes->_image);
+  imageutil::createImage(
+    extent.width,
+    extent.height,
+    colRes->_format,
+    VK_IMAGE_TILING_OPTIMAL,
+    renderContext->vmaAllocator(),
+    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    colRes->_image);
+
   colViewRes->_view = imageutil::createImageView(renderContext->device(), colRes->_image._image, colRes->_format, VK_IMAGE_ASPECT_COLOR_BIT);
 
   vault->addResource("GeometryColorImage", std::unique_ptr<IRenderResource>(colRes));
@@ -170,7 +167,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   fgb.registerRenderPass(std::move(info));
 
   fgb.registerRenderPassExe("Geometry",
-    [this](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx) {
+    [this](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra) {
       // Get resources
       auto colorView = (ImageViewRenderResource*)vault->getResource("GeometryColorImageView");
       auto depthView = (ImageViewRenderResource*)vault->getResource("GeometryDepthImageView");
@@ -236,7 +233,6 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       vkCmdSetScissor(*cmdBuffer, 0, 1, &scissor);
 
       // Ask render context to draw big giga buffer
-      //renderContext->drawGigaBuffer(cmdBuffer);
       renderContext->drawGigaBufferIndirect(cmdBuffer, drawCallBuffer->_buffer._buffer);
 
       // Stop dynamic rendering

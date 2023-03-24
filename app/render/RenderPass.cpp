@@ -311,8 +311,20 @@ bool RenderPass::buildDescriptorSetLayout(DescriptorSetLayoutCreateParams params
   layoutInfo.bindingCount = (uint32_t)bindings.size();
   layoutInfo.pBindings = bindings.data();
 
-  if (vkCreateDescriptorSetLayout(params.device, &layoutInfo, nullptr, &_descriptorSetLayout) != VK_SUCCESS) {
+  if (vkCreateDescriptorSetLayout(params.renderContext->device(), &layoutInfo, nullptr, &_descriptorSetLayout) != VK_SUCCESS) {
     printf("Could not create descriptor set layout!\n");
+    return false;
+  }
+
+  // Pipeline layout
+  PipelineLayoutCreateParams pipeLayoutParam{};
+  pipeLayoutParam.device = params.renderContext->device();
+  pipeLayoutParam.descriptorSetLayouts.emplace_back(params.renderContext->bindlessDescriptorSetLayout()); // set 0
+  pipeLayoutParam.descriptorSetLayouts.emplace_back(_descriptorSetLayout); // set 1
+  pipeLayoutParam.pushConstantsSize = 256;
+  pipeLayoutParam.pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+
+  if (!buildPipelineLayout(pipeLayoutParam)) {
     return false;
   }
 
@@ -347,22 +359,24 @@ bool RenderPass::buildPipelineLayout(PipelineLayoutCreateParams params)
 
 std::vector<VkDescriptorSet> RenderPass::buildDescriptorSets(DescriptorSetsCreateParams params)
 {
-  std::vector<VkDescriptorSet> sets;
-  sets.resize(params.numMultiBuffer);
+  int numMultiBuffer = params.renderContext->getMultiBufferSize();
 
-  std::vector<VkDescriptorSetLayout> layouts(params.numMultiBuffer, params.descriptorSetLayout);
+  std::vector<VkDescriptorSet> sets;
+  sets.resize(numMultiBuffer);
+
+  std::vector<VkDescriptorSetLayout> layouts(numMultiBuffer, _descriptorSetLayout);
   VkDescriptorSetAllocateInfo allocInfo{};
   allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  allocInfo.descriptorPool = params.descriptorPool;
-  allocInfo.descriptorSetCount = static_cast<uint32_t>(params.numMultiBuffer);
+  allocInfo.descriptorPool = params.renderContext->descriptorPool();
+  allocInfo.descriptorSetCount = static_cast<uint32_t>(numMultiBuffer);
   allocInfo.pSetLayouts = layouts.data();
 
-  if (vkAllocateDescriptorSets(params.device, &allocInfo, sets.data()) != VK_SUCCESS) {
+  if (vkAllocateDescriptorSets(params.renderContext->device(), &allocInfo, sets.data()) != VK_SUCCESS) {
     printf("failed to allocate compute descriptor sets!\n");
     return {};
   }
 
-  int numDescriptors = params.bindInfos.size() / params.numMultiBuffer;
+  int numDescriptors = params.bindInfos.size() / numMultiBuffer;
   int currIdx = 0;
   for (size_t j = 0; j < params.bindInfos.size(); j++) {
     if (j - currIdx*numDescriptors >= numDescriptors) {
@@ -386,7 +400,7 @@ std::vector<VkDescriptorSet> RenderPass::buildDescriptorSets(DescriptorSetsCreat
 
     descriptorWrites.emplace_back(std::move(bufWrite));
 
-    vkUpdateDescriptorSets(params.device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+    vkUpdateDescriptorSets(params.renderContext->device(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
   }
 
   return sets;

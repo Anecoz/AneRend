@@ -83,7 +83,8 @@ namespace render {
 
     struct DescriptorSetLayoutCreateParams
     {
-      VkDevice device;
+      //VkDevice device;
+      RenderContext* renderContext;
 
       std::vector<DescriptorBindInfo> bindInfos;
     };
@@ -98,12 +99,13 @@ namespace render {
 
     struct DescriptorSetsCreateParams
     {
-      VkDevice device;
-      VkDescriptorPool descriptorPool;
-      VkDescriptorSetLayout descriptorSetLayout;
+      RenderContext* renderContext;
+      //VkDevice device;
+      //VkDescriptorPool descriptorPool;
+      //VkDescriptorSetLayout descriptorSetLayout;
 
       std::vector<DescriptorBindInfo> bindInfos;
-      int numMultiBuffer;
+      //int numMultiBuffer;
       //std::vector<VkBuffer> buffers;
     };
 

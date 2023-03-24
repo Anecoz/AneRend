@@ -15,7 +15,7 @@ class RenderResourceVault;
 class RenderContext;
 struct IRenderResource;
 
-typedef std::function<void(RenderResourceVault* resourceVault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx)> RenderPassExeFcn;
+typedef std::function<void(RenderResourceVault* resourceVault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraDataSize, void* extraData)> RenderPassExeFcn;
 
 typedef std::function<void(IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext)> ResourceInitFcn;
 
@@ -64,6 +64,12 @@ struct ResourceUsage
 
   bool _invalidateAfterRead = false;
   std::string _resourceName;
+
+  // Extra data that the producer of this resource needs.
+  // For instance, culling parameters for culling pass.
+  bool _hasExtraRpExeData = false;
+  std::size_t _extraRpExeDataSz = 0;
+  std::uint8_t _extraRpExeData[512];
 };
 
 struct RenderPassRegisterInfo
@@ -126,13 +132,21 @@ private:
     std::optional<RenderPassExeFcn> _rpExe;
     std::optional<BarrierContext> _barrier;
 
+    /* 
+     * Extra data that is supplied to the render pass exe.
+     * This comes from the resource usage of the consumer of the resource that this rp produces.
+    */
+    std::uint8_t _extraRpExeData[512];
+    std::size_t _extraRpExeDataSz = 0;
+    bool _hasExtraRpExeData = false;
+
     std::vector<std::string> _producedResources;
     std::vector<ResourceUsage> _resourceUsages;
 
     std::string _debugName;
   };
 
-  bool stackContainsProducer(const std::vector<GraphNode>& stack, const std::string& resource);
+  bool stackContainsProducer(std::vector<GraphNode>& stack, const std::string& resource, GraphNode** nodeOut);
   Submission* findSubmission(const std::string& name);
   ResourceInit* findResourceInit(const std::string& resource);
   std::vector<Submission*> findResourceProducers(const std::string& resource, const std::string& excludePass);

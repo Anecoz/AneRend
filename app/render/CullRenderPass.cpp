@@ -40,26 +40,13 @@ bool CullRenderPass::init(RenderContext* renderContext, RenderResourceVault* vau
   DescriptorSetLayoutCreateParams descLayoutParam{};
   descLayoutParam.bindInfos.emplace_back(drawBufferInfo);
   descLayoutParam.bindInfos.emplace_back(transBufferInfo);
-  descLayoutParam.device = renderContext->device();
+  descLayoutParam.renderContext = renderContext;
 
   buildDescriptorSetLayout(descLayoutParam);
 
-  // Pipeline layout
-  PipelineLayoutCreateParams pipeLayoutParam{};
-  pipeLayoutParam.device = renderContext->device();
-  pipeLayoutParam.descriptorSetLayouts.emplace_back(renderContext->bindlessDescriptorSetLayout()); // set 0
-  pipeLayoutParam.descriptorSetLayouts.emplace_back(_descriptorSetLayout); // set 1
-  pipeLayoutParam.pushConstantsSize = 256;// (uint32_t)sizeof(gpu::GPUCullPushConstants);
-  pipeLayoutParam.pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-
-  buildPipelineLayout(pipeLayoutParam);
-
   // Descriptor (multi buffered) containing draw buffer SSBO
   DescriptorSetsCreateParams descParam{};
-  descParam.device = renderContext->device();
-  descParam.descriptorPool = renderContext->descriptorPool();
-  descParam.descriptorSetLayout = _descriptorSetLayout;
-  descParam.numMultiBuffer = renderContext->getMultiBufferSize();
+  descParam.renderContext = renderContext;
 
   // Create the buffers (multi buffered)
   _gpuStagingBuffers.resize(renderContext->getMultiBufferSize());
@@ -187,8 +174,12 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   fgb.registerRenderPass(std::move(regInfo));
 
   fgb.registerRenderPassExe("Cull",
-    [this](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx)
+    [this](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra)
     {
+      if (extraSz > 0) {
+        // TODO: Get culling param resource from vault via extra data
+      }
+
       vkCmdBindPipeline(*cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _pipeline);
 
       // Bind to set 1

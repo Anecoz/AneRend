@@ -42,7 +42,7 @@ void UIRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   fgb.registerRenderPass(std::move(info));
 
   fgb.registerRenderPassExe("UI",
-    [](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx)
+    [](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra)
     {
       // Just render the ImGui stuff on top of the frame
       auto imageView = (ImageViewRenderResource*)vault->getResource("GeometryColorImageView");
