@@ -82,20 +82,11 @@ bool CullRenderPass::init(RenderContext* renderContext, RenderResourceVault* vau
       0,
       resourceTransBuf->_buffer);
 
-    DescriptorBindInfo drawInfo{};
-    drawInfo.binding = 0;
-    drawInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
-    drawInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    drawInfo.buffer = resourceDrawBuf->_buffer._buffer;
+    drawBufferInfo.buffer = resourceDrawBuf->_buffer._buffer;
+    transBufferInfo.buffer = resourceTransBuf->_buffer._buffer;
 
-    DescriptorBindInfo transInfo{};
-    transInfo.binding = 1;
-    transInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
-    transInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    transInfo.buffer = resourceTransBuf->_buffer._buffer;
-
-    descParam.bindInfos.emplace_back(drawInfo);
-    descParam.bindInfos.emplace_back(transInfo);
+    descParam.bindInfos.emplace_back(drawBufferInfo);
+    descParam.bindInfos.emplace_back(transBufferInfo);
 
     vault->addResource("CullDrawBuf", std::unique_ptr<IRenderResource>(resourceDrawBuf), true, i);
     vault->addResource("CullTransBuf", std::unique_ptr<IRenderResource>(resourceTransBuf), true, i);
@@ -128,6 +119,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   drawBufInitUsage._type = Type::SSBO;
   drawBufInitUsage._access.set((std::size_t)Access::Write);
   drawBufInitUsage._stage.set((std::size_t)Stage::Transfer);
+
   fgb.registerResourceInitExe("CullDrawBuf", std::move(drawBufInitUsage),
     [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
       // Prefill with draw cmd data using rendercontext to get current mesh data
@@ -160,6 +152,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   transBufInitUsage._type = Type::SSBO;
   transBufInitUsage._access.set((std::size_t)Access::Write);
   transBufInitUsage._stage.set((std::size_t)Stage::Transfer);
+
   fgb.registerResourceInitExe("CullTransBuf", std::move(transBufInitUsage),
     [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
       // Just fill buffer with 0's
