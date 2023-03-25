@@ -35,6 +35,8 @@ void GeometryRenderPass::cleanup(RenderContext* renderContext, RenderResourceVau
   vkDestroyPipelineLayout(renderContext->device(), _pipelineLayout, nullptr);
   vkDestroyPipeline(renderContext->device(), _pipeline, nullptr);
 
+  vkDestroySampler(renderContext->device(), _shadowSampler, nullptr);
+
   vault->deleteResource("GeometryColorImageView");
   vault->deleteResource("GeometryColorImage");
   vault->deleteResource("GeometryDepthImageView");
@@ -49,8 +51,14 @@ bool GeometryRenderPass::init(RenderContext* renderContext, RenderResourceVault*
   transBufferInfo.stages = VK_SHADER_STAGE_VERTEX_BIT;
   transBufferInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
+  DescriptorBindInfo shadowSamplerInfo{};
+  shadowSamplerInfo.binding = 1;
+  shadowSamplerInfo.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
+  shadowSamplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
   DescriptorSetLayoutCreateParams descLayoutParam{};
   descLayoutParam.bindInfos.emplace_back(transBufferInfo);
+  descLayoutParam.bindInfos.emplace_back(shadowSamplerInfo);
   descLayoutParam.renderContext = renderContext;
 
   buildDescriptorSetLayout(descLayoutParam);
@@ -59,12 +67,23 @@ bool GeometryRenderPass::init(RenderContext* renderContext, RenderResourceVault*
   DescriptorSetsCreateParams descParam{};
   descParam.renderContext = renderContext;
 
-  auto allocator = renderContext->vmaAllocator();
+  // Sampler for shadow map
+  SamplerCreateParams samplerParam{};
+  samplerParam.renderContext = renderContext;
+  _shadowSampler = createSampler(samplerParam);
+
+  auto shadowMapView = (ImageViewRenderResource*)vault->getResource("ShadowMapView");
+
   for (int i = 0; i < renderContext->getMultiBufferSize(); ++i) {
     auto buf = (BufferRenderResource*)vault->getResource("CullTransBuf", i);
 
     transBufferInfo.buffer = buf->_buffer._buffer;
+    shadowSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+    shadowSamplerInfo.sampler = _shadowSampler;
+    shadowSamplerInfo.view = shadowMapView->_view;
+
     descParam.bindInfos.emplace_back(transBufferInfo);
+    descParam.bindInfos.emplace_back(shadowSamplerInfo);
   }
 
   _descriptorSets = buildDescriptorSets(descParam);
@@ -144,6 +163,14 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     usage._resourceName = "GeometryDepthImage";
     usage._access.set((std::size_t)Access::Write);
     usage._type = Type::DepthAttachment;
+    resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "ShadowMap";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
     resourceUsages.emplace_back(std::move(usage));
   }
   {

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <iterator>
 
 namespace render {
 
@@ -107,6 +108,43 @@ bool FrameGraphBuilder::stackContainsProducer(std::vector<GraphNode>& stack, con
   return false;
 }
 
+void FrameGraphBuilder::ensureOrder(std::vector<GraphNode>& stack, const std::string& nameBefore, const std::string& nameAfter)
+{
+  if (stack.size() <= 1) return;
+
+  // Make sure nameBefore comes before nameAfter
+  int afterIdx = -1;
+  int beforeIdx = -1;
+  bool doSwap = false;
+  for (int i = 0; i < stack.size(); ++i) {
+    auto& node = stack[i];
+
+    if (node._debugName == nameBefore) {
+      beforeIdx = i;
+    }
+    if (node._debugName == nameAfter) {
+      afterIdx = i;
+    }
+
+    if (afterIdx != -1) {
+      if (beforeIdx != -1) {
+        if (doSwap) {
+          // We just found before, do swap
+          std::iter_swap(stack.begin() + beforeIdx, stack.begin() + afterIdx);
+          return;
+        }
+        else {
+          // All is good
+          return;
+        }
+      }
+      else {
+        doSwap = true;
+      }
+    }
+  }
+}
+
 FrameGraphBuilder::Submission* FrameGraphBuilder::findSubmission(const std::string& name)
 {
   for (auto& sub : _submissions) {
@@ -173,8 +211,11 @@ void FrameGraphBuilder::build()
     return;
   }
 
+  //internalBuild2(presentSubmission);
+  internalBuild3();
+
   // Now we need to find all requirements for this submission, and recursively do the same for the children
-  GraphNode presentNode{};
+  /*GraphNode presentNode{};
   presentNode._rpExe = presentSubmission->_exe;
   presentNode._debugName = presentSubmission->_regInfo._name;
   presentNode._resourceUsages = presentSubmission->_regInfo._resourceUsages;
@@ -182,7 +223,7 @@ void FrameGraphBuilder::build()
 
   findDependenciesRecurse(_builtGraph, presentSubmission);
 
-  std::reverse(_builtGraph.begin(), _builtGraph.end());
+  std::reverse(_builtGraph.begin(), _builtGraph.end());*/
 
   // Frame graph is built, now we need to insert barriers at the appropriate positions
   insertBarriers(_builtGraph);
@@ -207,15 +248,34 @@ void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, S
 
       // Does our local stack already contain a producer for this resource?
       GraphNode* nodeOut;
-      if (stackContainsProducer(localStack, resourceUsage._resourceName, &nodeOut)) {
-        if (resourceUsage._hasExtraRpExeData && !nodeOut->_hasExtraRpExeData) {
-          nodeOut->_hasExtraRpExeData = true;
-          nodeOut->_extraRpExeDataSz = resourceUsage._extraRpExeDataSz;
-          std::memcpy((void*)&nodeOut->_extraRpExeData, (void*)&resourceUsage._extraRpExeData, resourceUsage._extraRpExeDataSz);
-        }
+      //if (resourceUsage._invalidateAfterRead) {
+        if (stackContainsProducer(localStack, resourceUsage._resourceName, &nodeOut)) {
+          if (resourceUsage._hasExtraRpExeData && !nodeOut->_hasExtraRpExeData) {
+            nodeOut->_hasExtraRpExeData = true;
+            nodeOut->_extraRpExeDataSz = resourceUsage._extraRpExeDataSz;
+            std::memcpy((void*)&nodeOut->_extraRpExeData, (void*)&resourceUsage._extraRpExeData, resourceUsage._extraRpExeDataSz);
+          }
 
-        continue;
-      }
+          continue;
+        }
+      /* }
+      else {
+        // Remove ourselves from stack
+        std::vector<GraphNode> tempStack = stack;
+        tempStack.pop_back();
+        tempStack.insert(tempStack.end(), localStack.begin(), localStack.end());
+        if (stackContainsProducer(tempStack, resourceUsage._resourceName, &nodeOut)) {
+          if (resourceUsage._hasExtraRpExeData && !nodeOut->_hasExtraRpExeData) {
+            nodeOut->_hasExtraRpExeData = true;
+            nodeOut->_extraRpExeDataSz = resourceUsage._extraRpExeDataSz;
+            std::memcpy((void*)&nodeOut->_extraRpExeData, (void*)&resourceUsage._extraRpExeData, resourceUsage._extraRpExeDataSz);
+          }
+
+          // Make sure that we are executed *after* the producer that is already present in the stack.
+          ensureOrder(stack, submission->_regInfo._name, nodeOut->_debugName);
+          continue;
+        }
+      }*/
 
       // Find the producers, skip ourselves and any already present producers in the stack
       auto producers = findResourceProducers(resourceUsage._resourceName, submission->_regInfo._name);
@@ -265,6 +325,131 @@ void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, S
   }
 
   stack.insert(stack.end(), localStack.begin(), localStack.end());
+}
+
+void FrameGraphBuilder::internalBuild2(Submission* presentSub)
+{
+  // Build an internal resource information structure first
+  std::vector<ResourceGraphInfo> resInfos;
+  for (auto& sub : _submissions) {
+    for (auto& resUsage : sub._regInfo._resourceUsages) {
+
+      auto it = std::find_if(resInfos.begin(), resInfos.end(), [&](ResourceGraphInfo& info) {
+        return info._resource == resUsage._resourceName;
+        });
+
+      bool r = resUsage._access.test((std::size_t)Access::Read);
+      bool w = resUsage._access.test((std::size_t)Access::Write);
+
+      if (it != resInfos.end()) {
+        if (r) {
+          it->_rSubs.emplace_back(&sub);
+        }
+        if (w) {
+          it->_wSubs.emplace_back(&sub);
+        }
+      }
+      else {
+        ResourceGraphInfo info{};
+        info._resource = resUsage._resourceName;
+        if (r) info._rSubs.emplace_back(&sub);
+        if (w) info._wSubs.emplace_back(&sub);
+        resInfos.emplace_back(std::move(info));
+      }
+    }
+  }
+
+  // DEBUG
+  for (auto& inf : resInfos) {
+    printf("\n");
+    printf("Resource %s is written to by: \n", inf._resource.c_str());
+    for (auto sub : inf._wSubs) {
+      printf("\t%s", sub->_regInfo._name.c_str());
+    }
+    printf("\n");
+
+    printf("Resource %s is read from by: \n", inf._resource.c_str());
+    for (auto sub : inf._rSubs) {
+      printf("\t%s", sub->_regInfo._name.c_str());
+    }
+    printf("\n");
+  }
+
+  // Go through each resource (start with the one used for presenting) and add all passes that also _read_ from this resource.
+  std::string presentRes;
+  for (auto& resUsage : presentSub->_regInfo._resourceUsages) {
+    if (resUsage._type == Type::Present) {
+      presentRes = resUsage._resourceName;
+      break;
+    }
+  }
+
+  GraphNode node{};
+  node._rpExe = presentSub->_exe;
+  node._debugName = std::string(presentSub->_regInfo._name);
+  node._resourceUsages = presentSub->_regInfo._resourceUsages;
+  _builtGraph.emplace_back(node);
+   
+  /*readSubs = addReadSubs();
+  writeSubs = addWriteSubs
+  res = */
+
+  std::string currRes = presentRes;
+  for (auto& info : resInfos) {
+    if (info._resource == currRes) {
+
+      for (auto rSub : info._rSubs) {
+        GraphNode node{};
+        for (auto& producerUsage : rSub->_regInfo._resourceUsages) {
+          if (producerUsage._access.test((std::size_t)Access::Write)) {
+            node._producedResources.emplace_back(producerUsage._resourceName);
+          }
+        }
+        node._rpExe = rSub->_exe;
+        node._debugName = std::string(rSub->_regInfo._name);
+        node._resourceUsages = rSub->_regInfo._resourceUsages;
+        _builtGraph.emplace_back(std::move(node));
+      }
+
+      // Now
+
+    } 
+  }
+}
+
+void FrameGraphBuilder::internalBuild3()
+{
+  // Simply use submission order, but insert resource inits if there are any
+  for (auto& sub : _submissions) {
+    GraphNode node{};
+
+    for (auto& resUs : sub._regInfo._resourceUsages) {
+
+      if (resUs._access.test((std::size_t)Access::Write)) {
+        node._producedResources.emplace_back(resUs._resourceName);
+
+        if (auto init = findResourceInit(resUs._resourceName)) {
+          GraphNode node{};
+          node._resourceInit = init;
+          node._resourceUsages = { init->_initUsage };
+          node._debugName = std::string(init->_resource);
+          _builtGraph.emplace_back(node);
+        }
+      }
+
+      if (resUs._hasExtraRpExeData) {
+        node._hasExtraRpExeData = true;
+        node._extraRpExeDataSz = resUs._extraRpExeDataSz;
+        std::memcpy((void*)&node._extraRpExeData, (void*)&resUs._extraRpExeData, resUs._extraRpExeDataSz);
+      }
+    }
+
+    node._rpExe = sub._exe;
+    node._debugName = std::string(sub._regInfo._name);
+    node._resourceUsages = sub._regInfo._resourceUsages;
+
+    _builtGraph.emplace_back(node);
+  }
 }
 
 std::pair<VkImageLayout, VkImageLayout> FrameGraphBuilder::findImageLayoutUsage(AccessBits prevAccess, Type prevType, AccessBits newAccess, Type newType)
@@ -565,6 +750,10 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         // If the _previous_ usage wrote to this image, and we now read from it, and the type is the same, skip the pre-barrier
         bool skipPreBarrier = false;
         if (prevUsage) {
+          // If we now only read, also ok to skip since we should have done an _after write_ barrier already (previous iteration)
+          if (usage._access.test((std::size_t)Access::Read)) {
+            skipPreBarrier = true;
+          }
           if (prevUsage->_access.test((std::size_t)Access::Write) && prevUsage->_type == usage._type) {
             skipPreBarrier = true;
           }

@@ -5,6 +5,9 @@
 #include "vma/vk_mem_alloc.h"
 
 #include "Mesh.h"
+#include "Vertex.h"
+#include "RenderableId.h"
+#include "MaterialId.h"
 #include "GpuBuffers.h"
 
 #include <unordered_map>
@@ -27,10 +30,20 @@ public:
   //virtual void bindGigaBuffers(VkCommandBuffer*) = 0;
   virtual void drawGigaBuffer(VkCommandBuffer*) = 0;
   virtual void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls) = 0;
+  virtual void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) = 0;
 
   virtual VkImage& getCurrentSwapImage() = 0;
   virtual int getCurrentMultiBufferIdx() = 0;
   virtual int getMultiBufferSize() = 0;
+
+  virtual MeshId registerMesh(const std::vector<Vertex>& vertices, const std::vector<std::uint32_t>& indices) = 0;
+  virtual RenderableId registerRenderable(
+    MeshId meshId,
+    MaterialID materialId,
+    const glm::mat4& transform,
+    const glm::vec3& sphereBoundCenter,
+    float sphereBoundRadius) = 0;
+  virtual void setRenderableVisible(RenderableId id, bool visible) = 0;
 
   virtual size_t getMaxNumMeshes() = 0;
   virtual size_t getMaxNumRenderables() = 0;

@@ -4,11 +4,11 @@
 
 namespace render {
 
-class GeometryRenderPass : public RenderPass
+class ShadowRenderPass : public RenderPass
 {
 public:
-  GeometryRenderPass();
-  ~GeometryRenderPass();
+  ShadowRenderPass();
+  ~ShadowRenderPass();
 
   bool init(RenderContext* renderContext, RenderResourceVault*) override final;
 
@@ -19,7 +19,6 @@ public:
 
 private:
   std::vector<VkDescriptorSet> _descriptorSets;
-  VkSampler _shadowSampler;
 };
 
 }

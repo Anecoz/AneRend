@@ -3,6 +3,7 @@
 layout(binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
+  mat4 directionalShadowMatrix;
   mat4 shadowMatrix[24];
   vec4 cameraPos;
   vec4 lightDir;
@@ -10,30 +11,32 @@ layout(binding = 0) uniform UniformBufferObject {
   vec4 lightColor[4];
 } ubo;
 
-layout(binding = 1) uniform samplerCube shadowMap[4];
+layout(set = 1, binding = 1) uniform sampler2D shadowMap;
 
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) flat in vec3 fragNormal;
 layout(location = 2) in vec3 fragPosition;
+layout(location = 3) in vec4 fragShadowPos;
 
 layout(location = 0) out vec4 outColor;
 
-#define NUM_LIGHTS 4
-
 float inShadow() {
-  float total = 0.0;
-  for (int i = 0; i < NUM_LIGHTS; ++i) {
-    vec3 lightVec = fragPosition - ubo.lightPos[i].xyz;
+  vec3 projCoords = fragShadowPos.xyz / fragShadowPos.w;
 
-    float sampledDepth = texture(shadowMap[i], lightVec).r;
-
-    float testDepth = length(lightVec) / 50.0;
-    if (sampledDepth < testDepth) {
-      total += 1.0;
-    }
+  if (projCoords.x > 1.0 || projCoords.x < -1.0 ||
+      projCoords.z > 1.0 || projCoords.z < -1.0 ||
+      projCoords.y > 1.0 || projCoords.y < -1.0) {
+    return 0;
   }
 
-  return total/NUM_LIGHTS;
+  vec2 shadowMapCoord = projCoords.xy * 0.5 + 0.5;
+
+  float depth = projCoords.z;
+  float sampledDepth = texture(shadowMap, shadowMapCoord.xy).r;
+  if (depth > sampledDepth) {
+    return 1;
+  }
+  return 0;
 }
 
 void main() {
@@ -43,7 +46,7 @@ void main() {
 
   vec3 normal = normalize(fragNormal);
 
-  //float shadow = inShadow();
+  float shadow = inShadow();
 
   // Ambient
   float ambientStrength = 0.1;
@@ -74,6 +77,6 @@ void main() {
 
   float diff = max(dot(normal, -ubo.lightDir.xyz), 0.0);
   vec3 diffuse = diff * vec3(1.0, 1.0, 1.0);
-  vec3 result = (ambient + diffuse) * diffuseColor;
+  vec3 result = (ambient + diffuse) * diffuseColor * clamp(1.0 - shadow, 0.3, 1.0);
   outColor = vec4(result, 1.0);
 }

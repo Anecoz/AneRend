@@ -78,12 +78,14 @@ namespace render {
       uint32_t binding;
       VkShaderStageFlags stages;
       VkDescriptorType type;
+      VkImageLayout imageLayout;
+      VkImageView view;
+      VkSampler sampler;
       VkBuffer buffer;
     };
 
     struct DescriptorSetLayoutCreateParams
     {
-      //VkDevice device;
       RenderContext* renderContext;
 
       std::vector<DescriptorBindInfo> bindInfos;
@@ -100,13 +102,23 @@ namespace render {
     struct DescriptorSetsCreateParams
     {
       RenderContext* renderContext;
-      //VkDevice device;
-      //VkDescriptorPool descriptorPool;
-      //VkDescriptorSetLayout descriptorSetLayout;
 
       std::vector<DescriptorBindInfo> bindInfos;
-      //int numMultiBuffer;
-      //std::vector<VkBuffer> buffers;
+    };
+
+    struct SamplerCreateParams
+    {
+      RenderContext* renderContext;
+
+      VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      VkFilter magFilter = VK_FILTER_NEAREST;
+      VkFilter minFilter = VK_FILTER_NEAREST;
+      VkSamplerMipmapMode mipMapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+      float mipLodBias = 0.0f;
+      float maxAnisotropy = 1.0f;
+      float minLod = 0.0f;
+      float maxLod = 1.0f;
+      VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
     };
 
     bool buildGraphicsPipeline(GraphicsPipelineCreateParams params);
@@ -118,5 +130,7 @@ namespace render {
     bool buildPipelineLayout(PipelineLayoutCreateParams params);
 
     std::vector<VkDescriptorSet> buildDescriptorSets(DescriptorSetsCreateParams params);
+
+    VkSampler createSampler(SamplerCreateParams params);
   };
 }

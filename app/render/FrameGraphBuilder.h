@@ -146,12 +146,23 @@ private:
     std::string _debugName;
   };
 
+  struct ResourceGraphInfo
+  {
+    std::string _resource;
+    std::vector<Submission*> _rSubs;
+    std::vector<Submission*> _wSubs;
+  };
+
   bool stackContainsProducer(std::vector<GraphNode>& stack, const std::string& resource, GraphNode** nodeOut);
+  void ensureOrder(std::vector<GraphNode>& stack, const std::string& nameBefore, const std::string& nameAfter);
   Submission* findSubmission(const std::string& name);
   ResourceInit* findResourceInit(const std::string& resource);
   std::vector<Submission*> findResourceProducers(const std::string& resource, const std::string& excludePass);
 
   void findDependenciesRecurse(std::vector<GraphNode>& stack, Submission* submission);
+
+  void internalBuild2(Submission* presentSub);
+  void internalBuild3();
 
   std::pair<VkImageLayout, VkImageLayout> findImageLayoutUsage(AccessBits prevAccess, Type prevType, AccessBits newAccess, Type newType);
   VkImageLayout findInitialImageLayout(AccessBits access, Type type);

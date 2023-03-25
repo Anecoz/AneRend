@@ -11,6 +11,8 @@
 #include "GeometryRenderPass.h"
 #include "PresentationRenderPass.h"
 #include "UIRenderPass.h"
+#include "ShadowRenderPass.h"
+#include "DebugViewRenderPass.h"
 
 #include "../util/Utils.h"
 #include "../LodePng/lodepng.h"
@@ -851,15 +853,19 @@ void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, co
   ShadowUBO shadowUbo{};
   shadowUbo.shadowMatrix = standardUbo.shadowMatrix[0];
 
+  auto shadowProj = shadowCamera.getProjection();
+
+  shadowProj[1][1] *= -1;
   gpu::GPUSceneData ubo{};
   ubo.cameraPos = standardUbo.cameraPos;
+  ubo.directionalShadowMatrix = shadowProj * shadowCamera.getCamMatrix();
   ubo.lightDir = standardUbo.lightDir;
   ubo.proj = standardUbo.proj;
   ubo.view = standardUbo.view;
 
   void* data;
   vmaMapMemory(_vmaAllocator, _gpuSceneDataBuffer[_currentFrame]._allocation, &data);
-  memcpy(data, &standardUbo, sizeof(gpu::GPUSceneData));
+  memcpy(data, &ubo, sizeof(gpu::GPUSceneData));
   vmaUnmapMemory(_vmaAllocator, _gpuSceneDataBuffer[_currentFrame]._allocation);
 
   for (auto& mat: _materials) {
@@ -2419,7 +2425,9 @@ bool VulkanRenderer::initBindless()
 bool VulkanRenderer::initFrameGraphBuilder()
 {
   _renderPasses.emplace_back(new CullRenderPass());
+  _renderPasses.emplace_back(new ShadowRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());
+  _renderPasses.emplace_back(new DebugViewRenderPass());
   _renderPasses.emplace_back(new UIRenderPass());
   _renderPasses.emplace_back(new PresentationRenderPass());
 
@@ -2763,6 +2771,12 @@ void VulkanRenderer::drawGigaBuffer(VkCommandBuffer* commandBuffer)
 void VulkanRenderer::drawGigaBufferIndirect(VkCommandBuffer* commandBuffer, VkBuffer drawCalls)
 {
   vkCmdDrawIndexedIndirect(*commandBuffer, drawCalls, 0, (uint32_t)_currentMeshes.size(), sizeof(gpu::GPUDrawCallCmd));
+}
+
+void VulkanRenderer::drawMeshId(VkCommandBuffer* cmdBuffer, MeshId meshId, uint32_t vertCount, uint32_t instanceCount)
+{
+  auto& mesh = _currentMeshes[meshId];
+  vkCmdDraw(*cmdBuffer, vertCount, instanceCount, (uint32_t)mesh._vertexOffset, 0);
 }
 
 VkImage& VulkanRenderer::getCurrentSwapImage()

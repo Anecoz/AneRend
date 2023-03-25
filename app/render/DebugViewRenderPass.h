@@ -2,13 +2,15 @@
 
 #include "RenderPass.h"
 
+#include "Model.h"
+
 namespace render {
 
-class GeometryRenderPass : public RenderPass
+class DebugViewRenderPass : public RenderPass
 {
 public:
-  GeometryRenderPass();
-  ~GeometryRenderPass();
+  DebugViewRenderPass();
+  ~DebugViewRenderPass();
 
   bool init(RenderContext* renderContext, RenderResourceVault*) override final;
 
@@ -19,7 +21,10 @@ public:
 
 private:
   std::vector<VkDescriptorSet> _descriptorSets;
-  VkSampler _shadowSampler;
+  VkSampler _sampler;
+  Model _screenQuad;
+  MeshId _meshId;
+  RenderableId _renderableId;
 };
 
 }

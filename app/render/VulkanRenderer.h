@@ -29,6 +29,7 @@
 #include "RenderResourceVault.h"
 #include "FrameGraphBuilder.h"
 #include "Mesh.h"
+#include "RenderableId.h"
 
 #include <array>
 #include <unordered_map>
@@ -37,8 +38,6 @@
 #include <tuple>
 
 namespace render {
-
-typedef std::int64_t RenderableId;
 
 class VulkanRenderer : public RenderContext
 {
@@ -104,6 +103,7 @@ public:
 
   void drawGigaBuffer(VkCommandBuffer* commandBuffer) override final;
   void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls) override final;
+  void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) override final;
 
   VkImage& getCurrentSwapImage() override final;
   int getCurrentMultiBufferIdx() override final;
