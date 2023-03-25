@@ -5,6 +5,7 @@
 #include "RenderResource.h"
 #include "RenderResourceVault.h"
 #include "FrameGraphBuilder.h"
+#include "ImageHelpers.h"
 
 namespace render {
 
@@ -72,6 +73,8 @@ bool DebugViewRenderPass::init(RenderContext* renderContext, RenderResourceVault
   _renderableId = renderContext->registerRenderable(_meshId, STANDARD_MATERIAL_ID, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
   renderContext->setRenderableVisible(_renderableId, false);
 
+  _currResource = "ShadowMap";
+
   return true;
 }
 
@@ -83,6 +86,14 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   {
     ResourceUsage usage{};
     usage._resourceName = "ShadowMap";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "GeometryDepthImage";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::SampledTexture;
@@ -102,7 +113,37 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   fgb.registerRenderPassExe("DebugView",
     [this](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra)
     {
+      if (!renderContext->getDebugOptions().debugView) return;
+
       auto imageView = (ImageViewRenderResource*)vault->getResource("GeometryColorImageView");
+
+      // If view is updated, descriptor (sampler) has to be recreated
+      std::string debugResource = renderContext->getDebugOptions().debugViewResource;
+      if (debugResource != _currResource) {
+        std::string viewName = debugResource + "View";
+
+        if (auto view = (ImageViewRenderResource*)vault->getResource(viewName)) {
+
+          // Recreate descriptors
+          DescriptorBindInfo samplerInfo{};
+          samplerInfo.binding = 0;
+          samplerInfo.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
+          samplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+          DescriptorSetsCreateParams descParam{};
+          descParam.renderContext = renderContext;
+          samplerInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+          samplerInfo.sampler = _sampler;
+          samplerInfo.view = view->_view;
+
+          for (int i = 0; i < renderContext->getMultiBufferSize(); ++i) {
+            descParam.bindInfos.emplace_back(samplerInfo);
+          }
+
+          updateDescriptorSets(descParam, _descriptorSets);
+          _currResource = debugResource;
+        }
+      }
 
       VkClearValue clearValue{};
       clearValue.color = { {0.0f, 0.0f, 0.0f, 1.0f} };

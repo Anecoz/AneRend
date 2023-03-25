@@ -820,13 +820,15 @@ void VulkanRenderer::queuePushConstant(RenderableId id, std::uint32_t size, void
   memcpy(&renderable->_pushConstants[0], pushConstants, size);
 }
 
-void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, bool lockCulling)
+void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, bool lockCulling, RenderDebugOptions options)
 {
   // TODO: We can't write to this frames UBO's until the GPU is finished with it.
   // If we run unlimited FPS we are quite likely to end up doing just that.
   // The ubo memory write _will_ be visible by the next queueSubmit, so that isn't the issue.
   // but we might be writing into memory that is currently accessed by the GPU.
   vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
+
+  _debugOptions = options;
 
   // Update UBOs
   StandardUBO standardUbo{};
@@ -2833,6 +2835,11 @@ gpu::GPUCullPushConstants VulkanRenderer::getCullParams()
   cullPushConstants._nearDist = _latestCamera.getNear();
 
   return cullPushConstants;
+}
+
+RenderDebugOptions& VulkanRenderer::getDebugOptions()
+{
+  return _debugOptions;
 }
 
 }

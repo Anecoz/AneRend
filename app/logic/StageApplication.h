@@ -7,6 +7,7 @@
 #include "../render/VulkanRenderer.h"
 #include "../render/Model.h"
 #include "../render/Camera.h"
+#include "../render/RenderDebugOptions.h"
 
 class StageApplication : public Application
 {
@@ -29,6 +30,7 @@ private:
   glm::vec3 _sunDir;
 
   render::VulkanRenderer _vkRenderer;
+  render::RenderDebugOptions _renderDebugOptions;
 
   render::Camera _camera;
   render::Camera _shadowCamera;

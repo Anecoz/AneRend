@@ -25,6 +25,8 @@ private:
   Model _screenQuad;
   MeshId _meshId;
   RenderableId _renderableId;
+
+  std::string _currResource;
 };
 
 }

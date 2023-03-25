@@ -113,7 +113,7 @@ bool GeometryRenderPass::init(RenderContext* renderContext, RenderResourceVault*
     depthRes->_format,
     VK_IMAGE_TILING_OPTIMAL,
     renderContext->vmaAllocator(),
-    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     depthRes->_image);
 
   depthViewRes->_view = imageutil::createImageView(renderContext->device(), depthRes->_image._image, depthRes->_format, VK_IMAGE_ASPECT_DEPTH_BIT);

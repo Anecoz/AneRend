@@ -131,6 +131,8 @@ namespace render {
 
     std::vector<VkDescriptorSet> buildDescriptorSets(DescriptorSetsCreateParams params);
 
+    void updateDescriptorSets(DescriptorSetsCreateParams params, std::vector<VkDescriptorSet>& sets);
+
     VkSampler createSampler(SamplerCreateParams params);
   };
 }

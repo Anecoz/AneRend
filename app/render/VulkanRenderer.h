@@ -79,7 +79,7 @@ public:
   // NOTE: There is a size limit to push constants... good luck!
   void queuePushConstant(RenderableId id, std::uint32_t size, void* pushConstants);
 
-  void update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, bool lockCulling);
+  void update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, bool lockCulling, RenderDebugOptions options);
 
   // Prepares some things for drawing (imgui stuff as of now).
   // Has to be called before drawFrame()!
@@ -118,12 +118,16 @@ public:
 
   gpu::GPUCullPushConstants getCullParams() override final;
 
+  RenderDebugOptions& getDebugOptions() override final;
+
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
   static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 256;
   static const std::size_t MAX_NUM_RENDERABLES = std::size_t(1e5);
   static const std::size_t MAX_NUM_MESHES = std::size_t(1e3);
+
+  RenderDebugOptions _debugOptions;
 
   RenderableId _nextRenderableId = 1;
   MeshId _nextMeshId = 0;

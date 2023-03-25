@@ -450,4 +450,54 @@ VkSampler RenderPass::createSampler(SamplerCreateParams params)
   return samplerOut;
 }
 
+void RenderPass::updateDescriptorSets(DescriptorSetsCreateParams params, std::vector<VkDescriptorSet>& sets)
+{
+  int numMultiBuffer = params.renderContext->getMultiBufferSize();
+  int numDescriptors = params.bindInfos.size() / numMultiBuffer;
+  int currIdx = 0;
+  for (size_t j = 0; j < params.bindInfos.size(); j++) {
+    if (j - currIdx * numDescriptors >= numDescriptors) {
+      currIdx++;
+    }
+    std::vector<VkWriteDescriptorSet> descriptorWrites;
+
+    if (params.bindInfos[j].type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
+      VkDescriptorBufferInfo bufferInfo{};
+      VkWriteDescriptorSet bufWrite{};
+      bufferInfo.buffer = params.bindInfos[j].buffer;
+      bufferInfo.offset = 0;
+      bufferInfo.range = VK_WHOLE_SIZE;
+
+      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      bufWrite.dstSet = sets[currIdx];
+      bufWrite.dstBinding = params.bindInfos[j].binding;
+      bufWrite.dstArrayElement = 0;
+      bufWrite.descriptorType = params.bindInfos[j].type;
+      bufWrite.descriptorCount = 1;
+      bufWrite.pBufferInfo = &bufferInfo;
+
+      descriptorWrites.emplace_back(std::move(bufWrite));
+    }
+    else if (params.bindInfos[j].type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
+      VkWriteDescriptorSet imWrite{};
+      VkDescriptorImageInfo imageInfo{};
+      imageInfo.imageLayout = params.bindInfos[j].imageLayout;
+      imageInfo.imageView = params.bindInfos[j].view;
+      imageInfo.sampler = params.bindInfos[j].sampler;
+
+      imWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      imWrite.dstSet = sets[currIdx];
+      imWrite.dstBinding = params.bindInfos[j].binding;
+      imWrite.dstArrayElement = 0;
+      imWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      imWrite.descriptorCount = 1;
+      imWrite.pImageInfo = &imageInfo;
+
+      descriptorWrites.emplace_back(std::move(imWrite));
+    }
+
+    vkUpdateDescriptorSets(params.renderContext->device(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+  }
+}
+
 }

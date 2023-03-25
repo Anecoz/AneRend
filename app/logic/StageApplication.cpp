@@ -107,7 +107,7 @@ void StageApplication::update(double delta)
   }
 
   _camera.update(delta);
-  _vkRenderer.update(_camera, _shadowCamera, glm::vec4(_sunDir, 0.0f), delta, g_LockFrustumCulling);
+  _vkRenderer.update(_camera, _shadowCamera, glm::vec4(_sunDir, 0.0f), delta, g_LockFrustumCulling, _renderDebugOptions);
 
   static auto currAngle = 0.0f;
   currAngle += 1.0f * (float)delta;
@@ -139,7 +139,12 @@ void StageApplication::render()
       _sunDir.x = dir[0];
       _sunDir.z = dir[1];
     }
-    ImGui::Checkbox("Shadow debug", &g_DebugShadow);
+
+    static char debugResStr[128] = "ShadowMap";
+    if (ImGui::InputText("Debug view resource", debugResStr, IM_ARRAYSIZE(debugResStr), ImGuiInputTextFlags_EnterReturnsTrue)) {
+      _renderDebugOptions.debugViewResource = std::string(debugResStr);
+    }
+    ImGui::Checkbox("Shadow debug", &_renderDebugOptions.debugView);
     ImGui::Checkbox("Apply post processing", &g_PP);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
     ImGui::End();

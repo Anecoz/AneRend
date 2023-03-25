@@ -9,6 +9,7 @@
 #include "RenderableId.h"
 #include "MaterialId.h"
 #include "GpuBuffers.h"
+#include "RenderDebugOptions.h"
 
 #include <unordered_map>
 
@@ -53,6 +54,8 @@ public:
   virtual size_t getCurrentNumRenderables() = 0;
 
   virtual gpu::GPUCullPushConstants getCullParams() = 0;
+
+  virtual RenderDebugOptions& getDebugOptions() = 0;
 };
 
 }
