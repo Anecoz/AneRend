@@ -13,6 +13,7 @@
 #include "UIRenderPass.h"
 #include "ShadowRenderPass.h"
 #include "DebugViewRenderPass.h"
+#include "GrassRenderPass.h"
 
 #include "../util/Utils.h"
 #include "../LodePng/lodepng.h"
@@ -820,7 +821,7 @@ void VulkanRenderer::queuePushConstant(RenderableId id, std::uint32_t size, void
   memcpy(&renderable->_pushConstants[0], pushConstants, size);
 }
 
-void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, bool lockCulling, RenderDebugOptions options)
+void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, double time, bool lockCulling, RenderDebugOptions options)
 {
   // TODO: We can't write to this frames UBO's until the GPU is finished with it.
   // If we run unlimited FPS we are quite likely to end up doing just that.
@@ -864,6 +865,7 @@ void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, co
   ubo.lightDir = standardUbo.lightDir;
   ubo.proj = standardUbo.proj;
   ubo.view = standardUbo.view;
+  ubo.time = time;
 
   void* data;
   vmaMapMemory(_vmaAllocator, _gpuSceneDataBuffer[_currentFrame]._allocation, &data);
@@ -2429,6 +2431,7 @@ bool VulkanRenderer::initFrameGraphBuilder()
   _renderPasses.emplace_back(new CullRenderPass());
   _renderPasses.emplace_back(new ShadowRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());
+  _renderPasses.emplace_back(new GrassRenderPass());
   _renderPasses.emplace_back(new DebugViewRenderPass());
   _renderPasses.emplace_back(new UIRenderPass());
   _renderPasses.emplace_back(new PresentationRenderPass());
@@ -2773,6 +2776,11 @@ void VulkanRenderer::drawGigaBuffer(VkCommandBuffer* commandBuffer)
 void VulkanRenderer::drawGigaBufferIndirect(VkCommandBuffer* commandBuffer, VkBuffer drawCalls)
 {
   vkCmdDrawIndexedIndirect(*commandBuffer, drawCalls, 0, (uint32_t)_currentMeshes.size(), sizeof(gpu::GPUDrawCallCmd));
+}
+
+void VulkanRenderer::drawNonIndexIndirect(VkCommandBuffer* cmdBuffer, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride)
+{
+  vkCmdDrawIndirect(*cmdBuffer, drawCalls, 0, drawCount, stride);
 }
 
 void VulkanRenderer::drawMeshId(VkCommandBuffer* cmdBuffer, MeshId meshId, uint32_t vertCount, uint32_t instanceCount)

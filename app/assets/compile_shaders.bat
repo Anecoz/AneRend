@@ -12,3 +12,5 @@ C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/pp_color_inv.frag -o %2/pp_color_inv_fra
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/pp_flip.frag -o %2/pp_flip_frag.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/pp_blur.frag -o %2/pp_blur_frag.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/pp_fxaa.frag -o %2/pp_fxaa_frag.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/grass.vert -o %2/grass_vert.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/grass.frag -o %2/grass_frag.spv

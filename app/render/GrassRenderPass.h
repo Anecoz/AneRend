@@ -1,15 +1,14 @@
 #pragma once
 
 #include "RenderPass.h"
-#include "AllocatedBuffer.h"
 
 namespace render {
 
-class CullRenderPass : public RenderPass
+class GrassRenderPass : public RenderPass
 {
 public:
-  CullRenderPass();
-  ~CullRenderPass();
+  GrassRenderPass();
+  ~GrassRenderPass();
 
   bool init(RenderContext* renderContext, RenderResourceVault*) override final;
 
@@ -19,10 +18,6 @@ public:
   void cleanup(RenderContext* renderContext, RenderResourceVault* vault) override final;
 
 private:
-  // Temp
-  const std::size_t MAX_NUM_GRASS_BLADES = 32 * 32 * 1000;
-
-  std::vector<AllocatedBuffer> _gpuStagingBuffers;
   std::vector<VkDescriptorSet> _descriptorSets;
 };
 

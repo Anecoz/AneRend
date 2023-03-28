@@ -50,6 +50,7 @@ namespace render {
       VkPipelineLayout pipelineLayout;
 
       VkDevice device = nullptr;
+      VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
       VkFormat colorFormat = VK_FORMAT_B8G8R8A8_SRGB;
       VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
       std::string vertShader;
@@ -64,6 +65,7 @@ namespace render {
       float depthBiasSlope = 0.0f;
       bool depthTest = true;
       bool colorAttachment = true;
+      bool vertexLess = false;
     };
 
     struct ComputePipelineCreateParams

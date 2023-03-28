@@ -79,7 +79,7 @@ public:
   // NOTE: There is a size limit to push constants... good luck!
   void queuePushConstant(RenderableId id, std::uint32_t size, void* pushConstants);
 
-  void update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, bool lockCulling, RenderDebugOptions options);
+  void update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, double time, bool lockCulling, RenderDebugOptions options);
 
   // Prepares some things for drawing (imgui stuff as of now).
   // Has to be called before drawFrame()!
@@ -103,6 +103,7 @@ public:
 
   void drawGigaBuffer(VkCommandBuffer* commandBuffer) override final;
   void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls) override final;
+  void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) override final;
   void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) override final;
 
   VkImage& getCurrentSwapImage() override final;

@@ -107,7 +107,7 @@ void StageApplication::update(double delta)
   }
 
   _camera.update(delta);
-  _vkRenderer.update(_camera, _shadowCamera, glm::vec4(_sunDir, 0.0f), delta, g_LockFrustumCulling, _renderDebugOptions);
+  _vkRenderer.update(_camera, _shadowCamera, glm::vec4(_sunDir, 0.0f), delta, glfwGetTime(), g_LockFrustumCulling, _renderDebugOptions);
 
   static auto currAngle = 0.0f;
   currAngle += 1.0f * (float)delta;
@@ -190,7 +190,7 @@ void StageApplication::calculateShadowMatrix()
   wNearRightTop /= wNearRightTop.w;
 
   glm::vec4 tmp;
-  const float percentageFar = 1.0f;
+  const float percentageFar = .2f;
 
   glm::vec4 wFarLeftBottom = ndcToWorldCam * glm::vec4(farLeftBottom, 1.0);
   wFarLeftBottom /= wFarLeftBottom.w;

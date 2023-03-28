@@ -31,6 +31,7 @@ public:
   //virtual void bindGigaBuffers(VkCommandBuffer*) = 0;
   virtual void drawGigaBuffer(VkCommandBuffer*) = 0;
   virtual void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls) = 0;
+  virtual void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) = 0;
   virtual void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) = 0;
 
   virtual VkImage& getCurrentSwapImage() = 0;

@@ -18,14 +18,6 @@ CullRenderPass::~CullRenderPass()
 
 bool CullRenderPass::init(RenderContext* renderContext, RenderResourceVault* vault)
 {
-  /* We need to create :
-  * - the compute pipeline
-  * - a DrawBuffer that will be used as an SSBO
-  * - a descriptor set for the DrawBuffer
-  * 
-  * The rest will be coming from the bindless descriptors (renderable buffer and translation buffer)
-  */
-
   // Desc layout for draw and translation buffer
   DescriptorBindInfo drawBufferInfo{};
   drawBufferInfo.binding = 0;
@@ -37,14 +29,27 @@ bool CullRenderPass::init(RenderContext* renderContext, RenderResourceVault* vau
   transBufferInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
   transBufferInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
+  // Grass buffers (Draw cmds (non-indexed), translation and Grass Object buffer)
+  DescriptorBindInfo grassDrawBufferInfo{};
+  grassDrawBufferInfo.binding = 2;
+  grassDrawBufferInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
+  grassDrawBufferInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
+  DescriptorBindInfo grassObjBufferInfo{};
+  grassObjBufferInfo.binding = 3;
+  grassObjBufferInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
+  grassObjBufferInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
   DescriptorSetLayoutCreateParams descLayoutParam{};
   descLayoutParam.bindInfos.emplace_back(drawBufferInfo);
   descLayoutParam.bindInfos.emplace_back(transBufferInfo);
+  descLayoutParam.bindInfos.emplace_back(grassDrawBufferInfo);
+  descLayoutParam.bindInfos.emplace_back(grassObjBufferInfo);
   descLayoutParam.renderContext = renderContext;
 
   buildDescriptorSetLayout(descLayoutParam);
 
-  // Descriptor (multi buffered) containing draw buffer SSBO
+  // Descriptors (multi buffered) containing the SSBOs
   DescriptorSetsCreateParams descParam{};
   descParam.renderContext = renderContext;
 
@@ -54,6 +59,8 @@ bool CullRenderPass::init(RenderContext* renderContext, RenderResourceVault* vau
   for (int i = 0; i < renderContext->getMultiBufferSize(); ++i) {
     auto resourceDrawBuf = new BufferRenderResource();
     auto resourceTransBuf = new BufferRenderResource();
+    auto resourceGrassDrawBuf = new BufferRenderResource();
+    auto resourceGrassObjBuf = new BufferRenderResource();
 
     bufferutil::createBuffer(
       allocator,
@@ -69,14 +76,36 @@ bool CullRenderPass::init(RenderContext* renderContext, RenderResourceVault* vau
       0,
       resourceTransBuf->_buffer);
 
+    // Grass draw
+    bufferutil::createBuffer(
+      allocator,
+      sizeof(gpu::GPUNonIndexDrawCallCmd),
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+      0,
+      resourceGrassDrawBuf->_buffer);
+
+    // Grass object
+    bufferutil::createBuffer(
+      allocator,
+      MAX_NUM_GRASS_BLADES * sizeof(gpu::GPUGrassBlade),
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+      0,
+      resourceGrassObjBuf->_buffer);
+
     drawBufferInfo.buffer = resourceDrawBuf->_buffer._buffer;
     transBufferInfo.buffer = resourceTransBuf->_buffer._buffer;
+    grassDrawBufferInfo.buffer = resourceGrassDrawBuf->_buffer._buffer;
+    grassObjBufferInfo.buffer = resourceGrassObjBuf->_buffer._buffer;
 
     descParam.bindInfos.emplace_back(drawBufferInfo);
     descParam.bindInfos.emplace_back(transBufferInfo);
+    descParam.bindInfos.emplace_back(grassDrawBufferInfo);
+    descParam.bindInfos.emplace_back(grassObjBufferInfo);
 
     vault->addResource("CullDrawBuf", std::unique_ptr<IRenderResource>(resourceDrawBuf), true, i);
     vault->addResource("CullTransBuf", std::unique_ptr<IRenderResource>(resourceTransBuf), true, i);
+    vault->addResource("CullGrassDrawBuf", std::unique_ptr<IRenderResource>(resourceGrassDrawBuf), true, i);
+    vault->addResource("CullGrassObjBuf", std::unique_ptr<IRenderResource>(resourceGrassObjBuf), true, i);
 
     // Create staging buffers while we're looping
     bufferutil::createBuffer(
@@ -153,6 +182,51 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
         0);
     });
 
+  // Add an initializer for the grass draw buffer
+  ResourceUsage grassDrawBufInitUsage{};
+  grassDrawBufInitUsage._type = Type::SSBO;
+  grassDrawBufInitUsage._access.set((std::size_t)Access::Write);
+  grassDrawBufInitUsage._stage.set((std::size_t)Stage::Transfer);
+
+  fgb.registerResourceInitExe("CullGrassDrawBuf", std::move(grassDrawBufInitUsage),
+    [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
+      auto buf = (BufferRenderResource*)resource;
+
+      gpu::GPUNonIndexDrawCallCmd* mappedData;
+      vmaMapMemory(renderContext->vmaAllocator(), _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._allocation, (void**)&mappedData);
+
+      mappedData->_command.firstInstance = 0;
+      mappedData->_command.firstVertex = 0;
+      mappedData->_command.instanceCount = 0;
+      mappedData->_command.vertexCount = 7;
+
+      VkBufferCopy copyRegion{};
+      copyRegion.dstOffset = 0;
+      copyRegion.size = sizeof(gpu::GPUNonIndexDrawCallCmd);
+      vkCmdCopyBuffer(cmdBuffer, _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._buffer, buf->_buffer._buffer, 1, &copyRegion);
+
+      vmaUnmapMemory(renderContext->vmaAllocator(), _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._allocation);
+    });
+
+  // Add an initializer for the grass obj buffer
+  ResourceUsage grassObjBufInitUsage{};
+  grassObjBufInitUsage._type = Type::SSBO;
+  grassObjBufInitUsage._access.set((std::size_t)Access::Write);
+  grassObjBufInitUsage._stage.set((std::size_t)Stage::Transfer);
+
+  fgb.registerResourceInitExe("CullGrassObjBuf", std::move(grassObjBufInitUsage),
+    [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
+      // Just fill buffer with 0's
+      auto buf = (BufferRenderResource*)resource;
+
+      vkCmdFillBuffer(
+        cmdBuffer,
+        buf->_buffer._buffer,
+        0,
+        VK_WHOLE_SIZE,
+        0);
+    });
+
   // Register the actual render pass
   RenderPassRegisterInfo regInfo{};
   regInfo._name = "Cull";
@@ -170,6 +244,20 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   translationBufUsage._stage.set((std::size_t)Stage::Compute);
   translationBufUsage._type = Type::SSBO;
   regInfo._resourceUsages.emplace_back(std::move(translationBufUsage));
+
+  ResourceUsage grassDrawBufUsage{};
+  grassDrawBufUsage._resourceName = "CullGrassDrawBuf";
+  grassDrawBufUsage._access.set((std::size_t)Access::Write);
+  grassDrawBufUsage._stage.set((std::size_t)Stage::Compute);
+  grassDrawBufUsage._type = Type::SSBO;
+  regInfo._resourceUsages.emplace_back(std::move(grassDrawBufUsage));
+
+  ResourceUsage grassObjBufUsage{};
+  grassObjBufUsage._resourceName = "CullGrassObjBuf";
+  grassObjBufUsage._access.set((std::size_t)Access::Write);
+  grassObjBufUsage._stage.set((std::size_t)Stage::Compute);
+  grassObjBufUsage._type = Type::SSBO;
+  regInfo._resourceUsages.emplace_back(std::move(grassObjBufUsage));
 
   fgb.registerRenderPass(std::move(regInfo));
 
@@ -193,9 +281,10 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       auto pushConstants = renderContext->getCullParams();
       vkCmdPushConstants(*cmdBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(gpu::GPUCullPushConstants), &pushConstants);
 
-      // 256 is the local group size in the comp shader
-      uint32_t numGroups = static_cast<uint32_t>(((uint32_t)renderContext->getCurrentNumRenderables() / 256) + 1);
-      vkCmdDispatch(*cmdBuffer, numGroups, 1, 1);
+      // 32 is the local group size in the comp shader
+      const uint32_t localSize = 32;
+      int sqr = std::ceil(std::sqrt((double)renderContext->getCurrentNumRenderables() / (double)(localSize*localSize)));
+      vkCmdDispatch(*cmdBuffer, sqr, sqr, 1);
     });
 }
 
@@ -208,6 +297,12 @@ void CullRenderPass::cleanup(RenderContext* renderContext, RenderResourceVault* 
     auto transBuf = (BufferRenderResource*)vault->getResource("CullTransBuf", i);
     vmaDestroyBuffer(renderContext->vmaAllocator(), transBuf->_buffer._buffer, transBuf->_buffer._allocation);
 
+    auto grassDrawBuf = (BufferRenderResource*)vault->getResource("CullGrassDrawBuf", i);
+    vmaDestroyBuffer(renderContext->vmaAllocator(), grassDrawBuf->_buffer._buffer, grassDrawBuf->_buffer._allocation);
+
+    auto grassObjBuf = (BufferRenderResource*)vault->getResource("CullGrassObjBuf", i);
+    vmaDestroyBuffer(renderContext->vmaAllocator(), grassObjBuf->_buffer._buffer, grassObjBuf->_buffer._allocation);
+
     vmaDestroyBuffer(renderContext->vmaAllocator(), _gpuStagingBuffers[i]._buffer, _gpuStagingBuffers[i]._allocation);
   }
 
@@ -217,6 +312,8 @@ void CullRenderPass::cleanup(RenderContext* renderContext, RenderResourceVault* 
 
   vault->deleteResource("CullDrawBuf");
   vault->deleteResource("CullTransBuf");
+  vault->deleteResource("CullGrassDrawBuf");
+  vault->deleteResource("CullGrassObjBuf");
 }
 
 }

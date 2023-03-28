@@ -68,8 +68,8 @@ bool ShadowRenderPass::init(RenderContext* renderContext, RenderResourceVault* v
   shadowMapViewRes->_format = shadowMapRes->_format;
 
   imageutil::createImage(
-    1024,
-    1024,
+    4096,
+    4096,
     params.depthFormat,
     VK_IMAGE_TILING_OPTIMAL,
     renderContext->vmaAllocator(),
@@ -128,8 +128,8 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullDrawBuf");
 
       VkExtent2D extent{};
-      extent.width = 1024;
-      extent.height = 1024;
+      extent.width = 4096;
+      extent.height = 4096;
 
       VkClearValue clearValue;
       clearValue.depthStencil = { 1.0f, 0 };

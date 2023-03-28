@@ -9,6 +9,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   vec4 lightDir;
   vec4 lightPos[4];
   vec4 lightColor[4];
+  float time;
 } ubo;
 
 struct Renderable
