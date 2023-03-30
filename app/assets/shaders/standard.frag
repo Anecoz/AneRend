@@ -1,6 +1,6 @@
 #version 450
 
-layout(binding = 0) uniform UniformBufferObject {
+layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
   mat4 directionalShadowMatrix;
@@ -9,6 +9,7 @@ layout(binding = 0) uniform UniformBufferObject {
   vec4 lightDir;
   vec4 lightPos[4];
   vec4 lightColor[4];
+  vec4 viewVector;
   float time;
 } ubo;
 

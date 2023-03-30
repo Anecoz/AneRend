@@ -865,6 +865,7 @@ void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, co
   ubo.lightDir = standardUbo.lightDir;
   ubo.proj = standardUbo.proj;
   ubo.view = standardUbo.view;
+  ubo.viewVector = glm::vec4(camera.getForward(), 1.0);
   ubo.time = time;
 
   void* data;

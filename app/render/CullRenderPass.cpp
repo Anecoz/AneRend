@@ -198,7 +198,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       mappedData->_command.firstInstance = 0;
       mappedData->_command.firstVertex = 0;
       mappedData->_command.instanceCount = 0;
-      mappedData->_command.vertexCount = 7;
+      mappedData->_command.vertexCount = 15;
 
       VkBufferCopy copyRegion{};
       copyRegion.dstOffset = 0;

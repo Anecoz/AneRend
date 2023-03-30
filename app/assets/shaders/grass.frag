@@ -1,6 +1,6 @@
 #version 450
 
-layout(binding = 0) uniform UniformBufferObject {
+layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
   mat4 directionalShadowMatrix;
@@ -9,17 +9,22 @@ layout(binding = 0) uniform UniformBufferObject {
   vec4 lightDir;
   vec4 lightPos[4];
   vec4 lightColor[4];
+  vec4 viewVector;
   float time;
 } ubo;
 
 layout(location = 0) in vec3 fragNormal;
+layout(location = 1) in float fragT;
+layout(location = 2) in vec3 fragPosition;
 
 layout(location = 0) out vec4 outColor;
 
 void main() {
   vec3 ambientColor = vec3(1.0, 1.0, 1.0);
-  vec3 diffuseColor = vec3(0.0, 1.0, 0.0);
+  vec3 diffuseColor = vec3(0.0, 154.0/255.0, 23.0/255.0);
   vec3 specColor = vec3(1.0, 1.0, 1.0);
+
+  diffuseColor *= fragT;
 
   vec3 normal = normalize(fragNormal);
 
@@ -27,8 +32,17 @@ void main() {
   float ambientStrength = 0.1;
   vec3 ambient = ambientStrength * ambientColor;
 
+  // Diffuse
   float diff = max(dot(normal, -ubo.lightDir.xyz), 0.0);
   vec3 diffuse = diff * vec3(1.0, 1.0, 1.0);
-  vec3 result = (ambient + diffuse) * diffuseColor;
+
+  // Specular
+  vec3 lightDirNorm = normalize(ubo.lightDir.xyz);
+  vec3 viewDir = normalize(vec3(ubo.cameraPos) - fragPosition);
+  vec3 reflectDir = reflect(-lightDirNorm, normal);  
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), 324);
+  vec3 specular = 1.0 * spec * specColor;
+
+  vec3 result = (ambient + diffuse + specular) * diffuseColor;
   outColor = vec4(result, 1.0);
 }

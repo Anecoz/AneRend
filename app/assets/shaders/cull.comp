@@ -30,7 +30,7 @@ struct Renderable
 struct GrassObj
 {
   vec4 worldPos;
-  float zOffset;
+  vec4 data; // x and y: facing dir, z: tilt, w: bend
 };
 
 layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {
@@ -115,15 +115,18 @@ void main()
   uint xPos = gl_GlobalInvocationID.x;
   uint yPos = gl_GlobalInvocationID.y;
 
-  vec3 worldPos = vec3(xPos*0.15, .25, yPos*0.15);
-  float radius = 0.1;
+  vec3 worldPos = vec3(xPos, .0, yPos);
+  float radius = 1.5;
   bool visible = sphereVisible(worldPos, radius);
 
   if (visible) {
     uint countBefore = atomicAdd(grassDrawBuffer.draw.instanceCount, 1);
 
     uint instanceIndex = grassDrawBuffer.draw.firstInstance + countBefore;
-    grassObjBuffer.blades[instanceIndex].worldPos = vec4(worldPos, 1.0);
-    grassObjBuffer.blades[instanceIndex].zOffset = rand(vec2(xPos, yPos)) * 3.14159;
+    float height = 1.0;
+    grassObjBuffer.blades[instanceIndex].worldPos = vec4(worldPos, height);
+    grassObjBuffer.blades[instanceIndex].data.xy = vec2(-1.0, 0); // facing
+    grassObjBuffer.blades[instanceIndex].data.z = .7; // tilt
+    grassObjBuffer.blades[instanceIndex].data.w = .5; // bend
   }
 }

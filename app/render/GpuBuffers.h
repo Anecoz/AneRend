@@ -32,7 +32,7 @@ struct GPUNonIndexDrawCallCmd {
 
 struct GPUGrassBlade {
   glm::vec4 _worldPos;
-  float zOffset;
+  glm::vec4 _data; // x and y: facing dir, z: tilt, w: bend
 };
 
 // Minimum supported size of push constants is 128 bytes! (RTX 3080 has a limit of 256 bytes)
@@ -55,6 +55,7 @@ struct GPUSceneData {
   glm::vec4 lightDir;
   glm::vec4 lightPos[4];
   glm::vec4 lightColor[4];
+  glm::vec4 viewVector;
   float time;
 };
 
