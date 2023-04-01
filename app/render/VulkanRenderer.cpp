@@ -1,11 +1,9 @@
 #include "VulkanRenderer.h"
 
-#include "MaterialFactory.h"
 #include "QueueFamilyIndices.h"
 #include "ImageHelpers.h"
 #include "BufferHelpers.h"
 #include "GpuBuffers.h"
-#include "ComputePipeline.h"
 #include "RenderResource.h"
 #include "CullRenderPass.h"
 #include "GeometryRenderPass.h"
@@ -83,9 +81,6 @@ VulkanRenderer::~VulkanRenderer()
   // Let logical device finish operations first
   vkDeviceWaitIdle(_device);
 
-  _shadowPass.cleanup(_vmaAllocator, _device);
-  _ppPass.cleanup(_vmaAllocator, _device);
-
   vmaDestroyBuffer(_vmaAllocator, _gigaMeshBuffer._buffer._buffer, _gigaMeshBuffer._buffer._allocation);
 
   for (auto& light: _lights) {
@@ -104,38 +99,11 @@ VulkanRenderer::~VulkanRenderer()
 
   ImGui_ImplVulkan_Shutdown();
 
-  vkDestroyDescriptorSetLayout(_device, _computeMaterial._descriptorSetLayouts[Material::STANDARD_INDEX], nullptr);
-  vkDestroyPipeline(_device, _computeMaterial._pipelines[Material::STANDARD_INDEX], nullptr);
-  vkDestroyPipelineLayout(_device, _computeMaterial._pipelineLayouts[Material::STANDARD_INDEX], nullptr);
-
   vkDestroyDescriptorSetLayout(_device, _bindlessDescSetLayout, nullptr);
   vkDestroyPipelineLayout(_device, _bindlessPipelineLayout, nullptr);
 
   for (auto& rp : _renderPasses) {
     rp->cleanup(this, &_vault);
-  }
-
-  for (const auto& material: _materials) {
-    for (auto& ubo: material.second._ubos[Material::STANDARD_INDEX]) {
-      vmaDestroyBuffer(_vmaAllocator, ubo._buffer, ubo._allocation);
-    }
-    for (auto& ubo: material.second._ubos[Material::SHADOW_INDEX]) {
-      vmaDestroyBuffer(_vmaAllocator, ubo._buffer, ubo._allocation);
-    }
-
-    vkDestroyDescriptorSetLayout(_device, material.second._descriptorSetLayouts[Material::STANDARD_INDEX], nullptr);
-    vkDestroyPipeline(_device, material.second._pipelines[Material::STANDARD_INDEX], nullptr);
-    vkDestroyPipelineLayout(_device, material.second._pipelineLayouts[Material::STANDARD_INDEX], nullptr);
-
-    vkDestroyDescriptorSetLayout(_device, material.second._descriptorSetLayouts[Material::SHADOW_INDEX], nullptr);
-    vkDestroyPipeline(_device, material.second._pipelines[Material::SHADOW_INDEX], nullptr);
-    vkDestroyPipelineLayout(_device, material.second._pipelineLayouts[Material::SHADOW_INDEX], nullptr);
-  }
-
-  for (const auto& material: _ppMaterials) {
-    vkDestroyDescriptorSetLayout(_device, material.first._descriptorSetLayouts[Material::POST_PROCESSING_INDEX], nullptr);
-    vkDestroyPipeline(_device, material.first._pipelines[Material::POST_PROCESSING_INDEX], nullptr);
-    vkDestroyPipelineLayout(_device, material.first._pipelineLayouts[Material::POST_PROCESSING_INDEX], nullptr);
   }
 
   cleanupSwapChain();
@@ -148,8 +116,6 @@ VulkanRenderer::~VulkanRenderer()
     vkDestroySemaphore(_device, _imageAvailableSemaphores[i], nullptr);
     vkDestroySemaphore(_device, _renderFinishedSemaphores[i], nullptr);
     vkDestroyFence(_device, _inFlightFences[i], nullptr);
-    vmaDestroyBuffer(_vmaAllocator, _gpuTranslationBuffer[i]._buffer, _gpuTranslationBuffer[i]._allocation);
-    vmaDestroyBuffer(_vmaAllocator, _gpuDrawCmdBuffer[i]._buffer, _gpuDrawCmdBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuRenderableBuffer[i]._buffer, _gpuRenderableBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuStagingBuffer[i]._buffer, _gpuStagingBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSceneDataBuffer[i]._buffer, _gpuSceneDataBuffer[i]._allocation);
@@ -220,11 +186,6 @@ bool VulkanRenderer::init()
   res &= createCommandPool();
   if (!res) return false;
   printf("Done!\n");
-  
-  printf("Creating depth resources...");
-  res &= createDepthResources();
-  if (!res) return false;
-  printf("Done!\n");
 
   printf("Creating descriptor pool...");
   res &= createDescriptorPool();
@@ -241,18 +202,8 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
-  printf("Init shadow pass...");
-  res &= initShadowpass();
-  if (!res) return false;
-  printf("Done!\n");
-
   printf("Init lights...");
   res &= initLights();
-  if (!res) return false;
-  printf("Done!\n");
-
-  printf("Init pp pass...");
-  res &= initPostProcessingPass();
   if (!res) return false;
   printf("Done!\n");
 
@@ -263,26 +214,6 @@ bool VulkanRenderer::init()
 
   printf("Init gpu buffers...");
   res &= initGpuBuffers();
-  if (!res) return false;
-  printf("Done!\n");
-
-  printf("Loading known materials...");
-  res &= loadKnownMaterials();
-  if (!res) return false;
-  printf("Done!\n");
-
-  printf("Init shadow debug...");
-  res &= initShadowDebug();
-  if (!res) return false;
-  printf("Done!\n");
-
-  printf("Init pp renderable...");
-  res &= initPostProcessingRenderable();
-  if (!res) return false;
-  printf("Done!\n");
-
-  printf("Init compute pipelines...");
-  res &= initComputePipelines();
   if (!res) return false;
   printf("Done!\n");
 
@@ -721,18 +652,12 @@ MeshId VulkanRenderer::registerMesh(const std::vector<Vertex>& vertices, const s
 
 RenderableId VulkanRenderer::registerRenderable(
   MeshId meshId,
-  MaterialID materialId,
   const glm::mat4& transform,
   const glm::vec3& sphereBoundCenter,
   float sphereBoundRadius)
 {
   if (_currentRenderables.size() == MAX_NUM_RENDERABLES) {
     printf("Too many renderables!\n");
-    return 0;
-  }
-
-  if (!materialIdExists(materialId)) {
-    printf("Material id %zu does not exist!\n", materialId);
     return 0;
   }
 
@@ -746,23 +671,12 @@ RenderableId VulkanRenderer::registerRenderable(
   auto id = _nextRenderableId++;
 
   renderable._id = id;
-  renderable._materialId = materialId;
   renderable._meshId = meshId;
   renderable._transform = transform;
   renderable._boundingSphereCenter = sphereBoundCenter;
   renderable._boundingSphereRadius = sphereBoundRadius;
 
   _currentRenderables.emplace_back(std::move(renderable));
-  if (_materialUsage.find(materialId) == _materialUsage.end()) {
-    // To be sure that it's initialized...
-    _materialUsage[materialId] = 0;
-  }
-  _materialUsage[materialId]++;
-
-  // Sort by material
-  std::sort(_currentRenderables.begin(), _currentRenderables.end(), [](const Renderable& a, const Renderable& b) {
-    return a._materialId < b._materialId;
-  });
 
   return id;
 }
@@ -797,30 +711,6 @@ void VulkanRenderer::cleanupRenderable(const Renderable& renderable)
   }*/
 }
 
-void VulkanRenderer::queuePushConstant(RenderableId id, std::uint32_t size, void* pushConstants)
-{
-  // Sanity check, does the material of this renderable support push constants?
-  // Also, does it even exist?
-  Renderable* renderable = nullptr;
-  for (auto& r: _currentRenderables) {
-    if (r._id == id) {
-      renderable = &r;
-      if (!_materials[r._materialId]._supportsPushConstants) {
-        printf("Could not queue push constant, because material doesn't support it\n");
-        return;
-      }
-    }
-  }
-
-  if (!renderable) {
-    printf("Could not queue push constant, because the renderable doesn't exist\n");
-    return;
-  }
-
-  renderable->_pushConstantsSize = size;
-  memcpy(&renderable->_pushConstants[0], pushConstants, size);
-}
-
 void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, double time, bool lockCulling, RenderDebugOptions options)
 {
   // TODO: We can't write to this frames UBO's until the GPU is finished with it.
@@ -831,40 +721,19 @@ void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, co
 
   _debugOptions = options;
 
-  // Update UBOs
-  StandardUBO standardUbo{};
-  standardUbo.view = camera.getCamMatrix();
-  standardUbo.proj = camera.getProjection();
-  standardUbo.cameraPos = glm::vec4(camera.getPosition(), 1.0);
-  standardUbo.lightDir = lightDir;
-  standardUbo.proj[1][1] *= -1;
-
-  for (std::size_t i = 0; i < _lights.size(); ++i) {
-    auto shadowProj = _lights[i]._proj;
-    shadowProj[1][1] *= -1;
-
-    _lights[i].debugUpdatePos(delta);
-    _lights[i].updateViewMatrices();
-    for (std::size_t v = 0; v < 6; ++v) {
-      standardUbo.shadowMatrix[i * 6 + v] = shadowProj * _lights[i]._view[v];
-    }
-
-    standardUbo.lightPos[i] = glm::vec4(_lights[i]._pos, 1.0f);
-    standardUbo.lightColor[i] = glm::vec4(_lights[i]._color, 1.0f);
-  }
-
-  ShadowUBO shadowUbo{};
-  shadowUbo.shadowMatrix = standardUbo.shadowMatrix[0];
-
+  // Update bindless UBO
   auto shadowProj = shadowCamera.getProjection();
+  auto proj = camera.getProjection();
 
   shadowProj[1][1] *= -1;
+  proj[1][1] *= -1;
+
   gpu::GPUSceneData ubo{};
-  ubo.cameraPos = standardUbo.cameraPos;
+  ubo.cameraPos = glm::vec4(camera.getPosition(), 1.0);
   ubo.directionalShadowMatrix = shadowProj * shadowCamera.getCamMatrix();
-  ubo.lightDir = standardUbo.lightDir;
-  ubo.proj = standardUbo.proj;
-  ubo.view = standardUbo.view;
+  ubo.lightDir = lightDir;
+  ubo.proj = proj;
+  ubo.view = camera.getCamMatrix();
   ubo.viewVector = glm::vec4(camera.getForward(), 1.0);
   ubo.time = time;
 
@@ -873,23 +742,9 @@ void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, co
   memcpy(data, &ubo, sizeof(gpu::GPUSceneData));
   vmaUnmapMemory(_vmaAllocator, _gpuSceneDataBuffer[_currentFrame]._allocation);
 
-  for (auto& mat: _materials) {
-    mat.second.updateUbos(_currentFrame, _vmaAllocator, standardUbo, shadowUbo);
-  }
-
   if (!lockCulling) {
     _latestCamera = camera;
   }
-}
-
-bool VulkanRenderer::materialIdExists(MaterialID id) const
-{
-  return _materials.find(id) != _materials.end();
-}
-
-bool VulkanRenderer::materialIdCurrentlyInUse(MaterialID id) const
-{
-  return _materialUsage.find(id) != _materialUsage.end();
 }
 
 bool VulkanRenderer::meshIdExists(MeshId meshId) const
@@ -1223,9 +1078,6 @@ bool VulkanRenderer::createSurface()
 
 void VulkanRenderer::cleanupSwapChain()
 {
-  vkDestroyImageView(_device, _depthImageView, nullptr);
-  vmaDestroyImage(_vmaAllocator, _depthImage._image, _depthImage._allocation);
-
   _swapChain.cleanup(_device);
 }
 
@@ -1236,19 +1088,6 @@ void VulkanRenderer::recreateSwapChain()
   cleanupSwapChain();
 
   createSwapChain();
-  createDepthResources();
-}
-
-void VulkanRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
-{
-  // Create a command buffer which we immediately will start recording the copy command to
-  VkCommandBuffer commandBuffer = beginSingleTimeCommands();
-
-  VkBufferCopy copyRegion{};
-  copyRegion.size = size;
-  vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-
-  endSingleTimeCommands(commandBuffer);
 }
 
 bool VulkanRenderer::createSwapChain()
@@ -1257,127 +1096,6 @@ bool VulkanRenderer::createSwapChain()
   glfwGetFramebufferSize(_window, &width, &height);
   return _swapChain.create(_device, _physicalDevice, _surface, _queueIndices, width, height) &&
          _swapChain.createImageViews(_device);
-}
-
-bool VulkanRenderer::loadKnownMaterials()
-{
-  // Create vectors for the light cubemap textures and samplers
-  std::vector<VkImageView*> lightCubeViews;
-  std::vector<VkSampler*> lightSamplers;
-  for (auto& light: _lights) {
-    lightCubeViews.emplace_back(&light._cubeShadowView);
-    lightSamplers.emplace_back(&light._sampler);
-  }
-
-  // Standard material
-  auto standardMaterial = MaterialFactory::createStandardMaterial(
-    _device, _swapChain._swapChainImageFormat, findDepthFormat(),
-    MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator, 
-    _gpuRenderableBuffer, _gpuTranslationBuffer,
-    lightCubeViews, lightSamplers, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
-
-  if (!standardMaterial) {
-    printf("Could not create standard material!\n");
-    return false;
-  }
-
-  _materials[STANDARD_MATERIAL_ID] = std::move(standardMaterial);
-
-  // This should not be needed anymore since we are doing GPU driven rendering
-  /*
-  // Standard instanced material
-  auto standardInstancedMaterial = MaterialFactory::createStandardInstancedMaterial(
-    _device, _swapChain._swapChainImageFormat, findDepthFormat(),
-    MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-    lightCubeViews, lightSamplers, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
-
-  if (!standardInstancedMaterial) {
-    printf("Could not create standard instanced material!\n");
-    return false;
-  }
-  _materials[STANDARD_INSTANCED_MATERIAL_ID] = std::move(standardInstancedMaterial);*/
-
-  // Shadow debug
-  auto shadowDebugMat = MaterialFactory::createShadowDebugMaterial(
-    _device, _swapChain._swapChainImageFormat, findDepthFormat(),
-    MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-    &_lights[0]._shadowImageViews[0], &_shadowPass._shadowSampler, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
-
-  if (!shadowDebugMat) {
-    printf("Could not create shadow debug material!\n");
-    return false;
-  }
-  _materials[SHADOW_DEBUG_MATERIAL_ID] = std::move(shadowDebugMat);
-
-  // Post processing
-  auto cmdBuffer = beginSingleTimeCommands();
-
-  // FXAA
-  {
-    std::size_t idx;
-    _ppPass.createResources(_device, _vmaAllocator, cmdBuffer, &idx);
-    auto ppMat = MaterialFactory::createPPFxaaMaterial(
-      _device, _swapChain._swapChainImageFormat, findDepthFormat(),
-      MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-      &_ppPass._ppResources[idx]._ppInputImageView, &_ppPass._ppResources[idx]._ppSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    if (!ppMat) {
-      printf("Could not create pp material!\n");
-      return false;
-    }
-    _ppMaterials.emplace_back(std::make_pair(std::move(ppMat), idx));
-  }
-
-  // Blur
-  /*{
-    std::size_t idx;
-    _ppPass.createResources(_device, _vmaAllocator, cmdBuffer, &idx);
-    auto ppMat = MaterialFactory::createPPBlurMaterial(
-      _device, _swapChain._swapChainImageFormat, findDepthFormat(),
-      MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-      &_ppPass._ppResources[idx]._ppInputImageView, &_ppPass._ppResources[idx]._ppSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    if (!ppMat) {
-      printf("Could not create pp material!\n");
-      return false;
-    }
-    _ppMaterials.emplace_back(std::make_pair(std::move(ppMat), idx));
-  }*/
-
-  /*// Flip
-  {
-    std::size_t idx;
-    _ppPass.createResources(_device, _vmaAllocator, cmdBuffer, &idx);
-    auto flipMat = MaterialFactory::createPPFlipMaterial(
-      _device, _swapChain._swapChainImageFormat, findDepthFormat(),
-      MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-      &_ppPass._ppResources[idx]._ppInputImageView, &_ppPass._ppResources[idx]._ppSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    if (!flipMat) {
-      printf("Could not create pp flip material!\n");
-      return false;
-    }
-    _ppMaterials.emplace_back(std::make_pair(std::move(flipMat), idx));
-  }
-
-  // Color inv
-  {
-    std::size_t idx;
-    _ppPass.createResources(_device, _vmaAllocator, cmdBuffer, &idx);
-    auto ppMat = MaterialFactory::createPPColorInvMaterial(
-      _device, _swapChain._swapChainImageFormat, findDepthFormat(),
-      MAX_FRAMES_IN_FLIGHT, _descriptorPool, _vmaAllocator,
-      &_ppPass._ppResources[idx]._ppInputImageView, &_ppPass._ppResources[idx]._ppSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    if (!ppMat) {
-      printf("Could not create pp material!\n");
-      return false;
-    }
-    _ppMaterials.emplace_back(std::make_pair(std::move(ppMat), idx));
-  }*/
-  endSingleTimeCommands(cmdBuffer);
-
-  return true;
 }
 
 bool VulkanRenderer::createCommandPool()
@@ -1391,21 +1109,6 @@ bool VulkanRenderer::createCommandPool()
     printf("failed to create command pool!\n");
     return false;
   }
-
-  return true;
-}
-
-bool VulkanRenderer::createDepthResources()
-{
-  VkFormat depthFormat = findDepthFormat();
-
-  imageutil::createImage(_swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL,
-    _vmaAllocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, _depthImage);
-  _depthImageView = imageutil::createImageView(_device, _depthImage._image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-  auto cmdBuffer = beginSingleTimeCommands();
-  imageutil::transitionImageLayout(cmdBuffer, _depthImage._image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-  endSingleTimeCommands(cmdBuffer);
 
   return true;
 }
@@ -1443,83 +1146,6 @@ void VulkanRenderer::endSingleTimeCommands(VkCommandBuffer commandBuffer)
   vkQueueWaitIdle(_graphicsQ);
 
   vkFreeCommandBuffers(_device, _commandPool, 1, &commandBuffer);
-}
-
-void VulkanRenderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
-{
-  VkCommandBuffer commandBuffer = beginSingleTimeCommands();
-
-  VkBufferImageCopy region{};
-  region.bufferOffset = 0;
-  region.bufferRowLength = 0;
-  region.bufferImageHeight = 0;
-
-  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  region.imageSubresource.mipLevel = 0;
-  region.imageSubresource.baseArrayLayer = 0;
-  region.imageSubresource.layerCount = 1;
-
-  region.imageOffset = {0, 0, 0};
-  region.imageExtent = {
-    width,
-    height,
-    1
-  };
-
-  vkCmdCopyBufferToImage(
-    commandBuffer,
-    buffer,
-    image,
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    1,
-    &region
-  );
-
-  endSingleTimeCommands(commandBuffer);
-}
-
-bool VulkanRenderer::createVertexBuffer(std::uint8_t* data, std::size_t dataSize, AllocatedBuffer& buffer)
-{
-  VkDeviceSize bufferSize = dataSize;
-
-  // Create a staging buffer
-  AllocatedBuffer stagingBuffer;
-  bufferutil::createBuffer(_vmaAllocator, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
-
-  void* mappedData;
-  vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, &mappedData);
-  memcpy(mappedData, data, (size_t) bufferSize);
-  vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
-
-  // Device local buffer, optimised for GPU
-  bufferutil::createBuffer(_vmaAllocator, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 0, buffer);
-
-  copyBuffer(stagingBuffer._buffer, buffer._buffer, bufferSize);
-
-  vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
-
-  return true;
-}
-
-bool VulkanRenderer::createIndexBuffer(const std::vector<std::uint32_t>& indices, AllocatedBuffer& buffer)
-{
-  VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-  AllocatedBuffer stagingBuffer;
-  bufferutil::createBuffer(_vmaAllocator, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
-
-  void* data;
-  vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, &data);
-  memcpy(data, indices.data(), (size_t) bufferSize);
-  vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
-
-  bufferutil::createBuffer(_vmaAllocator, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 0, buffer);
-
-  copyBuffer(stagingBuffer._buffer, buffer._buffer, bufferSize);
-
-  vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
-
-  return true;
 }
 
 bool VulkanRenderer::createDescriptorPool()
@@ -1568,270 +1194,6 @@ bool VulkanRenderer::createCommandBuffers()
   }
 
   return true;
-}
-
-void VulkanRenderer::drawRenderables(
-  VkCommandBuffer& commandBuffer,
-  std::size_t materialIndex,
-  bool shadowSupportRequired,
-  VkViewport& viewport, VkRect2D& scissor,
-  void* extraPushConstants,
-  std::size_t extraPushConstantsSize)
-{
-  VkDeviceSize offsets[] = {0};
-  // Have to bind these after bindpipeline... Even tho they are independent of material.
-  vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaMeshBuffer._buffer._buffer, offsets);
-  vkCmdBindIndexBuffer(commandBuffer, _gigaMeshBuffer._buffer._buffer, 0, VK_INDEX_TYPE_UINT32);
-
-  for (int i = 0; i <= MAX_MATERIAL_ID - 1; ++i) {
-
-    // Early exit checks
-    if (_materials.find(i) == _materials.end()) continue;
-    if (!materialIdCurrentlyInUse(i)) continue;
-    auto& material = _materials[i];
-    if (shadowSupportRequired && !material._supportsShadowPass) continue;
-    if (material._supportsPostProcessingPass) continue;
-
-    // Bind pipeline and start actual rendering
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelines[materialIndex]);
-
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-    // Bind descriptor sets for UBOs
-    auto& descriptorSets = material._descriptorSets[materialIndex][_currentFrame];
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayouts[materialIndex], 0, 1, &descriptorSets, 0, nullptr);
-
-    // If any extra push constants, bind them now
-    if (extraPushConstants) {
-      vkCmdPushConstants(
-        commandBuffer,
-        material._pipelineLayouts[materialIndex],
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        0,
-        (uint32_t)extraPushConstantsSize, extraPushConstants);
-    }
-
-    vkCmdDrawIndexedIndirect(commandBuffer, _gpuDrawCmdBuffer[_currentFrame]._buffer, 0, (uint32_t)_currentMeshes.size(), sizeof(gpu::GPUDrawCallCmd));
-    /*for (auto& renderable : _currentRenderables) {
-      // Move on to next material
-      if (renderable._materialId != i) continue;
-      if (!renderable._visible) continue;
-
-      auto& mesh = _currentMeshes[renderable._meshId];
-
-      // Bind specific push constants for this renderable
-      if (renderable._pushConstantsSize > 0) {
-        uint32_t pushSize = renderable._pushConstantsSize;
-        if (extraPushConstants) {
-          std::memcpy(&renderable._pushConstants[0] + renderable._pushConstantsSize, extraPushConstants, extraPushConstantsSize);
-          pushSize += (uint32_t)extraPushConstantsSize;
-        }
-        vkCmdPushConstants(commandBuffer, material._pipelineLayouts[materialIndex], VK_SHADER_STAGE_VERTEX_BIT, 0, pushSize, &renderable._pushConstants[0]);
-      }
-      else if (extraPushConstants) {
-        vkCmdPushConstants(commandBuffer, material._pipelineLayouts[materialIndex], VK_SHADER_STAGE_VERTEX_BIT, 0, (uint32_t)extraPushConstantsSize, extraPushConstants);
-      }
-
-      // Draw command
-      vkCmdDrawIndexed(
-        commandBuffer, 
-        (uint32_t)mesh._numIndices,
-        1,
-        (uint32_t)mesh._indexOffset,
-        (uint32_t)mesh._vertexOffset,
-        0);
-    }*/
-  }
-}
-
-void VulkanRenderer::recordCommandBufferShadow(VkCommandBuffer commandBuffer, bool debug)
-{
-  for (auto& light: _lights) {
-    auto shadowProj = light._proj;
-    shadowProj[1][1] *= -1;
-    for (std::size_t view = 0; view < light._shadowImageViews.size(); ++view) {
-      // For each light and its view, rerun the GPU culling to generate the (current) draw cmds
-      Camera shadowCam;
-      shadowCam.setProjection(light._proj, 0.1f, 50.0f);
-      shadowCam.setViewMatrix(light._view[view]);
-
-      executeGpuCullDispatch(commandBuffer, shadowCam);
-
-      imageutil::transitionImageLayout(commandBuffer, light._shadowImage._image, _shadowPass._shadowImageFormat,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, (uint32_t)view, 1);
-
-      _shadowPass.beginRendering(commandBuffer, light._shadowImageViews[view]);
-      
-      auto shadowMatrix = shadowProj * light._view[view];
-      glm::vec4 camPos{ light._pos.x, light._pos.y, light._pos.z, 1.0 };
-
-      const std::size_t dataSize = 4 * 4 * 4 + 4 * 4;
-      std::uint8_t data[dataSize];
-      std::memcpy(data, &shadowMatrix, 4 * 4 * 4);
-      std::memcpy(data + 4 * 4 * 4, &camPos, 4 * 4);
-      drawRenderables(commandBuffer, Material::SHADOW_INDEX, true, _shadowPass.viewport(), _shadowPass.scissor(),
-        (void*)data, dataSize);
-
-      vkCmdEndRendering(commandBuffer);
-
-      // TESTING: Execution barrier to prevent writing to cull buffers (in next iteration) before drawing has concluded
-      vkCmdPipelineBarrier(
-        commandBuffer,
-        VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-        0,
-        0, nullptr,
-        0, nullptr,
-        0, nullptr);
-
-      // Transition shadow map image to shader readable
-      imageutil::transitionImageLayout(commandBuffer, light._shadowImage._image, _shadowPass._shadowImageFormat,
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, (uint32_t)view, 1);
-    }
-  }
-}
-
-void VulkanRenderer::recordCommandBufferGeometry(VkCommandBuffer commandBuffer, bool debug)
-{
-  auto viewport = _geometryPass.viewport(_swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height);
-  auto scissor = _geometryPass.scissor( _swapChain._swapChainExtent);
-
-  drawRenderables(commandBuffer, Material::STANDARD_INDEX, false, viewport, scissor);
-}
-
-void VulkanRenderer::recordCommandBufferPP(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug)
-{
-  Renderable* rend = nullptr;
-  for (auto& renderable : _currentRenderables) {
-    if (renderable._id == _ppPass._quadModelId) {
-      rend = &renderable;
-      break;
-    }
-  }
-
-  if (!rend) return;
-
-  auto viewport = _ppPass.viewport(_swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height);
-  auto scissor = _ppPass.scissor(_swapChain._swapChainExtent);
-
-  for (std::size_t i = 0; i < _ppMaterials.size(); ++i) {
-    bool isLast = i == (_ppMaterials.size() - 1);
-    std::size_t nextIndex = isLast? 0 : _ppMaterials[i+1].second;
-  
-    auto& material = _ppMaterials[i];
-
-    // Transition ppInput image to shader read
-    imageutil::transitionImageLayout(commandBuffer, _ppPass._ppResources[material.second]._ppInputImage._image, _ppPass._ppImageFormat,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    // Transition the image we render to to color attachment (need to do before start rendering)
-    if (!isLast) {
-      imageutil::transitionImageLayout(commandBuffer, _ppPass._ppResources[nextIndex]._ppInputImage._image, _ppPass._ppImageFormat,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    }
-
-    if (isLast) {
-      _ppPass.beginRendering(commandBuffer, _swapChain._swapChainImageViews[imageIndex], _swapChain._swapChainExtent);
-    }
-    else {
-      _ppPass.beginRendering(commandBuffer, _ppPass._ppResources[nextIndex]._ppInputImageView, _swapChain._swapChainExtent);
-    }
-
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-    auto& descriptorSets = material.first._descriptorSets[Material::POST_PROCESSING_INDEX][_currentFrame];
-
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material.first._pipelines[Material::POST_PROCESSING_INDEX]);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material.first._pipelineLayouts[Material::POST_PROCESSING_INDEX], 0, 1, &descriptorSets, 0, nullptr);
-
-    auto& mesh = _currentMeshes[rend->_meshId];
-
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaMeshBuffer._buffer._buffer, offsets);
-    vkCmdDraw(commandBuffer, 6, 1, (uint32_t)mesh._vertexOffset, 0);
-
-    if (!isLast) {
-      vkCmdEndRendering(commandBuffer);
-    }
-  }
-}
-
-void VulkanRenderer::createComputeDescriptorSet()
-{
-  std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, _computeMaterial._descriptorSetLayouts[Material::STANDARD_INDEX]);
-  VkDescriptorSetAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  allocInfo.descriptorPool = _descriptorPool;
-  allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-  allocInfo.pSetLayouts = layouts.data();
-
-  _computeDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-  if (vkAllocateDescriptorSets(_device, &allocInfo, _computeDescriptorSets.data()) != VK_SUCCESS) {
-    printf("failed to allocate compute descriptor sets!\n");
-    return;
-  }
-
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    std::vector<VkWriteDescriptorSet> descriptorWrites;
-
-    VkDescriptorBufferInfo drawBufferInfo{};
-    {
-      VkWriteDescriptorSet bufWrite{};
-      drawBufferInfo.buffer = _gpuDrawCmdBuffer[i]._buffer;
-      drawBufferInfo.offset = 0;
-      drawBufferInfo.range = VK_WHOLE_SIZE;
-
-      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      bufWrite.dstSet = _computeDescriptorSets[i];
-      bufWrite.dstBinding = 0;
-      bufWrite.dstArrayElement = 0;
-      bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-      bufWrite.descriptorCount = 1;
-      bufWrite.pBufferInfo = &drawBufferInfo;
-
-      descriptorWrites.emplace_back(std::move(bufWrite));
-    }
-
-    VkDescriptorBufferInfo rendBufferInfo{};
-    {
-      VkWriteDescriptorSet bufWrite{};
-      rendBufferInfo.buffer = _gpuRenderableBuffer[i]._buffer;
-      rendBufferInfo.offset = 0;
-      rendBufferInfo.range = VK_WHOLE_SIZE;
-
-      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      bufWrite.dstSet = _computeDescriptorSets[i];
-      bufWrite.dstBinding = 1;
-      bufWrite.dstArrayElement = 0;
-      bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-      bufWrite.descriptorCount = 1;
-      bufWrite.pBufferInfo = &rendBufferInfo;
-
-      descriptorWrites.emplace_back(std::move(bufWrite));
-    }
-
-    VkDescriptorBufferInfo transBufferInfo{};
-    {
-      VkWriteDescriptorSet bufWrite{};
-      transBufferInfo.buffer = _gpuTranslationBuffer[i]._buffer;
-      transBufferInfo.offset = 0;
-      transBufferInfo.range = VK_WHOLE_SIZE;
-
-      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      bufWrite.dstSet = _computeDescriptorSets[i];
-      bufWrite.dstBinding = 2;
-      bufWrite.dstArrayElement = 0;
-      bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-      bufWrite.descriptorCount = 1;
-      bufWrite.pBufferInfo = &transBufferInfo;
-
-      descriptorWrites.emplace_back(std::move(bufWrite));
-    }
-
-    vkUpdateDescriptorSets(_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-  }
 }
 
 void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
@@ -1884,237 +1246,6 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
   vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
 }
 
-void VulkanRenderer::prefillGPUDrawCmdBuffer(VkCommandBuffer& commandBuffer)
-{
-  // Create one draw command for currently available meshes.
-  std::size_t dataSize = _currentMeshes.size() * sizeof(gpu::GPUDrawCallCmd);
-
-  gpu::GPUDrawCallCmd* mappedData;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&mappedData);
-  for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
-    auto& mesh = _currentMeshes[i];
-    mappedData[i]._command.indexCount = (uint32_t)mesh._numIndices;
-    mappedData[i]._command.instanceCount = 0; // Updated by GPU compute shader
-    mappedData[i]._command.firstIndex = (uint32_t)mesh._indexOffset;
-    mappedData[i]._command.vertexOffset = (uint32_t)mesh._vertexOffset;
-    mappedData[i]._command.firstInstance = i == 0 ? 0 : (uint32_t)_currentMeshUsage[(uint32_t)i - 1];
-  }
-
-  VkBufferCopy copyRegion{};
-  copyRegion.dstOffset = 0;
-  copyRegion.size = dataSize;
-  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuDrawCmdBuffer[_currentFrame]._buffer, 1, &copyRegion);
-
-  VkBufferMemoryBarrier memBarr {};
-  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  memBarr.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-  memBarr.srcQueueFamilyIndex = _queueIndices.graphicsFamily.value();
-  memBarr.dstQueueFamilyIndex = _queueIndices.graphicsFamily.value();
-  memBarr.buffer = _gpuDrawCmdBuffer[_currentFrame]._buffer;
-  memBarr.offset = 0;
-  memBarr.size = VK_WHOLE_SIZE;
-
-  vkCmdPipelineBarrier(
-    commandBuffer,
-    VK_PIPELINE_STAGE_TRANSFER_BIT,
-    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    0, 0, nullptr, 
-    1, &memBarr,
-    0, nullptr);
-
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
-}
-
-void VulkanRenderer::prefillGPUTranslationBuffer(VkCommandBuffer& commandBuffer)
-{
-  vkCmdFillBuffer(
-    commandBuffer,
-    _gpuTranslationBuffer[_currentFrame]._buffer,
-    0,
-    VK_WHOLE_SIZE,
-    0);
-
-  VkBufferMemoryBarrier memBarr {};
-  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  memBarr.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-  memBarr.srcQueueFamilyIndex = _queueIndices.graphicsFamily.value();
-  memBarr.dstQueueFamilyIndex = _queueIndices.graphicsFamily.value();
-  memBarr.buffer = _gpuTranslationBuffer[_currentFrame]._buffer;
-  memBarr.offset = 0;
-  memBarr.size = VK_WHOLE_SIZE;
-
-  vkCmdPipelineBarrier(
-    commandBuffer,
-    VK_PIPELINE_STAGE_TRANSFER_BIT,
-    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    0, 0, nullptr, 
-    1, &memBarr,
-    0, nullptr);
-}
-
-void VulkanRenderer::executeGpuCullDispatch(VkCommandBuffer commandBuffer, Camera& cullCamera)
-{
-  // Compute based culling buffers
-  // TODO: All these prefills contain barriers that are put on the command buffer, which is silly. 
-  //       Create the barriers and then record them all 3 at once outside.
-  prefillGPUDrawCmdBuffer(commandBuffer);
-  prefillGPUTranslationBuffer(commandBuffer);
-
-  // Dispatch compute
-  vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _computeMaterial._pipelines[Material::STANDARD_INDEX]);
-  vkCmdBindDescriptorSets(
-    commandBuffer,
-    VK_PIPELINE_BIND_POINT_COMPUTE,
-    _computeMaterial._pipelineLayouts[Material::STANDARD_INDEX],
-    0, 1,
-    &_computeDescriptorSets[_currentFrame],
-    0, nullptr);
-
-  // Push constants for culling params
-  gpu::GPUCullPushConstants cullPushConstants{};
-  cullPushConstants._drawCount = (uint32_t)_currentRenderables.size();
-
-  cullPushConstants._frustumPlanes[0] = cullCamera.getFrustum().getPlane(Frustum::Left);
-  cullPushConstants._frustumPlanes[1] = cullCamera.getFrustum().getPlane(Frustum::Right);
-  cullPushConstants._frustumPlanes[2] = cullCamera.getFrustum().getPlane(Frustum::Top);
-  cullPushConstants._frustumPlanes[3] = cullCamera.getFrustum().getPlane(Frustum::Bottom);
-  cullPushConstants._view = cullCamera.getCamMatrix();
-  cullPushConstants._farDist = cullCamera.getFar();
-  cullPushConstants._nearDist = cullCamera.getNear();
-
-  vkCmdPushConstants(commandBuffer, _computeMaterial._pipelineLayouts[Material::STANDARD_INDEX], VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(gpu::GPUCullPushConstants), &cullPushConstants);
-
-  // 256 is the local group size in the comp shader
-  uint32_t numGroups = static_cast<uint32_t>(((uint32_t)_currentRenderables.size() / 256) + 1);
-  vkCmdDispatch(commandBuffer, numGroups, 1, 1);
-
-  // Barrier for the buffers
-  VkBufferMemoryBarrier memBarrs[2];
-  VkBufferMemoryBarrier memBarrDraws{};
-  memBarrDraws.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  memBarrDraws.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-  memBarrDraws.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT;
-  memBarrDraws.srcQueueFamilyIndex = _queueIndices.graphicsFamily.value();
-  memBarrDraws.dstQueueFamilyIndex = _queueIndices.graphicsFamily.value();
-  memBarrDraws.buffer = _gpuDrawCmdBuffer[_currentFrame]._buffer;
-  memBarrDraws.offset = 0;
-  memBarrDraws.size = VK_WHOLE_SIZE;
-
-  VkBufferMemoryBarrier memBarrTranslation{};
-  memBarrTranslation.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  memBarrTranslation.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-  memBarrTranslation.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT;
-  memBarrTranslation.srcQueueFamilyIndex = _queueIndices.graphicsFamily.value();
-  memBarrTranslation.dstQueueFamilyIndex = _queueIndices.graphicsFamily.value();
-  memBarrTranslation.buffer = _gpuTranslationBuffer[_currentFrame]._buffer;
-  memBarrTranslation.offset = 0;
-  memBarrTranslation.size = VK_WHOLE_SIZE;
-
-  memBarrs[0] = memBarrDraws;
-  memBarrs[1] = memBarrTranslation;
-
-  vkCmdPipelineBarrier(
-    commandBuffer,
-    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-    0, 0, nullptr,
-    2, memBarrs,
-    0, nullptr);
-}
-
-void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool pp, bool debug)
-{
-  VkCommandBufferBeginInfo beginInfo{};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  beginInfo.flags = 0; // Optional
-  beginInfo.pInheritanceInfo = nullptr; // Optional
-
-  if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-    printf("failed to begin recording command buffer!\n");
-    return;
-  }
-
-  prefillGPURenderableBuffer(commandBuffer);
-
-  // The swapchain image has to go from present yout to color attachment optimal
-  imageutil::transitionImageLayout(commandBuffer,  _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
-                        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-  // Shadow pass
-  recordCommandBufferShadow(commandBuffer, debug);
-
-  // Geometry pass
-  // Transition the ppInput image to color attachment
-  if (!_ppMaterials.empty() && pp) {
-    imageutil::transitionImageLayout(commandBuffer, _ppPass._ppResources[0]._ppInputImage._image, _ppPass._ppImageFormat,
-      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-    executeGpuCullDispatch(commandBuffer, _latestCamera);
-
-    _geometryPass.beginRendering(
-      commandBuffer,
-      _ppPass._ppResources[0]._ppInputImageView,
-      _depthImageView,
-      _swapChain._swapChainExtent);
-    recordCommandBufferGeometry(commandBuffer, debug);
-    vkCmdEndRendering(commandBuffer);
-
-    // Post-processing pass
-    recordCommandBufferPP(commandBuffer, imageIndex, debug);
-  }
-  else {
-    // No post process effects, simply do the geometry pass
-    executeGpuCullDispatch(commandBuffer, _latestCamera);
-
-    _geometryPass.beginRendering(
-      commandBuffer,
-      _swapChain._swapChainImageViews[imageIndex],
-      _depthImageView,
-      _swapChain._swapChainExtent);
-    recordCommandBufferGeometry(commandBuffer, debug);
-  }
-
-  if (debug) {
-    // Shadow map overlay
-    // TODO: Stack debug texture overlays, not just shadow map
-    Renderable* rend = nullptr;
-    for (auto& renderable : _currentRenderables) {
-      if (renderable._id == _shadowPass._debugModelId) {
-        rend = &renderable;
-        break;
-      }
-    }
-
-    if (rend) {
-      // Hijack begin render from geometry pass...
-      auto& material = _materials[SHADOW_DEBUG_MATERIAL_ID];
-      auto& descriptorSets = material._descriptorSets[Material::STANDARD_INDEX][_currentFrame];
-      vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelines[Material::STANDARD_INDEX]);
-      vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, material._pipelineLayouts[Material::STANDARD_INDEX], 0, 1, &descriptorSets, 0, nullptr);
-      VkDeviceSize offsets[] = { 0 };
-      vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaMeshBuffer._buffer._buffer, offsets);
-
-      auto& mesh = _currentMeshes[rend->_meshId];
-      vkCmdDraw(commandBuffer, 6, 1, (uint32_t)mesh._vertexOffset, 0);
-    }
-  }
-
-  // Imgui, hijack geometrypass begin...
-  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
-
-  vkCmdEndRendering(commandBuffer);
-
-  // Swapchain image has to go from color attachment to present.
-  imageutil::transitionImageLayout(commandBuffer, _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
-                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-
-  if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-    printf("failed to record command buffer!\n");
-  }
-}
-
 bool VulkanRenderer::createSyncObjects()
 {
   _imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
@@ -2140,18 +1271,9 @@ bool VulkanRenderer::createSyncObjects()
   return true;
 }
 
-bool VulkanRenderer::initShadowpass()
-{
-  auto cmdBuffer = beginSingleTimeCommands();
-  _shadowPass.createShadowResources(_device, _vmaAllocator, cmdBuffer, findDepthFormat(), 1024, 1024);
-  endSingleTimeCommands(cmdBuffer);
-
-  return true;
-}
-
 bool VulkanRenderer::initLights()
 {
-  _lights.resize(4);
+  /*_lights.resize(4);
 
   auto cmdBuffer = beginSingleTimeCommands();
   auto depthFormat = findDepthFormat();
@@ -2211,33 +1333,8 @@ bool VulkanRenderer::initLights()
       return false;
     }
   }
-  endSingleTimeCommands(cmdBuffer);
+  endSingleTimeCommands(cmdBuffer);*/
 
-  return true;
-}
-
-bool VulkanRenderer::initShadowDebug()
-{
-  auto meshId = registerMesh(_shadowPass._debugModel._vertices, {});
-  _shadowPass._debugModelId = registerRenderable(meshId, STANDARD_MATERIAL_ID, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
-  setRenderableVisible(_shadowPass._debugModelId, false);
-
-  return true;
-}
-
-bool VulkanRenderer::initPostProcessingRenderable()
-{
-  auto meshId = registerMesh(_ppPass._quadModel._vertices, {});
-  _ppPass._quadModelId = registerRenderable(meshId, STANDARD_MATERIAL_ID, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
-  setRenderableVisible(_ppPass._quadModelId, false);
-
-  return true;
-}
-
-bool VulkanRenderer::initComputePipelines()
-{
-  _computeMaterial = compute::createComputeMaterial(_device, "cull_comp.spv");
-  createComputeDescriptorSet();
   return true;
 }
 
@@ -2250,13 +1347,11 @@ bool VulkanRenderer::initBindless()
   * 0: Scene UBO (UBO)
   * 1: Shadow samplers (Sampler)
   * 2: Renderable buffer (SSBO)
-  * 3: Index translation buffer (SSBO)
   */
 
   uint32_t uboBinding = 0;
   uint32_t samplerBinding = 1;
   uint32_t renderableBinding = 2;
-  uint32_t translationBinding = 3;
 
   // Descriptor set layout
   {
@@ -2276,13 +1371,6 @@ bool VulkanRenderer::initBindless()
     renderableLayoutBinding.descriptorCount = 1;
     renderableLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
     bindings.emplace_back(std::move(renderableLayoutBinding));
-
-    VkDescriptorSetLayoutBinding translationLayoutBinding{};
-    translationLayoutBinding.binding = translationBinding;
-    translationLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    translationLayoutBinding.descriptorCount = 1;
-    translationLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-    bindings.emplace_back(std::move(translationLayoutBinding));
 
     VkDescriptorSetLayoutBinding samplerLayoutBinding{};
     samplerLayoutBinding.binding = samplerBinding;
@@ -2379,24 +1467,6 @@ bool VulkanRenderer::initBindless()
 
       descriptorWrites.emplace_back(std::move(rendBufWrite));
 
-      // Translation SSBO
-      VkDescriptorBufferInfo transBufferInfo{};
-      VkWriteDescriptorSet bufWrite{};
-
-      transBufferInfo.buffer = _gpuTranslationBuffer[i]._buffer;
-      transBufferInfo.offset = 0;
-      transBufferInfo.range = VK_WHOLE_SIZE;
-
-      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      bufWrite.dstSet = _bindlessDescriptorSets[i];
-      bufWrite.dstBinding = translationBinding;
-      bufWrite.dstArrayElement = 0;
-      bufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-      bufWrite.descriptorCount = 1;
-      bufWrite.pBufferInfo = &transBufferInfo;
-
-      descriptorWrites.emplace_back(std::move(bufWrite));
-
       // Samplers
       /*std::vector<VkDescriptorImageInfo> imageInfos;
       VkWriteDescriptorSet imWrite{};
@@ -2448,13 +1518,6 @@ bool VulkanRenderer::initFrameGraphBuilder()
   return true;
 }
 
-bool VulkanRenderer::initPostProcessingPass()
-{
-  _ppPass.init(_swapChain._swapChainImageFormat, _swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height);
-
-  return true;
-}
-
 bool VulkanRenderer::initGigaMeshBuffer()
 {
   // Allocate "big enough" size... 
@@ -2466,8 +1529,6 @@ bool VulkanRenderer::initGpuBuffers()
 {
   _gpuStagingBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuRenderableBuffer.resize(MAX_FRAMES_IN_FLIGHT);
-  _gpuDrawCmdBuffer.resize(MAX_FRAMES_IN_FLIGHT);
-  _gpuTranslationBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuSceneDataBuffer.resize(MAX_FRAMES_IN_FLIGHT);
 
   for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -2486,22 +1547,6 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuRenderableBuffer[i]);
-
-    // Buffer that will contain draw cmds filled by compute shader (pre-filled by CPU).
-    bufferutil::createBuffer(
-      _vmaAllocator,
-      MAX_NUM_MESHES * sizeof(gpu::GPUDrawCallCmd),
-      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-      0,
-      _gpuDrawCmdBuffer[i]);
-
-    // Buffer that contains a translation from gl_InstanceID to renderableId written by compute while culling, and read by vertex shader.
-    bufferutil::createBuffer(
-      _vmaAllocator,
-      MAX_NUM_RENDERABLES * sizeof(uint32_t),
-      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-      0,
-      _gpuTranslationBuffer[i]);
 
     // Used as a UBO in most shaders for accessing scene data.
     bufferutil::createBuffer(

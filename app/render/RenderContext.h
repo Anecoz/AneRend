@@ -7,7 +7,6 @@
 #include "Mesh.h"
 #include "Vertex.h"
 #include "RenderableId.h"
-#include "MaterialId.h"
 #include "GpuBuffers.h"
 #include "RenderDebugOptions.h"
 
@@ -41,7 +40,6 @@ public:
   virtual MeshId registerMesh(const std::vector<Vertex>& vertices, const std::vector<std::uint32_t>& indices) = 0;
   virtual RenderableId registerRenderable(
     MeshId meshId,
-    MaterialID materialId,
     const glm::mat4& transform,
     const glm::vec3& sphereBoundCenter,
     float sphereBoundRadius) = 0;

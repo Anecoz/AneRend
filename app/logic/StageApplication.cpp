@@ -54,7 +54,7 @@ bool StageApplication::init()
 
   // Create a bunch of test matrices
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 100;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -66,7 +66,6 @@ bool StageApplication::init()
 
       auto ret = _modelId = _vkRenderer.registerRenderable(
         _meshId,
-        render::STANDARD_MATERIAL_ID,
         matrix,
         glm::vec3(sphereBoundCenter.x, sphereBoundCenter.y, sphereBoundCenter.z),
         1.0f);
@@ -79,12 +78,12 @@ bool StageApplication::init()
 
   // Do a couple of the big models
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 20;
 
     for (int x = 0; x < numInstances; ++x)
     for (int y = 0; y < numInstances; ++y) {
       auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(30.0f * x, 0.0f, 30.0f * y));
-      _modelId2 = _vkRenderer.registerRenderable(_meshId2, render::STANDARD_MATERIAL_ID, mat, glm::vec3(1.0f), 30.0f);
+      _modelId2 = _vkRenderer.registerRenderable(_meshId2, mat, glm::vec3(1.0f), 30.0f);
     }
   }
 
@@ -131,7 +130,7 @@ void StageApplication::render()
     float dir[2];
     dir[0] = _sunDir.x;
     dir[1] = _sunDir.z;
-    if (ImGui::SliderFloat2("Sun dir", dir, 0.0f, 1.0f)) {
+    if (ImGui::SliderFloat2("Sun dir", dir, -1.0f, 1.0f)) {
       _sunDir.x = dir[0];
       _sunDir.z = dir[1];
     }
@@ -144,9 +143,11 @@ void StageApplication::render()
     if (ImGui::InputText("Debug view resource", debugResStr, IM_ARRAYSIZE(debugResStr), ImGuiInputTextFlags_EnterReturnsTrue)) {
       _renderDebugOptions.debugViewResource = std::string(debugResStr);
     }
+    ImGui::Slider2DFloat("Sun dir", &_sunDir.x, &_sunDir.z, -1.0f, 1.0f, -1.0f, 1.0f);
     ImGui::Checkbox("Shadow debug", &_renderDebugOptions.debugView);
     ImGui::Checkbox("Apply post processing", &g_PP);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
+    ImGui::SliderFloat("Wind strength", &_renderDebugOptions.windStrength, 0.0, 1.0f);
     ImGui::End();
   }
 

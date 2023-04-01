@@ -8,11 +8,6 @@ namespace render
 {
 
 Model::Model()
-  : _materialId(std::numeric_limits<MaterialID>::max())
-{}
-
-Model::Model(MaterialID materialID)
-  : _materialId(materialID)
 {}
 
 Model::~Model()
@@ -49,10 +44,9 @@ Model& Model::operator=(Model&& rhs)
 
 Model::operator bool() const
 {
-  return 
+  return
     !_vertices.empty() &&
-    !_indices.empty() &&
-    _materialId < std::numeric_limits<MaterialID>::max();
+    !_indices.empty();
 }
 
 bool Model::loadFromObj(const std::string& objPath, const std::string& mtlPath)

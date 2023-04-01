@@ -41,6 +41,7 @@ Index of this file:
 #include "imgui_internal.h"
 
 // System includes
+#include <string>
 #include <ctype.h>      // toupper
 #if defined(_MSC_VER) && _MSC_VER <= 1500 // MSVC 2008 or earlier
 #include <stddef.h>     // intptr_t
@@ -3046,6 +3047,543 @@ bool ImGui::SliderScalarN(const char* label, ImGuiDataType data_type, void* v, i
 
     EndGroup();
     return value_changed;
+}
+
+float	ScalarToFloat(ImGuiDataType data_type, ImU64* p_source)
+{
+  switch (data_type)
+  {
+  case ImGuiDataType_S8:
+    return static_cast<float>(*reinterpret_cast<ImS8*>(p_source));
+  case ImGuiDataType_U8:
+    return static_cast<float>(*reinterpret_cast<ImU8*>(p_source));
+  case ImGuiDataType_S16:
+    return static_cast<float>(*reinterpret_cast<ImS16*>(p_source));
+  case ImGuiDataType_U16:
+    return static_cast<float>(*reinterpret_cast<ImU16*>(p_source));
+  case ImGuiDataType_S32:
+    return static_cast<float>(*reinterpret_cast<ImS32*>(p_source));
+  case ImGuiDataType_U32:
+    return static_cast<float>(*reinterpret_cast<ImU32*>(p_source));
+  case ImGuiDataType_S64:
+    return static_cast<float>(*reinterpret_cast<ImS64*>(p_source));
+  case ImGuiDataType_U64:
+    return static_cast<float>(*reinterpret_cast<ImU64*>(p_source));
+  case ImGuiDataType_Float:
+    return static_cast<float>(*reinterpret_cast<float*>(p_source));
+  case ImGuiDataType_Double:
+    return static_cast<float>(*reinterpret_cast<double*>(p_source));
+  }
+
+  return 0.0f;
+}
+
+ImU64	FloatToScalar(ImGuiDataType data_type, float f_value)
+{
+  switch (data_type)
+  {
+  case ImGuiDataType_S8:
+  {
+    ImS8 value = static_cast<ImS8>(f_value);
+    return static_cast<ImU64>(value);
+  }
+  case ImGuiDataType_U8:
+  {
+    ImU8 value = static_cast<ImU8>(f_value);
+    return static_cast<ImU64>(value);
+  }
+  case ImGuiDataType_S16:
+  {
+    ImS16 value = static_cast<ImS16>(f_value);
+    return static_cast<ImU64>(value);
+  }
+  case ImGuiDataType_U16:
+  {
+    ImU16 value = static_cast<ImU16>(f_value);
+    return static_cast<ImU64>(value);
+  }
+  case ImGuiDataType_S32:
+  {
+    ImS32 value = static_cast<ImS32>(f_value);
+    return static_cast<ImU64>(value);
+  }
+  case ImGuiDataType_U32:
+  {
+    ImU32 value = static_cast<ImU32>(f_value);
+    return static_cast<ImU64>(value);
+  }
+  case ImGuiDataType_S64:
+  {
+    ImS64 value = static_cast<ImS64>(f_value);
+    return static_cast<ImU64>(value);
+  }
+  case ImGuiDataType_U64:
+  {
+    ImU64 value = static_cast<ImU64>(f_value);
+    return static_cast<ImU64>(value);
+  }
+  case ImGuiDataType_Float:
+  {
+    float value = f_value;
+    return *reinterpret_cast<ImU64*>(&value);
+  }
+  case ImGuiDataType_Double:
+  {
+    double value = static_cast<double>(f_value);
+    return *reinterpret_cast<ImU64*>(&value);
+  }
+  }
+
+  return ImU64();
+}
+
+ImU64	SubScalar(ImGuiDataType data_type, void* p_a, void* p_b)
+{
+  ImU64 result = 0;
+  switch (data_type)
+  {
+  case ImGuiDataType_S8:
+  {
+    ImS8 value = *reinterpret_cast<ImS8*>(p_a) - *static_cast<ImS8*>(p_b);
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_U8:
+  {
+    ImU8 value = *reinterpret_cast<ImU8*>(p_a) - *static_cast<ImU8*>(p_b);
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_S16:
+  {
+    ImS16 value = *reinterpret_cast<ImS16*>(p_a) - *static_cast<ImS16*>(p_b);
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_U16:
+  {
+    ImU16 value = *reinterpret_cast<ImU16*>(p_a) - *static_cast<ImU16*>(p_b);
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_S32:
+  {
+    ImS32 value = *reinterpret_cast<ImS32*>(p_a) - *static_cast<ImS32*>(p_b);
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_U32:
+  {
+    ImU32 value = *reinterpret_cast<ImU32*>(p_a) - *static_cast<ImU32*>(p_b);
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_S64:
+  {
+    ImS64 value = *reinterpret_cast<ImS64*>(p_a) - *static_cast<ImS64*>(p_b);
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_U64:
+  {
+    ImU64 value = *reinterpret_cast<ImU64*>(p_a) - *static_cast<ImU64*>(p_b);
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_Float:
+  {
+    float value = *reinterpret_cast<float*>(p_a) - *static_cast<float*>(p_b);
+    result = *reinterpret_cast<ImU64*>(&value);
+  }
+  break;
+  case ImGuiDataType_Double:
+  {
+    double value = *reinterpret_cast<double*>(p_a) - *static_cast<double*>(p_b);
+    result = *reinterpret_cast<ImU64*>(&value);
+  }
+  break;
+  }
+
+  return result;
+}
+
+void	EqualScalar(ImGuiDataType data_type, ImU64* p_target, ImU64* p_source)
+{
+  switch (data_type)
+  {
+  case ImGuiDataType_S8:
+    *reinterpret_cast<ImS8*>(p_target) = *reinterpret_cast<ImS8*>(p_source);
+    break;
+  case ImGuiDataType_U8:
+    *reinterpret_cast<ImU8*>(p_target) = *reinterpret_cast<ImU8*>(p_source);
+    break;
+  case ImGuiDataType_S16:
+    *reinterpret_cast<ImS16*>(p_target) = *reinterpret_cast<ImS16*>(p_source);
+    break;
+  case ImGuiDataType_U16:
+    *reinterpret_cast<ImU16*>(p_target) = *reinterpret_cast<ImU16*>(p_source);
+    break;
+  case ImGuiDataType_S32:
+    *reinterpret_cast<ImS32*>(p_target) = *reinterpret_cast<ImS32*>(p_source);
+    break;
+  case ImGuiDataType_U32:
+    *reinterpret_cast<ImU64*>(p_target) = *reinterpret_cast<ImU32*>(p_source);
+    break;
+  case ImGuiDataType_S64:
+    *reinterpret_cast<ImS64*>(p_target) = *reinterpret_cast<ImS64*>(p_source);
+    break;
+  case ImGuiDataType_U64:
+    *reinterpret_cast<ImU64*>(p_target) = *reinterpret_cast<ImU64*>(p_source);
+    break;
+  case ImGuiDataType_Float:
+    *reinterpret_cast<float*>(p_target) = *reinterpret_cast<float*>(p_source);
+    break;
+  case ImGuiDataType_Double:
+    *reinterpret_cast<double*>(p_target) = *reinterpret_cast<double*>(p_source);
+    break;
+  }
+}
+
+ImU64	ClampScalar(ImGuiDataType data_type, void* p_value, void* p_min, void* p_max)
+{
+  ImU64 result = 0;
+  switch (data_type)
+  {
+  case ImGuiDataType_S8:
+  {
+    ImS8 value = ImClamp(*reinterpret_cast<ImS8*>(p_value), *static_cast<ImS8*>(p_min), *static_cast<ImS8*>(p_max));
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_U8:
+  {
+    ImU8 value = ImClamp(*reinterpret_cast<ImU8*>(p_value), *static_cast<ImU8*>(p_min), *static_cast<ImU8*>(p_max));
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_S16:
+  {
+    ImS16 value = ImClamp(*reinterpret_cast<ImS16*>(p_value), *static_cast<ImS16*>(p_min), *static_cast<ImS16*>(p_max));
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_U16:
+  {
+    ImU16 value = ImClamp(*reinterpret_cast<ImU16*>(p_value), *static_cast<ImU16*>(p_min), *static_cast<ImU16*>(p_max));
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_S32:
+  {
+    ImS32 value = ImClamp(*reinterpret_cast<ImS32*>(p_value), *static_cast<ImS32*>(p_min), *static_cast<ImS32*>(p_max));
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_U32:
+  {
+    ImU32 value = ImClamp(*reinterpret_cast<ImU32*>(p_value), *static_cast<ImU32*>(p_min), *static_cast<ImU32*>(p_max));
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_S64:
+  {
+    ImS64 value = ImClamp(*reinterpret_cast<ImS64*>(p_value), *static_cast<ImS64*>(p_min), *static_cast<ImS64*>(p_max));
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_U64:
+  {
+    ImU64 value = ImClamp(*reinterpret_cast<ImU64*>(p_value), *static_cast<ImU64*>(p_min), *static_cast<ImU64*>(p_max));
+    result = static_cast<ImU64>(value);
+  }
+  break;
+  case ImGuiDataType_Float:
+  {
+    float value = ImClamp(*reinterpret_cast<float*>(p_value), *static_cast<float*>(p_min), *static_cast<float*>(p_max));
+    result = *reinterpret_cast<ImU64*>(&value);
+  }
+  break;
+  case ImGuiDataType_Double:
+  {
+    double value = ImClamp(*reinterpret_cast<double*>(p_value), *static_cast<double*>(p_min), *static_cast<double*>(p_max));
+    result = *reinterpret_cast<ImU64*>(&value);
+  }
+  break;
+  }
+
+  return result;
+}
+
+bool	IsNegativeScalar(ImGuiDataType data_type, ImU64* src)
+{
+  switch (data_type)
+  {
+  case ImGuiDataType_S8:
+  {
+    ImS8 value = *reinterpret_cast<ImS8*>(src);
+    return value < 0;
+  }
+  break;
+  case ImGuiDataType_S16:
+  {
+    ImS16 value = *reinterpret_cast<ImS16*>(src);
+    return value < 0;
+  }
+  break;
+  case ImGuiDataType_S32:
+  {
+    ImS32 value = *reinterpret_cast<ImS32*>(src);
+    return value < 0l;
+  }
+  break;
+  case ImGuiDataType_S64:
+  {
+    ImS64 value = *reinterpret_cast<ImS64*>(src);
+    return value < 0ll;
+  }
+  break;
+  case ImGuiDataType_U8:
+  case ImGuiDataType_U16:
+  case ImGuiDataType_U32:
+  case ImGuiDataType_U64:
+  {
+    return false;
+  }
+  break;
+  case ImGuiDataType_Float:
+  {
+    float value = *reinterpret_cast<float*>(src);
+    return value < 0.0f;
+  }
+  break;
+  case ImGuiDataType_Double:
+  {
+    double value = *reinterpret_cast<double*>(src);
+    return value < 0.0f;
+  }
+  break;
+  }
+
+  return false;
+}
+
+bool	IsPositiveScalar(ImGuiDataType data_type, ImU64* src)
+{
+  return !IsNegativeScalar(data_type, src);
+}
+
+bool ImGui::Slider2DFloat(char const* pLabel, float* pValueX, float* pValueY, float minX, float maxX, float minY, float maxY, float const fScale)
+{
+  return SliderScalar2D(pLabel, ImGuiDataType_Float, pValueX, pValueY, &minX, &maxX, &minY, &maxY, fScale);
+}
+
+bool ImGui::SliderScalar2D(char const* pLabel, ImGuiDataType data_type, void* p_valueX, void* p_valueY, void* p_minX, void* p_maxX, void* p_minY, void* p_maxY, float const fScale /*= 1.0f*/)
+{
+  assert(ScalarToFloat(data_type, (ImU64*)p_minX) < ScalarToFloat(data_type, (ImU64*)p_maxX));
+  assert(ScalarToFloat(data_type, (ImU64*)p_minY) < ScalarToFloat(data_type, (ImU64*)p_maxY));
+
+  ImGuiWindow* window = ImGui::GetCurrentWindow();
+  if (window->SkipItems)
+    return false;
+
+  //ImGuiContext& g = *GImGui;
+  //const ImGuiStyle& style = g.Style;
+  //const ImGuiID id = window->GetID(pLabel);
+
+  ImGuiID const iID = ImGui::GetID(pLabel);
+
+  ImVec2 const vSizeSubstract = ImGui::CalcTextSize(std::to_string(1.0f).c_str()) * 1.1f;
+
+  float const vSizeFull = (ImGui::GetContentRegionAvail().x - vSizeSubstract.x) * fScale;
+  ImVec2 const vSize(vSizeFull, vSizeFull);
+
+  float const fHeightOffset = ImGui::GetTextLineHeight();
+  ImVec2 const vHeightOffset(0.0f, fHeightOffset);
+
+  ImVec2 vPos = ImGui::GetCursorScreenPos();
+  ImRect oRect(vPos + vHeightOffset, vPos + vSize + vHeightOffset);
+
+  ImGui::Text(pLabel);
+
+  ImGui::PushID(iID);
+
+  ImU32 const uFrameCol = ImGui::GetColorU32(ImGuiCol_FrameBg);
+
+  ImVec2 const vOriginPos = ImGui::GetCursorScreenPos();
+  ImGui::RenderFrame(oRect.Min, oRect.Max, uFrameCol, false, 0.0f);
+
+  ImU64 s_delta_x = SubScalar(data_type, p_maxX, p_minX);
+  ImU64 s_delta_y = SubScalar(data_type, p_maxY, p_minY);
+
+  bool bModified = false;
+  ImVec2 const vSecurity(15.0f, 15.0f);
+  ImRect frame_bb = ImRect(oRect.Min - vSecurity, oRect.Max + vSecurity);
+  //ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+  bool hovered;
+  bool held;
+  bool pressed = ImGui::ButtonBehavior(frame_bb, ImGui::GetID("##Zone"), &hovered, &held);
+  if (hovered && held)
+  {
+    ImVec2 const vCursorPos = ImGui::GetMousePos() - oRect.Min;
+
+    float fValueX = vCursorPos.x / (oRect.Max.x - oRect.Min.x) * ScalarToFloat(data_type, &s_delta_x) + ScalarToFloat(data_type, (ImU64*)p_minX);
+    float fValueY = ScalarToFloat(data_type, &s_delta_y) - vCursorPos.y / (oRect.Max.y - oRect.Min.y) * ScalarToFloat(data_type, &s_delta_y) + ScalarToFloat(data_type, (ImU64*)p_minY);
+
+    ImU64 s_value_x = FloatToScalar(data_type, fValueX);
+    ImU64 s_value_y = FloatToScalar(data_type, fValueY);
+
+    EqualScalar(data_type, (ImU64*)p_valueX, &s_value_x);
+    EqualScalar(data_type, (ImU64*)p_valueY, &s_value_y);
+
+    bModified = true;
+  }
+  //ImGui::PopItemFlag();
+
+  ImU64 s_clamped_x = ClampScalar(data_type, p_valueX, p_minX, p_maxX);
+  ImU64 s_clamped_y = ClampScalar(data_type, p_valueY, p_minY, p_maxY);
+  EqualScalar(data_type, (ImU64*)p_valueX, &s_clamped_x);
+  EqualScalar(data_type, (ImU64*)p_valueY, &s_clamped_y);
+
+  float const fScaleX = (ScalarToFloat(data_type, (ImU64*)p_valueX) - ScalarToFloat(data_type, (ImU64*)p_minX)) / ScalarToFloat(data_type, &s_delta_x);
+  float const fScaleY = 1.0f - (ScalarToFloat(data_type, (ImU64*)p_valueY) - ScalarToFloat(data_type, (ImU64*)p_minY)) / ScalarToFloat(data_type, &s_delta_y);
+
+  constexpr float fCursorOff = 10.0f;
+  float const fXLimit = fCursorOff / oRect.GetWidth();
+  float const fYLimit = fCursorOff / oRect.GetHeight();
+
+  ImVec2 const vCursorPos((oRect.Max.x - oRect.Min.x) * fScaleX + oRect.Min.x, (oRect.Max.y - oRect.Min.y) * fScaleY + oRect.Min.y);
+
+  ImDrawList* pDrawList = ImGui::GetWindowDrawList();
+
+  ImVec4 const vBlue(70.0f / 255.0f, 102.0f / 255.0f, 230.0f / 255.0f, 1.0f); // TODO: choose from style
+  ImVec4 const vOrange(255.0f / 255.0f, 128.0f / 255.0f, 64.0f / 255.0f, 1.0f); // TODO: choose from style
+
+  ImS32 const uBlue = ImGui::GetColorU32(vBlue);
+  ImS32 const uOrange = ImGui::GetColorU32(vOrange);
+
+  constexpr float fBorderThickness = 2.0f;
+  constexpr float fLineThickness = 3.0f;
+  constexpr float fHandleRadius = 7.0f;
+  constexpr float fHandleOffsetCoef = 2.0f;
+
+  // Cursor
+  pDrawList->AddCircleFilled(vCursorPos, 5.0f, uBlue, 16);
+
+  // Vertical Line
+  if (fScaleY > 2.0f * fYLimit)
+    pDrawList->AddLine(ImVec2(vCursorPos.x, oRect.Min.y + fCursorOff), ImVec2(vCursorPos.x, vCursorPos.y - fCursorOff), uOrange, fLineThickness);
+  if (fScaleY < 1.0f - 2.0f * fYLimit)
+    pDrawList->AddLine(ImVec2(vCursorPos.x, oRect.Max.y - fCursorOff), ImVec2(vCursorPos.x, vCursorPos.y + fCursorOff), uOrange, fLineThickness);
+
+  // Horizontal Line
+  if (fScaleX > 2.0f * fXLimit)
+    pDrawList->AddLine(ImVec2(oRect.Min.x + fCursorOff, vCursorPos.y), ImVec2(vCursorPos.x - fCursorOff, vCursorPos.y), uOrange, fLineThickness);
+  if (fScaleX < 1.0f - 2.0f * fYLimit)
+    pDrawList->AddLine(ImVec2(oRect.Max.x - fCursorOff, vCursorPos.y), ImVec2(vCursorPos.x + fCursorOff, vCursorPos.y), uOrange, fLineThickness);
+
+  std::string formatX = ImGui::DataTypeGetInfo(data_type)->PrintFmt;
+  std::string formatY = ImGui::DataTypeGetInfo(data_type)->PrintFmt;
+
+  if (IsPositiveScalar(data_type, (ImU64*)p_valueX))
+  {
+    formatX = " " + formatX;
+  }
+  if (IsPositiveScalar(data_type, (ImU64*)p_valueY))
+  {
+    formatY = " " + formatY;
+  }
+
+  char pBufferX[64];
+  char pBufferY[64];
+  /*const char* value_buf_end_x = pBufferX + */ImGui::DataTypeFormatString(pBufferX, IM_ARRAYSIZE(pBufferX), data_type, p_valueX, formatX.c_str());
+  /*const char* value_buf_end_y = pBufferX + */ImGui::DataTypeFormatString(pBufferY, IM_ARRAYSIZE(pBufferY), data_type, p_valueY, formatY.c_str());
+
+  ImU32 const uTextCol = ImGui::ColorConvertFloat4ToU32(ImGui::GetStyle().Colors[ImGuiCol_Text]);
+
+  ImGui::SetWindowFontScale(0.75f);
+
+  ImVec2 const vXSize = ImGui::CalcTextSize(pBufferX);
+  ImVec2 const vYSize = ImGui::CalcTextSize(pBufferY);
+
+  ImVec2 const vHandlePosX = ImVec2(vCursorPos.x, oRect.Max.y + vYSize.x * 0.5f);
+  ImVec2 const vHandlePosY = ImVec2(oRect.Max.x + fHandleOffsetCoef * fCursorOff + vYSize.x, vCursorPos.y);
+
+  ImRect handle_x_bb = ImRect(vHandlePosX - ImVec2(fHandleRadius, fHandleRadius) - vSecurity, vHandlePosX + ImVec2(fHandleRadius, fHandleRadius) + vSecurity);
+  ImRect handle_y_bb = ImRect(vHandlePosY - ImVec2(fHandleRadius, fHandleRadius) - vSecurity, vHandlePosY + ImVec2(fHandleRadius, fHandleRadius) + vSecurity);
+  pressed = ImGui::ButtonBehavior(handle_x_bb, ImGui::GetID("##HandleX"), &hovered, &held);
+  if (hovered && held)
+  {
+    ImVec2 const vCursorPosLocal = ImGui::GetMousePos() - oRect.Min;
+
+    //*fValueX = vCursorPos.x / (oRect.Max.x - oRect.Min.x) * fDeltaX + fMinX;
+    float fValueX = vCursorPosLocal.x / (oRect.Max.x - oRect.Min.x) * ScalarToFloat(data_type, &s_delta_x) + ScalarToFloat(data_type, (ImU64*)p_minX);
+    ImU64 s_value_x = FloatToScalar(data_type, fValueX);
+    EqualScalar(data_type, (ImU64*)p_valueX, &s_value_x);
+
+    bModified = true;
+  }
+  pressed = ImGui::ButtonBehavior(handle_y_bb, ImGui::GetID("##HandleX"), &hovered, &held);
+  if (hovered && held)
+  {
+    ImVec2 const vCursorPosLocal = ImGui::GetMousePos() - oRect.Min;
+
+    //*fValueY = fDeltaY - vCursorPos.y / (oRect.Max.y - oRect.Min.y) * fDeltaY + fMinY;
+    float fValueY = ScalarToFloat(data_type, &s_delta_y) - vCursorPosLocal.y / (oRect.Max.y - oRect.Min.y) * ScalarToFloat(data_type, &s_delta_y) + ScalarToFloat(data_type, (ImU64*)p_minY);
+    ImU64 s_value_y = FloatToScalar(data_type, fValueY);
+    EqualScalar(data_type, (ImU64*)p_valueY, &s_value_y);
+
+    bModified = true;
+  }
+
+  pDrawList->AddText(
+    ImVec2(
+      ImMin(ImMax(vCursorPos.x - vXSize.x * 0.5f, oRect.Min.x), oRect.Min.x + vSize.x - vXSize.x),
+      oRect.Max.y + fCursorOff),
+    uTextCol,
+    pBufferX);
+  pDrawList->AddText(
+    ImVec2(oRect.Max.x + fCursorOff, ImMin(ImMax(vCursorPos.y - vYSize.y * 0.5f, oRect.Min.y),
+      oRect.Min.y + vSize.y - vYSize.y)),
+    uTextCol,
+    pBufferY);
+  ImGui::SetWindowFontScale(1.0f);
+
+  // Borders::Right
+  pDrawList->AddCircleFilled(ImVec2(oRect.Max.x, vCursorPos.y), 2.0f, uOrange, 3);
+  // Handle Right::Y
+  pDrawList->AddNgonFilled(ImVec2(oRect.Max.x + fHandleOffsetCoef * fCursorOff + vYSize.x, vCursorPos.y), fHandleRadius, uBlue, 4);
+  if (fScaleY > fYLimit)
+    pDrawList->AddLine(ImVec2(oRect.Max.x, oRect.Min.y), ImVec2(oRect.Max.x, vCursorPos.y - fCursorOff), uBlue, fBorderThickness);
+  if (fScaleY < 1.0f - fYLimit)
+    pDrawList->AddLine(ImVec2(oRect.Max.x, oRect.Max.y), ImVec2(oRect.Max.x, vCursorPos.y + fCursorOff), uBlue, fBorderThickness);
+  // Borders::Top
+  pDrawList->AddCircleFilled(ImVec2(vCursorPos.x, oRect.Min.y), 2.0f, uOrange, 3);
+  if (fScaleX > fXLimit)
+    pDrawList->AddLine(ImVec2(oRect.Min.x, oRect.Min.y), ImVec2(vCursorPos.x - fCursorOff, oRect.Min.y), uBlue, fBorderThickness);
+  if (fScaleX < 1.0f - fXLimit)
+    pDrawList->AddLine(ImVec2(oRect.Max.x, oRect.Min.y), ImVec2(vCursorPos.x + fCursorOff, oRect.Min.y), uBlue, fBorderThickness);
+  // Borders::Left
+  pDrawList->AddCircleFilled(ImVec2(oRect.Min.x, vCursorPos.y), 2.0f, uOrange, 3);
+  if (fScaleY > fYLimit)
+    pDrawList->AddLine(ImVec2(oRect.Min.x, oRect.Min.y), ImVec2(oRect.Min.x, vCursorPos.y - fCursorOff), uBlue, fBorderThickness);
+  if (fScaleY < 1.0f - fYLimit)
+    pDrawList->AddLine(ImVec2(oRect.Min.x, oRect.Max.y), ImVec2(oRect.Min.x, vCursorPos.y + fCursorOff), uBlue, fBorderThickness);
+  // Borders::Bottom
+  pDrawList->AddCircleFilled(ImVec2(vCursorPos.x, oRect.Max.y), 2.0f, uOrange, 3);
+  // Handle Bottom::X
+  pDrawList->AddNgonFilled(ImVec2(vCursorPos.x, oRect.Max.y + vXSize.y * 2.0f), fHandleRadius, uBlue, 4);
+  if (fScaleX > fXLimit)
+    pDrawList->AddLine(ImVec2(oRect.Min.x, oRect.Max.y), ImVec2(vCursorPos.x - fCursorOff, oRect.Max.y), uBlue, fBorderThickness);
+  if (fScaleX < 1.0f - fXLimit)
+    pDrawList->AddLine(ImVec2(oRect.Max.x, oRect.Max.y), ImVec2(vCursorPos.x + fCursorOff, oRect.Max.y), uBlue, fBorderThickness);
+
+  ImGui::PopID();
+
+  ImGui::Dummy(vHeightOffset);
+  ImGui::Dummy(vHeightOffset);
+  ImGui::Dummy(vSize);
+
+  return bModified;
 }
 
 bool ImGui::SliderFloat(const char* label, float* v, float v_min, float v_max, const char* format, ImGuiSliderFlags flags)

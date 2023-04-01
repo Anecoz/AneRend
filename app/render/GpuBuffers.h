@@ -33,6 +33,7 @@ struct GPUNonIndexDrawCallCmd {
 struct GPUGrassBlade {
   glm::vec4 _worldPos;
   glm::vec4 _data; // x and y: facing dir, z: tilt, w: bend
+  glm::vec4 _data2; //x: per-blade hash
 };
 
 // Minimum supported size of push constants is 128 bytes! (RTX 3080 has a limit of 256 bytes)

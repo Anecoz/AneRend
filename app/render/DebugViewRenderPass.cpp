@@ -70,7 +70,7 @@ bool DebugViewRenderPass::init(RenderContext* renderContext, RenderResourceVault
   _screenQuad._vertices = graphicsutil::createScreenQuad(0.25f, 0.25f);
 
   _meshId = renderContext->registerMesh(_screenQuad._vertices, {});
-  _renderableId = renderContext->registerRenderable(_meshId, STANDARD_MATERIAL_ID, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
+  _renderableId = renderContext->registerRenderable(_meshId, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
   renderContext->setRenderableVisible(_renderableId, false);
 
   _currResource = "ShadowMap";

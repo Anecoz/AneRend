@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Vertex.h"
-#include "MaterialId.h"
 
 #include <cstdint>
 #include <string>
@@ -13,7 +12,6 @@ class Model
 {
 public:
   Model();
-  Model(MaterialID materialID);
   ~Model();
 
   Model(const Model&);
@@ -27,6 +25,5 @@ public:
 
   std::vector<Vertex> _vertices;
   std::vector<std::uint32_t> _indices;
-  MaterialID _materialId;
 };
 }

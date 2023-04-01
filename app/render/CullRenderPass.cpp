@@ -279,11 +279,22 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
         0, nullptr);
 
       auto pushConstants = renderContext->getCullParams();
-      vkCmdPushConstants(*cmdBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(gpu::GPUCullPushConstants), &pushConstants);
+      auto windStrength = renderContext->getDebugOptions().windStrength;
+
+      uint8_t pushData[256];
+      memcpy(pushData, &pushConstants, sizeof(gpu::GPUCullPushConstants));
+      memcpy(pushData + sizeof(gpu::GPUCullPushConstants), &windStrength, sizeof(float));
+      vkCmdPushConstants(
+        *cmdBuffer,
+        _pipelineLayout, 
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 
+        0,
+        sizeof(gpu::GPUCullPushConstants) + sizeof(float),
+        pushData);
 
       // 32 is the local group size in the comp shader
       const uint32_t localSize = 32;
-      int sqr = std::ceil(std::sqrt((double)renderContext->getCurrentNumRenderables() / (double)(localSize*localSize)));
+      int sqr = 20;// std::ceil(std::sqrt((double)renderContext->getCurrentNumRenderables() / (double)(localSize * localSize)));
       vkCmdDispatch(*cmdBuffer, sqr, sqr, 1);
     });
 }

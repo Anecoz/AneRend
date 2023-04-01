@@ -13,16 +13,11 @@
 #include "vk_mem_alloc.h"
 
 #include "Vertex.h"
-#include "MaterialId.h"
 #include "MeshId.h"
-#include "Material.h"
 #include "Camera.h"
 #include "AllocatedBuffer.h"
 #include "AllocatedImage.h"
 #include "Swapchain.h"
-#include "Shadowpass.h"
-#include "Geometrypass.h"
-#include "PostProcessingPass.h"
 #include "Light.h"
 #include "RenderContext.h"
 #include "RenderPass.h"
@@ -61,7 +56,6 @@ public:
   // After doing this, the renderable will be rendered every frame with the given material, until unregistered.
   RenderableId registerRenderable(
     MeshId meshId,
-    MaterialID materialId,
     const glm::mat4& transform,
     const glm::vec3& sphereBoundCenter,
     float sphereBoundRadius);
@@ -71,13 +65,6 @@ public:
 
   // Hide or show a renderable.
   void setRenderableVisible(RenderableId id, bool visible);
-
-  // Queues push constant data to be used with the specific renderable next frame.
-  // Typically per-object type stuff here, such as model matrix.
-  // The material for the renderable has to be compatible with the push constant.
-  // These will be used every frame until something else is specified.
-  // NOTE: There is a size limit to push constants... good luck!
-  void queuePushConstant(RenderableId id, std::uint32_t size, void* pushConstants);
 
   void update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, double time, bool lockCulling, RenderDebugOptions options);
 
@@ -146,16 +133,12 @@ private:
     RenderableId _id;
 
     MeshId _meshId;
-    MaterialID _materialId;
 
     bool _visible = true;
 
     glm::mat4 _transform;
     glm::vec3 _boundingSphereCenter;
     float _boundingSphereRadius;
-
-    std::array<std::uint8_t, MAX_PUSH_CONSTANT_SIZE> _pushConstants;
-    std::uint32_t _pushConstantsSize = 0;
   };
 
   std::vector<Renderable> _currentRenderables;
@@ -175,12 +158,6 @@ private:
 
   void executeFrameGraph(VkCommandBuffer commandBuffer, int imageIndex);
 
-  std::unordered_map<MaterialID, Material> _materials;
-  std::unordered_map<MaterialID, std::size_t> _materialUsage; // size_t is how many are using material
-  std::vector<std::pair<Material, std::size_t>> _ppMaterials; //size_t is index into pp render pass resources
-  bool materialIdExists(MaterialID) const;
-  bool materialIdCurrentlyInUse(MaterialID) const;
-
   // Giga mesh buffer that contains both vertex and index data of all currently registered meshes
   struct GigaMeshBuffer {
     AllocatedBuffer _buffer;
@@ -198,39 +175,11 @@ private:
   // Contains renderable info for compute culling shader.
   std::vector<AllocatedBuffer> _gpuRenderableBuffer;
 
-  // Contains draw commands pre-filled on CPU and then updated by compute culling shader.
-  std::vector<AllocatedBuffer> _gpuDrawCmdBuffer;
-
-  // Translates from gl_InstanceID to renderableID in vertex shader. Written by compute. gl_InstanceID is offset by firstInstance of each draw call.
-  std::vector<AllocatedBuffer> _gpuTranslationBuffer;
-
   // Contains scene data needed in shaders (view and proj matrices etc.)
   std::vector<AllocatedBuffer> _gpuSceneDataBuffer;
 
   // Fills gpu renderable buffer with current renderable information (could be done async)
   void prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer);
-
-  // Fills gpu draw cmd buffer, so that compute shader only has to do numInstance++ for each respective mesh draw command.
-  void prefillGPUDrawCmdBuffer(VkCommandBuffer& commandBuffer);
-
-  // Fills gpu translation buffer with 0's
-  void prefillGPUTranslationBuffer(VkCommandBuffer& commandBuffer);
-
-  Material _computeMaterial;
-  std::vector<VkDescriptorSet> _computeDescriptorSets;
-
-  void drawRenderables(
-    VkCommandBuffer& commandBuffer,
-    std::size_t materialIndex,
-    bool shadowSupportRequired,
-    VkViewport& viewport,
-    VkRect2D& scissor,
-    void* extraPushConstants = nullptr,
-    std::size_t extraPushConstantsSize = 0);
-
-  Shadowpass _shadowPass;
-  Geometrypass _geometryPass;
-  PostProcessingPass _ppPass;
 
   std::vector<Light> _lights;
 
@@ -243,21 +192,14 @@ private:
   bool createVmaAllocator();
   bool createSurface();
   bool createSwapChain();
-  bool loadKnownMaterials();
   bool createCommandPool();
   bool createCommandBuffers();
   bool createSyncObjects();
   bool createDescriptorPool();
-  bool createDepthResources();
-  bool initShadowpass();
   bool initLights();
-  bool initShadowDebug();
-  bool initPostProcessingPass();
-  bool initPostProcessingRenderable();
   bool initImgui();
   bool initGigaMeshBuffer();
   bool initGpuBuffers();
-  bool initComputePipelines();
   bool initBindless();
   bool initFrameGraphBuilder();
 
@@ -267,12 +209,6 @@ private:
 
   void cleanupSwapChain();
   void recreateSwapChain();
-
-  bool createIndexBuffer(const std::vector<std::uint32_t>& indices, AllocatedBuffer& buffer);
-  bool createVertexBuffer(std::uint8_t* data, std::size_t dataSize, AllocatedBuffer& buffer);
-  void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-
-  void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
   VkCommandBuffer beginSingleTimeCommands();
   void endSingleTimeCommands(VkCommandBuffer buffer);
@@ -284,12 +220,6 @@ private:
 
   VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
   VkFormat findDepthFormat();
-
-  void recordCommandBuffer(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool pp, bool debug);
-  void recordCommandBufferShadow(VkCommandBuffer commandBuffer, bool debug);
-  void recordCommandBufferGeometry(VkCommandBuffer commandBuffer, bool debug);
-  void recordCommandBufferPP(VkCommandBuffer commandBuffer, std::uint32_t imageIndex, bool debug);
-  void executeGpuCullDispatch(VkCommandBuffer commandBuffer, Camera& cullCamera);
 
   GLFWwindow* _window;
   bool _enableValidationLayers;
@@ -307,9 +237,6 @@ private:
 
   VkSurfaceKHR _surface;
   Swapchain _swapChain;
-
-  AllocatedImage _depthImage;
-  VkImageView _depthImageView;
 
   bool _framebufferResized = false;
 
