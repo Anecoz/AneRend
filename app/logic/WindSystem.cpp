@@ -5,6 +5,8 @@ namespace logic {
 WindSystem::WindSystem()
   : _windDir(1.0f, 0.0f)
 {
+  _perlin.SetOctaveCount(3);
+
   _heightMapBuilder.SetSourceModule(_perlin);
   _heightMapBuilder.SetDestNoiseMap(_heightMap);
   _heightMapBuilder.SetDestSize(256, 256);
@@ -22,7 +24,7 @@ void WindSystem::setWindDir(const glm::vec2& windDir)
 
 void WindSystem::update(double delta)
 {
-  const double speed = 0.8;
+  const double speed = 0.5;
 
   // Scroll in wind direction and rebuild
   double prevLowerX = _heightMapBuilder.GetLowerXBound();

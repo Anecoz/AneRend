@@ -309,18 +309,18 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
         0, nullptr);
 
       auto pushConstants = renderContext->getCullParams();
-      auto windStrength = renderContext->getDebugOptions().windStrength;
+      //auto windDir = renderContext->getWindDir();
 
-      uint8_t pushData[256];
-      memcpy(pushData, &pushConstants, sizeof(gpu::GPUCullPushConstants));
-      memcpy(pushData + sizeof(gpu::GPUCullPushConstants), &windStrength, sizeof(float));
+      //uint8_t pushData[256];
+      //memcpy(pushData, &pushConstants, sizeof(gpu::GPUCullPushConstants));
+      //memcpy(pushData + sizeof(gpu::GPUCullPushConstants), &windDir, sizeof(glm::vec2));
       vkCmdPushConstants(
         *cmdBuffer,
         _pipelineLayout, 
         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 
         0,
-        sizeof(gpu::GPUCullPushConstants) + sizeof(float),
-        pushData);
+        sizeof(gpu::GPUCullPushConstants),
+        &pushConstants);
 
       // 32 is the local group size in the comp shader
       const uint32_t localSize = 32;

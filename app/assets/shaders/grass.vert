@@ -90,8 +90,9 @@ void main() {
   float phaseOffset = bladeHash * 1.57;
   float speedMult = 2.0 * (bladeHash + 1.0) * (windStrength + 1.0);
   float maxAmplitude = 0.01 * (windStrength + 3.0);
-  p3 = p3 + sin(ubo.time*speedMult + phaseOffset)*maxAmplitude*away;
-  p2 = p2 + sin(ubo.time*speedMult + 1.57 + phaseOffset)*maxAmplitude/2.0*away;
+  float timeMod = mod(ubo.time, 2.0*acos(-1.0)); // To stop loss of precision when ubo.time gets big
+  p3 = p3 + sin(timeMod*speedMult + phaseOffset)*maxAmplitude*away;
+  p2 = p2 + sin(timeMod*speedMult + 1.57 + phaseOffset)*maxAmplitude/2.0*away;
 
   // Use bezier function to find this vertex' point
   float t = floor(float(gl_VertexIndex) / 2.0) / (float(NUM_VERT_IDX) / 2.0);

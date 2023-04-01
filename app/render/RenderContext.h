@@ -57,6 +57,8 @@ public:
   virtual RenderDebugOptions& getDebugOptions() = 0;
 
   virtual void setDebugName(VkObjectType objectType, uint64_t objectHandle, const char* name) = 0;
+
+  virtual glm::vec2 getWindDir() = 0;
 };
 
 }

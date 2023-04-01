@@ -40,10 +40,12 @@ struct GPUGrassBlade {
 struct GPUCullPushConstants {
   glm::mat4 _view;             // 4 * 4 * 4 = 64 bytes
   glm::vec4 _frustumPlanes[4]; // 4 * 4 * 4 = 64 bytes
-  float _nearDist;
-  float _farDist;
+  float _nearDist;             // 4 bytes
+  float _farDist;              // 4 bytes
   uint32_t _drawCount;         // 4 bytes
-                               // Total: 132 bytes
+  float _windDirX;          // 8 bytes
+  float _windDirY;
+                               // Total: 148 bytes
 };
 
 // This is used as a UBO and has follows std140 rules (use 4-byte things basically...)

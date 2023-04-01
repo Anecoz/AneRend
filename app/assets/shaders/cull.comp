@@ -62,7 +62,8 @@ layout(push_constant) uniform constants {
   float nearDist;
   float farDist;
   uint drawCount;
-  float windStrength; // temp
+  float windDirX;
+  float windDirY;
 } pushConstants;
 
 const uint k = 1103515245U;  // GLIB C
@@ -150,9 +151,9 @@ void main()
     float height = .5 * max(bladeHash2D.y, 0.3);
 
     vec2 facing = normalize(bladeHash2D * 2.0 - 1.0);
-    vec2 windDir = vec2(-1.0, 0.0);
     
-    float windStrength = texture(windForceTex, vec2(float(xPos)/256.0, float(yPos)/256.0)).r * 0.5;
+    float windStrength = texture(windForceTex, vec2(float(xPos)/256.0, float(yPos)/256.0)).r;
+    vec2 windDir = vec2(pushConstants.windDirX, pushConstants.windDirY);
 
     grassObjBuffer.blades[instanceIndex].worldPos = vec4(worldPos, height);
     grassObjBuffer.blades[instanceIndex].data.xy = normalize(facing*(1.0 - windStrength) + windDir*windStrength);

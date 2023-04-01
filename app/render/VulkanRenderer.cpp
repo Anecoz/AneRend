@@ -1686,6 +1686,12 @@ bool VulkanRenderer::initGpuBuffers()
       _gpuWindForceImage[i]._image,
       VK_FORMAT_R32_SFLOAT,
       VK_IMAGE_ASPECT_COLOR_BIT);
+
+    // Add the wind force image view to the vault so that the debug view can watch it
+    auto res = new ImageViewRenderResource();
+    res->_format = VK_FORMAT_R32_SFLOAT;
+    res->_view = _gpuWindForceView[i];
+    _vault.addResource("WindForceView", std::unique_ptr<IRenderResource>(res), true, i);
   }
 
   return true;
@@ -2023,6 +2029,9 @@ gpu::GPUCullPushConstants VulkanRenderer::getCullParams()
   cullPushConstants._view = _latestCamera.getCamMatrix();
   cullPushConstants._farDist = _latestCamera.getFar();
   cullPushConstants._nearDist = _latestCamera.getNear();
+  auto wind = glm::normalize(_currentWindMap.windDir);
+  cullPushConstants._windDirX = wind.x;
+  cullPushConstants._windDirY = wind.y;
 
   return cullPushConstants;
 }
@@ -2041,6 +2050,11 @@ void VulkanRenderer::setDebugName(VkObjectType objectType, uint64_t objectHandle
   nameInfo.pObjectName = name;
 
   SetDebugUtilsObjectNameEXT(_instance, _device, &nameInfo);
+}
+
+glm::vec2 VulkanRenderer::getWindDir()
+{
+  return _currentWindMap.windDir;
 }
 
 }

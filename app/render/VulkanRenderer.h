@@ -120,6 +120,8 @@ public:
 
   void setDebugName(VkObjectType objectType, uint64_t objectHandle, const char* name) override final;
 
+  virtual glm::vec2 getWindDir() override final;
+
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;

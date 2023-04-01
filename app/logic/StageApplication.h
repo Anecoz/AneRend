@@ -33,6 +33,7 @@ private:
   render::VulkanRenderer _vkRenderer;
   render::RenderDebugOptions _renderDebugOptions;
   logic::WindSystem _windSystem;
+  glm::vec2 _windDir;
 
   render::Camera _camera;
   render::Camera _shadowCamera;

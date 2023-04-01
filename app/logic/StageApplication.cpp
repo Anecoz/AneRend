@@ -16,6 +16,7 @@ StageApplication::StageApplication(std::string title)
   : Application(std::move(title))
   , _sunDir(glm::vec3(0.7f, -0.7f, 0.7f))
   , _vkRenderer(_window)
+  , _windDir(glm::vec2(-1.0, 0.0))
   , _camera(glm::vec3(-17.0, 6.0, 4.0), render::ProjectionType::Perspective)
   , _shadowCamera(glm::vec3(-20.0f, 15.0f, -20.0f), render::ProjectionType::Orthogonal)
 {
@@ -99,6 +100,10 @@ bool StageApplication::init()
 
 void StageApplication::update(double delta)
 {
+  /*if (glfwGetTime() > 5.0) {
+    glfwSetTime(0.0);
+  }*/
+
   calculateShadowMatrix();
 
   if (KeyInput::isKeyClicked(GLFW_KEY_ESCAPE)) {
@@ -106,7 +111,10 @@ void StageApplication::update(double delta)
   }
 
   _camera.update(delta);
+
   _windSystem.update(delta);
+  _windSystem.setWindDir(glm::normalize(_windDir));
+
   _vkRenderer.update(
     _camera,
     _shadowCamera,
@@ -152,6 +160,7 @@ void StageApplication::render()
       _renderDebugOptions.debugViewResource = std::string(debugResStr);
     }
     ImGui::Slider2DFloat("Sun dir", &_sunDir.x, &_sunDir.z, -1.0f, 1.0f, -1.0f, 1.0f);
+    ImGui::Slider2DFloat("Wind dir", &_windDir.x, &_windDir.y, -1.0f, 1.0f, -1.0f, 1.0f);
     ImGui::Checkbox("Shadow debug", &_renderDebugOptions.debugView);
     ImGui::Checkbox("Apply post processing", &g_PP);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
