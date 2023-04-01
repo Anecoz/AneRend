@@ -198,7 +198,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       // Get resources
       auto colorView = (ImageViewRenderResource*)vault->getResource("GeometryColorImageView");
       auto depthView = (ImageViewRenderResource*)vault->getResource("GeometryDepthImageView");
-      auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullDrawBuf");
+      auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullDrawBuf", multiBufferIdx);
 
       // Dynamic rendering begin
       std::array<VkClearValue, 2> clearValues{};

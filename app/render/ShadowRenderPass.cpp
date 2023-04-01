@@ -125,7 +125,7 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     [this](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra)
     {
       auto shadowMapView = (ImageViewRenderResource*)vault->getResource("ShadowMapView");
-      auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullDrawBuf");
+      auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullDrawBuf", multiBufferIdx);
 
       VkExtent2D extent{};
       extent.width = 4096;

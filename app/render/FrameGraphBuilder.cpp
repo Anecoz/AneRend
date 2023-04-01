@@ -44,6 +44,7 @@ void FrameGraphBuilder::registerResourceInitExe(const std::string& resource, Res
 {
   ResourceInit resInit;
   resInit._resource = resource;
+  initUsage._resourceName = resource;
   resInit._initFcn = initFcn;
   resInit._initUsage = std::move(initUsage);
   _resourceInits.emplace_back(std::move(resInit));

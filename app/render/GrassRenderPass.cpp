@@ -105,7 +105,7 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       // Get resources
       auto colorView = (ImageViewRenderResource*)vault->getResource("GeometryColorImageView");
       auto depthView = (ImageViewRenderResource*)vault->getResource("GeometryDepthImageView");
-      auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullGrassDrawBuf");
+      auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullGrassDrawBuf", multiBufferIdx);
 
       // Dynamic rendering begin
       std::array<VkClearValue, 2> clearValues{};

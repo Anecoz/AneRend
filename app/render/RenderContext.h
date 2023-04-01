@@ -55,6 +55,8 @@ public:
   virtual gpu::GPUCullPushConstants getCullParams() = 0;
 
   virtual RenderDebugOptions& getDebugOptions() = 0;
+
+  virtual void setDebugName(VkObjectType objectType, uint64_t objectHandle, const char* name) = 0;
 };
 
 }

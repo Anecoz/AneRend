@@ -51,6 +51,17 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
   }
 }
 
+VkResult SetDebugUtilsObjectNameEXT(VkInstance instance, VkDevice device, const VkDebugUtilsObjectNameInfoEXT* pNameInfo)
+{
+  auto func = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT");
+  if (func != nullptr) {
+    return func(device, pNameInfo);
+  }
+  else {
+    return VK_ERROR_EXTENSION_NOT_PRESENT;
+  }
+}
+
 VKAPI_ATTR VkBool32 VKAPI_CALL g_DebugCallback(
   VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
   VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -119,6 +130,10 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _gpuRenderableBuffer[i]._buffer, _gpuRenderableBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuStagingBuffer[i]._buffer, _gpuStagingBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSceneDataBuffer[i]._buffer, _gpuSceneDataBuffer[i]._allocation);
+
+    vkDestroyImageView(_device, _gpuWindForceView[i], nullptr);
+    vmaDestroyImage(_vmaAllocator, _gpuWindForceImage[i]._image, _gpuWindForceImage[i]._allocation);
+    vkDestroySampler(_device, _gpuWindForceSampler[i], nullptr);
   }
 
   vkDestroyCommandPool(_device, _commandPool, nullptr);
@@ -711,7 +726,15 @@ void VulkanRenderer::cleanupRenderable(const Renderable& renderable)
   }*/
 }
 
-void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, double time, bool lockCulling, RenderDebugOptions options)
+void VulkanRenderer::update(
+  const Camera& camera,
+  const Camera& shadowCamera,
+  const glm::vec4& lightDir,
+  double delta,
+  double time,
+  bool lockCulling,
+  RenderDebugOptions options,
+  logic::WindMap windMap)
 {
   // TODO: We can't write to this frames UBO's until the GPU is finished with it.
   // If we run unlimited FPS we are quite likely to end up doing just that.
@@ -720,6 +743,7 @@ void VulkanRenderer::update(const Camera& camera, const Camera& shadowCamera, co
   vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
 
   _debugOptions = options;
+  _currentWindMap = windMap;
 
   // Update bindless UBO
   auto shadowProj = shadowCamera.getProjection();
@@ -815,6 +839,7 @@ void VulkanRenderer::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreat
 {
   createInfo = {};
   createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+  createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT;
   createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
   createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
   createInfo.pfnUserCallback = g_DebugCallback;
@@ -1200,8 +1225,13 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 {
   // Each renderable that we currently have on the CPU needs to be udpated for the GPU buffer.
   std::size_t dataSize = _currentRenderables.size() * sizeof(gpu::GPURenderable);
-  gpu::GPURenderable* mappedData;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&mappedData);
+  uint8_t* data;
+  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+
+  // Offset according to current staging buffer usage
+  data = data + _currentStagingOffset;
+
+  gpu::GPURenderable* mappedData = reinterpret_cast<gpu::GPURenderable*>(data);
 
   // Also fill mesh usage buffer while we're looping through renderables anyway
   _currentMeshUsage.clear();
@@ -1221,7 +1251,7 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
-  copyRegion.srcOffset = 0;
+  copyRegion.srcOffset = _currentStagingOffset;
   copyRegion.size = dataSize;
   vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuRenderableBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
@@ -1244,6 +1274,75 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     0, nullptr);
 
   vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+
+  // Update staging offset
+  _currentStagingOffset += dataSize;
+}
+
+void VulkanRenderer::updateWindForceImage(VkCommandBuffer& commandBuffer)
+{
+  std::size_t dataSize = _currentWindMap.height * _currentWindMap.width * 4;
+  uint8_t* data;
+  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+
+  // Offset according to current staging buffer usage
+  data = data + _currentStagingOffset;
+  auto mappedData = reinterpret_cast<float*>(data);
+
+  for (int x = 0; x < _currentWindMap.width; x++)
+    for (int y = 0; y < _currentWindMap.height; y++) {
+      mappedData[x * _currentWindMap.width + y] = (_currentWindMap.data[x * _currentWindMap.width + y] + 1.0f) / 2.0f;
+  }
+
+  // Transition image to dst optimal
+  imageutil::transitionImageLayout(
+    commandBuffer,
+    _gpuWindForceImage[_currentFrame]._image,
+    VK_FORMAT_R32_SFLOAT,
+    VK_IMAGE_LAYOUT_UNDEFINED,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+  VkExtent3D extent{};
+  extent.depth = 1;
+  extent.height = _currentWindMap.height;
+  extent.width = _currentWindMap.width;
+
+  VkOffset3D offset{};
+  offset.x = 0;
+  offset.y = 0;
+  offset.z = 0;
+
+  VkBufferImageCopy imCopy{};
+  imCopy.bufferOffset = _currentStagingOffset;
+  imCopy.bufferImageHeight = 0;
+  imCopy.bufferRowLength = 0;
+  imCopy.imageExtent = extent;
+  imCopy.imageOffset = offset;
+  imCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  imCopy.imageSubresource.mipLevel = 0;
+  imCopy.imageSubresource.baseArrayLayer = 0;
+  imCopy.imageSubresource.layerCount = 1;
+
+  vkCmdCopyBufferToImage(
+    commandBuffer,
+    _gpuStagingBuffer[_currentFrame]._buffer,
+    _gpuWindForceImage[_currentFrame]._image,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    1,
+    &imCopy);
+
+  // Transition to shader read
+  imageutil::transitionImageLayout(
+    commandBuffer,
+    _gpuWindForceImage[_currentFrame]._image,
+    VK_FORMAT_R32_SFLOAT,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+
+  // Update staging offset
+  _currentStagingOffset += dataSize;
 }
 
 bool VulkanRenderer::createSyncObjects()
@@ -1345,18 +1444,16 @@ bool VulkanRenderer::initBindless()
   /*
   * Bindings:
   * 0: Scene UBO (UBO)
-  * 1: Shadow samplers (Sampler)
+  * 1: Wind force (Sampler)
   * 2: Renderable buffer (SSBO)
   */
 
   uint32_t uboBinding = 0;
-  uint32_t samplerBinding = 1;
+  uint32_t windForceBinding = 1;
   uint32_t renderableBinding = 2;
 
   // Descriptor set layout
   {
-    uint32_t samplerCount = 4; // 4 point lights
-
     std::vector<VkDescriptorSetLayoutBinding> bindings;
     VkDescriptorSetLayoutBinding uboLayoutBinding{};
     uboLayoutBinding.binding = uboBinding;
@@ -1373,11 +1470,11 @@ bool VulkanRenderer::initBindless()
     bindings.emplace_back(std::move(renderableLayoutBinding));
 
     VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-    samplerLayoutBinding.binding = samplerBinding;
-    samplerLayoutBinding.descriptorCount = (uint32_t)samplerCount;
+    samplerLayoutBinding.binding = windForceBinding;
+    samplerLayoutBinding.descriptorCount = 1;
     samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     samplerLayoutBinding.pImmutableSamplers = nullptr;
-    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
     bindings.emplace_back(std::move(samplerLayoutBinding));
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -1468,27 +1565,23 @@ bool VulkanRenderer::initBindless()
       descriptorWrites.emplace_back(std::move(rendBufWrite));
 
       // Samplers
-      /*std::vector<VkDescriptorImageInfo> imageInfos;
+      std::vector<VkDescriptorImageInfo> imageInfos;
       VkWriteDescriptorSet imWrite{};
-      if (!imageViews.empty()) {
-        for (std::size_t i = 0; i < imageViews.size(); ++i) {
-          VkDescriptorImageInfo imageInfo{};
-          imageInfo.imageLayout = imageLayout;
-          imageInfo.imageView = *(imageViews[i]);
-          imageInfo.sampler = *(samplers[i]);
-          imageInfos.emplace_back(std::move(imageInfo));
-        }
+      VkDescriptorImageInfo imageInfo{};
+      imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      imageInfo.imageView = _gpuWindForceView[i];
+      imageInfo.sampler = _gpuWindForceSampler[i];
+      imageInfos.emplace_back(std::move(imageInfo));
 
-        imWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        imWrite.dstSet = descriptorSets[i];
-        imWrite.dstBinding = samplerBinding;
-        imWrite.dstArrayElement = 0;
-        imWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        imWrite.descriptorCount = (uint32_t)imageViews.size();
-        imWrite.pImageInfo = imageInfos.data();
+      imWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      imWrite.dstSet = _bindlessDescriptorSets[i];
+      imWrite.dstBinding = windForceBinding;
+      imWrite.dstArrayElement = 0;
+      imWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      imWrite.descriptorCount = 1;
+      imWrite.pImageInfo = imageInfos.data();
 
-        descriptorWrites.emplace_back(std::move(imWrite));
-      }*/
+      descriptorWrites.emplace_back(std::move(imWrite));
 
       vkUpdateDescriptorSets(_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
     }
@@ -1530,12 +1623,15 @@ bool VulkanRenderer::initGpuBuffers()
   _gpuStagingBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuRenderableBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuSceneDataBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuWindForceSampler.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuWindForceImage.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuWindForceView.resize(MAX_FRAMES_IN_FLIGHT);
 
   for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     // Create a staging buffer that will be used to temporarily hold data that is to be copied to the gpu buffers.
     bufferutil::createBuffer(
       _vmaAllocator,
-      MAX_NUM_RENDERABLES * sizeof(gpu::GPURenderable), // We use this as the size, as the GPU buffers can never get bigger than this
+      MAX_NUM_RENDERABLES * sizeof(gpu::GPURenderable) * 2, // We use this as the size, as the GPU buffers can never get bigger than this
       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
       VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
       _gpuStagingBuffer[i]);
@@ -1555,6 +1651,41 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
       VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, // If this turns out to be a bottle neck we have to switch to a staging buffer
       _gpuSceneDataBuffer[i]);
+
+    // Wind force sampler
+    VkSamplerCreateInfo samplerCreate{};
+    samplerCreate.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerCreate.magFilter = VK_FILTER_NEAREST;
+    samplerCreate.minFilter = VK_FILTER_NEAREST;
+    samplerCreate.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerCreate.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerCreate.addressModeV = samplerCreate.addressModeU;
+    samplerCreate.addressModeW = samplerCreate.addressModeU;
+    samplerCreate.mipLodBias = 0.0f;
+    samplerCreate.maxAnisotropy = 1.0f;
+    samplerCreate.minLod = 0.0f;
+    samplerCreate.maxLod = 1.0f;
+    samplerCreate.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+
+    if (vkCreateSampler(_device, &samplerCreate, nullptr, &_gpuWindForceSampler[i]) != VK_SUCCESS) {
+      printf("Could not create bindless wind sampler!\n");
+    }
+
+    // Wind force image
+    imageutil::createImage(
+      256, 256,
+      VK_FORMAT_R32_SFLOAT,
+      VK_IMAGE_TILING_OPTIMAL,
+      _vmaAllocator,
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+      _gpuWindForceImage[i]);
+
+    // Wind force image view
+    _gpuWindForceView[i] = imageutil::createImageView(
+      _device,
+      _gpuWindForceImage[i]._image,
+      VK_FORMAT_R32_SFLOAT,
+      VK_IMAGE_ASPECT_COLOR_BIT);
   }
 
   return true;
@@ -1654,6 +1785,9 @@ void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
 
   _currentSwapChainIndex = imageIndex;
 
+  // Reset staging buffer usage
+  _currentStagingOffset = 0;
+
   // Window has resized for instance
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     recreateSwapChain();
@@ -1669,7 +1803,6 @@ void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
 
   // Recording command buffer
   vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
-  //recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex, applyPostProcessing, debug);
   executeFrameGraph(_commandBuffers[_currentFrame], imageIndex);
 
   // Submit the command buffer
@@ -1744,6 +1877,9 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
   // Prefill renderable buffer
   // This is unnecessary to do every frame!
   prefillGPURenderableBuffer(commandBuffer);
+
+  // Update windforce texture
+  updateWindForceImage(commandBuffer);
 
   // Bind giga buffers and bindless descriptors
   VkDeviceSize offsets[] = { 0 };
@@ -1894,6 +2030,17 @@ gpu::GPUCullPushConstants VulkanRenderer::getCullParams()
 RenderDebugOptions& VulkanRenderer::getDebugOptions()
 {
   return _debugOptions;
+}
+
+void VulkanRenderer::setDebugName(VkObjectType objectType, uint64_t objectHandle, const char* name)
+{
+  VkDebugUtilsObjectNameInfoEXT nameInfo{};
+  nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+  nameInfo.objectType = objectType;
+  nameInfo.objectHandle = objectHandle;
+  nameInfo.pObjectName = name;
+
+  SetDebugUtilsObjectNameEXT(_instance, _device, &nameInfo);
 }
 
 }

@@ -22,6 +22,8 @@ private:
   // Temp
   const std::size_t MAX_NUM_GRASS_BLADES = 32 * 32 * 1000;
 
+  std::size_t _currentStagingOffset = 0;
+
   std::vector<AllocatedBuffer> _gpuStagingBuffers;
   std::vector<VkDescriptorSet> _descriptorSets;
 };

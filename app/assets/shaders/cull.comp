@@ -34,6 +34,8 @@ struct GrassObj
   vec4 data2; //x: per-blade hash
 };
 
+layout(set = 0, binding = 1) uniform sampler2D windForceTex;
+
 layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {
   Renderable renderables[];
 } renderableBuffer;
@@ -149,12 +151,14 @@ void main()
 
     vec2 facing = normalize(bladeHash2D * 2.0 - 1.0);
     vec2 windDir = vec2(-1.0, 0.0);
+    
+    float windStrength = texture(windForceTex, vec2(float(xPos)/256.0, float(yPos)/256.0)).r * 0.5;
 
     grassObjBuffer.blades[instanceIndex].worldPos = vec4(worldPos, height);
-    grassObjBuffer.blades[instanceIndex].data.xy = normalize(facing*(1.0 - pushConstants.windStrength) + windDir*pushConstants.windStrength);
-    grassObjBuffer.blades[instanceIndex].data.z = min(bladeHash + pushConstants.windStrength, 1.0); // tilt
+    grassObjBuffer.blades[instanceIndex].data.xy = normalize(facing*(1.0 - windStrength) + windDir*windStrength);
+    grassObjBuffer.blades[instanceIndex].data.z = min(bladeHash + windStrength, 1.0); // tilt
     grassObjBuffer.blades[instanceIndex].data.w = bladeHash < 0.05 ? 0.0 : .1; // bend
     grassObjBuffer.blades[instanceIndex].data2.x = bladeHash;
-    grassObjBuffer.blades[instanceIndex].data2.y = pushConstants.windStrength;
+    grassObjBuffer.blades[instanceIndex].data2.y = windStrength;
   }
 }

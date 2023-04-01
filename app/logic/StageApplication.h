@@ -8,6 +8,7 @@
 #include "../render/Model.h"
 #include "../render/Camera.h"
 #include "../render/RenderDebugOptions.h"
+#include "WindSystem.h"
 
 class StageApplication : public Application
 {
@@ -31,6 +32,7 @@ private:
 
   render::VulkanRenderer _vkRenderer;
   render::RenderDebugOptions _renderDebugOptions;
+  logic::WindSystem _windSystem;
 
   render::Camera _camera;
   render::Camera _shadowCamera;

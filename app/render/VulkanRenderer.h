@@ -26,6 +26,8 @@
 #include "Mesh.h"
 #include "RenderableId.h"
 
+#include "../logic/WindSystem.h"
+
 #include <array>
 #include <unordered_map>
 #include <optional>
@@ -66,7 +68,15 @@ public:
   // Hide or show a renderable.
   void setRenderableVisible(RenderableId id, bool visible);
 
-  void update(const Camera& camera, const Camera& shadowCamera, const glm::vec4& lightDir, double delta, double time, bool lockCulling, RenderDebugOptions options);
+  void update(
+    const Camera& camera,
+    const Camera& shadowCamera,
+    const glm::vec4& lightDir,
+    double delta,
+    double time,
+    bool lockCulling,
+    RenderDebugOptions options,
+    logic::WindMap windMap);
 
   // Prepares some things for drawing (imgui stuff as of now).
   // Has to be called before drawFrame()!
@@ -108,6 +118,8 @@ public:
 
   RenderDebugOptions& getDebugOptions() override final;
 
+  void setDebugName(VkObjectType objectType, uint64_t objectHandle, const char* name) override final;
+
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
@@ -116,6 +128,7 @@ private:
   static const std::size_t MAX_NUM_MESHES = std::size_t(1e3);
 
   RenderDebugOptions _debugOptions;
+  logic::WindMap _currentWindMap;
 
   RenderableId _nextRenderableId = 1;
   MeshId _nextMeshId = 0;
@@ -144,7 +157,8 @@ private:
   std::vector<Renderable> _currentRenderables;
   void cleanupRenderable(const Renderable& renderable);
 
-  /* "Bindless" descriptor set layout and pipeline layout, used for every render pass.
+  /* 
+  * "Bindless" descriptor set layout and pipeline layout, used for every render pass.
   * The render passes create their own pipelines, specifying these on creation (accessed via RenderContext).
   * Only one descriptor set gets bound before all rendering.
   */
@@ -167,10 +181,9 @@ private:
     std::size_t _freeSpacePointer = 0; // points to where we currently can insert things into the buffer
   } _gigaMeshBuffer;
 
-  void createComputeDescriptorSet();
-
   // Staging buffer for copying data to the gpu buffers.
   std::vector<AllocatedBuffer> _gpuStagingBuffer;
+  std::size_t _currentStagingOffset = 0;
 
   // Contains renderable info for compute culling shader.
   std::vector<AllocatedBuffer> _gpuRenderableBuffer;
@@ -178,8 +191,20 @@ private:
   // Contains scene data needed in shaders (view and proj matrices etc.)
   std::vector<AllocatedBuffer> _gpuSceneDataBuffer;
 
+  // Contains wind system data, accessed by various render passes.
+  std::vector<AllocatedImage> _gpuWindForceImage;
+
+  // View for the wind force images.
+  std::vector<VkImageView> _gpuWindForceView;
+
+  // Samplers for the wind force images.
+  std::vector<VkSampler> _gpuWindForceSampler;
+
   // Fills gpu renderable buffer with current renderable information (could be done async)
   void prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer);
+
+  // Update wind force image
+  void updateWindForceImage(VkCommandBuffer& commandBuffer);
 
   std::vector<Light> _lights;
 
