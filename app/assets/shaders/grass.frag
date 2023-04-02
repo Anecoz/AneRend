@@ -28,7 +28,7 @@ void main() {
   vec3 diffuseColor = fragBladeHash * col0 + (1.0 - fragBladeHash) * col1;
   vec3 specColor = vec3(1.0, 1.0, 1.0);
 
-  //diffuseColor *= fragT;
+  diffuseColor *= fragT;
 
   vec3 normal = normalize(fragNormal);
 
@@ -37,16 +37,16 @@ void main() {
   vec3 ambient = ambientStrength * ambientColor;
 
   // Diffuse
-  float diff = max(dot(normal, -ubo.lightDir.xyz), 0.0);
+  float diff = max(dot(normal, ubo.lightDir.xyz), 0.0);
   vec3 diffuse = diff * vec3(1.0, 1.0, 1.0);
 
   // Specular 
   vec3 lightDirNorm = normalize(ubo.lightDir.xyz);
   vec3 viewDir = normalize(vec3(ubo.cameraPos) - fragPosition);
-  vec3 reflectDir = reflect(-lightDirNorm, normal);  
-  float spec = pow(max(dot(viewDir, reflectDir), 0.0), 324);
-  vec3 specular = 0.3 * spec * specColor;
+  vec3 reflectDir = reflect(lightDirNorm, normal);  
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16);
+  vec3 specular = 1.0 * spec * specColor;
 
-  vec3 result = (ambient + diffuse + specular) * diffuseColor * fragT;
+  vec3 result = (ambient + diffuse + specular) * diffuseColor;
   outColor = vec4(result, 1.0);
 }

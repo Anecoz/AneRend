@@ -74,7 +74,7 @@ void FrameGraphBuilder::registerRenderPassExe(const std::string& renderPass, Ren
   sub->_exe = exeFcn;
 }
 
-void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* renderContext, uint32_t graphicsFamilyQ)
+void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* renderContext)
 {
   for (auto& node : _builtGraph) {
     if (node._resourceInit) {
@@ -83,7 +83,7 @@ void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* 
     }
     else if (node._barrier) {
       auto resource = _vault->getResource(node._barrier->_resourceName, renderContext->getCurrentMultiBufferIdx());
-      node._barrier.value()._barrierFcn(resource, cmdBuffer, graphicsFamilyQ);
+      node._barrier.value()._barrierFcn(resource, cmdBuffer);
     }
     else if (node._rpExe) {
       if (node._hasExtraRpExeData) {
@@ -768,7 +768,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
 
           BarrierContext beforeWriteBarrier{};
           beforeWriteBarrier._resourceName = usage._resourceName;
-          beforeWriteBarrier._barrierFcn = [baseLayer, initialLayout](IRenderResource* resource, VkCommandBuffer& cmdBuffer, uint32_t) {
+          beforeWriteBarrier._barrierFcn = [baseLayer, initialLayout](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
             auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
 
             imageutil::transitionImageLayout(
@@ -801,7 +801,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         // If the next usage is the same as the current, no need to have a barrier...?
         // Probably an execution barrier is still needed?
         if (transitionPair.first != transitionPair.second) {
-          afterWriteBarrier._barrierFcn = [transitionPair, baseLayer](IRenderResource* resource, VkCommandBuffer& cmdBuffer, uint32_t) {
+          afterWriteBarrier._barrierFcn = [transitionPair, baseLayer](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
             auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
 
             imageutil::transitionImageLayout(
@@ -828,7 +828,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
 
         BarrierContext bufBarrier{};
         bufBarrier._resourceName = usage._resourceName;
-        bufBarrier._barrierFcn = [accessFlagPair, transStagePair](IRenderResource* resource, VkCommandBuffer& cmdBuffer, uint32_t graphicsFamilyQ) {
+        bufBarrier._barrierFcn = [accessFlagPair, transStagePair](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
           BufferRenderResource* buf = dynamic_cast<BufferRenderResource*>(resource);
 
           // If there is no access, an execution barrier is enough
@@ -847,8 +847,8 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
             memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
             memBarr.srcAccessMask = accessFlagPair.first;
             memBarr.dstAccessMask = accessFlagPair.second;
-            memBarr.srcQueueFamilyIndex = graphicsFamilyQ;
-            memBarr.dstQueueFamilyIndex = graphicsFamilyQ;
+            memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             memBarr.buffer = buf->_buffer._buffer;
             memBarr.offset = 0;
             memBarr.size = VK_WHOLE_SIZE;

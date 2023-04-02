@@ -257,6 +257,7 @@ private:
 
   QueueFamilyIndices _queueIndices;
   VkQueue _computeQ;
+  VkQueue _transferQ;
   VkQueue _graphicsQ;
   VkQueue _presentQ;
 

@@ -974,8 +974,17 @@ QueueFamilyIndices VulkanRenderer::findQueueFamilies(VkPhysicalDevice device)
       indices.graphicsFamily = i;
     }
 
-    if (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT) {
+    // Async compute
+    if (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT &&
+       !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
       indices.computeFamily = i;
+    }
+
+    // Transfer only (hopefully DMA)
+    if (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT &&
+      !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
+      !(queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
+      indices.transferFamily = i;
     }
 
     VkBool32 presentSupport = false;
@@ -1026,7 +1035,11 @@ bool VulkanRenderer::createLogicalDevice()
   auto familyIndices = findQueueFamilies(_physicalDevice);
 
   std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-  std::set<uint32_t> uniqueQueueFamilies = {familyIndices.graphicsFamily.value(), familyIndices.presentFamily.value()};
+  std::set<uint32_t> uniqueQueueFamilies = {
+    familyIndices.graphicsFamily.value(),
+    familyIndices.presentFamily.value(),
+    familyIndices.computeFamily.value(),
+    familyIndices.transferFamily.value()};
 
   float queuePriority = 1.0f;
   for (uint32_t queueFamily : uniqueQueueFamilies) {
@@ -1072,6 +1085,7 @@ bool VulkanRenderer::createLogicalDevice()
 
   _queueIndices = familyIndices;
   vkGetDeviceQueue(_device, familyIndices.computeFamily.value(), 0, &_computeQ);
+  vkGetDeviceQueue(_device, familyIndices.transferFamily.value(), 0, &_transferQ);
   vkGetDeviceQueue(_device, familyIndices.graphicsFamily.value(), 0, &_graphicsQ);
   vkGetDeviceQueue(_device, familyIndices.presentFamily.value(), 0, &_presentQ);
 
@@ -1895,7 +1909,7 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
   vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _bindlessPipelineLayout, 0, 1, &_bindlessDescriptorSets[_currentFrame], 0, nullptr);
   vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _bindlessPipelineLayout, 0, 1, &_bindlessDescriptorSets[_currentFrame], 0, nullptr);
 
-  _fgb.executeGraph(commandBuffer, this, _queueIndices.graphicsFamily.value());
+  _fgb.executeGraph(commandBuffer, this);
 
   // The swapchain image has to go to present, which is the last thing the frame graph does.
   imageutil::transitionImageLayout(commandBuffer, _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,

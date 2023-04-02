@@ -19,7 +19,7 @@ typedef std::function<void(RenderResourceVault* resourceVault, RenderContext* re
 
 typedef std::function<void(IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext)> ResourceInitFcn;
 
-typedef std::function<void(IRenderResource* resource, VkCommandBuffer& cmdBuffer, uint32_t graphicsFamilyQ)> BarrierFcn;
+typedef std::function<void(IRenderResource* resource, VkCommandBuffer& cmdBuffer)> BarrierFcn;
 
 enum class Access
 {
@@ -98,7 +98,7 @@ public:
   void registerRenderPass(RenderPassRegisterInfo&& registerInfo);
   void registerRenderPassExe(const std::string& renderPass, RenderPassExeFcn exeFcn);
 
-  void executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* renderContext, uint32_t graphicsFamilyQ);
+  void executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* renderContext);
 
   void build();
 
