@@ -122,10 +122,10 @@ void main() {
     vec3 camToVtx = normalize(b - ubo.cameraPos.xyz);
     float d = dot(preTiltNormal, camToVtx);
 
-    vec3 viewRight = vec3(1.0, 0.0, 0.0);
+    vec3 viewNormal = normalize(mat3(ubo.view) * preTiltNormal);
     float dotSign = d < 0.0? 1.0 : -1.0;
     if (abs(d) < 0.5) {
-      viewB = viewB + viewRight * signFlip * dotSign * .005;
+      viewB = viewB + viewNormal * signFlip * dotSign * .008;
     }
   }
 
