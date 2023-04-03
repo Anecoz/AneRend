@@ -1,11 +1,11 @@
 #include "DebugViewRenderPass.h"
 
-#include "../util/GraphicsUtils.h"
+#include "../../util/GraphicsUtils.h"
 
-#include "RenderResource.h"
-#include "RenderResourceVault.h"
-#include "FrameGraphBuilder.h"
-#include "ImageHelpers.h"
+#include "../RenderResource.h"
+#include "../RenderResourceVault.h"
+#include "../FrameGraphBuilder.h"
+#include "../ImageHelpers.h"
 
 namespace render {
 

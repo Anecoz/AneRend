@@ -1,8 +1,8 @@
 #include "GrassRenderPass.h"
 
-#include "RenderResource.h"
-#include "RenderResourceVault.h"
-#include "FrameGraphBuilder.h"
+#include "../RenderResource.h"
+#include "../RenderResourceVault.h"
+#include "../FrameGraphBuilder.h"
 
 namespace render {
 

@@ -1,9 +1,9 @@
 #include "PresentationRenderPass.h"
 
-#include "FrameGraphBuilder.h"
-#include "ImageHelpers.h"
-#include "RenderResource.h"
-#include "RenderResourceVault.h"
+#include "../FrameGraphBuilder.h"
+#include "../ImageHelpers.h"
+#include "../RenderResource.h"
+#include "../RenderResourceVault.h"
 
 namespace render {
 

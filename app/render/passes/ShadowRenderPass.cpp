@@ -1,11 +1,11 @@
 #include "ShadowRenderPass.h"
 
-#include "ImageHelpers.h"
+#include "../ImageHelpers.h"
 
-#include "FrameGraphBuilder.h"
-#include "RenderContext.h"
-#include "RenderResource.h"
-#include "RenderResourceVault.h"
+#include "../FrameGraphBuilder.h"
+#include "../RenderContext.h"
+#include "../RenderResource.h"
+#include "../RenderResourceVault.h"
 
 namespace render {
 

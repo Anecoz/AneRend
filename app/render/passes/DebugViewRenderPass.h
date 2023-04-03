@@ -1,15 +1,16 @@
 #pragma once
 
 #include "RenderPass.h"
-#include "AllocatedBuffer.h"
+
+#include "../Model.h"
 
 namespace render {
 
-class CullRenderPass : public RenderPass
+class DebugViewRenderPass : public RenderPass
 {
 public:
-  CullRenderPass();
-  ~CullRenderPass();
+  DebugViewRenderPass();
+  ~DebugViewRenderPass();
 
   bool init(RenderContext* renderContext, RenderResourceVault*) override final;
 
@@ -19,13 +20,13 @@ public:
   void cleanup(RenderContext* renderContext, RenderResourceVault* vault) override final;
 
 private:
-  // Temp
-  const std::size_t MAX_NUM_GRASS_BLADES = 32 * 32 * 1000;
-
-  std::size_t _currentStagingOffset = 0;
-
-  std::vector<AllocatedBuffer> _gpuStagingBuffers;
   std::vector<VkDescriptorSet> _descriptorSets;
+  VkSampler _sampler;
+  Model _screenQuad;
+  MeshId _meshId;
+  RenderableId _renderableId;
+
+  std::string _currResource;
 };
 
 }

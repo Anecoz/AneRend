@@ -20,7 +20,7 @@
 #include "Swapchain.h"
 #include "Light.h"
 #include "RenderContext.h"
-#include "RenderPass.h"
+#include "passes/RenderPass.h"
 #include "RenderResourceVault.h"
 #include "FrameGraphBuilder.h"
 #include "Mesh.h"

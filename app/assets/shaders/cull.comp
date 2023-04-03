@@ -148,7 +148,7 @@ void main()
     worldPos.z += bladeHash * 0.5;
 
     uint instanceIndex = grassDrawBuffer.draw.firstInstance + countBefore;
-    float height = .5 * max(bladeHash2D.y, 0.3);
+    float height = 1.0 * max(bladeHash2D.y, 0.3);
 
     vec2 facing = normalize(bladeHash2D * 2.0 - 1.0);
     

@@ -1,9 +1,9 @@
 #include "GeometryRenderPass.h"
 
-#include "RenderResource.h"
-#include "ImageHelpers.h"
-#include "FrameGraphBuilder.h"
-#include "RenderResourceVault.h"
+#include "../RenderResource.h"
+#include "../ImageHelpers.h"
+#include "../FrameGraphBuilder.h"
+#include "../RenderResourceVault.h"
 
 #include <array>
 #include <memory>
