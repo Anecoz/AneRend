@@ -16,8 +16,10 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 struct GrassObj
 {
   vec4 worldPos;
-  vec4 data; // x and y: facing dir, z: tilt, w: bend
-  vec4 data2; //x: per-blade hash
+  vec4 cpData0;
+  vec4 cpData1;
+  vec4 cpData2;
+  vec4 widthDir;
 };
 
 layout(std430, set = 1, binding = 0) readonly buffer GrassObjBuffer {
@@ -54,45 +56,16 @@ const vec3 up = vec3(0.0, 1.0, 0.0);
 const int NUM_VERT_IDX = 14;
 
 void main() {
-  vec4 worldPos = grassObjBuffer.blades[gl_InstanceIndex].worldPos;
-  float height = worldPos.w;
-  vec2 facing2D = grassObjBuffer.blades[gl_InstanceIndex].data.xy;
-  vec3 facing = vec3(facing2D.x, 0.0, facing2D.y);
-  float tilt = grassObjBuffer.blades[gl_InstanceIndex].data.z;
-  float bend = grassObjBuffer.blades[gl_InstanceIndex].data.w;
-  float bladeHash = grassObjBuffer.blades[gl_InstanceIndex].data2.x;
-  float windStrength = grassObjBuffer.blades[gl_InstanceIndex].data2.y;
-
   float width = 0.01;
 
-  // Calculate the width direction in which to step vertex
-  vec3 widthDir = vec3(0.0, 0.0, 0.0);
-  widthDir.x = facing.z;
-  widthDir.z = -facing.x;
+  // Reconstruct control points from grass blade data
+  vec3 p0 = grassObjBuffer.blades[gl_InstanceIndex].cpData0.xyz;
+  vec3 p1 = vec3(grassObjBuffer.blades[gl_InstanceIndex].cpData0.w, grassObjBuffer.blades[gl_InstanceIndex].cpData1.xy);
+  vec3 p2 = vec3(grassObjBuffer.blades[gl_InstanceIndex].cpData1.zw, grassObjBuffer.blades[gl_InstanceIndex].cpData2.x);
+  vec3 p3 = grassObjBuffer.blades[gl_InstanceIndex].cpData2.yzw;
 
-  // Find control points of the bezier curve
-  vec3 p0 = worldPos.xyz;
-
-  // End point, or tip, is dictated by base point and the tilt
-  vec3 p3 = p0 + facing * tilt + up * height;
-
-  vec3 bladeDir = normalize(p3 - p0);
-  vec3 away = cross(-widthDir, bladeDir);
-
-  // p1 is straight above p0
-  vec3 p1 = p0 + up * height * bend;
-
-  // The shaping control point is dictated by the bend parameter
-  vec3 p2 = p0 + 0.5 * (p3 - p0);
-  p2 = p2 + away * bend;
-
-  // Attempt animation, find vector perpendicular to blade dir
-  float phaseOffset = bladeHash * 1.57;
-  float speedMult = 2.0 * (bladeHash + 1.0) * (windStrength + 1.0);
-  float maxAmplitude = 0.01 * (windStrength + 3.0);
-  float timeMod = mod(ubo.time, 2.0*acos(-1.0)); // To stop loss of precision when ubo.time gets big
-  p3 = p3 + sin(timeMod*speedMult + phaseOffset)*maxAmplitude*away;
-  p2 = p2 + sin(timeMod*speedMult + 1.57 + phaseOffset)*maxAmplitude/2.0*away;
+  vec3 widthDir = grassObjBuffer.blades[gl_InstanceIndex].widthDir.xyz;
+  float bladeHash = grassObjBuffer.blades[gl_InstanceIndex].widthDir.w;
 
   // Use bezier function to find this vertex' point
   float t = floor(float(gl_VertexIndex) / 2.0) / (float(NUM_VERT_IDX) / 2.0);
