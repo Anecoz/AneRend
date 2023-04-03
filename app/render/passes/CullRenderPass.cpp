@@ -309,11 +309,6 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
         0, nullptr);
 
       auto pushConstants = renderContext->getCullParams();
-      //auto windDir = renderContext->getWindDir();
-
-      //uint8_t pushData[256];
-      //memcpy(pushData, &pushConstants, sizeof(gpu::GPUCullPushConstants));
-      //memcpy(pushData + sizeof(gpu::GPUCullPushConstants), &windDir, sizeof(glm::vec2));
       vkCmdPushConstants(
         *cmdBuffer,
         _pipelineLayout, 

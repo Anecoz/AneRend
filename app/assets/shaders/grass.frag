@@ -3,7 +3,8 @@
 layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
-  mat4 directionalShadowMatrix;
+  mat4 directionalShadowMatrixProj;
+  mat4 directionalShadowMatrixView;
   mat4 shadowMatrix[24];
   vec4 cameraPos;
   vec4 lightDir;
@@ -13,15 +14,37 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   float time;
 } ubo;
 
+layout(set = 1, binding = 1) uniform sampler2D shadowMap;
+
 layout(location = 0) in vec3 fragNormal;
 layout(location = 1) in float fragT;
 layout(location = 2) in vec3 fragPosition;
 layout(location = 3) in flat float fragBladeHash;
+layout(location = 4) in vec4 fragShadowPos;
 
 layout(location = 0) out vec4 outColor;
 
 const vec3 col0 = vec3(0.0, 154.0/255.0, 23.0/255.0);
 const vec3 col1 = vec3(65.0/255.0, 152.0/255.0, 10.0/255.0);
+
+float inShadow() {
+  vec3 projCoords = fragShadowPos.xyz / fragShadowPos.w;
+
+  if (projCoords.x > 1.0 || projCoords.x < -1.0 ||
+      projCoords.z > 1.0 || projCoords.z < -1.0 ||
+      projCoords.y > 1.0 || projCoords.y < -1.0) {
+    return 0;
+  }
+
+  vec2 shadowMapCoord = projCoords.xy * 0.5 + 0.5;
+
+  float depth = projCoords.z;
+  float sampledDepth = texture(shadowMap, shadowMapCoord.xy).r;
+  if (depth > sampledDepth) {
+    return 1;
+  }
+  return 0;
+}
 
 void main() {
   vec3 ambientColor = vec3(1.0, 1.0, 1.0);
@@ -31,6 +54,7 @@ void main() {
   diffuseColor *= fragT;
 
   vec3 normal = normalize(fragNormal);
+  float shadow = inShadow();
 
   // Ambient
   float ambientStrength = 0.3;
@@ -47,6 +71,6 @@ void main() {
   float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16);
   vec3 specular = 1.0 * spec * specColor;
 
-  vec3 result = (ambient + diffuse + specular) * diffuseColor;
+  vec3 result = (ambient + diffuse + specular) * diffuseColor * clamp(1.0 - shadow, 0.3, 1.0);
   outColor = vec4(result, 1.0);
 }

@@ -23,8 +23,14 @@ bool GrassRenderPass::init(RenderContext* renderContext, RenderResourceVault* va
   grassBufferInfo.stages = VK_SHADER_STAGE_VERTEX_BIT;
   grassBufferInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
+  DescriptorBindInfo shadowSamplerInfo{};
+  shadowSamplerInfo.binding = 1;
+  shadowSamplerInfo.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
+  shadowSamplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
   DescriptorSetLayoutCreateParams descLayoutParam{};
   descLayoutParam.bindInfos.emplace_back(grassBufferInfo);
+  descLayoutParam.bindInfos.emplace_back(shadowSamplerInfo);
   descLayoutParam.renderContext = renderContext;
 
   buildDescriptorSetLayout(descLayoutParam);
@@ -33,11 +39,23 @@ bool GrassRenderPass::init(RenderContext* renderContext, RenderResourceVault* va
   DescriptorSetsCreateParams descParam{};
   descParam.renderContext = renderContext;
 
+  // Sampler for shadow map
+  SamplerCreateParams samplerParam{};
+  samplerParam.renderContext = renderContext;
+  _shadowSampler = createSampler(samplerParam);
+
+  auto shadowMapView = (ImageViewRenderResource*)vault->getResource("ShadowMapView");
+
   for (int i = 0; i < renderContext->getMultiBufferSize(); ++i) {
     auto buf = (BufferRenderResource*)vault->getResource("CullGrassObjBuf", i);
     grassBufferInfo.buffer = buf->_buffer._buffer;
 
+    shadowSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+    shadowSamplerInfo.sampler = _shadowSampler;
+    shadowSamplerInfo.view = shadowMapView->_view;
+
     descParam.bindInfos.emplace_back(grassBufferInfo);
+    descParam.bindInfos.emplace_back(shadowSamplerInfo);
   }
 
   _descriptorSets = buildDescriptorSets(descParam);
@@ -162,6 +180,16 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb)
         1, 1, &_descriptorSets[multiBufferIdx],
         0, nullptr);
 
+      // Push constant 0 for non-shadow
+      uint32_t pushConstants = 0;
+      vkCmdPushConstants(
+        *cmdBuffer,
+        _pipelineLayout,
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+        0,
+        sizeof(uint32_t),
+        &pushConstants);
+
       // Set dynamic viewport and scissor
       vkCmdSetViewport(*cmdBuffer, 0, 1, &viewport);
       vkCmdSetScissor(*cmdBuffer, 0, 1, &scissor);
@@ -178,6 +206,8 @@ void GrassRenderPass::cleanup(RenderContext* renderContext, RenderResourceVault*
   vkDestroyDescriptorSetLayout(renderContext->device(), _descriptorSetLayout, nullptr);
   vkDestroyPipelineLayout(renderContext->device(), _pipelineLayout, nullptr);
   vkDestroyPipeline(renderContext->device(), _pipeline, nullptr);
+
+  vkDestroySampler(renderContext->device(), _shadowSampler, nullptr);
 }
 
 }

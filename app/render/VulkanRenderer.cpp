@@ -12,6 +12,7 @@
 #include "passes/ShadowRenderPass.h"
 #include "passes/DebugViewRenderPass.h"
 #include "passes/GrassRenderPass.h"
+#include "passes/GrassShadowRenderPass.h"
 
 #include "../util/Utils.h"
 #include "../LodePng/lodepng.h"
@@ -754,7 +755,8 @@ void VulkanRenderer::update(
 
   gpu::GPUSceneData ubo{};
   ubo.cameraPos = glm::vec4(camera.getPosition(), 1.0);
-  ubo.directionalShadowMatrix = shadowProj * shadowCamera.getCamMatrix();
+  ubo.directionalShadowMatrixProj = shadowProj;
+  ubo.directionalShadowMatrixView = shadowCamera.getCamMatrix();
   ubo.lightDir = lightDir;
   ubo.proj = proj;
   ubo.view = camera.getCamMatrix();
@@ -839,7 +841,6 @@ void VulkanRenderer::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreat
 {
   createInfo = {};
   createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-  createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT;
   createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
   createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
   createInfo.pfnUserCallback = g_DebugCallback;
@@ -1608,6 +1609,7 @@ bool VulkanRenderer::initFrameGraphBuilder()
 {
   _renderPasses.emplace_back(new CullRenderPass());
   _renderPasses.emplace_back(new ShadowRenderPass());
+  _renderPasses.emplace_back(new GrassShadowRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());
   _renderPasses.emplace_back(new GrassRenderPass());
   _renderPasses.emplace_back(new DebugViewRenderPass());

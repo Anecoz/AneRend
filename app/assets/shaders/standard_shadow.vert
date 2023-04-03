@@ -3,7 +3,8 @@
 layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
-  mat4 directionalShadowMatrix;
+  mat4 directionalShadowMatrixProj;
+  mat4 directionalShadowMatrixView;
   mat4 shadowMatrix[24];
   vec4 cameraPos;
   vec4 lightDir;
@@ -35,6 +36,6 @@ layout(location = 0) out vec3 fragPositionWorld;
 void main() {
   uint renderableId = translationBuffer.ids[gl_InstanceIndex];
   mat4 model = renderableBuffer.renderables[renderableId].transform;
-  gl_Position = ubo.directionalShadowMatrix * model * vec4(inPosition, 1.0);
+  gl_Position = ubo.directionalShadowMatrixProj * ubo.directionalShadowMatrixView * model * vec4(inPosition, 1.0);
   fragPositionWorld = vec3(model * vec4(inPosition, 1.0));
 }

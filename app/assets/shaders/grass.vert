@@ -3,7 +3,8 @@
 layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
-  mat4 directionalShadowMatrix;
+  mat4 directionalShadowMatrixProj;
+  mat4 directionalShadowMatrixView;
   mat4 shadowMatrix[24];
   vec4 cameraPos;
   vec4 lightDir;
@@ -26,10 +27,15 @@ layout(std430, set = 1, binding = 0) readonly buffer GrassObjBuffer {
   GrassObj blades[];
 } grassObjBuffer;
 
+layout(push_constant) uniform constants {
+  uint shadow; // if 1 use shadow matrices, else not
+} pushConstants;
+
 layout(location = 0) out vec3 fragNormal;
 layout(location = 1) out float fragT;
 layout(location = 2) out vec3 fragPosition;
 layout(location = 3) out flat float fragBladeHash;
+layout(location = 4) out vec4 fragShadowPos;
 
 vec3 cubeBezier(vec3 p0, vec3 p1, vec3 p2, vec3 p3, float t)
 {
@@ -56,6 +62,9 @@ const vec3 up = vec3(0.0, 1.0, 0.0);
 const int NUM_VERT_IDX = 14;
 
 void main() {
+  mat4 view = pushConstants.shadow == 1 ? ubo.directionalShadowMatrixView : ubo.view;
+  mat4 proj = pushConstants.shadow == 1 ? ubo.directionalShadowMatrixProj : ubo.proj;
+
   float width = 0.01;
 
   // Reconstruct control points from grass blade data
@@ -88,7 +97,7 @@ void main() {
     fragNormal = fragNormal + signFlip * widthDir * normalTiltStrength;
   }
 
-  vec3 viewB = vec3(ubo.view * vec4(b, 1.0));
+  vec3 viewB = vec3(view * vec4(b, 1.0));
 
   // Tilt vertices in view space if orthogonal to us
   if (gl_VertexIndex != NUM_VERT_IDX) {
@@ -106,6 +115,7 @@ void main() {
   fragT = t;
   fragPosition = b;
   fragBladeHash = bladeHash;
+  fragShadowPos = ubo.directionalShadowMatrixProj * ubo.directionalShadowMatrixView * vec4(fragPosition, 1.0);
 
-  gl_Position = ubo.proj * vec4(viewB, 1.0);
+  gl_Position = proj * vec4(viewB, 1.0);
 }

@@ -4,11 +4,11 @@
 
 namespace render {
 
-class GrassRenderPass : public RenderPass
+class GrassShadowRenderPass : public RenderPass
 {
 public:
-  GrassRenderPass();
-  ~GrassRenderPass();
+  GrassShadowRenderPass();
+  ~GrassShadowRenderPass();
 
   bool init(RenderContext* renderContext, RenderResourceVault*) override final;
 
@@ -19,7 +19,6 @@ public:
 
 private:
   std::vector<VkDescriptorSet> _descriptorSets;
-  VkSampler _shadowSampler;
 };
 
 }

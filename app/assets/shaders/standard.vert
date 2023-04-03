@@ -3,7 +3,8 @@
 layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
-  mat4 directionalShadowMatrix;
+  mat4 directionalShadowMatrixProj;
+  mat4 directionalShadowMatrixView;
   mat4 shadowMatrix[24];
   vec4 cameraPos;
   vec4 lightDir;
@@ -47,7 +48,7 @@ void main() {
   mat4 model = renderableBuffer.renderables[renderableId].transform;
 
   fragPosition = vec3(model * vec4(inPosition, 1.0));
-  fragShadowPos = ubo.directionalShadowMatrix * vec4(fragPosition, 1.0);
+  fragShadowPos = ubo.directionalShadowMatrixProj * ubo.directionalShadowMatrixView * vec4(fragPosition, 1.0);
 
   gl_Position = ubo.proj * ubo.view * model * vec4(inPosition, 1.0);
   fragColor = inColor;
