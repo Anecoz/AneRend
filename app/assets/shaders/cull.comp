@@ -130,7 +130,7 @@ void main()
       vec3 sphereCenter = vec3(model * vec4(sphereBounds.xyz, 1.0));
 
       visible = visible && sphereCenterView.z > -pushConstants.farDist;
-      visible = visible && sphereCenterView.z < pushConstants.nearDist;
+      //visible = visible && sphereCenterView.z < pushConstants.nearDist;
       visible = visible && sphereVisible(sphereCenter, radius);
 
       if (visible) {

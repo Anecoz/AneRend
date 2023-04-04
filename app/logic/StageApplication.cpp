@@ -50,8 +50,14 @@ bool StageApplication::init()
     return false;
   }
 
+  if (!_testModel3.loadFromObj(std::string(ASSET_PATH) + "models/sponza.obj",
+    std::string(ASSET_PATH) + "models/")) {
+    return false;
+  }
+
   _meshId = _vkRenderer.registerMesh(_testModel._vertices, _testModel._indices);
   _meshId2 = _vkRenderer.registerMesh(_testModel2._vertices, _testModel2._indices);
+  _meshId3 = _vkRenderer.registerMesh(_testModel3._vertices, _testModel3._indices);
 
   // Create a bunch of test matrices
   {
@@ -65,11 +71,11 @@ bool StageApplication::init()
       glm::vec4 sphereBoundCenter(1.0f);
       //sphereBoundCenter = trans * sphereBoundCenter;
 
-      auto ret = _modelId = _vkRenderer.registerRenderable(
+      auto ret = _vkRenderer.registerRenderable(
         _meshId,
         matrix,
         glm::vec3(sphereBoundCenter.x, sphereBoundCenter.y, sphereBoundCenter.z),
-        1.0f);
+        10.0f);
 
       if (ret == 0) {
         break;
@@ -84,11 +90,21 @@ bool StageApplication::init()
     for (int x = 0; x < numInstances; ++x)
     for (int y = 0; y < numInstances; ++y) {
       auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(30.0f * x, 0.0f, 30.0f * y));
-      _modelId2 = _vkRenderer.registerRenderable(_meshId2, mat, glm::vec3(1.0f), 30.0f);
+      _vkRenderer.registerRenderable(_meshId2, mat, glm::vec3(1.0f), 50.0f);
     }
   }
 
-  printf("Renderable registered! Id1: %lld, id2: %lld\n", _modelId, _modelId2);
+  // Do a couple of the big models
+  {
+    std::size_t numInstances = 1;
+
+    for (int x = 0; x < numInstances; ++x)
+      for (int y = 0; y < numInstances; ++y) {
+        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(500.0f * x, 0.0f, 500.0f * y));
+        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
+        _vkRenderer.registerRenderable(_meshId3, mat*scale, glm::vec3(1.0f), 500.0f);
+      }
+  }
 
   // Set shadow cam somewhere
   _shadowCamera.setViewMatrix(glm::lookAt(glm::vec3(-16.0f, 10.0f, -18.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)));

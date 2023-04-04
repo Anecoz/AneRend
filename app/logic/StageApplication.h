@@ -40,8 +40,8 @@ private:
 
   render::Model _testModel;
   render::Model _testModel2;
-  render::RenderableId _modelId;
-  render::RenderableId _modelId2;
+  render::Model _testModel3;
   render::MeshId _meshId;
   render::MeshId _meshId2;
+  render::MeshId _meshId3;
 };
