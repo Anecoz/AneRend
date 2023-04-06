@@ -13,6 +13,7 @@
 #include "passes/DebugViewRenderPass.h"
 #include "passes/GrassRenderPass.h"
 #include "passes/GrassShadowRenderPass.h"
+#include "passes/DeferredLightingRenderPass.h"
 
 #include "../util/Utils.h"
 #include "../LodePng/lodepng.h"
@@ -398,8 +399,12 @@ void VulkanRenderer::update(
   shadowProj[1][1] *= -1;
   proj[1][1] *= -1;
 
+  auto invView = glm::inverse(camera.getCamMatrix());
+  auto invProj = glm::inverse(proj);
+
   gpu::GPUSceneData ubo{};
   ubo.cameraPos = glm::vec4(camera.getPosition(), 1.0);
+  ubo.invViewProj = invView * invProj;
   ubo.directionalShadowMatrixProj = shadowProj;
   ubo.directionalShadowMatrixView = shadowCamera.getCamMatrix();
   ubo.lightDir = lightDir;
@@ -407,6 +412,12 @@ void VulkanRenderer::update(
   ubo.view = camera.getCamMatrix();
   ubo.viewVector = glm::vec4(camera.getForward(), 1.0);
   ubo.time = time;
+
+  for (int i = 0; i < _lights.size(); ++i) {
+    _lights[i].debugUpdatePos(delta);
+    ubo.lightColor[i] = glm::vec4(_lights[i]._color, 1.0);
+    ubo.lightPos[i] = glm::vec4(_lights[i]._pos, 0.0);
+  }
 
   void* data;
   vmaMapMemory(_vmaAllocator, _gpuSceneDataBuffer[_currentFrame]._allocation, &data);
@@ -1032,10 +1043,10 @@ bool VulkanRenderer::createSyncObjects()
 
 bool VulkanRenderer::initLights()
 {
-  /*_lights.resize(4);
+  _lights.resize(4);
 
-  auto cmdBuffer = beginSingleTimeCommands();
-  auto depthFormat = findDepthFormat();
+  //auto cmdBuffer = beginSingleTimeCommands();
+  //auto depthFormat = findDepthFormat();
   for (std::size_t i = 0; i < _lights.size(); ++i) {
     auto& light = _lights[i];
     float zNear = 0.1f;
@@ -1053,7 +1064,7 @@ bool VulkanRenderer::initLights()
     light.updateViewMatrices();
 
     // Construct the image
-    imageutil::createImage(
+    /*imageutil::createImage(
       _shadowPass._shadowExtent.width, _shadowPass._shadowExtent.height,
       depthFormat, VK_IMAGE_TILING_OPTIMAL, _vmaAllocator,
       VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, light._shadowImage,
@@ -1090,9 +1101,9 @@ bool VulkanRenderer::initLights()
     if (vkCreateSampler(_device, &sampler, nullptr, &light._sampler) != VK_SUCCESS) {
       printf("Could not create shadow map sampler!\n");
       return false;
-    }
+    }*/
   }
-  endSingleTimeCommands(cmdBuffer);*/
+  //endSingleTimeCommands(cmdBuffer);
 
   return true;
 }
@@ -1257,6 +1268,7 @@ bool VulkanRenderer::initFrameGraphBuilder()
   _renderPasses.emplace_back(new GrassShadowRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());
   _renderPasses.emplace_back(new GrassRenderPass());
+  _renderPasses.emplace_back(new DeferredLightingRenderPass());
   _renderPasses.emplace_back(new DebugViewRenderPass());
   _renderPasses.emplace_back(new UIRenderPass());
   _renderPasses.emplace_back(new PresentationRenderPass());

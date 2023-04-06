@@ -23,14 +23,8 @@ bool GrassRenderPass::init(RenderContext* renderContext, RenderResourceVault* va
   grassBufferInfo.stages = VK_SHADER_STAGE_VERTEX_BIT;
   grassBufferInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
-  DescriptorBindInfo shadowSamplerInfo{};
-  shadowSamplerInfo.binding = 1;
-  shadowSamplerInfo.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
-  shadowSamplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-
   DescriptorSetLayoutCreateParams descLayoutParam{};
   descLayoutParam.bindInfos.emplace_back(grassBufferInfo);
-  descLayoutParam.bindInfos.emplace_back(shadowSamplerInfo);
   descLayoutParam.renderContext = renderContext;
 
   buildDescriptorSetLayout(descLayoutParam);
@@ -42,20 +36,11 @@ bool GrassRenderPass::init(RenderContext* renderContext, RenderResourceVault* va
   // Sampler for shadow map
   SamplerCreateParams samplerParam{};
   samplerParam.renderContext = renderContext;
-  _shadowSampler = createSampler(samplerParam);
-
-  auto shadowMapView = (ImageViewRenderResource*)vault->getResource("ShadowMapView");
 
   for (int i = 0; i < renderContext->getMultiBufferSize(); ++i) {
     auto buf = (BufferRenderResource*)vault->getResource("CullGrassObjBuf", i);
     grassBufferInfo.buffer = buf->_buffer._buffer;
-
-    shadowSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-    shadowSamplerInfo.sampler = _shadowSampler;
-    shadowSamplerInfo.view = shadowMapView->_view;
-
     descParam.bindInfos.emplace_back(grassBufferInfo);
-    descParam.bindInfos.emplace_back(shadowSamplerInfo);
   }
 
   _descriptorSets = buildDescriptorSets(descParam);
@@ -69,6 +54,8 @@ bool GrassRenderPass::init(RenderContext* renderContext, RenderResourceVault* va
   param.fragShader = "grass_frag.spv";
   param.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
   param.vertexLess = true;
+  param.colorAttachmentCount = 2;
+  param.colorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
   buildGraphicsPipeline(param);
 
@@ -83,7 +70,15 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   std::vector<ResourceUsage> resourceUsages;
   {
     ResourceUsage usage{};
-    usage._resourceName = "GeometryColorImage";
+    usage._resourceName = "Geometry0Image";
+    usage._access.set((std::size_t)Access::Write);
+    usage._access.set((std::size_t)Access::Read);
+    usage._type = Type::ColorAttachment;
+    resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "Geometry1Image";
     usage._access.set((std::size_t)Access::Write);
     usage._access.set((std::size_t)Access::Read);
     usage._type = Type::ColorAttachment;
@@ -121,21 +116,29 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     [this](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra)
     {
       // Get resources
-      auto colorView = (ImageViewRenderResource*)vault->getResource("GeometryColorImageView");
+      auto color0View = (ImageViewRenderResource*)vault->getResource("Geometry0ImageView");
+      auto color1View = (ImageViewRenderResource*)vault->getResource("Geometry1ImageView");
       auto depthView = (ImageViewRenderResource*)vault->getResource("GeometryDepthImageView");
       auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullGrassDrawBuf", multiBufferIdx);
 
       // Dynamic rendering begin
       std::array<VkClearValue, 2> clearValues{};
+      std::array<VkRenderingAttachmentInfoKHR, 2> colAttachInfos{};
       clearValues[0].color = { {0.5f, 0.5f, 0.5f, 1.0f} };
       clearValues[1].depthStencil = { 1.0f, 0 };
-      VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
-      colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-      colorAttachmentInfo.imageView = colorView->_view;
-      colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-      colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-      colorAttachmentInfo.clearValue = clearValues[0];
+      colAttachInfos[0].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+      colAttachInfos[0].imageView = color0View->_view;
+      colAttachInfos[0].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      colAttachInfos[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+      colAttachInfos[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      colAttachInfos[0].clearValue = clearValues[0];
+
+      colAttachInfos[1].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+      colAttachInfos[1].imageView = color1View->_view;
+      colAttachInfos[1].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      colAttachInfos[1].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+      colAttachInfos[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      colAttachInfos[1].clearValue = clearValues[0];
 
       VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
       depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
@@ -150,8 +153,8 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       renderInfo.renderArea.extent = renderContext->swapChainExtent();
       renderInfo.renderArea.offset = { 0, 0 };
       renderInfo.layerCount = 1;
-      renderInfo.colorAttachmentCount = 1;
-      renderInfo.pColorAttachments = &colorAttachmentInfo;
+      renderInfo.colorAttachmentCount = colAttachInfos.size();
+      renderInfo.pColorAttachments = colAttachInfos.data();
       renderInfo.pDepthAttachment = &depthAttachmentInfo;
 
       vkCmdBeginRendering(*cmdBuffer, &renderInfo);
@@ -206,8 +209,6 @@ void GrassRenderPass::cleanup(RenderContext* renderContext, RenderResourceVault*
   vkDestroyDescriptorSetLayout(renderContext->device(), _descriptorSetLayout, nullptr);
   vkDestroyPipelineLayout(renderContext->device(), _pipelineLayout, nullptr);
   vkDestroyPipeline(renderContext->device(), _pipeline, nullptr);
-
-  vkDestroySampler(renderContext->device(), _shadowSampler, nullptr);
 }
 
 }

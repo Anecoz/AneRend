@@ -19,7 +19,6 @@ public:
 
 private:
   std::vector<VkDescriptorSet> _descriptorSets;
-  VkSampler _shadowSampler;
 };
 
 }

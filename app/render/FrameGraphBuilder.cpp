@@ -472,6 +472,12 @@ std::pair<VkImageLayout, VkImageLayout> FrameGraphBuilder::findImageLayoutUsage(
       return { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL };
     }
   }
+  else if (prevAccess.test(std::size_t(Access::Read)) &&
+    newAccess.test(std::size_t(Access::Read))) {
+    if (prevType == Type::SampledTexture && newType == Type::Present) {
+      return { VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL };
+    }
+  }
 
   return {};
 }
@@ -500,6 +506,9 @@ std::string FrameGraphBuilder::debugConstructImageBarrierName(VkImageLayout old,
   }
   else if (old == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
     from = "COLOR_ATTACHMENT_OPTIMAL";
+  }
+  else if (old == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+    from = "SHADER_READ_ONLY_OPTIMAL";
   }
   else if (old == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) {
     from = "DEPTH_ATTACHMENT_OPTIMAL";

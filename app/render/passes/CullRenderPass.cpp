@@ -235,7 +235,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     });
 
   // Add an initializer for the grass obj buffer
-  ResourceUsage grassObjBufInitUsage{};
+  /*ResourceUsage grassObjBufInitUsage{};
   grassObjBufInitUsage._type = Type::SSBO;
   grassObjBufInitUsage._access.set((std::size_t)Access::Write);
   grassObjBufInitUsage._stage.set((std::size_t)Stage::Transfer);
@@ -251,7 +251,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
         0,
         VK_WHOLE_SIZE,
         0);
-    });
+    });*/
 
   // Register the actual render pass
   RenderPassRegisterInfo regInfo{};
@@ -319,7 +319,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
 
       // 32 is the local group size in the comp shader
       const uint32_t localSize = 32;
-      int sqr = 20;// std::ceil(std::sqrt((double)renderContext->getCurrentNumRenderables() / (double)(localSize * localSize)));
+      int sqr = std::ceil(std::sqrt((double)renderContext->getCurrentNumRenderables() / (double)(localSize * localSize)));
       vkCmdDispatch(*cmdBuffer, sqr, sqr, 1);
     });
 }

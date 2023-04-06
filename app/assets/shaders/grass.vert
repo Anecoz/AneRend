@@ -3,6 +3,7 @@
 layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
+  mat4 invViewProj;
   mat4 directionalShadowMatrixProj;
   mat4 directionalShadowMatrixView;
   mat4 shadowMatrix[24];
@@ -33,9 +34,7 @@ layout(push_constant) uniform constants {
 
 layout(location = 0) out vec3 fragNormal;
 layout(location = 1) out float fragT;
-layout(location = 2) out vec3 fragPosition;
 layout(location = 3) out flat float fragBladeHash;
-layout(location = 4) out vec4 fragShadowPos;
 
 vec3 cubeBezier(vec3 p0, vec3 p1, vec3 p2, vec3 p3, float t)
 {
@@ -113,9 +112,7 @@ void main() {
 
   fragNormal = normalize(fragNormal);
   fragT = t;
-  fragPosition = b;
   fragBladeHash = bladeHash;
-  fragShadowPos = ubo.directionalShadowMatrixProj * ubo.directionalShadowMatrixView * vec4(fragPosition, 1.0);
 
   gl_Position = proj * vec4(viewB, 1.0);
 }

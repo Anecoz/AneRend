@@ -208,16 +208,21 @@ bool RenderPass::buildGraphicsPipeline(GraphicsPipelineCreateParams param)
 
   // Color blending
   VkPipelineColorBlendStateCreateInfo colorBlending{};
-  VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+  std::vector<VkPipelineColorBlendAttachmentState> colBlendAttachments;
   if (param.colorAttachment) {
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable = VK_FALSE;
+
+    for (int i = 0; i < param.colorAttachmentCount; ++i) {
+      VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+      colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+      colorBlendAttachment.blendEnable = VK_FALSE;
+      colBlendAttachments.emplace_back(colorBlendAttachment);
+    }
 
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlending.logicOpEnable = VK_FALSE;
     colorBlending.logicOp = VK_LOGIC_OP_COPY;
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &colorBlendAttachment;
+    colorBlending.attachmentCount = param.colorAttachmentCount;
+    colorBlending.pAttachments = colBlendAttachments.data();
     colorBlending.blendConstants[0] = 0.0f;
     colorBlending.blendConstants[1] = 0.0f;
     colorBlending.blendConstants[2] = 0.0f;
@@ -228,10 +233,11 @@ bool RenderPass::buildGraphicsPipeline(GraphicsPipelineCreateParams param)
   }
 
   // Dynamic rendering info
+  std::vector<VkFormat> formats(param.colorAttachmentCount, param.colorFormat);
   VkPipelineRenderingCreateInfoKHR renderingCreateInfo{};
   renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-  renderingCreateInfo.colorAttachmentCount = param.colorAttachment ? 1 : 0;
-  renderingCreateInfo.pColorAttachmentFormats = param.colorAttachment ? &param.colorFormat : nullptr;
+  renderingCreateInfo.colorAttachmentCount = param.colorAttachment ? param.colorAttachmentCount : 0;
+  renderingCreateInfo.pColorAttachmentFormats = param.colorAttachment ? formats.data() : nullptr;
   renderingCreateInfo.depthAttachmentFormat = param.depthFormat;
 
   // Creating the pipeline
@@ -367,7 +373,7 @@ bool RenderPass::buildPipelineLayout(PipelineLayoutCreateParams params)
 
 std::vector<VkDescriptorSet> RenderPass::buildDescriptorSets(DescriptorSetsCreateParams params)
 {
-  int numMultiBuffer = params.renderContext->getMultiBufferSize();
+  int numMultiBuffer = params.multiBuffered ? params.renderContext->getMultiBufferSize() : 1;
 
   std::vector<VkDescriptorSet> sets;
   sets.resize(numMultiBuffer);

@@ -21,24 +21,28 @@ GeometryRenderPass::~GeometryRenderPass()
 
 void GeometryRenderPass::cleanup(RenderContext* renderContext, RenderResourceVault* vault)
 {
-  auto colorView = (ImageViewRenderResource*)vault->getResource("GeometryColorImageView");
-  auto colorIm = (ImageRenderResource*)vault->getResource("GeometryColorImage");
+  auto color0View = (ImageViewRenderResource*)vault->getResource("Geometry0ImageView");
+  auto color1View = (ImageViewRenderResource*)vault->getResource("Geometry1ImageView");
+  auto color0Im = (ImageRenderResource*)vault->getResource("Geometry0Image");
+  auto color1Im = (ImageRenderResource*)vault->getResource("Geometry1Image");
   auto depthView = (ImageViewRenderResource*)vault->getResource("GeometryDepthImageView");
   auto depthIm = (ImageRenderResource*)vault->getResource("GeometryDepthImage");
 
-  vmaDestroyImage(renderContext->vmaAllocator(), colorIm->_image._image, colorIm->_image._allocation);
+  vmaDestroyImage(renderContext->vmaAllocator(), color0Im->_image._image, color0Im->_image._allocation);
+  vmaDestroyImage(renderContext->vmaAllocator(), color1Im->_image._image, color1Im->_image._allocation);
   vmaDestroyImage(renderContext->vmaAllocator(), depthIm->_image._image, depthIm->_image._allocation);
-  vkDestroyImageView(renderContext->device(), colorView->_view, nullptr);
+  vkDestroyImageView(renderContext->device(), color0View->_view, nullptr);
+  vkDestroyImageView(renderContext->device(), color1View->_view, nullptr);
   vkDestroyImageView(renderContext->device(), depthView->_view, nullptr);
 
   vkDestroyDescriptorSetLayout(renderContext->device(), _descriptorSetLayout, nullptr);
   vkDestroyPipelineLayout(renderContext->device(), _pipelineLayout, nullptr);
   vkDestroyPipeline(renderContext->device(), _pipeline, nullptr);
 
-  vkDestroySampler(renderContext->device(), _shadowSampler, nullptr);
-
-  vault->deleteResource("GeometryColorImageView");
-  vault->deleteResource("GeometryColorImage");
+  vault->deleteResource("Geometry0ImageView");
+  vault->deleteResource("Geometry0Image");
+  vault->deleteResource("Geometry1ImageView");
+  vault->deleteResource("Geometry1Image");
   vault->deleteResource("GeometryDepthImageView");
   vault->deleteResource("GeometryDepthImage");
 }
@@ -51,14 +55,8 @@ bool GeometryRenderPass::init(RenderContext* renderContext, RenderResourceVault*
   transBufferInfo.stages = VK_SHADER_STAGE_VERTEX_BIT;
   transBufferInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
-  DescriptorBindInfo shadowSamplerInfo{};
-  shadowSamplerInfo.binding = 1;
-  shadowSamplerInfo.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
-  shadowSamplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-
   DescriptorSetLayoutCreateParams descLayoutParam{};
   descLayoutParam.bindInfos.emplace_back(transBufferInfo);
-  descLayoutParam.bindInfos.emplace_back(shadowSamplerInfo);
   descLayoutParam.renderContext = renderContext;
 
   buildDescriptorSetLayout(descLayoutParam);
@@ -67,37 +65,35 @@ bool GeometryRenderPass::init(RenderContext* renderContext, RenderResourceVault*
   DescriptorSetsCreateParams descParam{};
   descParam.renderContext = renderContext;
 
-  // Sampler for shadow map
-  SamplerCreateParams samplerParam{};
-  samplerParam.renderContext = renderContext;
-  _shadowSampler = createSampler(samplerParam);
-
-  auto shadowMapView = (ImageViewRenderResource*)vault->getResource("ShadowMapView");
-
   for (int i = 0; i < renderContext->getMultiBufferSize(); ++i) {
     auto buf = (BufferRenderResource*)vault->getResource("CullTransBuf", i);
 
     transBufferInfo.buffer = buf->_buffer._buffer;
-    shadowSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-    shadowSamplerInfo.sampler = _shadowSampler;
-    shadowSamplerInfo.view = shadowMapView->_view;
-
     descParam.bindInfos.emplace_back(transBufferInfo);
-    descParam.bindInfos.emplace_back(shadowSamplerInfo);
   }
 
   _descriptorSets = buildDescriptorSets(descParam);
 
   // Build a graphics pipeline
+  VkFormat format = VK_FORMAT_R16G16B16A16_SFLOAT;
   GraphicsPipelineCreateParams param{};
   param.pipelineLayout = _pipelineLayout;
   param.device = renderContext->device();
   param.vertShader = "standard_vert.spv";
   param.fragShader = "standard_frag.spv";
+  param.colorAttachmentCount = 2;
+  param.colorFormat = format;
 
   buildGraphicsPipeline(param);
 
-  // Create the depth and color images used for rendering.
+  // Create the gbuffer.
+  // 1 depth attachment (32 bit float)
+  // 3 rgba 4 channel 16 bit per channel color targets
+  // - r0g0b0: normals
+  // - a0r1g1: albedo
+  // - b1: metallic
+  // - a1: roughness
+  // - r2g2b2: world pos
   auto extent = renderContext->swapChainExtent();
 
   // Depth
@@ -121,26 +117,45 @@ bool GeometryRenderPass::init(RenderContext* renderContext, RenderResourceVault*
   vault->addResource("GeometryDepthImage", std::unique_ptr<IRenderResource>(depthRes));
   vault->addResource("GeometryDepthImageView", std::unique_ptr<IRenderResource>(depthViewRes));
 
-  // Color
-  auto colRes = new ImageRenderResource();
-  auto colViewRes = new ImageViewRenderResource();
+  // Color images
+  auto col0Res = new ImageRenderResource();
+  auto col0ViewRes = new ImageViewRenderResource();
+  auto col1Res = new ImageRenderResource();
+  auto col1ViewRes = new ImageViewRenderResource();
 
-  colRes->_format = VK_FORMAT_B8G8R8A8_SRGB;
-  colViewRes->_format = VK_FORMAT_B8G8R8A8_SRGB;
+  // VK_FORMAT_B8G8R8A8_SRGB
+  // VK_FORMAT_R16G16B16A16_SFLOAT
+  col0Res->_format = format;
+  col0ViewRes->_format = format;
+  col1Res->_format = format;
+  col1ViewRes->_format = format;
 
   imageutil::createImage(
     extent.width,
     extent.height,
-    colRes->_format,
+    col0Res->_format,
     VK_IMAGE_TILING_OPTIMAL,
     renderContext->vmaAllocator(),
     VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    colRes->_image);
+    col0Res->_image);
 
-  colViewRes->_view = imageutil::createImageView(renderContext->device(), colRes->_image._image, colRes->_format, VK_IMAGE_ASPECT_COLOR_BIT);
+  col0ViewRes->_view = imageutil::createImageView(renderContext->device(), col0Res->_image._image, col0Res->_format, VK_IMAGE_ASPECT_COLOR_BIT);
 
-  vault->addResource("GeometryColorImage", std::unique_ptr<IRenderResource>(colRes));
-  vault->addResource("GeometryColorImageView", std::unique_ptr<IRenderResource>(colViewRes));
+  imageutil::createImage(
+    extent.width,
+    extent.height,
+    col1Res->_format,
+    VK_IMAGE_TILING_OPTIMAL,
+    renderContext->vmaAllocator(),
+    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    col1Res->_image);
+
+  col1ViewRes->_view = imageutil::createImageView(renderContext->device(), col1Res->_image._image, col1Res->_format, VK_IMAGE_ASPECT_COLOR_BIT);
+
+  vault->addResource("Geometry0Image", std::unique_ptr<IRenderResource>(col0Res));
+  vault->addResource("Geometry0ImageView", std::unique_ptr<IRenderResource>(col0ViewRes));
+  vault->addResource("Geometry1Image", std::unique_ptr<IRenderResource>(col1Res));
+  vault->addResource("Geometry1ImageView", std::unique_ptr<IRenderResource>(col1ViewRes));
 
   return true;
 }
@@ -153,8 +168,17 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   std::vector<ResourceUsage> resourceUsages;
   {
     ResourceUsage usage{};
-    usage._resourceName = "GeometryColorImage";
+    usage._resourceName = "Geometry0Image";
     usage._access.set((std::size_t)Access::Write);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::ColorAttachment;
+    resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "Geometry1Image";
+    usage._access.set((std::size_t)Access::Write);
+    usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::ColorAttachment;
     resourceUsages.emplace_back(std::move(usage));
   }
@@ -162,15 +186,8 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     ResourceUsage usage{};
     usage._resourceName = "GeometryDepthImage";
     usage._access.set((std::size_t)Access::Write);
-    usage._type = Type::DepthAttachment;
-    resourceUsages.emplace_back(std::move(usage));
-  }
-  {
-    ResourceUsage usage{};
-    usage._resourceName = "ShadowMap";
-    usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
-    usage._type = Type::SampledTexture;
+    usage._type = Type::DepthAttachment;
     resourceUsages.emplace_back(std::move(usage));
   }
   {
@@ -196,21 +213,34 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   fgb.registerRenderPassExe("Geometry",
     [this](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra) {
       // Get resources
-      auto colorView = (ImageViewRenderResource*)vault->getResource("GeometryColorImageView");
+      auto color0View = (ImageViewRenderResource*)vault->getResource("Geometry0ImageView");
+      auto color1View = (ImageViewRenderResource*)vault->getResource("Geometry1ImageView");
       auto depthView = (ImageViewRenderResource*)vault->getResource("GeometryDepthImageView");
       auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullDrawBuf", multiBufferIdx);
 
       // Dynamic rendering begin
       std::array<VkClearValue, 2> clearValues{};
+      std::array<VkRenderingAttachmentInfoKHR, 2> colInfo{};
       clearValues[0].color = { {0.5f, 0.5f, 0.5f, 1.0f} };
       clearValues[1].depthStencil = { 1.0f, 0 };
-      VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
-      colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-      colorAttachmentInfo.imageView = colorView->_view;
-      colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-      colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-      colorAttachmentInfo.clearValue = clearValues[0];
+      VkRenderingAttachmentInfoKHR color0AttachmentInfo{};
+      color0AttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+      color0AttachmentInfo.imageView = color0View->_view;
+      color0AttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      color0AttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      color0AttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      color0AttachmentInfo.clearValue = clearValues[0];
+
+      VkRenderingAttachmentInfoKHR color1AttachmentInfo{};
+      color1AttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+      color1AttachmentInfo.imageView = color1View->_view;
+      color1AttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      color1AttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      color1AttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      color1AttachmentInfo.clearValue = clearValues[0];
+
+      colInfo[0] = color0AttachmentInfo;
+      colInfo[1] = color1AttachmentInfo;
 
       VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
       depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
@@ -225,8 +255,8 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       renderInfo.renderArea.extent = renderContext->swapChainExtent();
       renderInfo.renderArea.offset = { 0, 0 };
       renderInfo.layerCount = 1;
-      renderInfo.colorAttachmentCount = 1;
-      renderInfo.pColorAttachments = &colorAttachmentInfo;
+      renderInfo.colorAttachmentCount = colInfo.size();
+      renderInfo.pColorAttachments = colInfo.data();
       renderInfo.pDepthAttachment = &depthAttachmentInfo;
 
       vkCmdBeginRendering(*cmdBuffer, &renderInfo);
