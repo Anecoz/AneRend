@@ -128,6 +128,7 @@ private:
   static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 256;
   static const std::size_t MAX_NUM_RENDERABLES = std::size_t(1e5);
   static const std::size_t MAX_NUM_MESHES = std::size_t(1e3);
+  static const std::size_t NUM_PIXELS_CLUSTER = 16;
 
   RenderDebugOptions _debugOptions;
   logic::WindMap _currentWindMap;
@@ -157,6 +158,7 @@ private:
   };
 
   std::vector<Renderable> _currentRenderables;
+  std::vector<bool> _renderablesChanged;
   void cleanupRenderable(const Renderable& renderable);
 
   /* 
@@ -208,6 +210,16 @@ private:
   // Update wind force image
   void updateWindForceImage(VkCommandBuffer& commandBuffer);
 
+  // View space clusters for the light assignment
+  struct ViewCluster
+  {
+    // AABB
+    glm::vec3 _minBounds;
+    glm::vec3 _maxBounds;
+  };
+
+  std::vector<ViewCluster> _viewClusters;
+
   std::vector<Light> _lights;
 
   VmaAllocator _vmaAllocator;
@@ -229,6 +241,8 @@ private:
   bool initGpuBuffers();
   bool initBindless();
   bool initFrameGraphBuilder();
+  bool initRenderPasses();
+  bool initViewClusters();
 
   bool checkValidationLayerSupport();
   bool checkDeviceExtensionSupport(VkPhysicalDevice device);

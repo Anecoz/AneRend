@@ -24,6 +24,8 @@ public:
 
   void addResource(const std::string& name, std::unique_ptr<IRenderResource> resource, bool multiBuffered = false, int multiBufferIdx = 0);
   void deleteResource(const std::string& name);
+
+  void clear();
   
   IRenderResource* getResource(const std::string& name, int multiBufferIdx = 0);
 

@@ -70,4 +70,9 @@ void RenderResourceVault::deleteResource(const std::string& name)
   }
 }
 
+void RenderResourceVault::clear()
+{
+  _resources.clear();
+}
+
 }

@@ -117,6 +117,7 @@ VulkanRenderer::~VulkanRenderer()
 
   for (auto& rp : _renderPasses) {
     rp->cleanup(this, &_vault);
+    delete rp;
   }
 
   cleanupSwapChain();
@@ -239,8 +240,18 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
+  printf("Init render passes...");
+  res &= initRenderPasses();
+  if (!res) return false;
+  printf("Done!\n");
+
   printf("Init frame graph builder...");
   res &= initFrameGraphBuilder();
+  if (!res) return false;
+  printf("Done!\n");
+
+  printf("Init view clusters...");
+  res &= initViewClusters();
   if (!res) return false;
   printf("Done!\n");
 
@@ -248,6 +259,12 @@ bool VulkanRenderer::init()
   res &= initImgui();
   if (!res) return false;
   printf("Done!\n");
+
+  _renderablesChanged.resize(MAX_FRAMES_IN_FLIGHT);
+
+  for (auto& val : _renderablesChanged) {
+    val = true;
+  }
 
   return res;
 }
@@ -339,6 +356,10 @@ RenderableId VulkanRenderer::registerRenderable(
   renderable._boundingSphereRadius = sphereBoundRadius;
 
   _currentRenderables.emplace_back(std::move(renderable));
+
+  for (auto& val : _renderablesChanged) {
+    val = true;
+  }
 
   return id;
 }
@@ -784,6 +805,15 @@ void VulkanRenderer::recreateSwapChain()
   cleanupSwapChain();
 
   createSwapChain();
+
+  _fgb.reset();
+
+  for (auto& rp : _renderPasses) {
+    rp->cleanup(this, &_vault);
+  }
+
+  _vault.clear();
+  initFrameGraphBuilder();
 }
 
 bool VulkanRenderer::createSwapChain()
@@ -1263,6 +1293,19 @@ bool VulkanRenderer::initBindless()
 
 bool VulkanRenderer::initFrameGraphBuilder()
 {
+  for (auto* rp : _renderPasses) {
+    rp->init(this, &_vault);
+    rp->registerToGraph(_fgb);
+  }
+
+  _fgb.build();
+  _fgb.printBuiltGraphDebug();
+
+  return true;
+}
+
+bool VulkanRenderer::initRenderPasses()
+{
   _renderPasses.emplace_back(new CullRenderPass());
   _renderPasses.emplace_back(new ShadowRenderPass());
   _renderPasses.emplace_back(new GrassShadowRenderPass());
@@ -1273,13 +1316,12 @@ bool VulkanRenderer::initFrameGraphBuilder()
   _renderPasses.emplace_back(new UIRenderPass());
   _renderPasses.emplace_back(new PresentationRenderPass());
 
-  for (auto* rp : _renderPasses) {
-    rp->init(this, &_vault);
-    rp->registerToGraph(_fgb);
-  }
+  return true;
+}
 
-  _fgb.build();
-  _fgb.printBuiltGraphDebug();
+bool VulkanRenderer::initViewClusters()
+{
+
 
   return true;
 }
@@ -1555,7 +1597,10 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
   // Prefill renderable buffer
   // This is unnecessary to do every frame!
-  prefillGPURenderableBuffer(commandBuffer);
+  if (_renderablesChanged[_currentFrame]) {
+    prefillGPURenderableBuffer(commandBuffer);
+    _renderablesChanged[_currentFrame] = false;
+  }
 
   // Update windforce texture
   updateWindForceImage(commandBuffer);
