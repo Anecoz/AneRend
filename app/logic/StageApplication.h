@@ -30,13 +30,14 @@ private:
 
   glm::vec3 _sunDir;
 
-  render::VulkanRenderer _vkRenderer;
   render::RenderDebugOptions _renderDebugOptions;
   logic::WindSystem _windSystem;
   glm::vec2 _windDir;
 
   render::Camera _camera;
   render::Camera _shadowCamera;
+
+  render::VulkanRenderer _vkRenderer;
 
   render::Model _testModel;
   render::Model _testModel2;

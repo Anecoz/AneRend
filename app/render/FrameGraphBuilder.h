@@ -48,6 +48,7 @@ enum class Type
   UBO,
   SSBO,
   Irrelevant,
+  ImageStorage,
   Count
 };
 

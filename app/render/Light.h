@@ -21,6 +21,8 @@ struct Light
 
   glm::vec3 _pos;
   glm::vec3 _color;
+  bool _enabled = true;
+  double _range;
   std::vector<glm::mat4> _view;
   glm::mat4 _proj;
 
@@ -32,12 +34,13 @@ struct Light
   double _debugCircleRadius;
   double _debugOrigX;
   double _debugOrigZ;
+  double _debugSpeed;
 
   double _lastAngle = 0.0;
 
   void debugUpdatePos(double delta)
   {
-    _lastAngle += delta * .5;
+    _lastAngle += delta * _debugSpeed;
     _pos.x = (float)_debugOrigX + (float)cos(_lastAngle) * (float)_debugCircleRadius;
     _pos.z = (float)_debugOrigZ + (float)sin(_lastAngle) * (float)_debugCircleRadius;
   }

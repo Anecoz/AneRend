@@ -16,6 +16,7 @@
 #include "passes/DeferredLightingRenderPass.h"
 
 #include "../util/Utils.h"
+#include "../util/GraphicsUtils.h"
 #include "../LodePng/lodepng.h"
 #include "../imgui/imgui.h"
 #include "../imgui/imgui_impl_glfw.h"
@@ -33,6 +34,7 @@
 #include <limits>
 #include <iostream>
 #include <set>
+#include <random>
 
 namespace {
 
@@ -81,9 +83,10 @@ VKAPI_ATTR VkBool32 VKAPI_CALL g_DebugCallback(
 
 namespace render {
 
-VulkanRenderer::VulkanRenderer(GLFWwindow* window)
+VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   : _currentSwapChainIndex(0)
   , _vault(MAX_FRAMES_IN_FLIGHT)
+  , _latestCamera(initialCamera)
   , _fgb(&_vault)
   , _window(window)
   , _enableValidationLayers(true)
@@ -133,6 +136,8 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _gpuRenderableBuffer[i]._buffer, _gpuRenderableBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuStagingBuffer[i]._buffer, _gpuStagingBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSceneDataBuffer[i]._buffer, _gpuSceneDataBuffer[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _gpuLightBuffer[i]._buffer, _gpuLightBuffer[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _gpuViewClusterBuffer[i]._buffer, _gpuViewClusterBuffer[i]._allocation);
 
     vkDestroyImageView(_device, _gpuWindForceView[i], nullptr);
     vmaDestroyImage(_vmaAllocator, _gpuWindForceImage[i]._image, _gpuWindForceImage[i]._allocation);
@@ -235,6 +240,11 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
+  printf("Init view clusters...");
+  res &= initViewClusters();
+  if (!res) return false;
+  printf("Done!\n");
+
   printf("Init bindless...");
   res &= initBindless();
   if (!res) return false;
@@ -247,11 +257,6 @@ bool VulkanRenderer::init()
 
   printf("Init frame graph builder...");
   res &= initFrameGraphBuilder();
-  if (!res) return false;
-  printf("Done!\n");
-
-  printf("Init view clusters...");
-  res &= initViewClusters();
   if (!res) return false;
   printf("Done!\n");
 
@@ -351,6 +356,7 @@ RenderableId VulkanRenderer::registerRenderable(
 
   renderable._id = id;
   renderable._meshId = meshId;
+  renderable._tint = glm::vec3(1.0f);
   renderable._transform = transform;
   renderable._boundingSphereCenter = sphereBoundCenter;
   renderable._boundingSphereRadius = sphereBoundRadius;
@@ -392,6 +398,16 @@ void VulkanRenderer::cleanupRenderable(const Renderable& renderable)
   if (renderable._numInstances > 0) {
     vmaDestroyBuffer(_vmaAllocator, renderable._instanceData._buffer, renderable._instanceData._allocation);
   }*/
+}
+
+void VulkanRenderer::setRenderableTint(RenderableId id, const glm::vec3& tint)
+{
+  for (auto& rend : _currentRenderables) {
+    if (rend._id == id) {
+      rend._tint = tint;
+      return;
+    }
+  }
 }
 
 void VulkanRenderer::update(
@@ -436,8 +452,8 @@ void VulkanRenderer::update(
 
   for (int i = 0; i < _lights.size(); ++i) {
     _lights[i].debugUpdatePos(delta);
-    ubo.lightColor[i] = glm::vec4(_lights[i]._color, 1.0);
-    ubo.lightPos[i] = glm::vec4(_lights[i]._pos, 0.0);
+    //ubo.lightColor[i] = glm::vec4(_lights[i]._color, 1.0);
+    //ubo.lightPos[i] = glm::vec4(_lights[i]._pos, 0.0);
   }
 
   void* data;
@@ -945,6 +961,7 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     _currentMeshUsage[renderable._meshId]++;
     
     mappedData[i]._transform = renderable._transform;
+    mappedData[i]._tint = glm::vec4(renderable._tint, 1.0f);
     mappedData[i]._meshId = (uint32_t)renderable._meshId;
     mappedData[i]._bounds = glm::vec4(renderable._boundingSphereCenter, renderable._boundingSphereRadius);
     mappedData[i]._visible = renderable._visible ? 1 : 0;
@@ -971,6 +988,57 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     VK_PIPELINE_STAGE_TRANSFER_BIT,
     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
     0, 0, nullptr, 
+    1, &memBarr,
+    0, nullptr);
+
+  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+
+  // Update staging offset
+  _currentStagingOffset += dataSize;
+}
+
+void VulkanRenderer::prefilGPULightBuffer(VkCommandBuffer& commandBuffer)
+{
+  std::size_t dataSize = _lights.size() * sizeof(gpu::GPULight);
+  uint8_t* data;
+  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+
+  // Offset according to current staging buffer usage
+  data = data + _currentStagingOffset;
+
+  gpu::GPULight* mappedData = reinterpret_cast<gpu::GPULight*>(data);
+
+  for (std::size_t i = 0; i < MAX_NUM_LIGHTS; ++i) {
+    mappedData[i]._color = glm::vec4(0.0);
+    if (_lights.size() > i) {
+      auto& light = _lights[i];
+
+      mappedData[i]._worldPos = glm::vec4(light._pos, light._range);
+      mappedData[i]._color = glm::vec4(light._color, light._enabled ? 1.0 : 0.0);
+    }
+  }
+
+  VkBufferCopy copyRegion{};
+  copyRegion.dstOffset = 0;
+  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.size = dataSize;
+  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuLightBuffer[_currentFrame]._buffer, 1, &copyRegion);
+
+  VkBufferMemoryBarrier memBarr{};
+  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  memBarr.srcQueueFamilyIndex = _queueIndices.graphicsFamily.value();
+  memBarr.dstQueueFamilyIndex = _queueIndices.graphicsFamily.value();
+  memBarr.buffer = _gpuLightBuffer[_currentFrame]._buffer;
+  memBarr.offset = 0;
+  memBarr.size = VK_WHOLE_SIZE;
+
+  vkCmdPipelineBarrier(
+    commandBuffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    0, 0, nullptr,
     1, &memBarr,
     0, nullptr);
 
@@ -1073,67 +1141,40 @@ bool VulkanRenderer::createSyncObjects()
 
 bool VulkanRenderer::initLights()
 {
-  _lights.resize(4);
+  _lights.resize(MAX_NUM_LIGHTS);
 
-  //auto cmdBuffer = beginSingleTimeCommands();
-  //auto depthFormat = findDepthFormat();
+  std::random_device dev;
+  std::mt19937 rng(dev());
+  std::uniform_real_distribution<> col(0.0, 1.0);
+  std::uniform_real_distribution<> pos(0.0, 100.0);
+  std::uniform_real_distribution<> rad(0.0, 10.0);
+  std::uniform_real_distribution<> speed(1.0, 20.0);
+
   for (std::size_t i = 0; i < _lights.size(); ++i) {
     auto& light = _lights[i];
     float zNear = 0.1f;
     float zFar = 50.0f;
 
     light._type = Light::Point;
-    light._color = glm::vec3(1.0f, 1.0f * i / (_lights.size() - 1), 0.0f);
-    light._pos = glm::vec3(1.0f * i * 3, 5.0f, 0.0f);
+
+    glm::vec3 randomPos{
+      pos(rng),
+      1.0f,//static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 1.0f)),
+      pos(rng)
+    };
+
+    light._color = glm::vec3(col(rng), col(rng), col(rng));
+    light._pos = randomPos;// glm::vec3(1.0f * i, 5.0f, 0.0f);
     light._proj = glm::perspective(glm::radians(90.0f), 1.0f, zNear, zFar);
-    light._debugCircleRadius = 5.0 + 15.0 * (double)i;
+    light._debugCircleRadius = rad(rng);
+    light._debugSpeed = speed(rng);
     light._debugOrigX = light._pos.x;
     light._debugOrigZ = light._pos.z;
+    light._range = 5.0;
 
     // Construct view matrices
     light.updateViewMatrices();
-
-    // Construct the image
-    /*imageutil::createImage(
-      _shadowPass._shadowExtent.width, _shadowPass._shadowExtent.height,
-      depthFormat, VK_IMAGE_TILING_OPTIMAL, _vmaAllocator,
-      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, light._shadowImage,
-      6, VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
-
-    // Create views
-    light._cubeShadowView = imageutil::createImageView(_device, light._shadowImage._image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 0, 6, VK_IMAGE_VIEW_TYPE_CUBE);
-
-    for (std::size_t view = 0; view < 6; ++view) {
-      light._shadowImageViews.emplace_back(
-        imageutil::createImageView(
-          _device, light._shadowImage._image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, (uint32_t)view, 1));
-
-      // Transition image
-      imageutil::transitionImageLayout(cmdBuffer, light._shadowImage._image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, (uint32_t)view, 1);
-    }
-
-    // Create the sampler
-    VkSamplerCreateInfo sampler{};
-    sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    sampler.magFilter = VK_FILTER_NEAREST;
-    sampler.minFilter = VK_FILTER_NEAREST;
-    sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    sampler.addressModeV = sampler.addressModeU;
-    sampler.addressModeW = sampler.addressModeU;
-    sampler.mipLodBias = 0.0f;
-    sampler.maxAnisotropy = 1.0f;
-    sampler.compareOp = VK_COMPARE_OP_NEVER;
-    sampler.minLod = 0.0f;
-    sampler.maxLod = 1.0f;
-    sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-
-    if (vkCreateSampler(_device, &sampler, nullptr, &light._sampler) != VK_SUCCESS) {
-      printf("Could not create shadow map sampler!\n");
-      return false;
-    }*/
   }
-  //endSingleTimeCommands(cmdBuffer);
 
   return true;
 }
@@ -1147,11 +1188,15 @@ bool VulkanRenderer::initBindless()
   * 0: Scene UBO (UBO)
   * 1: Wind force (Sampler)
   * 2: Renderable buffer (SSBO)
+  * 3: Light buffer (SSBO)
+  * 4: View cluster buffer (SSBO)
   */
 
   uint32_t uboBinding = 0;
   uint32_t windForceBinding = 1;
   uint32_t renderableBinding = 2;
+  uint32_t lightBinding = 3;
+  uint32_t clusterBinding = 4;
 
   // Descriptor set layout
   {
@@ -1177,6 +1222,20 @@ bool VulkanRenderer::initBindless()
     samplerLayoutBinding.pImmutableSamplers = nullptr;
     samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
     bindings.emplace_back(std::move(samplerLayoutBinding));
+
+    VkDescriptorSetLayoutBinding lightLayoutBinding{};
+    lightLayoutBinding.binding = lightBinding;
+    lightLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    lightLayoutBinding.descriptorCount = 1;
+    lightLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    bindings.emplace_back(std::move(lightLayoutBinding));
+
+    VkDescriptorSetLayoutBinding clusterLayoutBinding{};
+    clusterLayoutBinding.binding = clusterBinding;
+    clusterLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    clusterLayoutBinding.descriptorCount = 1;
+    clusterLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    bindings.emplace_back(std::move(clusterLayoutBinding));
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1265,6 +1324,42 @@ bool VulkanRenderer::initBindless()
 
       descriptorWrites.emplace_back(std::move(rendBufWrite));
 
+      // Light SSBO
+      VkDescriptorBufferInfo lightBufferInfo{};
+      VkWriteDescriptorSet lightBufWrite{};
+
+      lightBufferInfo.buffer = _gpuLightBuffer[i]._buffer;
+      lightBufferInfo.offset = 0;
+      lightBufferInfo.range = VK_WHOLE_SIZE;
+
+      lightBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      lightBufWrite.dstSet = _bindlessDescriptorSets[i];
+      lightBufWrite.dstBinding = lightBinding;
+      lightBufWrite.dstArrayElement = 0;
+      lightBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      lightBufWrite.descriptorCount = 1;
+      lightBufWrite.pBufferInfo = &lightBufferInfo;
+
+      descriptorWrites.emplace_back(std::move(lightBufWrite));
+
+      // Cluster SSBO
+      VkDescriptorBufferInfo clusterBufferInfo{};
+      VkWriteDescriptorSet clusterBufWrite{};
+
+      clusterBufferInfo.buffer = _gpuViewClusterBuffer[i]._buffer;
+      clusterBufferInfo.offset = 0;
+      clusterBufferInfo.range = VK_WHOLE_SIZE;
+
+      clusterBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      clusterBufWrite.dstSet = _bindlessDescriptorSets[i];
+      clusterBufWrite.dstBinding = clusterBinding;
+      clusterBufWrite.dstArrayElement = 0;
+      clusterBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      clusterBufWrite.descriptorCount = 1;
+      clusterBufWrite.pBufferInfo = &clusterBufferInfo;
+
+      descriptorWrites.emplace_back(std::move(clusterBufWrite));
+
       // Samplers
       std::vector<VkDescriptorImageInfo> imageInfos;
       VkWriteDescriptorSet imWrite{};
@@ -1321,7 +1416,138 @@ bool VulkanRenderer::initRenderPasses()
 
 bool VulkanRenderer::initViewClusters()
 {
+  // Debug render
+  /*std::vector<Vertex> vert;
+  std::vector<std::uint32_t> inds;
+  graphicsutil::createUnitCube(&vert, &inds, false);
 
+  auto meshId = registerMesh(vert, inds);*/
+
+  std::size_t w = _swapChain._swapChainExtent.width;
+  std::size_t h = _swapChain._swapChainExtent.height;
+  double nearCam = _latestCamera.getNear();
+  double farCam = _latestCamera.getFar();
+
+  auto proj = _latestCamera.getProjection();
+  auto view = _latestCamera.getCamMatrix();
+  auto invView = glm::inverse(view);
+  //proj[1][1] *= -1;
+  auto invProj = glm::inverse(proj);
+
+  std::size_t numClustersX = w / NUM_PIXELS_CLUSTER_X;
+  std::size_t numClustersY = h / NUM_PIXELS_CLUSTER_Y;
+  std::size_t numSlices = NUM_CLUSTER_DEPTH_SLIZES;
+
+  _viewClusters.resize(numClustersX * numClustersY * numSlices);
+
+  // Step sizes in NDC space (x and y -1 to 1, z 0 to 1)
+  double xStep = 2.0 / double(numClustersX);
+  double yStep = 2.0 / double(numClustersY);
+
+  for (std::size_t z = 0; z < numSlices; ++z)
+  for (std::size_t y = 0; y < numClustersY; ++y)
+  for (std::size_t x = 0; x < numClustersX; ++x) {
+    // Find NDC points of this particular cluster
+    double ndcMinX = double(x) * xStep - 1.0;
+    double ndcMaxX = double(x + 1) * xStep - 1.0;
+    double ndcMinY = double(y) * yStep - 1.0;
+    double ndcMaxY = double(y + 1) * yStep - 1.0;
+
+    glm::vec4 minBound(ndcMinX, ndcMinY, 1.0, 1.0);
+    glm::vec4 maxBound(ndcMaxX, ndcMaxY, 1.0, 1.0);
+
+    // Tramsform to view space by inverse projection
+    auto minBoundView = invProj * minBound;
+    minBoundView /= minBoundView.w;
+
+    auto maxBoundView = invProj * maxBound;
+    maxBoundView /= maxBoundView.w;
+
+    glm::vec3 minEye{ minBoundView.x, minBoundView.y, minBoundView.z };
+    glm::vec3 maxEye{ maxBoundView.x, maxBoundView.y, maxBoundView.z };
+
+    // calculate near and far depth edges of the cluster
+    double clusterNear = -nearCam * pow(farCam / nearCam, double(z) / double(NUM_CLUSTER_DEPTH_SLIZES));
+    double clusterFar = -nearCam * pow(farCam / nearCam, (double(z) + 1.0) / double(NUM_CLUSTER_DEPTH_SLIZES));
+
+    // this calculates the intersection between:
+    // - a line from the camera (origin) to the eye point (at the camera's far plane)
+    // - the cluster's z-planes (near + far)
+    // we could divide by u_zFar as well
+    glm::vec3 minNear = minEye * (float)clusterNear / minEye.z;
+    glm::vec3 minFar = minEye * (float)clusterFar / minEye.z;
+    glm::vec3 maxNear = maxEye * (float)clusterNear / maxEye.z;
+    glm::vec3 maxFar = maxEye * (float)clusterFar / maxEye.z;
+
+    glm::vec3 minBounds = glm::min(glm::min(minNear, minFar), glm::min(maxNear, maxFar));
+    glm::vec3 maxBounds = glm::max(glm::max(minNear, minFar), glm::max(maxNear, maxFar));
+
+    ViewCluster cluster{
+      glm::vec3(minBounds.x, minBounds.y, minBounds.z),
+      glm::vec3(maxBounds.x, maxBounds.y, maxBounds.z) };
+
+    // Find index of this cluster
+    std::size_t index =
+      z * numClustersX * numClustersY +
+      y * numClustersX +
+      x;
+
+    //printf("Index: %zu\n", index);
+
+    /*printf("\nCluster index %zu has min and max: %lf %lf %lf | %lf %lf %lf\n", index,
+      minBound.x, minBound.y, minBound.z,
+      maxBound.x, maxBound.y, maxBound.z);
+    printf("(NDC was %lf %lf %lf | %lf %lf %lf)\n", ndcMinX, ndcMinY, ndcMinZ, ndcMaxX, ndcMaxY, ndcMaxZ);*/
+
+    // For debugging, world space
+    /*auto worldMin = invView * glm::vec4(minBounds, 1.0);
+    auto worldMax = invView * glm::vec4(maxBounds, 1.0);
+
+    //printf("World: %lf %lf %lf | %lf %lf %lf\n", worldMin.x, worldMin.y, worldMin.z, worldMax.x, worldMax.y, worldMax.z);
+
+    // Debug
+    //glm::vec3 center = (worldMin + worldMax) / 2.0f;
+    glm::vec3 center = (minBounds + maxBounds) / 2.0f;
+
+    glm::mat4 trans = glm::translate(glm::mat4(1.0f), center);
+    glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(
+      abs(maxBounds.x - minBounds.x),
+      abs(maxBounds.y - minBounds.y),
+      abs(maxBounds.z - minBounds.z)));
+    auto rend = registerRenderable(meshId, invView * trans * scale, glm::vec3(1.0f), 5000.0f);
+    setRenderableTint(rend, graphicsutil::randomColor());*/
+
+    _viewClusters[index] = std::move(cluster);
+  }
+
+  // Create a staging buffer on CPU side first
+  AllocatedBuffer stagingBuffer;
+  std::size_t dataSize = _viewClusters.size() * sizeof(gpu::GPUViewCluster);
+
+  bufferutil::createBuffer(_vmaAllocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
+
+  gpu::GPUViewCluster* mappedData;
+  vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, &(void*)mappedData);
+
+  for (std::size_t i = 0; i < _viewClusters.size(); ++i) {
+    mappedData[i]._max = glm::vec4(_viewClusters[i]._maxBounds, 0.0);
+    mappedData[i]._min = glm::vec4(_viewClusters[i]._minBounds, 0.0);
+  }
+
+  vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
+
+  auto cmdBuffer = beginSingleTimeCommands();
+
+  VkBufferCopy copyRegion{};
+  copyRegion.size = dataSize;
+
+  for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    vkCmdCopyBuffer(cmdBuffer, stagingBuffer._buffer, _gpuViewClusterBuffer[i]._buffer, 1, &copyRegion);
+  }
+
+  endSingleTimeCommands(cmdBuffer);
+
+  vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
 
   return true;
 }
@@ -1341,6 +1567,8 @@ bool VulkanRenderer::initGpuBuffers()
   _gpuWindForceSampler.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuWindForceImage.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuWindForceView.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuLightBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuViewClusterBuffer.resize(MAX_FRAMES_IN_FLIGHT);
 
   for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     // Create a staging buffer that will be used to temporarily hold data that is to be copied to the gpu buffers.
@@ -1366,6 +1594,20 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
       VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, // If this turns out to be a bottle neck we have to switch to a staging buffer
       _gpuSceneDataBuffer[i]);
+
+    bufferutil::createBuffer(
+      _vmaAllocator,
+      MAX_NUM_LIGHTS * sizeof(gpu::GPULight),
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+      0,
+      _gpuLightBuffer[i]);
+
+    bufferutil::createBuffer(
+      _vmaAllocator,
+      120 * 120 * 10 * sizeof(gpu::GPUViewCluster),
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+      0,
+      _gpuViewClusterBuffer[i]);
 
     // Wind force sampler
     VkSamplerCreateInfo samplerCreate{};
@@ -1601,6 +1843,9 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
     prefillGPURenderableBuffer(commandBuffer);
     _renderablesChanged[_currentFrame] = false;
   }
+
+  // Only do if lights have updated
+  prefilGPULightBuffer(commandBuffer);
 
   // Update windforce texture
   updateWindForceImage(commandBuffer);

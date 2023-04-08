@@ -9,8 +9,6 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 shadowMatrix[24];
   vec4 cameraPos;
   vec4 lightDir;
-  vec4 lightPos[4];
-  vec4 lightColor[4];
   float time;
 } ubo;
 
@@ -18,6 +16,7 @@ struct Renderable
 {
   mat4 transform;
   vec4 bounds;
+  vec4 tint;
   uint meshId;
   uint _visible;
 };

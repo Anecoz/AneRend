@@ -159,13 +159,17 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       data += _currentStagingOffset;
 
       gpu::GPUDrawCallCmd* mappedData = reinterpret_cast<gpu::GPUDrawCallCmd*>(data);
+      uint32_t cumulativeMeshUsage = 0;
       for (std::size_t i = 0; i < meshes.size(); ++i) {
         auto& mesh = meshes[i];
+
         mappedData[i]._command.indexCount = (uint32_t)mesh._numIndices;
         mappedData[i]._command.instanceCount = 0; // Updated by GPU compute shader
         mappedData[i]._command.firstIndex = (uint32_t)mesh._indexOffset;
         mappedData[i]._command.vertexOffset = (uint32_t)mesh._vertexOffset;
-        mappedData[i]._command.firstInstance = i == 0 ? 0 : (uint32_t)renderContext->getCurrentMeshUsage()[(uint32_t)i - 1];
+        mappedData[i]._command.firstInstance = cumulativeMeshUsage;//i == 0 ? 0 : (uint32_t)renderContext->getCurrentMeshUsage()[(uint32_t)i - 1];
+
+        cumulativeMeshUsage += (uint32_t)renderContext->getCurrentMeshUsage()[(uint32_t)i];
       }
 
       VkBufferCopy copyRegion{};

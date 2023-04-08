@@ -907,10 +907,11 @@ static void ImGui_ImplVulkan_CreatePipeline(VkDevice device, const VkAllocationC
     info.subpass = subpass;
 
 #if defined(VK_VERSION_1_3) || defined(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)
+    VkFormat form = VK_FORMAT_R8G8B8A8_UNORM;
     VkPipelineRenderingCreateInfoKHR pipelineRenderingCreateInfo = {};
     pipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
     pipelineRenderingCreateInfo.colorAttachmentCount = 1;
-    pipelineRenderingCreateInfo.pColorAttachmentFormats = &bd->VulkanInitInfo.ColorAttachmentFormat;
+    pipelineRenderingCreateInfo.pColorAttachmentFormats = &form;//&bd->VulkanInitInfo.ColorAttachmentFormat;
     pipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
 
     if (bd->VulkanInitInfo.UseDynamicRendering) {

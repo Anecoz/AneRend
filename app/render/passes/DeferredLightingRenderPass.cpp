@@ -19,32 +19,61 @@ DeferredLightingRenderPass::~DeferredLightingRenderPass()
 
 bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResourceVault* vault)
 {
+  // Create the output image
+  auto extent = renderContext->swapChainExtent();
+
+  auto outputRes = new ImageRenderResource();
+  outputRes->_format = VK_FORMAT_R8G8B8A8_UNORM;
+
+  auto outputViewRes = new ImageViewRenderResource();
+  outputViewRes->_format = VK_FORMAT_R8G8B8A8_UNORM;
+
+  imageutil::createImage(
+    extent.width,
+    extent.height,
+    outputRes->_format,
+    VK_IMAGE_TILING_OPTIMAL,
+    renderContext->vmaAllocator(),
+    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    outputRes->_image);
+
+  outputViewRes->_view = imageutil::createImageView(renderContext->device(), outputRes->_image._image, outputRes->_format, VK_IMAGE_ASPECT_COLOR_BIT);
+
+  vault->addResource("FinalImage", std::unique_ptr<IRenderResource>(outputRes));
+  vault->addResource("FinalImageView", std::unique_ptr<IRenderResource>(outputViewRes));
+
   // Desc layout for gbuffer samplers
   DescriptorBindInfo sampler0Info{};
   sampler0Info.binding = 0;
-  sampler0Info.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
+  sampler0Info.stages = VK_SHADER_STAGE_COMPUTE_BIT;
   sampler0Info.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
   DescriptorBindInfo sampler1Info{};
   sampler1Info.binding = 1;
-  sampler1Info.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
+  sampler1Info.stages = VK_SHADER_STAGE_COMPUTE_BIT;
   sampler1Info.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
   DescriptorBindInfo depthSamplerInfo{};
   depthSamplerInfo.binding = 2;
-  depthSamplerInfo.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
+  depthSamplerInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
   depthSamplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
   DescriptorBindInfo shadowMapSamplerInfo{};
   shadowMapSamplerInfo.binding = 3;
-  shadowMapSamplerInfo.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
+  shadowMapSamplerInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
   shadowMapSamplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+  DescriptorBindInfo outputImInfo{};
+  outputImInfo.binding = 4;
+  outputImInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
+  outputImInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 
   DescriptorSetLayoutCreateParams descLayoutParam{};
   descLayoutParam.bindInfos.emplace_back(sampler0Info);
   descLayoutParam.bindInfos.emplace_back(sampler1Info);
   descLayoutParam.bindInfos.emplace_back(depthSamplerInfo);
   descLayoutParam.bindInfos.emplace_back(shadowMapSamplerInfo);
+  descLayoutParam.bindInfos.emplace_back(outputImInfo);
   descLayoutParam.renderContext = renderContext;
 
   buildDescriptorSetLayout(descLayoutParam);
@@ -86,11 +115,23 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   shadowMapSamplerInfo.view = shadowMap->_view;
   descParam.bindInfos.emplace_back(shadowMapSamplerInfo);
 
+  outputImInfo.view = outputViewRes->_view;
+  outputImInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+  descParam.bindInfos.emplace_back(outputImInfo);
+
   descParam.multiBuffered = false;
 
   _descriptorSets = buildDescriptorSets(descParam);
 
-  // Build a graphics pipeline
+  // Build a compute pipeline
+  ComputePipelineCreateParams param{};
+  param.device = renderContext->device();
+  param.pipelineLayout = _pipelineLayout;
+  param.shader = "deferred_tiled_comp.spv";
+
+  buildComputePipeline(param);
+
+  /*// Build a graphics pipeline
   GraphicsPipelineCreateParams param{};
   param.pipelineLayout = _pipelineLayout;
   param.device = renderContext->device();
@@ -108,30 +149,7 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
 
   _meshId = renderContext->registerMesh(_screenQuad._vertices, {});
   _renderableId = renderContext->registerRenderable(_meshId, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
-  renderContext->setRenderableVisible(_renderableId, false);
-
-  // Create the output image
-  auto extent = renderContext->swapChainExtent();
-
-  auto outputRes = new ImageRenderResource();
-  outputRes->_format = VK_FORMAT_B8G8R8A8_SRGB;
-
-  auto outputViewRes = new ImageViewRenderResource();
-  outputViewRes->_format = VK_FORMAT_B8G8R8A8_SRGB;
-
-  imageutil::createImage(
-    extent.width,
-    extent.height,
-    outputRes->_format,
-    VK_IMAGE_TILING_OPTIMAL,
-    renderContext->vmaAllocator(),
-    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    outputRes->_image);
-
-  outputViewRes->_view = imageutil::createImageView(renderContext->device(), outputRes->_image._image, outputRes->_format, VK_IMAGE_ASPECT_COLOR_BIT);
-
-  vault->addResource("FinalImage", std::unique_ptr<IRenderResource>(outputRes));
-  vault->addResource("FinalImageView", std::unique_ptr<IRenderResource>(outputViewRes));
+  renderContext->setRenderableVisible(_renderableId, false);*/
 
   return true;
 }
@@ -147,15 +165,15 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     usage._resourceName = "FinalImage";
     usage._access.set((std::size_t)Access::Read);
     usage._access.set((std::size_t)Access::Write);
-    usage._stage.set((std::size_t)Stage::Fragment);
-    usage._type = Type::ColorAttachment;
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::ImageStorage;
     resourceUsages.emplace_back(std::move(usage));
   }
   {
     ResourceUsage usage{};
     usage._resourceName = "Geometry0Image";
     usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SampledTexture;
     resourceUsages.emplace_back(std::move(usage));
   }
@@ -163,7 +181,7 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     ResourceUsage usage{};
     usage._resourceName = "Geometry1Image";
     usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SampledTexture;
     resourceUsages.emplace_back(std::move(usage));
   }
@@ -171,7 +189,7 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     ResourceUsage usage{};
     usage._resourceName = "GeometryDepthImage";
     usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SampledTexture;
     resourceUsages.emplace_back(std::move(usage));
   }
@@ -179,7 +197,7 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     ResourceUsage usage{};
     usage._resourceName = "ShadowMap";
     usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SampledTexture;
     resourceUsages.emplace_back(std::move(usage));
   }
@@ -189,7 +207,7 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb)
 
   fgb.registerRenderPassExe("DeferredPbrLight",
     [this](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra) {
-      // Get resources
+      /*// Get resources
       auto finalImView = (ImageViewRenderResource*)vault->getResource("FinalImageView");
 
       VkClearValue clearValue{};
@@ -242,7 +260,36 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb)
 
       renderContext->drawMeshId(cmdBuffer, _meshId, 6, 1);
 
-      vkCmdEndRendering(*cmdBuffer);
+      vkCmdEndRendering(*cmdBuffer);*/
+
+      // Bind pipeline
+      vkCmdBindPipeline(*cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _pipeline);
+
+      vkCmdBindDescriptorSets(
+        *cmdBuffer,
+        VK_PIPELINE_BIND_POINT_COMPUTE,
+        _pipelineLayout,
+        1, 1, &_descriptorSets[0],
+        0, nullptr);
+
+      auto extent = renderContext->swapChainExtent();
+
+      uint32_t numX = extent.width / 32;
+      uint32_t numY = extent.height / 32;
+
+      std::uint32_t pushData[2];
+      pushData[0] = extent.width;
+      pushData[1] = extent.height;
+
+      vkCmdPushConstants(
+        *cmdBuffer,
+        _pipelineLayout,
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+        0,
+        2 * sizeof(uint32_t),
+        pushData);
+        
+      vkCmdDispatch(*cmdBuffer, numX, numY + 1, 1);
     });
 }
 

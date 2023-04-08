@@ -39,7 +39,7 @@ namespace render {
 class VulkanRenderer : public RenderContext
 {
 public:
-  VulkanRenderer(GLFWwindow* window);
+  VulkanRenderer(GLFWwindow* window, const Camera& initialCamera);
   ~VulkanRenderer();
 
   VulkanRenderer(const VulkanRenderer&) = delete;
@@ -67,6 +67,9 @@ public:
 
   // Hide or show a renderable.
   void setRenderableVisible(RenderableId id, bool visible);
+
+  // Tint
+  void setRenderableTint(RenderableId id, const glm::vec3& tint);
 
   void update(
     const Camera& camera,
@@ -128,7 +131,10 @@ private:
   static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 256;
   static const std::size_t MAX_NUM_RENDERABLES = std::size_t(1e5);
   static const std::size_t MAX_NUM_MESHES = std::size_t(1e3);
-  static const std::size_t NUM_PIXELS_CLUSTER = 16;
+  static const std::size_t NUM_PIXELS_CLUSTER_X = 16;
+  static const std::size_t NUM_PIXELS_CLUSTER_Y = 9;
+  static const std::size_t NUM_CLUSTER_DEPTH_SLIZES = 7;
+  static const std::size_t MAX_NUM_LIGHTS = 32*32;
 
   RenderDebugOptions _debugOptions;
   logic::WindMap _currentWindMap;
@@ -153,6 +159,7 @@ private:
     bool _visible = true;
 
     glm::mat4 _transform;
+    glm::vec3 _tint;
     glm::vec3 _boundingSphereCenter;
     float _boundingSphereRadius;
   };
@@ -192,6 +199,12 @@ private:
   // Contains renderable info for compute culling shader.
   std::vector<AllocatedBuffer> _gpuRenderableBuffer;
 
+  // SSBO for light information.
+  std::vector<AllocatedBuffer> _gpuLightBuffer;
+
+  // SSBO for the view clusters.
+  std::vector<AllocatedBuffer> _gpuViewClusterBuffer;
+
   // Contains scene data needed in shaders (view and proj matrices etc.)
   std::vector<AllocatedBuffer> _gpuSceneDataBuffer;
 
@@ -206,6 +219,9 @@ private:
 
   // Fills gpu renderable buffer with current renderable information (could be done async)
   void prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer);
+
+  // Fills GPU light buffer with current light information.
+  void prefilGPULightBuffer(VkCommandBuffer& commandBuffer);
 
   // Update wind force image
   void updateWindForceImage(VkCommandBuffer& commandBuffer);

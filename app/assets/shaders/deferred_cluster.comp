@@ -1,5 +1,7 @@
 #version 450
 
+layout (local_size_x = 16, local_size_y = 9, local_size_z = 7) in;
+
 layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
@@ -17,10 +19,90 @@ layout(set = 1, binding = 0) uniform sampler2D im0;
 layout(set = 1, binding = 1) uniform sampler2D im1;
 layout(set = 1, binding = 2) uniform sampler2D depth;
 layout(set = 1, binding = 3) uniform sampler2D shadowMap;
+layout(set = 1, binding = 4, rgba8) uniform writeonly image2D outputIm;
 
-layout(location = 0) in vec2 fragTexCoords;
+struct Light 
+{
+  vec4 worldPos; // w is range
+  vec4 color; // w is enabled or not
+};
 
-layout(location = 0) out vec4 outCol;
+struct Cluster
+{
+  vec4 minVs;
+  vec4 maxVs;
+};
+
+layout(std430, set = 0, binding = 3) readonly buffer LightBuffer {
+  Light lights[];
+} lightBuffer;
+
+layout(std430, set = 0, binding = 4) readonly buffer ClusterBuffer {
+  Cluster clusters[];
+} clusterBuffer;
+
+layout(push_constant) uniform constants {
+  uint numClustersX;
+  uint numClustersY;
+} pushConstants;
+
+// The index list that will need to be processed by this particular invocation
+shared uint groupLocalIndexList[16 * 9]; // Worst case size is _all_ lights
+
+// The actual size of the above array
+shared uint groupLocalNumIndices;
+
+void doLight(ivec2 pixel);
+
+void main()
+{
+  if (gl_LocalInvocationID.x == 0 && 
+      gl_LocalInvocationID.y == 0 &&
+      gl_LocalInvocationID.z == 0) {
+    groupLocalNumIndices = 0;
+  }
+
+  barrier();
+
+  // Index into the cluster buffer for this invocation
+  uint index = 
+    gl_LocalInvocationID.z * pushConstants.numClustersX * pushConstants.numClustersY +
+    gl_WorkGroupID.y * pushConstants.numClustersX +
+    gl_WorkGroupID.x;
+
+  Cluster cluster = clusterBuffer.clusters[index];
+
+  // Choose a light to do culling with
+  if (gl_LocalInvocationID.z == 0) {
+    uint lightIndex = gl_LocalInvocationID.x * gl_WorkGroupSize.y + gl_LocalInvocationID.y;
+    Light light = lightBuffer.lights[lightIndex];
+
+    if (light.color.w > 0.5) {
+      float range = light.worldPos.w;
+
+      vec3 viewLightPos = vec4(ubo.view * (light.worldPos.xyz, 1.0)).xyz;
+
+      // get closest point to sphere center
+      vec3 closest = max(cluster.minVs.xyz, min(viewLightPos, cluster.maxVs.xyz));
+
+      // check if point is inside the sphere
+      vec3 dist = closest - viewLightPos;
+      float d = dot(dist, dist);
+      if (d <= (range * range)) {
+        uint countBefore = atomicAdd(groupLocalNumIndices, 1);
+        groupLocalIndexList[countBefore] = lightIndex;
+      }
+    }
+
+    // All threads in this group must complete the above
+    barrier();
+
+    // Actually loop through list and do light calc
+    //if (groupLocalNumIndices > 0) {
+      doLight(ivec2(gl_GlobalInvocationID.xy)); 
+    //}
+  }
+}
 
 const float PI = 3.14159265359;
 
@@ -102,7 +184,6 @@ vec3 importanceSample_GGX(vec2 Xi, float roughness, vec3 normal)
    return normalize(tangentX * H.x + tangentY * H.y + normal * H.z);
 }
 
-
 vec3 fresnelSchlick(float cosTheta, vec3 F0)
 {
    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
@@ -143,20 +224,25 @@ vec3 calcWorldPos(vec2 texCoord, float depthSamp)
   return(position.xyz / position.w);
 }
 
+void doLight(ivec2 pixel)
+{
+  vec2 texCoords = vec2(pixel) / (gl_WorkGroupSize.xy * gl_NumWorkGroups.xy);
 
-void main() {
-  vec4 im0Samp = texture(im0, fragTexCoords);
-  vec4 im1Samp = texture(im1, fragTexCoords);
-  float depthSamp = texture(depth, fragTexCoords).r;
+  vec4 im0Samp = texture(im0, texCoords);
+  vec4 im1Samp = texture(im1, texCoords);
+  float depthSamp = texture(depth, texCoords).r;
 
-  if (depthSamp == 1.0f) discard;
+  if (depthSamp == 1.0f) {
+    imageStore(outputIm, pixel, vec4(0.5, 0.5, 0.5, 1.0));
+    return;
+  }
 
   vec3 normal = im0Samp.rgb;
   vec3 albedo = pow(vec3(im0Samp.a, im1Samp.rg), vec3(2.2));
   float metallic = im1Samp.b;
   float roughness = im1Samp.a;
   float depth = depthSamp;
-  vec3 fragWorldPos = calcWorldPos(fragTexCoords, depthSamp);
+  vec3 fragWorldPos = calcWorldPos(texCoords, depthSamp);
 
   vec3 color = vec3(0.0f);
   vec3 lightColor = vec3(1.0);
@@ -172,20 +258,22 @@ void main() {
   // Reflectance equation
   vec3 Lo = vec3(0.0);
 
-  for (int i = 0; i < 5; ++i) {
+  for (int i = 0; i < 1 + groupLocalNumIndices; ++i) {
     float attenuation = 0.0f;
     vec3 L = vec3(0.0);
 
-    //if (i == 0) {
+    if (i == 0) {
       attenuation = 1.0f; // Directional light
       L = normalize(ubo.lightDir.xyz * vec3(-1.0, 1.0, -1.0));
-    //}
-    /*else {
-      float d = 0.1 * distance(ubo.lightPos[i-1].xyz, fragWorldPos);
+    }
+    else {
+      Light light = lightBuffer.lights[groupLocalIndexList[i-1]];
+      vec3 lightWorldPos = light.worldPos.xyz;
+      float d = distance(lightWorldPos, fragWorldPos);
       attenuation = 1.0 / (d * d);
-      L = normalize(ubo.lightPos[i-1].xyz - fragWorldPos);
-      lightColor = ubo.lightColor[i-1].rgb;
-    }*/
+      L = normalize(lightWorldPos - fragWorldPos);
+      lightColor = light.color.rgb;
+    }
 
     vec3 H = normalize(V + L);
     vec3 radiance = lightColor * attenuation;
@@ -211,12 +299,13 @@ void main() {
   float shadow = inShadow(fragWorldPos);
 
   vec3 ambient = vec3(0.03) * albedo;
-  color = (ambient + Lo) * clamp(1.0 - shadow, 0.3, 1.0);
+  color = (ambient + Lo);// * clamp(1.0 - shadow, 0.3, 1.0);
 
   // HDR tonemapping
   color = color / (color + vec3(1.0));
   // gamma correct
   color = pow(color, vec3(1.0/2.2)); 
 
-  outCol = vec4(color, 1.0);
+  imageStore(outputIm, pixel, vec4(color, 1.0));
+  //outCol = vec4(color, 1.0);
 }

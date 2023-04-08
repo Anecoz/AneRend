@@ -432,6 +432,22 @@ std::vector<VkDescriptorSet> RenderPass::buildDescriptorSets(DescriptorSetsCreat
 
       descriptorWrites.emplace_back(std::move(imWrite));
     }
+    else if (params.bindInfos[j].type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
+      VkWriteDescriptorSet imWrite{};
+      VkDescriptorImageInfo imageInfo{};
+      imageInfo.imageView = params.bindInfos[j].view;
+      imageInfo.imageLayout = params.bindInfos[j].imageLayout;
+
+      imWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      imWrite.dstSet = sets[currIdx];
+      imWrite.dstBinding = params.bindInfos[j].binding;
+      imWrite.dstArrayElement = 0;
+      imWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      imWrite.descriptorCount = 1;
+      imWrite.pImageInfo = &imageInfo;
+
+      descriptorWrites.emplace_back(std::move(imWrite));
+    }
 
     vkUpdateDescriptorSets(params.renderContext->device(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
   }

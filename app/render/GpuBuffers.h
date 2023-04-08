@@ -17,6 +17,7 @@ namespace gpu {
 struct alignas(16) GPURenderable {
   glm::mat4 _transform;
   glm::vec4 _bounds;
+  glm::vec4 _tint;
   uint32_t _meshId; // Also index into the mesh GPU buffer
   uint32_t _visible; // TODO: Not sure about if there is a bool type...
 };
@@ -36,6 +37,16 @@ struct GPUGrassBlade {
   glm::vec4 _cpData1;
   glm::vec4 _cpData2;
   glm::vec4 _widthDir;
+};
+
+struct GPULight {
+  glm::vec4 _worldPos; // xyz is pos and w is range
+  glm::vec4 _color; // w is enabled or not
+};
+
+struct GPUViewCluster {
+  glm::vec4 _min; // view space
+  glm::vec4 _max; // view space
 };
 
 // Minimum supported size of push constants is 128 bytes! (RTX 3080 has a limit of 256 bytes)
@@ -60,8 +71,6 @@ struct GPUSceneData {
   glm::mat4 shadowMatrix[24];
   glm::vec4 cameraPos;
   glm::vec4 lightDir;
-  glm::vec4 lightPos[4];
-  glm::vec4 lightColor[4];
   glm::vec4 viewVector;
   float time;
 };

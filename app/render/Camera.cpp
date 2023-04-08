@@ -25,11 +25,12 @@ Camera::Camera(glm::vec3 initialPosition, ProjectionType type)
     _far = 50.0f;
   }
   else {
-    _projection = glm::perspective(glm::radians(55.0f), 16.0f/9.0f, 0.1f, 100.0f);
+    _projection = glm::perspective(glm::radians(55.0f), 16.0f/9.0f, 1.0f, 100.0f);
     _far = 100.0f;
   }
 
-  _near = 0.1f;
+  _near = 1.0f;
+  update(0.0);
 }
 
 bool Camera::insideFrustum(const glm::vec3& point) const

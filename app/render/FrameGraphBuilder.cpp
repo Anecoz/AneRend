@@ -20,7 +20,7 @@ bool isTypeBuffer(Type type)
 bool isTypeImage(Type type)
 {
   return type == Type::ColorAttachment || type == Type::DepthAttachment ||
-    type == Type::Present || type == Type::SampledTexture;
+    type == Type::Present || type == Type::SampledTexture || type == Type::ImageStorage;
 }
 
 }
@@ -471,6 +471,12 @@ std::pair<VkImageLayout, VkImageLayout> FrameGraphBuilder::findImageLayoutUsage(
       //return { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
       return { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL };
     }
+    else if (prevType == Type::ImageStorage && newType == Type::ColorAttachment) {
+      return { VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+    }
+    else if (prevType == Type::ImageStorage && newType == Type::Present) {
+      return { VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL };
+    }
   }
   else if (prevAccess.test(std::size_t(Access::Read)) &&
     newAccess.test(std::size_t(Access::Read))) {
@@ -490,6 +496,9 @@ VkImageLayout FrameGraphBuilder::findInitialImageLayout(AccessBits access, Type 
     }
     else if (type == Type::ColorAttachment) {
       return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+    else if (type == Type::ImageStorage) {
+      return VK_IMAGE_LAYOUT_GENERAL;
     }
   }
 

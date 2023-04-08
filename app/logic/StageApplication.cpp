@@ -15,9 +15,9 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
 StageApplication::StageApplication(std::string title)
   : Application(std::move(title))
   , _sunDir(glm::vec3(0.7f, -0.7f, 0.7f))
-  , _vkRenderer(_window)
-  , _windDir(glm::vec2(-1.0, 0.0))
   , _camera(glm::vec3(-17.0, 6.0, 4.0), render::ProjectionType::Perspective)
+  , _vkRenderer(_window, _camera)
+  , _windDir(glm::vec2(-1.0, 0.0))
   , _shadowCamera(glm::vec3(-20.0f, 15.0f, -20.0f), render::ProjectionType::Orthogonal)
 {
 
@@ -50,10 +50,10 @@ bool StageApplication::init()
     return false;
   }
 
-  if (!_testModel3.loadFromObj(std::string(ASSET_PATH) + "models/sponza.obj",
+  /*if (!_testModel3.loadFromObj(std::string(ASSET_PATH) + "models/sponza.obj",
     std::string(ASSET_PATH) + "models/")) {
     return false;
-  }
+  }*/
 
   _meshId = _vkRenderer.registerMesh(_testModel._vertices, _testModel._indices);
   _meshId2 = _vkRenderer.registerMesh(_testModel2._vertices, _testModel2._indices);
