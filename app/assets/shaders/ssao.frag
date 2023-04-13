@@ -17,7 +17,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 } ubo;
 
 layout(set = 1, binding = 0) uniform sampler2D gbuffer0Tex;
-layout(set = 1, binding = 1) uniform sampler2D depthTex;
+layout(set = 1, binding = 1) uniform sampler2D gbuffer2Tex;
 layout(set = 1, binding = 2) uniform sampler2D noiseTex;
 
 layout(set = 1, binding = 3) uniform UniformBufferObjectSamples {
@@ -28,7 +28,7 @@ layout(location = 0) in vec2 fragTexCoords;
 
 layout(location = 0) out vec4 outColor;
 
-vec3 calcViewSpacePos(vec2 texCoord, float depthSamp)
+/*vec3 calcViewSpacePos(vec2 texCoord, float depthSamp)
 {
   vec4 clipSpacePos = vec4(texCoord * 2.0 - vec2(1.0), depthSamp, 1.0);
 
@@ -36,15 +36,15 @@ vec3 calcViewSpacePos(vec2 texCoord, float depthSamp)
   //vec4 position = ubo.invViewProj * clipSpacePos; // Use this for world space
 
   return(position.xyz / position.w);
-}
+}*/
 
 void main() {
   const vec2 noiseScale = vec2(float(ubo.screenWidth)/4.0, float(ubo.screenHeight)/4.0);
 
-  float depthSamp = texture(depthTex, fragTexCoords).r;
+  vec4 im2Samp = texture(gbuffer2Tex, fragTexCoords);
 
   // From learnopengl.com
-  vec3 fragPos   = calcViewSpacePos(fragTexCoords, depthSamp);
+  vec3 fragPos   = (ubo.view * vec4(im2Samp.rgb, 1.0)).xyz;//calcViewSpacePos(fragTexCoords, depthSamp);
   vec3 normal    = mat3(ubo.view) * texture(gbuffer0Tex, fragTexCoords).rgb;
   vec3 randomVec = texture(noiseTex, fragTexCoords * noiseScale).xyz;
 
@@ -66,8 +66,8 @@ void main() {
     offset.xyz /= offset.w;               // perspective divide
     offset.xyz  = offset.xyz * 0.5 + 0.5; // transform to range 0.0 - 1.0
 
-    float offsetDepthSamp = texture(depthTex, offset.xy).r;
-    float sampleDepth = calcViewSpacePos(offset.xy, offsetDepthSamp).z;
+    vec4 offsetim2Samp = texture(gbuffer2Tex, offset.xy);
+    float sampleDepth = (ubo.view * vec4(offsetim2Samp.rgb, 1.0)).z;//calcViewSpacePos(offset.xy, offsetDepthSamp).z;
     
     float rangeCheck = smoothstep(0.0, 1.0, radius / abs(fragPos.z - sampleDepth));
     occlusion       += (sampleDepth >= samplePos.z + bias ? 1.0 : 0.0) * rangeCheck; 

@@ -43,6 +43,7 @@ layout(location = 2) in vec3 inNormal;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) flat out vec3 fragNormal;
+layout(location = 2) out vec3 fragPos;
 
 void main() {
   uint renderableId = translationBuffer.ids[gl_InstanceIndex];
@@ -51,4 +52,5 @@ void main() {
   gl_Position = ubo.proj * ubo.view * model * vec4(inPosition, 1.0);
   fragColor = inColor * renderableBuffer.renderables[renderableId].tint.rgb;
   fragNormal = mat3(model) * inNormal;
+  fragPos = (model * vec4(inPosition, 1.0)).xyz;
 }

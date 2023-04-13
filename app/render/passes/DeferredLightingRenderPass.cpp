@@ -53,29 +53,35 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   sampler1Info.stages = VK_SHADER_STAGE_COMPUTE_BIT;
   sampler1Info.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
+  DescriptorBindInfo sampler2Info{};
+  sampler2Info.binding = 2;
+  sampler2Info.stages = VK_SHADER_STAGE_COMPUTE_BIT;
+  sampler2Info.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
   DescriptorBindInfo depthSamplerInfo{};
-  depthSamplerInfo.binding = 2;
+  depthSamplerInfo.binding = 3;
   depthSamplerInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
   depthSamplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
   DescriptorBindInfo shadowMapSamplerInfo{};
-  shadowMapSamplerInfo.binding = 3;
+  shadowMapSamplerInfo.binding = 4;
   shadowMapSamplerInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
   shadowMapSamplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
   DescriptorBindInfo outputImInfo{};
-  outputImInfo.binding = 4;
+  outputImInfo.binding = 5;
   outputImInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
   outputImInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 
   DescriptorBindInfo ssaoSamplerInfo{};
-  ssaoSamplerInfo.binding = 5;
+  ssaoSamplerInfo.binding = 6;
   ssaoSamplerInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
   ssaoSamplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
   DescriptorSetLayoutCreateParams descLayoutParam{};
   descLayoutParam.bindInfos.emplace_back(sampler0Info);
   descLayoutParam.bindInfos.emplace_back(sampler1Info);
+  descLayoutParam.bindInfos.emplace_back(sampler2Info);
   descLayoutParam.bindInfos.emplace_back(depthSamplerInfo);
   descLayoutParam.bindInfos.emplace_back(shadowMapSamplerInfo);
   descLayoutParam.bindInfos.emplace_back(outputImInfo);
@@ -87,6 +93,7 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   // Descriptor containing samplers
   auto im0 = (ImageViewRenderResource*)vault->getResource("Geometry0ImageView");
   auto im1 = (ImageViewRenderResource*)vault->getResource("Geometry1ImageView");
+  auto im2 = (ImageViewRenderResource*)vault->getResource("Geometry2ImageView");
   auto depth = (ImageViewRenderResource*)vault->getResource("GeometryDepthImageView");
   auto shadowMap = (ImageViewRenderResource*)vault->getResource("ShadowMapView");
   auto ssao = (ImageViewRenderResource*)vault->getResource("SSAOBlurImageView");
@@ -112,6 +119,11 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   sampler1Info.sampler = _sampler1;
   sampler1Info.view = im1->_view;
   descParam.bindInfos.emplace_back(sampler1Info);
+
+  sampler2Info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  sampler2Info.sampler = _sampler2;
+  sampler2Info.view = im2->_view;
+  descParam.bindInfos.emplace_back(sampler2Info);
 
   depthSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
   depthSamplerInfo.sampler = _depthSampler;
@@ -193,6 +205,14 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   {
     ResourceUsage usage{};
     usage._resourceName = "Geometry1Image";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SampledTexture;
+    resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "Geometry2Image";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SampledTexture;

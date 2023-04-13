@@ -51,7 +51,7 @@ namespace render {
 
       VkDevice device = nullptr;
       VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-      VkFormat colorFormat = VK_FORMAT_B8G8R8A8_SRGB;
+      std::vector<VkFormat> colorFormats = { VK_FORMAT_B8G8R8A8_SRGB };
       uint32_t colorAttachmentCount = 1;
       VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
       std::string vertShader;

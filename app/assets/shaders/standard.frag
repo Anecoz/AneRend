@@ -18,9 +18,11 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) flat in vec3 fragNormal;
+layout(location = 2) in vec3 fragPos;
 
 layout(location = 0) out vec4 outCol0;
 layout(location = 1) out vec4 outCol1;
+layout(location = 2) out vec4 outCol2;
 
 void main() {
   vec3 normal = normalize(fragNormal);
@@ -29,4 +31,5 @@ void main() {
 
   outCol0 = vec4(normal, fragColor.x);
   outCol1 = vec4(fragColor.yz, metallic, roughness);
+  outCol2 = vec4(fragPos, 0.0);
 }

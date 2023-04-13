@@ -525,6 +525,9 @@ std::string FrameGraphBuilder::debugConstructImageBarrierName(VkImageLayout old,
   else if (old == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
     from = "DEPTH_STENCIL_ATTACHMENT_OPTIMAL";
   }
+  else if (old == VK_IMAGE_LAYOUT_GENERAL) {
+    from = "GENERAL";
+  }
 
   if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL) {
     to = "DEPTH_STENCIL_READ_ONLY_OPTIMAL";
@@ -543,6 +546,9 @@ std::string FrameGraphBuilder::debugConstructImageBarrierName(VkImageLayout old,
   }
   else if (newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
     to = "TRANSFER_SRC_OPTIMAL";
+  }
+  else if (newLayout == VK_IMAGE_LAYOUT_GENERAL) {
+    to = "GENERAL";
   }
 
   output.append("Barrier: FROM ");

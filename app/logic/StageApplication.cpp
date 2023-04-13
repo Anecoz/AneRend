@@ -96,7 +96,7 @@ bool StageApplication::init()
 
   // Do a couple of the big models
   {
-    std::size_t numInstances = 1;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -128,7 +128,7 @@ void StageApplication::update(double delta)
 
   _camera.update(delta);
 
-  _windSystem.update(delta);
+  //_windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));
 
   _vkRenderer.update(
@@ -224,7 +224,7 @@ void StageApplication::calculateShadowMatrix()
   wNearRightTop /= wNearRightTop.w;
 
   glm::vec4 tmp;
-  const float percentageFar = .2f;
+  const float percentageFar = 1.0f;
 
   glm::vec4 wFarLeftBottom = ndcToWorldCam * glm::vec4(farLeftBottom, 1.0);
   wFarLeftBottom /= wFarLeftBottom.w;

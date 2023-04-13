@@ -175,11 +175,11 @@ bool RenderPass::buildGraphicsPipeline(GraphicsPipelineCreateParams param)
   rasterizer.lineWidth = 1.0f; // Thickness of lines in terms of fragments
   rasterizer.cullMode = param.cullMode;
   rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-  rasterizer.depthBiasEnable = VK_FALSE;
+  rasterizer.depthBiasEnable = param.depthBiasEnable ? VK_TRUE : VK_FALSE;
   if (param.depthBiasEnable) {
-    rasterizer.depthBiasEnable = VK_TRUE;
     rasterizer.depthBiasConstantFactor = param.depthBiasConstant;
     rasterizer.depthBiasSlopeFactor = param.depthBiasSlope;
+    //rasterizer.depthBiasClamp = param.depthBiasConstant * 2.0f;
   }
 
   // Multisampling
@@ -233,11 +233,11 @@ bool RenderPass::buildGraphicsPipeline(GraphicsPipelineCreateParams param)
   }
 
   // Dynamic rendering info
-  std::vector<VkFormat> formats(param.colorAttachmentCount, param.colorFormat);
+  //std::vector<VkFormat> formats(param.colorAttachmentCount, param.colorFormat);
   VkPipelineRenderingCreateInfoKHR renderingCreateInfo{};
   renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
   renderingCreateInfo.colorAttachmentCount = param.colorAttachment ? param.colorAttachmentCount : 0;
-  renderingCreateInfo.pColorAttachmentFormats = param.colorAttachment ? formats.data() : nullptr;
+  renderingCreateInfo.pColorAttachmentFormats = param.colorAttachment ? param.colorFormats.data() : nullptr;
   renderingCreateInfo.depthAttachmentFormat = param.depthFormat;
 
   // Creating the pipeline

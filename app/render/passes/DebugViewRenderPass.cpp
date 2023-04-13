@@ -63,7 +63,7 @@ bool DebugViewRenderPass::init(RenderContext* renderContext, RenderResourceVault
   param.normalLoc = -1;
   param.colorLoc = -1;
   param.uvLoc = 1;
-  param.colorFormat = VK_FORMAT_R16G16B16A16_UNORM;
+  param.colorFormats = { VK_FORMAT_R16G16B16A16_UNORM };
 
   buildGraphicsPipeline(param);
 

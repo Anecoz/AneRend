@@ -102,8 +102,8 @@ void GrassShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullGrassDrawBuf", multiBufferIdx);
 
       VkExtent2D extent{};
-      extent.width = 4096;
-      extent.height = 4096;
+      extent.width = 8192;
+      extent.height = 8192;
 
       VkClearValue clearValue;
       clearValue.depthStencil = { 1.0f, 0 };

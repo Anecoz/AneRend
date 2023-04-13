@@ -54,8 +54,8 @@ bool GrassRenderPass::init(RenderContext* renderContext, RenderResourceVault* va
   param.fragShader = "grass_frag.spv";
   param.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
   param.vertexLess = true;
-  param.colorAttachmentCount = 2;
-  param.colorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+  param.colorAttachmentCount = 3;
+  param.colorFormats = { VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R32G32B32A32_SFLOAT };
 
   buildGraphicsPipeline(param);
 
@@ -79,6 +79,14 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   {
     ResourceUsage usage{};
     usage._resourceName = "Geometry1Image";
+    usage._access.set((std::size_t)Access::Write);
+    usage._access.set((std::size_t)Access::Read);
+    usage._type = Type::ColorAttachment;
+    resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "Geometry2Image";
     usage._access.set((std::size_t)Access::Write);
     usage._access.set((std::size_t)Access::Read);
     usage._type = Type::ColorAttachment;
@@ -118,12 +126,13 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       // Get resources
       auto color0View = (ImageViewRenderResource*)vault->getResource("Geometry0ImageView");
       auto color1View = (ImageViewRenderResource*)vault->getResource("Geometry1ImageView");
+      auto color2View = (ImageViewRenderResource*)vault->getResource("Geometry2ImageView");
       auto depthView = (ImageViewRenderResource*)vault->getResource("GeometryDepthImageView");
       auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullGrassDrawBuf", multiBufferIdx);
 
       // Dynamic rendering begin
       std::array<VkClearValue, 2> clearValues{};
-      std::array<VkRenderingAttachmentInfoKHR, 2> colAttachInfos{};
+      std::array<VkRenderingAttachmentInfoKHR, 3> colAttachInfos{};
       clearValues[0].color = { {0.5f, 0.5f, 0.5f, 1.0f} };
       clearValues[1].depthStencil = { 1.0f, 0 };
       colAttachInfos[0].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
@@ -139,6 +148,13 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       colAttachInfos[1].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
       colAttachInfos[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
       colAttachInfos[1].clearValue = clearValues[0];
+
+      colAttachInfos[2].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+      colAttachInfos[2].imageView = color2View->_view;
+      colAttachInfos[2].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      colAttachInfos[2].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+      colAttachInfos[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      colAttachInfos[2].clearValue = clearValues[0];
 
       VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
       depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;

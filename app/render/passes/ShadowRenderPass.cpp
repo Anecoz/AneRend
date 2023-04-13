@@ -55,8 +55,9 @@ bool ShadowRenderPass::init(RenderContext* renderContext, RenderResourceVault* v
   params.normalLoc = -1;
   params.colorAttachment = false;
   params.depthBiasEnable = true;
-  params.depthBiasConstant = 4.0f;
-  params.depthBiasSlope = 1.5f;
+  params.depthBiasConstant = 20.0f;
+  params.depthBiasSlope = 5.5f;
+  params.cullMode = VK_CULL_MODE_FRONT_BIT;
 
   buildGraphicsPipeline(params);
 
@@ -68,8 +69,8 @@ bool ShadowRenderPass::init(RenderContext* renderContext, RenderResourceVault* v
   shadowMapViewRes->_format = shadowMapRes->_format;
 
   imageutil::createImage(
-    4096,
-    4096,
+    8192,
+    8192,
     params.depthFormat,
     VK_IMAGE_TILING_OPTIMAL,
     renderContext->vmaAllocator(),
@@ -128,8 +129,8 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullDrawBuf", multiBufferIdx);
 
       VkExtent2D extent{};
-      extent.width = 4096;
-      extent.height = 4096;
+      extent.width = 8192;
+      extent.height = 8192;
 
       VkClearValue clearValue;
       clearValue.depthStencil = { 1.0f, 0 };
