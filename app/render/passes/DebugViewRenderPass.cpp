@@ -120,6 +120,14 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     ResourceUsage usage{};
     usage._resourceName = "FinalImage";
     usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "FinalImagePP";
+    usage._access.set((std::size_t)Access::Read);
     usage._access.set((std::size_t)Access::Write);
     usage._type = Type::ColorAttachment;
     info._resourceUsages.emplace_back(std::move(usage));
@@ -140,7 +148,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     {
       if (!renderContext->getDebugOptions().debugView) return;
 
-      auto imageView = (ImageViewRenderResource*)vault->getResource("FinalImageView");
+      auto imageView = (ImageViewRenderResource*)vault->getResource("FinalImagePPView");
 
       // If view is updated, descriptor (sampler) has to be recreated
       std::string debugResource = renderContext->getDebugOptions().debugViewResource;

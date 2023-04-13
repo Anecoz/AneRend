@@ -170,7 +170,7 @@ bool SSAORenderPass::init(RenderContext* renderContext, RenderResourceVault* vau
     noiseViewRes->_format,
     VK_IMAGE_TILING_OPTIMAL,
     renderContext->vmaAllocator(),
-    VK_IMAGE_USAGE_SAMPLED_BIT,
+    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     noiseRes->_image);
 
   noiseViewRes->_view = imageutil::createImageView(renderContext->device(), noiseRes->_image._image, noiseRes->_format, VK_IMAGE_ASPECT_COLOR_BIT);

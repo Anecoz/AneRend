@@ -16,6 +16,7 @@
 #include "passes/DeferredLightingRenderPass.h"
 #include "passes/SSAORenderPass.h"
 #include "passes/SSAOBlurRenderPass.h"
+#include "passes/FXAARenderPass.h"
 
 #include "../util/Utils.h"
 #include "../util/GraphicsUtils.h"
@@ -1406,7 +1407,7 @@ bool VulkanRenderer::initFrameGraphBuilder()
 
 bool VulkanRenderer::initRenderPasses()
 {
-  _renderPasses.emplace_back(new CullRenderPass());
+   _renderPasses.emplace_back(new CullRenderPass());
   _renderPasses.emplace_back(new ShadowRenderPass());
   _renderPasses.emplace_back(new GrassShadowRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());
@@ -1414,6 +1415,7 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new SSAORenderPass());
   _renderPasses.emplace_back(new SSAOBlurRenderPass());
   _renderPasses.emplace_back(new DeferredLightingRenderPass());
+  _renderPasses.emplace_back(new FXAARenderPass());
   _renderPasses.emplace_back(new DebugViewRenderPass());
   _renderPasses.emplace_back(new UIRenderPass());
   _renderPasses.emplace_back(new PresentationRenderPass());

@@ -474,6 +474,9 @@ std::pair<VkImageLayout, VkImageLayout> FrameGraphBuilder::findImageLayoutUsage(
     else if (prevType == Type::ImageStorage && newType == Type::ColorAttachment) {
       return { VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
     }
+    else if (prevType == Type::ImageStorage && newType == Type::SampledTexture) {
+      return { VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    }
     else if (prevType == Type::ImageStorage && newType == Type::Present) {
       return { VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL };
     }

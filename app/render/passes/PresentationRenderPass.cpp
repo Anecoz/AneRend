@@ -30,7 +30,7 @@ void PresentationRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   std::vector<ResourceUsage> resourceUsage;
   {
     ResourceUsage usage{};
-    usage._resourceName = "FinalImage";
+    usage._resourceName = "FinalImagePP";
     usage._access.set((std::size_t)Access::Read);
     usage._type = Type::Present;
     resourceUsage.emplace_back(std::move(usage));
@@ -42,7 +42,7 @@ void PresentationRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     [](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra) {
 
       // Copy to the present image from the swap chain
-      auto geomIm = (ImageRenderResource*)vault->getResource("FinalImage");
+      auto geomIm = (ImageRenderResource*)vault->getResource("FinalImagePP");
       auto presentImage = renderContext->getCurrentSwapImage();
 
       VkImageCopy imageCopyRegion{};

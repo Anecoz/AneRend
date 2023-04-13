@@ -55,8 +55,8 @@ bool ShadowRenderPass::init(RenderContext* renderContext, RenderResourceVault* v
   params.normalLoc = -1;
   params.colorAttachment = false;
   params.depthBiasEnable = true;
-  params.depthBiasConstant = 20.0f;
-  params.depthBiasSlope = 5.5f;
+  params.depthBiasConstant = 4.0f;
+  params.depthBiasSlope = 1.5f;
   params.cullMode = VK_CULL_MODE_FRONT_BIT;
 
   buildGraphicsPipeline(params);

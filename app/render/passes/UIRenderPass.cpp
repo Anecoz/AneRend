@@ -31,7 +31,7 @@ void UIRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   std::vector<ResourceUsage> resourceUsage;
   {
     ResourceUsage usage{};
-    usage._resourceName = "FinalImage";
+    usage._resourceName = "FinalImagePP";
     usage._access.set((std::size_t)Access::Read);
     usage._access.set((std::size_t)Access::Write);
     usage._type = Type::ColorAttachment;
@@ -45,7 +45,7 @@ void UIRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     [](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra)
     {
       // Just render the ImGui stuff on top of the frame
-      auto imageView = (ImageViewRenderResource*)vault->getResource("FinalImageView");
+      auto imageView = (ImageViewRenderResource*)vault->getResource("FinalImagePPView");
 
       VkClearValue clearValue{};
       clearValue.color = { {0.0f, 0.0f, 0.0f, 1.0f} };
