@@ -444,6 +444,7 @@ void VulkanRenderer::update(
   gpu::GPUSceneData ubo{};
   ubo.cameraPos = glm::vec4(camera.getPosition(), 1.0);
   ubo.invViewProj = invView * invProj;
+  ubo.invProj = invProj;
   ubo.directionalShadowMatrixProj = shadowProj;
   ubo.directionalShadowMatrixView = shadowCamera.getCamMatrix();
   ubo.lightDir = lightDir;
@@ -451,6 +452,8 @@ void VulkanRenderer::update(
   ubo.view = camera.getCamMatrix();
   ubo.viewVector = glm::vec4(camera.getForward(), 1.0);
   ubo.time = time;
+  ubo.screenHeight = swapChainExtent().height;
+  ubo.screenWidth = swapChainExtent().width;
 
   for (int i = 0; i < _lights.size(); ++i) {
     _lights[i].debugUpdatePos(delta);

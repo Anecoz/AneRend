@@ -3,6 +3,7 @@
 layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
+  mat4 invProj;
   mat4 invViewProj;
   mat4 directionalShadowMatrixProj;
   mat4 directionalShadowMatrixView;
@@ -11,6 +12,8 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   vec4 lightDir;
   vec4 viewVector;
   float time;
+  uint screenWidth;
+  uint screenHeight;
 } ubo;
 
 layout(location = 0) in vec3 fragColor;

@@ -3,6 +3,7 @@
 layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
   mat4 proj;
+  mat4 invProj;
   mat4 invViewProj;
   mat4 directionalShadowMatrixProj;
   mat4 directionalShadowMatrixView;
@@ -11,6 +12,8 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   vec4 lightDir;
   vec4 viewVector;
   float time;
+  uint screenWidth;
+  uint screenHeight;
 } ubo;
 
 layout(set = 1, binding = 0) uniform sampler2D gbuffer0Tex;
@@ -25,20 +28,19 @@ layout(location = 0) in vec2 fragTexCoords;
 
 layout(location = 0) out vec4 outColor;
 
-const vec2 noiseScale = vec2(1920.0/4.0, 1080.0/4.0); // screen = 800x600
-
 vec3 calcViewSpacePos(vec2 texCoord, float depthSamp)
 {
   vec4 clipSpacePos = vec4(texCoord * 2.0 - vec2(1.0), depthSamp, 1.0);
-  mat4 invProj = inverse(ubo.proj);
 
-  vec4 position = invProj * clipSpacePos; // Use this for view space
+  vec4 position = ubo.invProj * clipSpacePos; // Use this for view space
   //vec4 position = ubo.invViewProj * clipSpacePos; // Use this for world space
 
   return(position.xyz / position.w);
 }
 
 void main() {
+  const vec2 noiseScale = vec2(float(ubo.screenWidth)/4.0, float(ubo.screenHeight)/4.0);
+
   float depthSamp = texture(depthTex, fragTexCoords).r;
 
   // From learnopengl.com

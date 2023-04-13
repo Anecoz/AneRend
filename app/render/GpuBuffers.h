@@ -65,6 +65,7 @@ struct GPUCullPushConstants {
 struct GPUSceneData {
   glm::mat4 view;
   glm::mat4 proj;
+  glm::mat4 invProj;
   glm::mat4 invViewProj;
   glm::mat4 directionalShadowMatrixProj;
   glm::mat4 directionalShadowMatrixView;
@@ -73,6 +74,8 @@ struct GPUSceneData {
   glm::vec4 lightDir;
   glm::vec4 viewVector;
   float time;
+  uint32_t screenWidth;
+  uint32_t screenHeight;
 };
 
 struct GPUSSAOSampleUbo {
