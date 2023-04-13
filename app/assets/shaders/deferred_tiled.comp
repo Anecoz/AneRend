@@ -63,7 +63,7 @@ void main()
 
   // Early exit if we're in the sky
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-  vec2 texCoords = vec2(pixel) / (vec2(gl_WorkGroupSize.xy) * vec2(gl_NumWorkGroups.xy));
+  vec2 texCoords = vec2(pixel) / vec2(ubo.screenWidth - 1, ubo.screenHeight - 1);
 
   float depthSamp = texture(depth, texCoords).r;
 
@@ -240,7 +240,7 @@ float inShadow(vec3 worldPos) {
 
 void doLight(ivec2 pixel)
 {
-  vec2 texCoords = vec2(pixel) / vec2(ubo.screenWidth, ubo.screenHeight);
+  vec2 texCoords = vec2(pixel) / vec2(ubo.screenWidth - 1, ubo.screenHeight - 1);
 
   vec4 im0Samp = texture(im0, texCoords);
   vec4 im1Samp = texture(im1, texCoords);
@@ -316,7 +316,7 @@ void doLight(ivec2 pixel)
   float occlusion = texture(ssao, texCoords).r;
 
   vec3 ambient = vec3(0.3) * albedo;
-  color = (ambient + Lo) * occlusion;// * clamp(1.0 - shadow, 0.3, 1.0);
+  color = (ambient + Lo) * occlusion * clamp(1.0 - shadow, 0.3, 1.0);
   //color = vec3(occlusion, occlusion, occlusion);
   //color = vec3(texCoords.x, texCoords.y, 0.0);
   //color = vec3(depthSamp);
