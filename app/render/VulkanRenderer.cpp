@@ -14,6 +14,8 @@
 #include "passes/GrassRenderPass.h"
 #include "passes/GrassShadowRenderPass.h"
 #include "passes/DeferredLightingRenderPass.h"
+#include "passes/SSAORenderPass.h"
+#include "passes/SSAOBlurRenderPass.h"
 
 #include "../util/Utils.h"
 #include "../util/GraphicsUtils.h"
@@ -1148,7 +1150,7 @@ bool VulkanRenderer::initLights()
   std::uniform_real_distribution<> col(0.0, 1.0);
   std::uniform_real_distribution<> pos(0.0, 100.0);
   std::uniform_real_distribution<> rad(0.0, 10.0);
-  std::uniform_real_distribution<> speed(1.0, 20.0);
+  std::uniform_real_distribution<> speed(1.0, 5.0);
 
   for (std::size_t i = 0; i < _lights.size(); ++i) {
     auto& light = _lights[i];
@@ -1406,6 +1408,8 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new GrassShadowRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());
   _renderPasses.emplace_back(new GrassRenderPass());
+  _renderPasses.emplace_back(new SSAORenderPass());
+  _renderPasses.emplace_back(new SSAOBlurRenderPass());
   _renderPasses.emplace_back(new DeferredLightingRenderPass());
   _renderPasses.emplace_back(new DebugViewRenderPass());
   _renderPasses.emplace_back(new UIRenderPass());

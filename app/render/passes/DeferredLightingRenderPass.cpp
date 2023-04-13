@@ -23,10 +23,10 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   auto extent = renderContext->swapChainExtent();
 
   auto outputRes = new ImageRenderResource();
-  outputRes->_format = VK_FORMAT_R8G8B8A8_UNORM;
+  outputRes->_format = VK_FORMAT_R16G16B16A16_UNORM;
 
   auto outputViewRes = new ImageViewRenderResource();
-  outputViewRes->_format = VK_FORMAT_R8G8B8A8_UNORM;
+  outputViewRes->_format = VK_FORMAT_R16G16B16A16_UNORM;
 
   imageutil::createImage(
     extent.width,
@@ -68,12 +68,18 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   outputImInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
   outputImInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 
+  DescriptorBindInfo ssaoSamplerInfo{};
+  ssaoSamplerInfo.binding = 5;
+  ssaoSamplerInfo.stages = VK_SHADER_STAGE_COMPUTE_BIT;
+  ssaoSamplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
   DescriptorSetLayoutCreateParams descLayoutParam{};
   descLayoutParam.bindInfos.emplace_back(sampler0Info);
   descLayoutParam.bindInfos.emplace_back(sampler1Info);
   descLayoutParam.bindInfos.emplace_back(depthSamplerInfo);
   descLayoutParam.bindInfos.emplace_back(shadowMapSamplerInfo);
   descLayoutParam.bindInfos.emplace_back(outputImInfo);
+  descLayoutParam.bindInfos.emplace_back(ssaoSamplerInfo);
   descLayoutParam.renderContext = renderContext;
 
   buildDescriptorSetLayout(descLayoutParam);
@@ -83,6 +89,7 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   auto im1 = (ImageViewRenderResource*)vault->getResource("Geometry1ImageView");
   auto depth = (ImageViewRenderResource*)vault->getResource("GeometryDepthImageView");
   auto shadowMap = (ImageViewRenderResource*)vault->getResource("ShadowMapView");
+  auto ssao = (ImageViewRenderResource*)vault->getResource("SSAOBlurImageView");
 
   DescriptorSetsCreateParams descParam{};
   descParam.renderContext = renderContext;
@@ -94,6 +101,7 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   _sampler2 = createSampler(samplerParam);
   _depthSampler = createSampler(samplerParam);
   _shadowMapSampler = createSampler(samplerParam);
+  _ssaoSampler= createSampler(samplerParam);
 
   sampler0Info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   sampler0Info.sampler = _sampler0;
@@ -114,6 +122,11 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   shadowMapSamplerInfo.sampler = _shadowMapSampler;
   shadowMapSamplerInfo.view = shadowMap->_view;
   descParam.bindInfos.emplace_back(shadowMapSamplerInfo);
+
+  ssaoSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  ssaoSamplerInfo.sampler = _ssaoSampler;
+  ssaoSamplerInfo.view = ssao->_view;
+  descParam.bindInfos.emplace_back(ssaoSamplerInfo);
 
   outputImInfo.view = outputViewRes->_view;
   outputImInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -196,6 +209,14 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   {
     ResourceUsage usage{};
     usage._resourceName = "ShadowMap";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SampledTexture;
+    resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "SSAOBlurImage";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SampledTexture;
@@ -304,6 +325,7 @@ void DeferredLightingRenderPass::cleanup(RenderContext* renderContext, RenderRes
   vkDestroySampler(renderContext->device(), _sampler2, nullptr);
   vkDestroySampler(renderContext->device(), _depthSampler, nullptr);
   vkDestroySampler(renderContext->device(), _shadowMapSampler, nullptr);
+  vkDestroySampler(renderContext->device(), _ssaoSampler, nullptr);
 
   auto im = (ImageRenderResource*)vault->getResource("FinalImage");
   auto imView = (ImageViewRenderResource*)vault->getResource("FinalImageView");

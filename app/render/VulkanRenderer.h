@@ -125,6 +125,9 @@ public:
 
   virtual glm::vec2 getWindDir() override final;
 
+  VkCommandBuffer beginSingleTimeCommands() override final;
+  void endSingleTimeCommands(VkCommandBuffer buffer) override final;
+
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
@@ -266,9 +269,6 @@ private:
 
   void cleanupSwapChain();
   void recreateSwapChain();
-
-  VkCommandBuffer beginSingleTimeCommands();
-  void endSingleTimeCommands(VkCommandBuffer buffer);
 
   std::vector<const char*> getRequiredExtensions();
 

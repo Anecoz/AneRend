@@ -415,6 +415,23 @@ std::vector<VkDescriptorSet> RenderPass::buildDescriptorSets(DescriptorSetsCreat
 
       descriptorWrites.emplace_back(std::move(bufWrite));
     }
+    else if (params.bindInfos[j].type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
+      VkDescriptorBufferInfo bufferInfo{};
+      VkWriteDescriptorSet bufWrite{};
+      bufferInfo.buffer = params.bindInfos[j].buffer;
+      bufferInfo.offset = 0;
+      bufferInfo.range = VK_WHOLE_SIZE;
+
+      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      bufWrite.dstSet = sets[currIdx];
+      bufWrite.dstBinding = params.bindInfos[j].binding;
+      bufWrite.dstArrayElement = 0;
+      bufWrite.descriptorType = params.bindInfos[j].type;
+      bufWrite.descriptorCount = 1;
+      bufWrite.pBufferInfo = &bufferInfo;
+
+      descriptorWrites.emplace_back(std::move(bufWrite));
+    }
     else if (params.bindInfos[j].type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
       VkWriteDescriptorSet imWrite{};
       VkDescriptorImageInfo imageInfo{};

@@ -59,6 +59,9 @@ public:
   virtual void setDebugName(VkObjectType objectType, uint64_t objectHandle, const char* name) = 0;
 
   virtual glm::vec2 getWindDir() = 0;
+
+  virtual VkCommandBuffer beginSingleTimeCommands() = 0;
+  virtual void endSingleTimeCommands(VkCommandBuffer buffer) = 0;
 };
 
 }

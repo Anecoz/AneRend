@@ -63,7 +63,7 @@ bool DebugViewRenderPass::init(RenderContext* renderContext, RenderResourceVault
   param.normalLoc = -1;
   param.colorLoc = -1;
   param.uvLoc = 1;
-  param.colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+  param.colorFormat = VK_FORMAT_R16G16B16A16_UNORM;
 
   buildGraphicsPipeline(param);
 
@@ -124,6 +124,14 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     usage._type = Type::ColorAttachment;
     info._resourceUsages.emplace_back(std::move(usage));
   }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "SSAOImage";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
 
   fgb.registerRenderPass(std::move(info));
 
@@ -149,7 +157,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb)
 
           DescriptorSetsCreateParams descParam{};
           descParam.renderContext = renderContext;
-          samplerInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+          samplerInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
           samplerInfo.sampler = _sampler;
           samplerInfo.view = view->_view;
 

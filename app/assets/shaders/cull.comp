@@ -32,18 +32,6 @@ struct GrassDrawCommand
   uint firstInstance;
 };
 
-struct Light 
-{
-  vec4 worldPos; // w is range
-  vec4 color;
-};
-
-struct Cluster
-{
-  vec4 minVs;
-  vec4 maxVs;
-};
-
 struct Renderable
 {
   mat4 transform;
@@ -67,14 +55,6 @@ layout(set = 0, binding = 1) uniform sampler2D windForceTex;
 layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {
   Renderable renderables[];
 } renderableBuffer;
-
-layout(std430, set = 0, binding = 3) readonly buffer LightBuffer {
-  Light lights[];
-} lightBuffer;
-
-layout(std430, set = 0, binding = 4) readonly buffer ClusterBuffer {
-  Cluster clusters[];
-} clusterBuffer;
 
 layout(std430, set = 1, binding = 0) buffer DrawBuffer {
   DrawCommand draws[];

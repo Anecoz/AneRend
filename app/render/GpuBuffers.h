@@ -75,5 +75,9 @@ struct GPUSceneData {
   float time;
 };
 
+struct GPUSSAOSampleUbo {
+  glm::vec4 samples[64];
+};
+
 }
 }

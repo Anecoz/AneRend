@@ -26,6 +26,7 @@ private:
   VkSampler _sampler2;
   VkSampler _depthSampler;
   VkSampler _shadowMapSampler;
+  VkSampler _ssaoSampler;
 
   Model _screenQuad;
   MeshId _meshId;

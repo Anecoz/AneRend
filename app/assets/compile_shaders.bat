@@ -17,3 +17,5 @@ C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/grass.frag -o %2/grass_frag.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/deferred_pbr.frag -o %2/deferred_pbr_frag.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/deferred_cluster.comp -o %2/deferred_cluster_comp.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/deferred_tiled.comp -o %2/deferred_tiled_comp.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/ssao.frag -o %2/ssao_frag.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/ssao_blur.frag -o %2/ssao_blur_frag.spv
