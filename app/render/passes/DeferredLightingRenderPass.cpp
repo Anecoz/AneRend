@@ -93,7 +93,7 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   // Descriptor containing samplers
   auto im0 = (ImageViewRenderResource*)vault->getResource("Geometry0ImageView");
   auto im1 = (ImageViewRenderResource*)vault->getResource("Geometry1ImageView");
-  auto im2 = (ImageViewRenderResource*)vault->getResource("Geometry2ImageView");
+  //auto im2 = (ImageViewRenderResource*)vault->getResource("Geometry2ImageView");
   auto depth = (ImageViewRenderResource*)vault->getResource("GeometryDepthImageView");
   auto shadowMap = (ImageViewRenderResource*)vault->getResource("ShadowMapView");
   auto ssao = (ImageViewRenderResource*)vault->getResource("SSAOBlurImageView");
@@ -105,7 +105,7 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   samplerParam.renderContext = renderContext;
   _sampler0 = createSampler(samplerParam);
   _sampler1 = createSampler(samplerParam);
-  _sampler2 = createSampler(samplerParam);
+  //_sampler2 = createSampler(samplerParam);
   _depthSampler = createSampler(samplerParam);
   _shadowMapSampler = createSampler(samplerParam);
   _ssaoSampler= createSampler(samplerParam);
@@ -120,10 +120,10 @@ bool DeferredLightingRenderPass::init(RenderContext* renderContext, RenderResour
   sampler1Info.view = im1->_view;
   descParam.bindInfos.emplace_back(sampler1Info);
 
-  sampler2Info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  /*sampler2Info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   sampler2Info.sampler = _sampler2;
   sampler2Info.view = im2->_view;
-  descParam.bindInfos.emplace_back(sampler2Info);
+  descParam.bindInfos.emplace_back(sampler2Info);*/
 
   depthSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
   depthSamplerInfo.sampler = _depthSampler;
@@ -210,14 +210,14 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     usage._type = Type::SampledTexture;
     resourceUsages.emplace_back(std::move(usage));
   }
-  {
+  /* {
     ResourceUsage usage{};
     usage._resourceName = "Geometry2Image";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SampledTexture;
     resourceUsages.emplace_back(std::move(usage));
-  }
+  }*/
   {
     ResourceUsage usage{};
     usage._resourceName = "GeometryDepthImage";
@@ -342,7 +342,7 @@ void DeferredLightingRenderPass::cleanup(RenderContext* renderContext, RenderRes
 
   vkDestroySampler(renderContext->device(), _sampler0, nullptr);
   vkDestroySampler(renderContext->device(), _sampler1, nullptr);
-  vkDestroySampler(renderContext->device(), _sampler2, nullptr);
+  //vkDestroySampler(renderContext->device(), _sampler2, nullptr);
   vkDestroySampler(renderContext->device(), _depthSampler, nullptr);
   vkDestroySampler(renderContext->device(), _shadowMapSampler, nullptr);
   vkDestroySampler(renderContext->device(), _ssaoSampler, nullptr);

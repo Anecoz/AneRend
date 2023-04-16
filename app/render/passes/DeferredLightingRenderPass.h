@@ -23,7 +23,7 @@ private:
 
   VkSampler _sampler0;
   VkSampler _sampler1;
-  VkSampler _sampler2;
+  //VkSampler _sampler2;
   VkSampler _depthSampler;
   VkSampler _shadowMapSampler;
   VkSampler _ssaoSampler;

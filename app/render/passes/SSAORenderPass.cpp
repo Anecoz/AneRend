@@ -198,10 +198,10 @@ bool SSAORenderPass::init(RenderContext* renderContext, RenderResourceVault* vau
   sampler0Info.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
   sampler0Info.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
-  DescriptorBindInfo sampler2Info{};
-  sampler2Info.binding = 1;
-  sampler2Info.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
-  sampler2Info.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  DescriptorBindInfo depthSamplerInfo{};
+  depthSamplerInfo.binding = 1;
+  depthSamplerInfo.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
+  depthSamplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
   DescriptorBindInfo noiseSamplerInfo{};
   noiseSamplerInfo.binding = 2;
@@ -215,7 +215,7 @@ bool SSAORenderPass::init(RenderContext* renderContext, RenderResourceVault* vau
 
   DescriptorSetLayoutCreateParams descLayoutParam{};
   descLayoutParam.bindInfos.emplace_back(sampler0Info);
-  descLayoutParam.bindInfos.emplace_back(sampler2Info);
+  descLayoutParam.bindInfos.emplace_back(depthSamplerInfo);
   descLayoutParam.bindInfos.emplace_back(noiseSamplerInfo);
   descLayoutParam.bindInfos.emplace_back(sampleUBOInfo);
   descLayoutParam.renderContext = renderContext;
@@ -224,7 +224,7 @@ bool SSAORenderPass::init(RenderContext* renderContext, RenderResourceVault* vau
 
   // Descriptor containing samplers
   auto im0 = (ImageViewRenderResource*)vault->getResource("Geometry0ImageView");
-  auto im2 = (ImageViewRenderResource*)vault->getResource("Geometry2ImageView");
+  auto depthIm = (ImageViewRenderResource*)vault->getResource("GeometryDepthImageView");
 
   DescriptorSetsCreateParams descParam{};
   descParam.renderContext = renderContext;
@@ -232,7 +232,7 @@ bool SSAORenderPass::init(RenderContext* renderContext, RenderResourceVault* vau
   SamplerCreateParams samplerParam{};
   samplerParam.renderContext = renderContext;
   _sampler0 = createSampler(samplerParam);
-  _sampler2 = createSampler(samplerParam);
+  _depthSampler = createSampler(samplerParam);
 
   samplerParam.addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
   _noiseSampler = createSampler(samplerParam);
@@ -242,10 +242,10 @@ bool SSAORenderPass::init(RenderContext* renderContext, RenderResourceVault* vau
   sampler0Info.view = im0->_view;
   descParam.bindInfos.emplace_back(sampler0Info);
 
-  sampler2Info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  sampler2Info.sampler = _sampler2;
-  sampler2Info.view = im2->_view;
-  descParam.bindInfos.emplace_back(sampler2Info);
+  depthSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+  depthSamplerInfo.sampler = _depthSampler;
+  depthSamplerInfo.view = depthIm->_view;
+  descParam.bindInfos.emplace_back(depthSamplerInfo);
 
   noiseSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   noiseSamplerInfo.sampler = _noiseSampler;
@@ -299,7 +299,7 @@ void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb)
   }
   {
     ResourceUsage usage{};
-    usage._resourceName = "Geometry2Image";
+    usage._resourceName = "GeometryDepthImage";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::SampledTexture;
@@ -391,7 +391,7 @@ void SSAORenderPass::cleanup(RenderContext* renderContext, RenderResourceVault* 
   vkDestroyPipeline(renderContext->device(), _pipeline, nullptr);
 
   vkDestroySampler(renderContext->device(), _sampler0, nullptr);
-  vkDestroySampler(renderContext->device(), _sampler2, nullptr);
+  vkDestroySampler(renderContext->device(), _depthSampler, nullptr);
   vkDestroySampler(renderContext->device(), _noiseSampler, nullptr);
 
   auto im = (ImageRenderResource*)vault->getResource("SSAOImage");

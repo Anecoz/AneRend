@@ -1154,7 +1154,7 @@ bool VulkanRenderer::initLights()
   std::uniform_real_distribution<> col(0.0, 1.0);
   std::uniform_real_distribution<> pos(0.0, 100.0);
   std::uniform_real_distribution<> rad(0.0, 10.0);
-  std::uniform_real_distribution<> speed(1.0, 5.0);
+  std::uniform_real_distribution<> speed(1.0, 2.0);
 
   for (std::size_t i = 0; i < _lights.size(); ++i) {
     auto& light = _lights[i];
@@ -1165,11 +1165,11 @@ bool VulkanRenderer::initLights()
 
     glm::vec3 randomPos{
       pos(rng),
-      1.0f,//static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 1.0f)),
+      .5f,
       pos(rng)
     };
 
-    light._color = glm::vec3(col(rng), col(rng), col(rng));
+    light._color = glm::normalize(glm::vec3(col(rng), col(rng), col(rng)));
     light._pos = randomPos;// glm::vec3(1.0f * i, 5.0f, 0.0f);
     light._proj = glm::perspective(glm::radians(90.0f), 1.0f, zNear, zFar);
     light._debugCircleRadius = rad(rng);
@@ -1407,7 +1407,7 @@ bool VulkanRenderer::initFrameGraphBuilder()
 
 bool VulkanRenderer::initRenderPasses()
 {
-   _renderPasses.emplace_back(new CullRenderPass());
+  _renderPasses.emplace_back(new CullRenderPass());
   _renderPasses.emplace_back(new ShadowRenderPass());
   _renderPasses.emplace_back(new GrassShadowRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());

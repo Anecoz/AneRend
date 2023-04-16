@@ -20,7 +20,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 
 layout(set = 1, binding = 0) uniform sampler2D im0;
 layout(set = 1, binding = 1) uniform sampler2D im1;
-layout(set = 1, binding = 2) uniform sampler2D im2;
+//layout(set = 1, binding = 2) uniform sampler2D im2;
 layout(set = 1, binding = 3) uniform sampler2D depth;
 layout(set = 1, binding = 4) uniform sampler2D shadowMap;
 layout(set = 1, binding = 6) uniform sampler2D ssao;
@@ -101,15 +101,20 @@ void main()
       frustumPlanes[i] /= length(frustumPlanes[i].xyz);
     }
 
-    bool inFrustum = true;
-    for (int j = 3; j >= 0 && inFrustum; --j) {
-      float d = dot(frustumPlanes[j], ubo.view * vec4(light.worldPos.xyz, 1.0f)); // Distance of the point from the plane
-      // https://gamedev.stackexchange.com/questions/79172/checking-if-a-vector-is-contained-inside-a-viewing-frustum
-      inFrustum = -light.worldPos.w <= d;
-    }
+    vec4 lightView =  ubo.view * vec4(light.worldPos.xyz, 1.0f);
+    bool inFrustum = true;//distance(ubo.cameraPos.xyz, light.worldPos.xyz) < 50.0;
+    inFrustum = inFrustum && lightView.z > -50.0;
+    inFrustum = inFrustum && lightView.z < 1.0;
     if (inFrustum) {
-      uint countBefore = atomicAdd(groupLocalNumIndices, 1);
-      groupLocalIndexList[countBefore] = lightIndex;
+      for (int j = 3; j >= 0 && inFrustum; --j) {
+        float d = dot(frustumPlanes[j], lightView); // Distance of the point from the plane
+        // https://gamedev.stackexchange.com/questions/79172/checking-if-a-vector-is-contained-inside-a-viewing-frustum
+        inFrustum = -light.worldPos.w <= d;
+      }
+      if (inFrustum) {
+        uint countBefore = atomicAdd(groupLocalNumIndices, 1);
+        groupLocalIndexList[countBefore] = lightIndex;
+      }
     }
   }
 
@@ -228,7 +233,7 @@ float inShadow(vec3 worldPos) {
   return 0.0;
 }
 
-/*vec3 calcWorldPos(vec2 texCoord, float depthSamp)
+vec3 calcWorldPos(vec2 texCoord, float depthSamp)
 {
   vec4 clipSpacePos = vec4(texCoord * 2.0 - vec2(1.0), depthSamp, 1.0);
 
@@ -236,7 +241,7 @@ float inShadow(vec3 worldPos) {
   vec4 position = ubo.invViewProj * clipSpacePos; // Use this for world space
 
   return(position.xyz / position.w);
-}*/
+}
 
 void doLight(ivec2 pixel)
 {
@@ -244,7 +249,7 @@ void doLight(ivec2 pixel)
 
   vec4 im0Samp = texture(im0, texCoords);
   vec4 im1Samp = texture(im1, texCoords);
-  vec4 im2Samp = texture(im2, texCoords);
+  //vec4 im2Samp = texture(im2, texCoords);
   float depthSamp = texture(depth, texCoords).r;
 
   if (depthSamp == 1.0f) {
@@ -257,7 +262,7 @@ void doLight(ivec2 pixel)
   float metallic = im1Samp.b;
   float roughness = im1Samp.a;
   float depth = depthSamp;
-  vec3 fragWorldPos = im2Samp.rgb;//calcWorldPos(texCoords, depthSamp);
+  vec3 fragWorldPos = calcWorldPos(texCoords, depthSamp);//im2Samp.rgb;//calcWorldPos(texCoords, depthSamp);
 
   vec3 color = vec3(0.0f);
   vec3 lightColor = vec3(1.0);
@@ -272,6 +277,9 @@ void doLight(ivec2 pixel)
 
   // Reflectance equation
   vec3 Lo = vec3(0.0);
+  vec3 directionalLo = vec3(0.0);
+
+  const float brightness = 5.0;
 
   for (int i = 0; i < 1 + groupLocalNumIndices; ++i) {
     float attenuation = 0.0f;
@@ -284,8 +292,10 @@ void doLight(ivec2 pixel)
     else {
       Light light = lightBuffer.lights[groupLocalIndexList[i-1]];
       vec3 lightWorldPos = light.worldPos.xyz;
-      float d = distance(lightWorldPos, fragWorldPos);
-      attenuation = 1.0 / (d * d);
+      float d = min(distance(lightWorldPos, fragWorldPos), light.worldPos.w);
+      attenuation = (1.0 - d / light.worldPos.w)*(1.0 - d/light.worldPos.w) * brightness;
+      //float d = distance(lightWorldPos, fragWorldPos);
+      //attenuation = clamp(brightness - d/(1.0/brightness * light.worldPos.w), 0.0, brightness);//1.0 / (d * d);
       L = normalize(lightWorldPos - fragWorldPos);
       lightColor = light.color.rgb;
     }
@@ -308,15 +318,22 @@ void doLight(ivec2 pixel)
 
     // Add to outgoing radiance Lo
     float NdotL = max(dot(N, L), 0.0);
-    Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    if (i == 0) {
+      directionalLo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
+    else {
+      Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
   }
 
   float shadow = inShadow(fragWorldPos);
+  shadow = clamp(1.0 - shadow, 0.3, 1.0);
 
   float occlusion = texture(ssao, texCoords).r;
 
-  vec3 ambient = vec3(0.3) * albedo;
-  color = (ambient + Lo) * occlusion * clamp(1.0 - shadow, 0.3, 1.0);
+  vec3 ambient = vec3(0.3) * albedo * shadow;
+  directionalLo *= shadow;
+  color = (ambient + Lo + directionalLo) * occlusion;
   //color = vec3(occlusion, occlusion, occlusion);
   //color = vec3(texCoords.x, texCoords.y, 0.0);
   //color = vec3(depthSamp);
