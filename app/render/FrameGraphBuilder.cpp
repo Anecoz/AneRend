@@ -575,13 +575,13 @@ bool FrameGraphBuilder::createResources(RenderContext* renderContext, RenderReso
     return false;
   }
 
-  if (createdResources.size() != foundResources.size()) {
+  /*if (createdResources.size() != foundResources.size()) {
     return false;
   }
 
   for (std::size_t i = 0; i < createdResources.size(); ++i) {
     if (createdResources[i] != foundResources[i]) return false;
-  }
+  }*/
 
   return true;
 }

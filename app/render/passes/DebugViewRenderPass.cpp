@@ -4,8 +4,9 @@
 
 #include "../RenderResource.h"
 #include "../RenderResourceVault.h"
-#include "../FrameGraphBuilder.h"
 #include "../ImageHelpers.h"
+
+#include <fstream>
 
 namespace render {
 
@@ -20,28 +21,69 @@ DebugViewRenderPass::~DebugViewRenderPass()
 
 namespace {
 
-uint32_t translateNameToBinding(const std::string& name)
-{
-  if (name == "GeometryDepthImage") {
-    return 0;
-  }
-  if (name == "ShadowMap") {
-    return 1;
-  }
-  if (name == "Geometry0Image") {
-    return 2;
-  }
-  if (name == "Geometry1Image") {
-    return 3;
-  }
-  if (name == "FinalImage") {
-    return 4;
-  }
-  if (name == "SSAOImage") {
-    return 5;
-  }
+std::string shaderStart(
+"#version 450\n"
+"layout(location = 0) in vec2 fragTexCoords;\n"
+"layout(location = 0) out vec4 outColor;\n"
+"layout(push_constant) uniform constants {\n"
+  "uint samplerId;\n"
+"} pushConstants;\n");
+
+std::string shaderMainStart(
+  "void main() {\n"
+  "vec4 val = vec4(0.0);\n"
+);
+
+std::string shaderEnd(
+  "outColor = vec4(val);\n"
+"}\n"
+);
+
 }
 
+uint32_t DebugViewRenderPass::translateNameToBinding(const std::string& name)
+{
+  for (int i = 0; i < _resourceUsages.size(); ++i) {
+    if (_resourceUsages[i]._resourceName == name) {
+      return i;
+    }
+  }
+
+  return 0;
+}
+
+void DebugViewRenderPass::writeShader()
+{
+  std::string output;
+  output += shaderStart;
+
+  // Add the "layout(..." parts
+  for (int i = 0; i < _resourceUsages.size(); ++i) {
+    std::string layout = std::string("layout(set = 1, binding = ") + std::to_string(i) + std::string(") uniform sampler2D tex" + std::to_string(i) + "; \n");
+    output += layout;
+  }
+
+  output += shaderMainStart;
+
+  // Add the push constants checks
+  for (int i = 0; i < _resourceUsages.size(); ++i) {
+    std::string check = std::string("if (pushConstants.samplerId == ") + std::to_string(i) + std::string(") {\n");
+    std::string col = std::string("val = texture(tex") + std::to_string(i) + ", fragTexCoords);\n";
+    std::string end = std::string("}\n");
+    output += check;
+    output += col;
+    output += end;
+  }
+
+  output += shaderEnd;
+
+  std::string shaderPath(std::string(ASSET_PATH) + "shaders/debug_view.frag");
+  std::ofstream file;
+  file.open(shaderPath);
+
+  file.write(output.c_str(), output.size());
+
+  file.close();
 }
 
 void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
@@ -55,46 +97,6 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
 
   {
     ResourceUsage usage{};
-    usage._resourceName = "GeometryDepthImage";
-    usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
-    usage._type = Type::SampledDepthTexture;
-    info._resourceUsages.emplace_back(std::move(usage));
-  }
-  {
-    ResourceUsage usage{};
-    usage._resourceName = "ShadowMap";
-    usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
-    usage._type = Type::SampledDepthTexture;
-    info._resourceUsages.emplace_back(std::move(usage));
-  }
-  {
-    ResourceUsage usage{};
-    usage._resourceName = "Geometry0Image";
-    usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
-    usage._type = Type::SampledTexture;
-    info._resourceUsages.emplace_back(std::move(usage));
-  }
-  {
-    ResourceUsage usage{};
-    usage._resourceName = "Geometry1Image";
-    usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
-    usage._type = Type::SampledTexture;
-    info._resourceUsages.emplace_back(std::move(usage));
-  }
-  {
-    ResourceUsage usage{};
-    usage._resourceName = "FinalImage";
-    usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
-    usage._type = Type::SampledTexture;
-    info._resourceUsages.emplace_back(std::move(usage));
-  }
-  {
-    ResourceUsage usage{};
     usage._resourceName = "FinalImagePP";
     usage._access.set((std::size_t)Access::Read);
     usage._access.set((std::size_t)Access::Write);
@@ -103,12 +105,74 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
   }
   {
     ResourceUsage usage{};
+    usage._resourceName = "GeometryDepthImage";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledDepthTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "ShadowMap";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledDepthTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "Geometry0Image";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "Geometry1Image";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "FinalImage";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
     usage._resourceName = "SSAOImage";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::SampledTexture;
-    info._resourceUsages.emplace_back(std::move(usage));
+    _resourceUsages.emplace_back(std::move(usage));
   }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "WindForceImage";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "SSAOBlurImage";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+
+  for (auto& us : _resourceUsages) {
+    info._resourceUsages.emplace_back(us);
+  }
+
+  writeShader();
 
   GraphicsPipelineCreateParams param{};
   param.device = rc->device();

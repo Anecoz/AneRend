@@ -2,6 +2,8 @@
 
 #include "RenderPass.h"
 
+#include "../FrameGraphBuilder.h"
+
 #include "../Model.h"
 
 namespace render {
@@ -16,6 +18,11 @@ public:
   void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
 
 private:
+  uint32_t translateNameToBinding(const std::string& name);
+  void writeShader();
+
+  std::vector<ResourceUsage> _resourceUsages;
+
   Model _screenQuad;
   MeshId _meshId;
 

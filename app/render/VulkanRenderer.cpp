@@ -146,8 +146,9 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _gpuLightBuffer[i]._buffer, _gpuLightBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuViewClusterBuffer[i]._buffer, _gpuViewClusterBuffer[i]._allocation);
 
-    vkDestroyImageView(_device, _gpuWindForceView[i], nullptr);
-    vmaDestroyImage(_vmaAllocator, _gpuWindForceImage[i]._image, _gpuWindForceImage[i]._allocation);
+    // Destroyed by resource vault
+    //vkDestroyImageView(_device, _gpuWindForceView[i], nullptr);
+    //vmaDestroyImage(_vmaAllocator, _gpuWindForceImage[i]._image, _gpuWindForceImage[i]._allocation);
     vkDestroySampler(_device, _gpuWindForceSampler[i], nullptr);
   }
 
@@ -1658,10 +1659,11 @@ bool VulkanRenderer::initGpuBuffers()
       VK_IMAGE_ASPECT_COLOR_BIT);
 
     // Add the wind force image view to the vault so that the debug view can watch it
-    //auto res = new ImageViewRenderResource();
-    //res->_format = VK_FORMAT_R32_SFLOAT;
-    //res->_view = _gpuWindForceView[i];
-    //_vault.addResource("WindForceView", std::unique_ptr<IRenderResource>(res), true, i);
+    auto res = new ImageRenderResource();
+    res->_format = VK_FORMAT_R32_SFLOAT;
+    res->_image = _gpuWindForceImage[i];
+    res->_view = _gpuWindForceView[i];
+    _vault.addResource("WindForceImage", std::unique_ptr<IRenderResource>(res), true, i);
   }
 
   return true;
