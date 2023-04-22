@@ -19,8 +19,7 @@ struct IRenderResource
   enum class Type {
     Generic,
     Buffer,
-    Image,
-    ImageView
+    Image
   } _type;
 
   IRenderResource(Type type)
@@ -50,13 +49,6 @@ struct ImageRenderResource : public IRenderResource
   ImageRenderResource() : IRenderResource(Type::Image) {}
 
   AllocatedImage _image;
-  VkFormat _format;  
-};
-
-struct ImageViewRenderResource : public IRenderResource
-{
-  ImageViewRenderResource() : IRenderResource(Type::ImageView) {}
-
   VkImageView _view;
   VkFormat _format;
 };

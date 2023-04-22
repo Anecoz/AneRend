@@ -15,88 +15,12 @@ FXAARenderPass::FXAARenderPass()
 FXAARenderPass::~FXAARenderPass()
 {}
 
-bool FXAARenderPass::init(RenderContext* renderContext, RenderResourceVault* vault)
+void FXAARenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
-  // Create the output image
-  auto extent = renderContext->swapChainExtent();
-
-  auto outputRes = new ImageRenderResource();
-  outputRes->_format = VK_FORMAT_R16G16B16A16_UNORM;
-
-  auto outputViewRes = new ImageViewRenderResource();
-  outputViewRes->_format = VK_FORMAT_R16G16B16A16_UNORM;
-
-  imageutil::createImage(
-    extent.width,
-    extent.height,
-    outputRes->_format,
-    VK_IMAGE_TILING_OPTIMAL,
-    renderContext->vmaAllocator(),
-    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    outputRes->_image);
-
-  outputViewRes->_view = imageutil::createImageView(renderContext->device(), outputRes->_image._image, outputRes->_format, VK_IMAGE_ASPECT_COLOR_BIT);
-
-  vault->addResource("FinalImagePP", std::unique_ptr<IRenderResource>(outputRes));
-  vault->addResource("FinalImagePPView", std::unique_ptr<IRenderResource>(outputViewRes));
-
-  // Desc layout
-  DescriptorBindInfo samplerInfo{};
-  samplerInfo.binding = 0;
-  samplerInfo.stages = VK_SHADER_STAGE_FRAGMENT_BIT;
-  samplerInfo.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-
-  DescriptorSetLayoutCreateParams descLayoutParam{};
-  descLayoutParam.bindInfos.emplace_back(samplerInfo);
-  descLayoutParam.renderContext = renderContext;
-
-  buildDescriptorSetLayout(descLayoutParam);
-
-  // Descriptor
-  auto im = (ImageViewRenderResource*)vault->getResource("FinalImageView");
-
-  DescriptorSetsCreateParams descParam{};
-  descParam.renderContext = renderContext;
-
-  SamplerCreateParams samplerParam{};
-  samplerParam.renderContext = renderContext;
-  _sampler = createSampler(samplerParam);
-
-  samplerInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  samplerInfo.sampler = _sampler;
-  samplerInfo.view = im->_view;
-  descParam.bindInfos.emplace_back(samplerInfo);
-
-  descParam.multiBuffered = false;
-
-  _descriptorSets = buildDescriptorSets(descParam);
-
-  // Build a graphics pipeline
-  GraphicsPipelineCreateParams param{};
-  param.pipelineLayout = _pipelineLayout;
-  param.device = renderContext->device();
-  param.vertShader = "shadow_debug_vert.spv";
-  param.fragShader = "pp_fxaa_frag.spv";
-  param.depthTest = false;
-  param.normalLoc = -1;
-  param.colorLoc = -1;
-  param.uvLoc = 1;
-  param.colorFormats = { VK_FORMAT_R16G16B16A16_UNORM };
-
-  buildGraphicsPipeline(param);
-
   // Screen quad
   _screenQuad._vertices = graphicsutil::createScreenQuad(1.0f, 1.0f);
+  _meshId = rc->registerMesh(_screenQuad._vertices, {});
 
-  _meshId = renderContext->registerMesh(_screenQuad._vertices, {});
-  _renderableId = renderContext->registerRenderable(_meshId, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
-  renderContext->setRenderableVisible(_renderableId, false);
-
-  return true;
-}
-
-void FXAARenderPass::registerToGraph(FrameGraphBuilder& fgb)
-{
   RenderPassRegisterInfo info{};
   info._name = "FXAA";
 
@@ -114,23 +38,40 @@ void FXAARenderPass::registerToGraph(FrameGraphBuilder& fgb)
     usage._resourceName = "FinalImagePP";
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::Fragment);
+
+    ImageInitialCreateInfo createInfo{};
+    createInfo._initialHeight = rc->swapChainExtent().height;
+    createInfo._initialWidth = rc->swapChainExtent().width;
+    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_UNORM;
+
+    usage._imageCreateInfo = createInfo;
+
     usage._type = Type::ColorAttachment;
     resourceUsages.emplace_back(std::move(usage));
   }
 
   info._resourceUsages = std::move(resourceUsages);
+
+  GraphicsPipelineCreateParams param{};
+  param.device = rc->device();
+  param.vertShader = "fullscreen_vert.spv";
+  param.fragShader = "pp_fxaa_frag.spv";
+  param.depthTest = false;
+  param.normalLoc = -1;
+  param.colorLoc = -1;
+  param.uvLoc = 1;
+  param.colorFormats = { VK_FORMAT_R16G16B16A16_UNORM };
+  info._graphicsParams = param;
+
   fgb.registerRenderPass(std::move(info));
 
   fgb.registerRenderPassExe("FXAA",
-    [this](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra) {
-      // Get resources
-      auto finalImView = (ImageViewRenderResource*)vault->getResource("FinalImagePPView");
-
+    [this](RenderExeParams exeParams) {
       VkClearValue clearValue{};
       clearValue.color = { {0.5f, 0.5f, 0.2f, 1.0f} };
       VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
       colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-      colorAttachmentInfo.imageView = finalImView->_view;
+      colorAttachmentInfo.imageView = exeParams.colorAttachmentViews[0];
       colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
       colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
       colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -138,64 +79,46 @@ void FXAARenderPass::registerToGraph(FrameGraphBuilder& fgb)
 
       VkRenderingInfoKHR renderInfo{};
       renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-      renderInfo.renderArea.extent = renderContext->swapChainExtent();
+      renderInfo.renderArea.extent = exeParams.rc->swapChainExtent();
       renderInfo.renderArea.offset = { 0, 0 };
       renderInfo.layerCount = 1;
       renderInfo.colorAttachmentCount = 1;
       renderInfo.pColorAttachments = &colorAttachmentInfo;
       renderInfo.pDepthAttachment = nullptr;
 
-      vkCmdBeginRendering(*cmdBuffer, &renderInfo);
+      vkCmdBeginRendering(*exeParams.cmdBuffer, &renderInfo);
 
       // Viewport and scissor
       VkViewport viewport{};
       viewport.x = 0.0f;
       viewport.y = 0.0f;
-      viewport.width = static_cast<float>(renderContext->swapChainExtent().width);
-      viewport.height = static_cast<float>(renderContext->swapChainExtent().height);
+      viewport.width = static_cast<float>(exeParams.rc->swapChainExtent().width);
+      viewport.height = static_cast<float>(exeParams.rc->swapChainExtent().height);
       viewport.minDepth = 0.0f;
       viewport.maxDepth = 1.0f;
 
       VkRect2D scissor{};
       scissor.offset = { 0, 0 };
-      scissor.extent = renderContext->swapChainExtent();
+      scissor.extent = exeParams.rc->swapChainExtent();
 
       // Bind pipeline
-      vkCmdBindPipeline(*cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+      vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, *exeParams.pipeline);
 
       vkCmdBindDescriptorSets(
-        *cmdBuffer,
+        *exeParams.cmdBuffer,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
-        _pipelineLayout,
-        1, 1, &_descriptorSets[0],
+        *exeParams.pipelineLayout,
+        1, 1, &(*exeParams.descriptorSets)[0],
         0, nullptr);
 
       // Set dynamic viewport and scissor
-      vkCmdSetViewport(*cmdBuffer, 0, 1, &viewport);
-      vkCmdSetScissor(*cmdBuffer, 0, 1, &scissor);
+      vkCmdSetViewport(*exeParams.cmdBuffer, 0, 1, &viewport);
+      vkCmdSetScissor(*exeParams.cmdBuffer, 0, 1, &scissor);
 
-      renderContext->drawMeshId(cmdBuffer, _meshId, 6, 1);
+      exeParams.rc->drawMeshId(exeParams.cmdBuffer, _meshId, 6, 1);
 
-      vkCmdEndRendering(*cmdBuffer);
+      vkCmdEndRendering(*exeParams.cmdBuffer);
     });
-}
-
-void FXAARenderPass::cleanup(RenderContext* renderContext, RenderResourceVault* vault)
-{
-  vkDestroyDescriptorSetLayout(renderContext->device(), _descriptorSetLayout, nullptr);
-  vkDestroyPipelineLayout(renderContext->device(), _pipelineLayout, nullptr);
-  vkDestroyPipeline(renderContext->device(), _pipeline, nullptr);
-
-  vkDestroySampler(renderContext->device(), _sampler, nullptr);
-
-  auto im = (ImageRenderResource*)vault->getResource("FinalImagePP");
-  auto imView = (ImageViewRenderResource*)vault->getResource("FinalImagePPView");
-
-  vmaDestroyImage(renderContext->vmaAllocator(), im->_image._image, im->_image._allocation);
-  vkDestroyImageView(renderContext->device(), imView->_view, nullptr);
-
-  vault->deleteResource("FinalImagePP");
-  vault->deleteResource("FinalImagePPView");
 }
 
 }

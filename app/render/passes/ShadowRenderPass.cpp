@@ -18,90 +18,10 @@ ShadowRenderPass::~ShadowRenderPass()
 {
 }
 
-bool ShadowRenderPass::init(RenderContext* renderContext, RenderResourceVault* vault)
-{
-  // Desc layout for translation buffer
-  DescriptorBindInfo transBufferInfo{};
-  transBufferInfo.binding = 0;
-  transBufferInfo.stages = VK_SHADER_STAGE_VERTEX_BIT;
-  transBufferInfo.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-
-  DescriptorSetLayoutCreateParams descLayoutParam{};
-  descLayoutParam.bindInfos.emplace_back(transBufferInfo);
-  descLayoutParam.renderContext = renderContext;
-
-  buildDescriptorSetLayout(descLayoutParam);
-
-  // Descriptor (multi buffered) containing draw buffer SSBO
-  DescriptorSetsCreateParams descParam{};
-  descParam.renderContext = renderContext;
-
-  auto allocator = renderContext->vmaAllocator();
-  for (int i = 0; i < renderContext->getMultiBufferSize(); ++i) {
-    auto buf = (BufferRenderResource*)vault->getResource("CullTransBuf", i);
-
-    transBufferInfo.buffer = buf->_buffer._buffer;
-    descParam.bindInfos.emplace_back(transBufferInfo);
-  }
-
-  _descriptorSets = buildDescriptorSets(descParam);
-
-  // Build graphics pipeline
-  GraphicsPipelineCreateParams params{};
-  params.device = renderContext->device();
-  params.pipelineLayout = _pipelineLayout;
-  params.vertShader = "standard_shadow_vert.spv";
-  params.colorLoc = -1;
-  params.normalLoc = -1;
-  params.colorAttachment = false;
-  params.depthBiasEnable = true;
-  params.depthBiasConstant = 4.0f;
-  params.depthBiasSlope = 1.5f;
-  params.cullMode = VK_CULL_MODE_FRONT_BIT;
-
-  buildGraphicsPipeline(params);
-
-  // Create the shadow map
-  auto shadowMapRes = new ImageRenderResource();
-  auto shadowMapViewRes = new ImageViewRenderResource();
-
-  shadowMapRes->_format = params.depthFormat;
-  shadowMapViewRes->_format = shadowMapRes->_format;
-
-  imageutil::createImage(
-    8192,
-    8192,
-    params.depthFormat,
-    VK_IMAGE_TILING_OPTIMAL,
-    renderContext->vmaAllocator(),
-    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    shadowMapRes->_image);
-
-  shadowMapViewRes->_view = imageutil::createImageView(
-    renderContext->device(),
-    shadowMapRes->_image._image,
-    shadowMapRes->_format,
-    VK_IMAGE_ASPECT_DEPTH_BIT);
-
-  vault->addResource("ShadowMap", std::unique_ptr<IRenderResource>(shadowMapRes));
-  vault->addResource("ShadowMapView", std::unique_ptr<IRenderResource>(shadowMapViewRes));
-
-  return true;
-}
-
-void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb)
+void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
   RenderPassRegisterInfo info{};
   info._name = "Shadow";
-
-  {
-    ResourceUsage shadowMapUsage{};
-    shadowMapUsage._resourceName = "ShadowMap";
-    shadowMapUsage._access.set((std::size_t)Access::Write);
-    shadowMapUsage._stage.set((std::size_t)Stage::Fragment);
-    shadowMapUsage._type = Type::DepthAttachment;
-    info._resourceUsages.emplace_back(std::move(shadowMapUsage));
-  }
 
   {
     ResourceUsage usage{};
@@ -109,6 +29,20 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Vertex);
     usage._type = Type::SSBO;
+    usage._multiBuffered = true;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "ShadowMap";
+    usage._access.set((std::size_t)Access::Write);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::DepthAttachment;
+    ImageInitialCreateInfo createInfo{};
+    createInfo._intialFormat = VK_FORMAT_D32_SFLOAT;
+    createInfo._initialHeight = 8192;
+    createInfo._initialWidth = 8192;
+    usage._imageCreateInfo = createInfo;
     info._resourceUsages.emplace_back(std::move(usage));
   }
   {
@@ -117,17 +51,27 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb)
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::IndirectDraw);
     usage._type = Type::SSBO;
+    usage._multiBuffered = true;
     info._resourceUsages.emplace_back(std::move(usage));
   }
+
+  GraphicsPipelineCreateParams params{};
+  params.device = rc->device();
+  params.vertShader = "standard_shadow_vert.spv";
+  params.colorLoc = -1;
+  params.normalLoc = -1;
+  params.colorAttachment = false;
+  params.depthBiasEnable = true;
+  params.depthBiasConstant = 4.0f;
+  params.depthBiasSlope = 1.5f;
+  params.cullMode = VK_CULL_MODE_FRONT_BIT;
+  info._graphicsParams = params;
 
   fgb.registerRenderPass(std::move(info));
 
   fgb.registerRenderPassExe("Shadow",
-    [this](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra)
+    [this](RenderExeParams exeParams)
     {
-      auto shadowMapView = (ImageViewRenderResource*)vault->getResource("ShadowMapView");
-      auto drawCallBuffer = (BufferRenderResource*)vault->getResource("CullDrawBuf", multiBufferIdx);
-
       VkExtent2D extent{};
       extent.width = 8192;
       extent.height = 8192;
@@ -137,7 +81,7 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb)
 
       VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
       depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-      depthAttachmentInfo.imageView = shadowMapView->_view;
+      depthAttachmentInfo.imageView = exeParams.depthAttachmentViews[0];
       depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
       depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
       depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -151,7 +95,7 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       renderInfo.colorAttachmentCount = 0;
       renderInfo.pDepthAttachment = &depthAttachmentInfo;
 
-      vkCmdBeginRendering(*cmdBuffer, &renderInfo);
+      vkCmdBeginRendering(*exeParams.cmdBuffer, &renderInfo);
 
       // Viewport and scissor
       VkViewport viewport{};
@@ -167,42 +111,26 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb)
       scissor.extent = extent;
 
       // Bind pipeline
-      vkCmdBindPipeline(*cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+      vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, *exeParams.pipeline);
 
       // Descriptor set for translation buffer in set 1
       vkCmdBindDescriptorSets(
-        *cmdBuffer,
+        *exeParams.cmdBuffer,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
-        _pipelineLayout,
-        1, 1, &_descriptorSets[multiBufferIdx],
+        *exeParams.pipelineLayout,
+        1, 1, &(*exeParams.descriptorSets)[exeParams.rc->getCurrentMultiBufferIdx()],
         0, nullptr);
 
       // Set dynamic viewport and scissor
-      vkCmdSetViewport(*cmdBuffer, 0, 1, &viewport);
-      vkCmdSetScissor(*cmdBuffer, 0, 1, &scissor);
+      vkCmdSetViewport(*exeParams.cmdBuffer, 0, 1, &viewport);
+      vkCmdSetScissor(*exeParams.cmdBuffer, 0, 1, &scissor);
 
       // Ask render context to draw big giga buffer
-      renderContext->drawGigaBufferIndirect(cmdBuffer, drawCallBuffer->_buffer._buffer);
+      exeParams.rc->drawGigaBufferIndirect(exeParams.cmdBuffer, exeParams.buffers[1]);
 
       // Stop dynamic rendering
-      vkCmdEndRendering(*cmdBuffer);
+      vkCmdEndRendering(*exeParams.cmdBuffer);
     });
-}
-
-void ShadowRenderPass::cleanup(RenderContext* renderContext, RenderResourceVault* vault)
-{
-  auto depthView = (ImageViewRenderResource*)vault->getResource("ShadowMapView");
-  auto depthIm = (ImageRenderResource*)vault->getResource("ShadowMap");
-
-  vmaDestroyImage(renderContext->vmaAllocator(), depthIm->_image._image, depthIm->_image._allocation);
-  vkDestroyImageView(renderContext->device(), depthView->_view, nullptr);
-
-  vkDestroyDescriptorSetLayout(renderContext->device(), _descriptorSetLayout, nullptr);
-  vkDestroyPipelineLayout(renderContext->device(), _pipelineLayout, nullptr);
-  vkDestroyPipeline(renderContext->device(), _pipeline, nullptr);
-
-  vault->deleteResource("ShadowMapView");
-  vault->deleteResource("ShadowMap");
 }
 
 }

@@ -11,19 +11,12 @@ namespace render {
 
 UIRenderPass::UIRenderPass()
   : RenderPass()
-{
-}
+{}
 
 UIRenderPass::~UIRenderPass()
-{
-}
+{}
 
-bool UIRenderPass::init(RenderContext* renderContext, RenderResourceVault*)
-{
-  return true;
-}
-
-void UIRenderPass::registerToGraph(FrameGraphBuilder& fgb)
+void UIRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
   RenderPassRegisterInfo info{};
   info._name = "UI";
@@ -42,16 +35,14 @@ void UIRenderPass::registerToGraph(FrameGraphBuilder& fgb)
   fgb.registerRenderPass(std::move(info));
 
   fgb.registerRenderPassExe("UI",
-    [](RenderResourceVault* vault, RenderContext* renderContext, VkCommandBuffer* cmdBuffer, int multiBufferIdx, int extraSz, void* extra)
+    [](RenderExeParams exeParams)
     {
       // Just render the ImGui stuff on top of the frame
-      auto imageView = (ImageViewRenderResource*)vault->getResource("FinalImagePPView");
-
       VkClearValue clearValue{};
       clearValue.color = { {0.0f, 0.0f, 0.0f, 1.0f} };
       VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
       colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-      colorAttachmentInfo.imageView = imageView->_view;
+      colorAttachmentInfo.imageView = exeParams.colorAttachmentViews[0];
       colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
       colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
       colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -59,18 +50,18 @@ void UIRenderPass::registerToGraph(FrameGraphBuilder& fgb)
 
       VkRenderingInfoKHR renderInfo{};
       renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-      renderInfo.renderArea.extent = renderContext->swapChainExtent();
+      renderInfo.renderArea.extent = exeParams.rc->swapChainExtent();
       renderInfo.renderArea.offset = { 0, 0 };
       renderInfo.layerCount = 1;
       renderInfo.colorAttachmentCount = 1;
       renderInfo.pColorAttachments = &colorAttachmentInfo;
       renderInfo.pDepthAttachment = nullptr;
 
-      vkCmdBeginRendering(*cmdBuffer, &renderInfo);
+      vkCmdBeginRendering(*exeParams.cmdBuffer, &renderInfo);
 
-      ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *cmdBuffer);
+      ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *exeParams.cmdBuffer);
 
-      vkCmdEndRendering(*cmdBuffer);
+      vkCmdEndRendering(*exeParams.cmdBuffer);
     });
 }
 

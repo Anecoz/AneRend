@@ -32,111 +32,12 @@ namespace render {
 
     // Meant to create pipeline etc as well as add resources to the vault
     // It is also possible to get already existing resources from the vault to setup descriptor sets
-    virtual bool init(RenderContext* renderContext, RenderResourceVault*) = 0;
+    virtual bool init(RenderContext* renderContext, RenderResourceVault*) { return true; };
 
     // Register how the render pass will actually render
-    virtual void registerToGraph(FrameGraphBuilder&) = 0;
+    virtual void registerToGraph(FrameGraphBuilder&, RenderContext* rc) = 0;
 
     // Clean up any created resources
     virtual void cleanup(RenderContext* renderContext, RenderResourceVault*) {}
-
-  protected:
-    VkPipeline _pipeline;
-    VkPipelineLayout _pipelineLayout;
-    VkDescriptorSetLayout _descriptorSetLayout;
-
-    struct GraphicsPipelineCreateParams
-    {
-      VkPipelineLayout pipelineLayout;
-
-      VkDevice device = nullptr;
-      VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-      std::vector<VkFormat> colorFormats = { VK_FORMAT_B8G8R8A8_SRGB };
-      uint32_t colorAttachmentCount = 1;
-      VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
-      std::string vertShader;
-      std::string fragShader;
-      int posLoc = 0;
-      int colorLoc = 1;
-      int normalLoc = 2;
-      int uvLoc = -1;
-      VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
-      bool depthBiasEnable = false;
-      float depthBiasConstant = 0.0f;
-      float depthBiasSlope = 0.0f;
-      bool depthTest = true;
-      bool colorAttachment = true;
-      bool vertexLess = false;
-    };
-
-    struct ComputePipelineCreateParams
-    {
-      VkDevice device = nullptr;
-      VkPipelineLayout pipelineLayout;
-      std::string shader;
-    };
-
-    struct DescriptorBindInfo
-    {
-      uint32_t binding;
-      VkShaderStageFlags stages;
-      VkDescriptorType type;
-      VkImageLayout imageLayout;
-      VkImageView view;
-      VkSampler sampler;
-      VkBuffer buffer;
-    };
-
-    struct DescriptorSetLayoutCreateParams
-    {
-      RenderContext* renderContext;
-
-      std::vector<DescriptorBindInfo> bindInfos;
-    };
-
-    struct PipelineLayoutCreateParams
-    {
-      VkDevice device;
-      std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
-      uint32_t pushConstantsSize = 0;
-      VkShaderStageFlags pushConstantStages;
-    };
-
-    struct DescriptorSetsCreateParams
-    {
-      RenderContext* renderContext;
-
-      bool multiBuffered = true;
-      std::vector<DescriptorBindInfo> bindInfos;
-    };
-
-    struct SamplerCreateParams
-    {
-      RenderContext* renderContext;
-
-      VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      VkFilter magFilter = VK_FILTER_NEAREST;
-      VkFilter minFilter = VK_FILTER_NEAREST;
-      VkSamplerMipmapMode mipMapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-      float mipLodBias = 0.0f;
-      float maxAnisotropy = 1.0f;
-      float minLod = 0.0f;
-      float maxLod = 1.0f;
-      VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-    };
-
-    bool buildGraphicsPipeline(GraphicsPipelineCreateParams params);
-
-    bool buildComputePipeline(ComputePipelineCreateParams params);
-
-    bool buildDescriptorSetLayout(DescriptorSetLayoutCreateParams params);
-
-    bool buildPipelineLayout(PipelineLayoutCreateParams params);
-
-    std::vector<VkDescriptorSet> buildDescriptorSets(DescriptorSetsCreateParams params);
-
-    void updateDescriptorSets(DescriptorSetsCreateParams params, std::vector<VkDescriptorSet>& sets);
-
-    VkSampler createSampler(SamplerCreateParams params);
   };
 }

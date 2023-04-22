@@ -11,12 +11,10 @@ public:
   CullRenderPass();
   ~CullRenderPass();
 
-  bool init(RenderContext* renderContext, RenderResourceVault*) override final;
+  void cleanup(RenderContext* renderContext, RenderResourceVault*) override final;
 
   // Register how the render pass will actually render
-  void registerToGraph(FrameGraphBuilder&) override final;
-
-  void cleanup(RenderContext* renderContext, RenderResourceVault* vault) override final;
+  void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
 
 private:
   // Temp
@@ -25,7 +23,6 @@ private:
   std::size_t _currentStagingOffset = 0;
 
   std::vector<AllocatedBuffer> _gpuStagingBuffers;
-  std::vector<VkDescriptorSet> _descriptorSets;
 };
 
 }

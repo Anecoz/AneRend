@@ -4,8 +4,8 @@ C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/standard_shadow.frag -o %2/standard_shad
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/standard_instanced.vert -o %2/standard_instanced_vert.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/standard_instanced_shadow.vert -o %2/standard_instanced_shadow_vert.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/standard.frag -o %2/standard_frag.spv
-C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/shadow_debug.vert -o %2/shadow_debug_vert.spv
-C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/shadow_debug.frag -o %2/shadow_debug_frag.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/fullscreen.vert -o %2/fullscreen_vert.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/debug_view.frag -o %2/debug_view_frag.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/cull.comp -o %2/cull_comp.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/pp.vert -o %2/pp_vert.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/pp_color_inv.frag -o %2/pp_color_inv_frag.spv

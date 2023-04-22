@@ -3,6 +3,9 @@
 #include "RenderResourceVault.h"
 #include "ImageHelpers.h"
 #include "RenderContext.h"
+#include "BufferHelpers.h"
+#include "ImageHelpers.h"
+#include "../util/Utils.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -12,6 +15,22 @@ namespace render {
 
 namespace {
 
+std::optional<VkShaderModule> createShaderModule(const std::vector<char>& code, VkDevice device)
+{
+  VkShaderModuleCreateInfo createInfo{};
+  createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  createInfo.codeSize = code.size();
+  createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+  VkShaderModule shaderModule;
+  if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+    printf("Could not create shader module!\n");
+    return {};
+  }
+
+  return shaderModule;
+}
+
 bool isTypeBuffer(Type type)
 {
   return type == Type::SSBO || type == Type::UBO;
@@ -19,8 +38,64 @@ bool isTypeBuffer(Type type)
 
 bool isTypeImage(Type type)
 {
-  return type == Type::ColorAttachment || type == Type::DepthAttachment ||
+  return type == Type::ColorAttachment || type == Type::DepthAttachment || type == Type::SampledDepthTexture ||
     type == Type::Present || type == Type::SampledTexture || type == Type::ImageStorage;
+}
+
+VkDescriptorType translateDescriptorType(Type type)
+{
+  if (type == Type::SSBO) {
+    return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+  }
+  if (type == Type::UBO) {
+    return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  }
+  if (type == Type::SampledTexture) {
+    return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  }
+  if (type == Type::SampledDepthTexture) {
+    return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  }
+  if (type == Type::ImageStorage) {
+    return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  }
+
+  return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+}
+
+VkImageLayout translateImageLayout(Type type)
+{
+  if (type == Type::SampledTexture) {
+    return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  }
+  if (type == Type::SampledDepthTexture) {
+    return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+  }
+  if (type == Type::ImageStorage) {
+    return VK_IMAGE_LAYOUT_GENERAL;
+  }
+
+  return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+}
+
+bool shouldBeDescriptor(Type type)
+{
+  if (type == Type::DepthAttachment ||
+    type == Type::ColorAttachment ||
+    type == Type::Present) {
+    return false;
+  }
+
+  return true;
+}
+
+bool shouldBeDescriptor(StageBits stageBits)
+{
+  if (stageBits.test((std::size_t)Stage::IndirectDraw)) {
+    return false;
+  }
+
+  return true;
 }
 
 }
@@ -33,8 +108,21 @@ FrameGraphBuilder::FrameGraphBuilder(RenderResourceVault* resourceVault)
   : _vault(resourceVault)
 {}
 
-void FrameGraphBuilder::reset()
+void FrameGraphBuilder::reset(RenderContext* rc)
 {
+  // Delete all objects associated with the nodes
+  for (auto& node : _builtGraph) {
+    if (!node._rpExe.has_value()) continue;
+
+    vkDestroyDescriptorSetLayout(rc->device(), node._descriptorSetLayout, nullptr);
+    vkDestroyPipelineLayout(rc->device(), node._pipelineLayout, nullptr);
+    vkDestroyPipeline(rc->device(), node._pipeline, nullptr);
+
+    for (auto& sampler : node._samplers) {
+      vkDestroySampler(rc->device(), sampler, nullptr);
+    }
+  }
+
   _submissions.clear();
   _builtGraph.clear();
   _resourceInits.clear();
@@ -86,12 +174,36 @@ void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* 
       node._barrier.value()._barrierFcn(resource, cmdBuffer);
     }
     else if (node._rpExe) {
-      if (node._hasExtraRpExeData) {
-        node._rpExe.value()(_vault, renderContext, &cmdBuffer, renderContext->getCurrentMultiBufferIdx(), (int)node._extraRpExeDataSz, &node._extraRpExeData);
+      // Find parameters for this exe
+      RenderExeParams exeParams{};
+      exeParams.cmdBuffer = &cmdBuffer;
+      exeParams.rc = renderContext;
+      exeParams.vault = _vault;
+      exeParams.pipeline = &node._pipeline;
+      exeParams.pipelineLayout = &node._pipelineLayout;
+      exeParams.descriptorSets = &node._descriptorSets;
+      exeParams.samplers = node._samplers;
+
+      // Views and buffers
+      int multiIdx = renderContext->getCurrentMultiBufferIdx();
+      for (auto& us : node._resourceUsages) {
+        if (us._type == Type::ColorAttachment) {
+          auto view = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_view;
+          exeParams.colorAttachmentViews.emplace_back(view);
+        }
+        else if (us._type == Type::DepthAttachment) {
+          auto view = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_view;
+          exeParams.depthAttachmentViews.emplace_back(view);
+        }
+        else if (us._type == Type::SSBO) {
+          auto buf = ((BufferRenderResource*)_vault->getResource(us._resourceName, multiIdx))->_buffer._buffer;
+          exeParams.buffers.emplace_back(buf);
+        }
+        else if (us._type == Type::Present) {
+          exeParams.presentImage = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_image._image;
+        }
       }
-      else {
-        node._rpExe.value()(_vault, renderContext, &cmdBuffer, renderContext->getCurrentMultiBufferIdx(), 0, nullptr);
-      }
+      node._rpExe.value()(exeParams);
     }
   }
 }
@@ -185,7 +297,7 @@ std::vector<FrameGraphBuilder::Submission*> FrameGraphBuilder::findResourceProdu
   return out;
 }
 
-void FrameGraphBuilder::build()
+bool FrameGraphBuilder::build(RenderContext* renderContext, RenderResourceVault* vault)
 {
   /* 
   Try to figure out internal dependencies.
@@ -209,11 +321,24 @@ void FrameGraphBuilder::build()
 
   if (!presentSubmission) {
     printf("Could not build frame graph, there is no one presenting!\n");
-    return;
+    return false;
+  }
+
+  // Do a pass of all submissions and figure out what resources need to be created
+  if (!createResources(renderContext, vault)) {
+    printf("Could not create resources for frame graph!\n");
+    return false;
   }
 
   //internalBuild2(presentSubmission);
   internalBuild3();
+
+  // Do another pass and create all pipelines, pipelinelayouts, descriptor set layouts and descriptor sets
+  // that each render pass needs
+  if (!createPipelines(renderContext, vault)) {
+    printf("Could not create pipelines for frame graph!\n");
+    return false;
+  }
 
   // Now we need to find all requirements for this submission, and recursively do the same for the children
   /*GraphNode presentNode{};
@@ -232,6 +357,856 @@ void FrameGraphBuilder::build()
   // TODO: Barrier insertion particularly for buffers is overly ambitious... 
   //       Should be able to go through after insertions and tidy it up. Execution
   //       barriers for instance can be treacherous. 
+
+  return true;
+}
+
+std::vector<VkBufferUsageFlagBits> FrameGraphBuilder::findBufferCreateFlags(const std::string& bufferResource)
+{
+  std::vector<VkBufferUsageFlagBits> output;
+
+  for (auto& sub : _submissions) {
+    for (auto& us : sub._regInfo._resourceUsages) {
+      if (us._resourceName == bufferResource) {
+        if (us._type == Type::SSBO) {
+          output.emplace_back(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        }
+        if (us._type == Type::UBO) {
+          output.emplace_back(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+        }
+        if (us._stage.test((std::size_t)Stage::IndirectDraw)) {
+          output.emplace_back(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+        }
+        if (us._stage.test((std::size_t)Stage::Transfer)) {
+          output.emplace_back(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        }
+      }
+    }
+  }
+  for (auto& init : _resourceInits) {
+    if (init._resource == bufferResource) {
+      if (init._initUsage._type == Type::SSBO) {
+        output.emplace_back(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+      }
+      if (init._initUsage._stage.test((std::size_t)Stage::IndirectDraw)) {
+        output.emplace_back(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+      }
+      if (init._initUsage._stage.test((std::size_t)Stage::Transfer)) {
+        output.emplace_back(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+      }
+    }
+  }
+
+  // Uniqueify
+  std::sort(output.begin(), output.end());
+  output.erase(std::unique(output.begin(), output.end()), output.end());
+
+  return output;
+}
+
+std::vector<VkImageUsageFlagBits> FrameGraphBuilder::findImageCreateFlags(const std::string& resource)
+{
+  std::vector<VkImageUsageFlagBits> output;
+
+  for (auto& sub : _submissions) {
+    for (auto& us : sub._regInfo._resourceUsages) {
+      if (us._resourceName == resource) {
+        if (us._type == Type::DepthAttachment) {
+          output.emplace_back(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+        }
+        if (us._type == Type::ColorAttachment) {
+          output.emplace_back(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+        }
+        if (us._type == Type::SampledTexture || us._type == Type::SampledDepthTexture) {
+          output.emplace_back(VK_IMAGE_USAGE_SAMPLED_BIT);
+        }
+        if (us._type == Type::ImageStorage) {
+          output.emplace_back(VK_IMAGE_USAGE_STORAGE_BIT);
+        }
+        if (us._type == Type::Present) {
+          output.emplace_back(VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+        }
+      }
+    }
+  }
+  for (auto& init : _resourceInits) {
+    if (init._resource == resource) {
+      if (init._initUsage._type == Type::DepthAttachment) {
+        output.emplace_back(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+      }
+      if (init._initUsage._type == Type::ColorAttachment) {
+        output.emplace_back(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+      }
+      if (init._initUsage._type == Type::SampledTexture || init._initUsage._type == Type::SampledDepthTexture) {
+        output.emplace_back(VK_IMAGE_USAGE_SAMPLED_BIT);
+      }
+      if (init._initUsage._type == Type::ImageStorage) {
+        output.emplace_back(VK_IMAGE_USAGE_STORAGE_BIT);
+      }
+      if (init._initUsage._type == Type::Present) {
+        output.emplace_back(VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+      }
+    }
+  }
+
+  // Uniqueify
+  std::sort(output.begin(), output.end());
+  output.erase(std::unique(output.begin(), output.end()), output.end());
+
+  return output;
+}
+
+bool FrameGraphBuilder::createResources(RenderContext* renderContext, RenderResourceVault* vault)
+{
+  auto allocator = renderContext->vmaAllocator();
+
+  std::vector<std::string> createdResources;
+  std::vector<std::string> foundResources;
+
+  for (auto& sub : _submissions) {
+    for (auto& usage : sub._regInfo._resourceUsages) {
+      foundResources.emplace_back(usage._resourceName);
+
+      // If this resource is not created
+      if (std::find(createdResources.begin(), createdResources.end(), usage._resourceName) == createdResources.end()) {
+
+        if (isTypeBuffer(usage._type)) {
+          if (usage._bufferCreateInfo.has_value()) {
+            auto flags = findBufferCreateFlags(usage._resourceName);
+
+            VkBufferUsageFlagBits flag{};
+            for (auto f : flags) {
+              flag = VkBufferUsageFlagBits(flag | f);
+            }
+
+            VmaAllocationCreateFlags createFlags = 0;
+            if (usage._bufferCreateInfo->_hostWritable) {
+              createFlags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+            }
+
+            int num = usage._bufferCreateInfo->_multiBuffered ? renderContext->getMultiBufferSize() : 1;
+
+            for (int i = 0; i < num; ++i) {
+              auto buf = new BufferRenderResource();
+              bufferutil::createBuffer(
+                allocator,
+                usage._bufferCreateInfo->_initialSize,
+                flag,
+                createFlags,
+                buf->_buffer);
+
+              std::string name = usage._resourceName + "_" + std::to_string(i);
+              renderContext->setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)buf->_buffer._buffer, name.c_str());
+
+              if (usage._bufferCreateInfo->_initialDataCb) {
+                usage._bufferCreateInfo->_initialDataCb(renderContext, buf->_buffer);
+              }
+
+              vault->addResource(usage._resourceName, std::unique_ptr<IRenderResource>(buf), usage._bufferCreateInfo->_multiBuffered, i);
+              createdResources.emplace_back(usage._resourceName);
+
+              usage._multiBuffered = usage._bufferCreateInfo->_multiBuffered;
+            }
+          }
+        }
+        else if (isTypeImage(usage._type)) {
+          if (usage._imageCreateInfo.has_value()) {
+            auto flags = findImageCreateFlags(usage._resourceName);
+
+            VkImageUsageFlagBits flag{};
+            for (auto f : flags) {
+              flag = VkImageUsageFlagBits(flag | f);
+            }
+
+            if (usage._imageCreateInfo->_initialDataCb) {
+              flag = VkImageUsageFlagBits(flag | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+            }
+
+            int num = usage._imageCreateInfo->_multiBuffered ? renderContext->getMultiBufferSize() : 1;
+
+            for (int i = 0; i < num; ++i) {
+              auto im = new ImageRenderResource();
+              im->_format = usage._imageCreateInfo->_intialFormat;
+              imageutil::createImage(
+                usage._imageCreateInfo->_initialWidth,
+                usage._imageCreateInfo->_initialHeight,
+                usage._imageCreateInfo->_intialFormat,
+                VK_IMAGE_TILING_OPTIMAL,
+                renderContext->vmaAllocator(),
+                flag,
+                im->_image);
+
+              im->_view = imageutil::createImageView(
+                renderContext->device(), 
+                im->_image._image,
+                im->_format,
+                usage._type == Type::DepthAttachment ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
+
+              std::string name = usage._resourceName + "_" + std::to_string(i);
+              std::string viewName = usage._resourceName + "View" + std::to_string(i);
+              renderContext->setDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)im->_image._image, name.c_str());
+              renderContext->setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)im->_view, viewName.c_str());
+
+              if (usage._imageCreateInfo->_initialDataCb) {
+                usage._imageCreateInfo->_initialDataCb(renderContext, im->_image._image);
+              }
+
+              vault->addResource(usage._resourceName, std::unique_ptr<IRenderResource>(im), usage._imageCreateInfo->_multiBuffered, i);
+              createdResources.emplace_back(usage._resourceName);
+
+              usage._multiBuffered = usage._imageCreateInfo->_multiBuffered;
+            }
+          }
+        }
+
+      }
+    }
+  }
+
+  // If we didn't create all resources that we found, means we missed something, which is fatal
+  std::sort(createdResources.begin(), createdResources.end());
+  createdResources.erase(std::unique(createdResources.begin(), createdResources.end()), createdResources.end());
+
+  std::sort(foundResources.begin(), foundResources.end());
+  foundResources.erase(std::unique(foundResources.begin(), foundResources.end()), foundResources.end());
+
+  // Should probably check that they are actually equal...
+  if (createdResources.empty()) {
+    return false;
+  }
+
+  if (createdResources.size() != foundResources.size()) {
+    return false;
+  }
+
+  for (std::size_t i = 0; i < createdResources.size(); ++i) {
+    if (createdResources[i] != foundResources[i]) return false;
+  }
+
+  return true;
+}
+
+bool FrameGraphBuilder::buildDescriptorSetLayout(DescriptorSetLayoutCreateParams params, VkDescriptorSetLayout& outDescriptorSetLayout, VkPipelineLayout& outPipelineLayout)
+{
+  std::vector<VkDescriptorSetLayoutBinding> bindings;
+
+  for (auto& bindInfo : params.bindInfos) {
+    VkDescriptorSetLayoutBinding layoutBinding{};
+    layoutBinding.binding = bindInfo.binding;
+    layoutBinding.descriptorType = bindInfo.type;
+    layoutBinding.descriptorCount = 1;
+    layoutBinding.stageFlags = bindInfo.stages;
+    bindings.emplace_back(std::move(layoutBinding));
+  }
+
+  VkDescriptorSetLayoutCreateInfo layoutInfo{};
+  layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  layoutInfo.bindingCount = (uint32_t)bindings.size();
+  layoutInfo.pBindings = bindings.data();
+
+  if (vkCreateDescriptorSetLayout(params.renderContext->device(), &layoutInfo, nullptr, &outDescriptorSetLayout) != VK_SUCCESS) {
+    printf("Could not create descriptor set layout!\n");
+    return false;
+  }
+
+  // Pipeline layout
+  PipelineLayoutCreateParams pipeLayoutParam{};
+  pipeLayoutParam.device = params.renderContext->device();
+  pipeLayoutParam.descriptorSetLayouts.emplace_back(params.renderContext->bindlessDescriptorSetLayout()); // set 0
+  pipeLayoutParam.descriptorSetLayouts.emplace_back(outDescriptorSetLayout); // set 1
+  pipeLayoutParam.pushConstantsSize = 256;
+  pipeLayoutParam.pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+
+  if (!buildPipelineLayout(pipeLayoutParam, outPipelineLayout)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool FrameGraphBuilder::buildPipelineLayout(PipelineLayoutCreateParams params, VkPipelineLayout& outPipelineLayout)
+{
+  // Push constants
+  VkPushConstantRange pushConstant;
+  if (params.pushConstantsSize > 0) {
+    pushConstant.offset = 0;
+    pushConstant.size = params.pushConstantsSize;
+    pushConstant.stageFlags = params.pushConstantStages;
+  }
+
+  // Pipeline layout
+  VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+  pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  pipelineLayoutInfo.setLayoutCount = (uint32_t)params.descriptorSetLayouts.size();
+  pipelineLayoutInfo.pSetLayouts = &params.descriptorSetLayouts[0];
+  pipelineLayoutInfo.pushConstantRangeCount = params.pushConstantsSize > 0 ? 1 : 0;
+  pipelineLayoutInfo.pPushConstantRanges = params.pushConstantsSize > 0 ? &pushConstant : nullptr;
+
+  if (vkCreatePipelineLayout(params.device, &pipelineLayoutInfo, nullptr, &outPipelineLayout) != VK_SUCCESS) {
+    printf("Could not create pipeline layout!\n");
+    return false;
+  }
+
+  return true;
+}
+
+std::vector<VkDescriptorSet> FrameGraphBuilder::buildDescriptorSets(DescriptorSetsCreateParams params)
+{
+  int numMultiBuffer = params.multiBuffered ? params.renderContext->getMultiBufferSize() : 1;
+
+  std::vector<VkDescriptorSet> sets;
+  sets.resize(numMultiBuffer);
+
+  std::vector<VkDescriptorSetLayout> layouts(numMultiBuffer, params.descLayout);
+  VkDescriptorSetAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  allocInfo.descriptorPool = params.renderContext->descriptorPool();
+  allocInfo.descriptorSetCount = static_cast<uint32_t>(numMultiBuffer);
+  allocInfo.pSetLayouts = layouts.data();
+
+  if (vkAllocateDescriptorSets(params.renderContext->device(), &allocInfo, sets.data()) != VK_SUCCESS) {
+    printf("failed to allocate compute descriptor sets!\n");
+    return {};
+  }
+
+  int numDescriptors = params.bindInfos.size() / numMultiBuffer;
+  int currIdx = 0;
+  for (size_t j = 0; j < params.bindInfos.size(); j++) {
+    if (currIdx >= numMultiBuffer) {
+      currIdx = 0;
+    }
+    /*if (j - currIdx * numDescriptors >= numDescriptors) {
+      currIdx++;
+    }*/
+    std::vector<VkWriteDescriptorSet> descriptorWrites;
+
+    if (params.bindInfos[j].type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
+      VkDescriptorBufferInfo bufferInfo{};
+      VkWriteDescriptorSet bufWrite{};
+      bufferInfo.buffer = params.bindInfos[j].buffer;
+      bufferInfo.offset = 0;
+      bufferInfo.range = VK_WHOLE_SIZE;
+
+      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      bufWrite.dstSet = sets[currIdx];
+      bufWrite.dstBinding = params.bindInfos[j].binding;
+      bufWrite.dstArrayElement = 0;
+      bufWrite.descriptorType = params.bindInfos[j].type;
+      bufWrite.descriptorCount = 1;
+      bufWrite.pBufferInfo = &bufferInfo;
+
+      descriptorWrites.emplace_back(std::move(bufWrite));
+    }
+    else if (params.bindInfos[j].type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
+      VkDescriptorBufferInfo bufferInfo{};
+      VkWriteDescriptorSet bufWrite{};
+      bufferInfo.buffer = params.bindInfos[j].buffer;
+      bufferInfo.offset = 0;
+      bufferInfo.range = VK_WHOLE_SIZE;
+
+      bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      bufWrite.dstSet = sets[currIdx];
+      bufWrite.dstBinding = params.bindInfos[j].binding;
+      bufWrite.dstArrayElement = 0;
+      bufWrite.descriptorType = params.bindInfos[j].type;
+      bufWrite.descriptorCount = 1;
+      bufWrite.pBufferInfo = &bufferInfo;
+
+      descriptorWrites.emplace_back(std::move(bufWrite));
+    }
+    else if (params.bindInfos[j].type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
+      VkWriteDescriptorSet imWrite{};
+      VkDescriptorImageInfo imageInfo{};
+      imageInfo.imageLayout = params.bindInfos[j].imageLayout;
+      imageInfo.imageView = params.bindInfos[j].view;
+      imageInfo.sampler = params.bindInfos[j].sampler;
+
+      imWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      imWrite.dstSet = sets[currIdx];
+      imWrite.dstBinding = params.bindInfos[j].binding;
+      imWrite.dstArrayElement = 0;
+      imWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      imWrite.descriptorCount = 1;
+      imWrite.pImageInfo = &imageInfo;
+
+      descriptorWrites.emplace_back(std::move(imWrite));
+    }
+    else if (params.bindInfos[j].type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
+      VkWriteDescriptorSet imWrite{};
+      VkDescriptorImageInfo imageInfo{};
+      imageInfo.imageView = params.bindInfos[j].view;
+      imageInfo.imageLayout = params.bindInfos[j].imageLayout;
+
+      imWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      imWrite.dstSet = sets[currIdx];
+      imWrite.dstBinding = params.bindInfos[j].binding;
+      imWrite.dstArrayElement = 0;
+      imWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      imWrite.descriptorCount = 1;
+      imWrite.pImageInfo = &imageInfo;
+
+      descriptorWrites.emplace_back(std::move(imWrite));
+    }
+
+    vkUpdateDescriptorSets(params.renderContext->device(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+    currIdx++;
+  }
+
+  return sets;
+}
+
+VkSampler FrameGraphBuilder::createSampler(SamplerCreateParams params)
+{
+  VkSampler samplerOut;
+
+  VkSamplerCreateInfo sampler{};
+  sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+  sampler.magFilter = params.magFilter;
+  sampler.minFilter = params.minFilter;
+  sampler.mipmapMode = params.mipMapMode;
+  sampler.addressModeU = params.addressMode;
+  sampler.addressModeV = sampler.addressModeU;
+  sampler.addressModeW = sampler.addressModeU;
+  sampler.mipLodBias = params.mipLodBias;
+  sampler.maxAnisotropy = params.maxAnisotropy;
+  sampler.minLod = params.minLod;
+  sampler.maxLod = params.maxLod;
+  sampler.borderColor = params.borderColor;
+
+  if (vkCreateSampler(params.renderContext->device(), &sampler, nullptr, &samplerOut) != VK_SUCCESS) {
+    printf("Could not create shadow map sampler!\n");
+  }
+
+  return samplerOut;
+}
+
+bool FrameGraphBuilder::buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout& pipelineLayout, VkPipeline& outPipeline)
+{
+  // Shaders
+  VkShaderModule vertShaderModule;
+  VkShaderModule fragShaderModule;
+  if (!param.vertShader.empty()) {
+    auto vertShaderCode = util::readFile(std::string(ASSET_PATH) + param.vertShader);
+    auto opt = createShaderModule(vertShaderCode, param.device);
+    if (!opt) {
+      printf("Could not create vertex shader!\n");
+      return false;
+    }
+    vertShaderModule = opt.value();
+  }
+
+  if (!param.fragShader.empty()) {
+    auto fragShaderCode = util::readFile(std::string(ASSET_PATH) + param.fragShader);
+    auto opt = createShaderModule(fragShaderCode, param.device);
+    if (!opt) {
+      printf("Could not create frag shader!\n");
+      return false;
+    }
+    fragShaderModule = opt.value();
+  }
+
+  DEFER([&]() {
+    if (!param.fragShader.empty()) {
+      vkDestroyShaderModule(param.device, fragShaderModule, nullptr);
+    }
+  if (!param.vertShader.empty()) {
+    vkDestroyShaderModule(param.device, vertShaderModule, nullptr);
+  }
+    });
+
+  std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+  if (!param.vertShader.empty()) {
+    VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+    vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertShaderStageInfo.module = vertShaderModule;
+    vertShaderStageInfo.pName = "main";
+    shaderStages.emplace_back(std::move(vertShaderStageInfo));
+  }
+
+  if (!param.fragShader.empty()) {
+    VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+    fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragShaderStageInfo.module = fragShaderModule;
+    fragShaderStageInfo.pName = "main";
+    shaderStages.emplace_back(std::move(fragShaderStageInfo));
+  }
+
+  // Dynamic setup, viewport for instance
+  std::vector<VkDynamicState> dynamicStates = {
+    VK_DYNAMIC_STATE_VIEWPORT,
+    VK_DYNAMIC_STATE_SCISSOR
+  };
+
+  VkPipelineDynamicStateCreateInfo dynamicState{};
+  dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+  dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+  dynamicState.pDynamicStates = dynamicStates.data();
+
+  // Vertex input
+  std::vector<VkVertexInputBindingDescription> bindingDescriptions;
+  VkVertexInputBindingDescription bindingDescription{};
+  bindingDescription.binding = 0;
+  bindingDescription.stride = sizeof(render::Vertex);
+  bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+  bindingDescriptions.emplace_back(std::move(bindingDescription));
+
+  std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+  if (param.posLoc != -1) {
+    VkVertexInputAttributeDescription desc{};
+    desc.binding = 0;
+    desc.location = param.posLoc;
+    desc.format = VK_FORMAT_R32G32B32_SFLOAT;
+    desc.offset = offsetof(render::Vertex, pos);
+    attributeDescriptions.emplace_back(std::move(desc));
+  }
+
+  if (param.colorLoc != -1) {
+    VkVertexInputAttributeDescription desc{};
+    desc.binding = 0;
+    desc.location = param.colorLoc;
+    desc.format = VK_FORMAT_R32G32B32_SFLOAT;
+    desc.offset = offsetof(render::Vertex, color);
+    attributeDescriptions.emplace_back(std::move(desc));
+  }
+
+  if (param.normalLoc != -1) {
+    VkVertexInputAttributeDescription desc{};
+    desc.binding = 0;
+    desc.location = param.normalLoc;
+    desc.format = VK_FORMAT_R32G32B32_SFLOAT;
+    desc.offset = offsetof(render::Vertex, normal);
+    attributeDescriptions.emplace_back(std::move(desc));
+  }
+
+  if (param.uvLoc != -1) {
+    VkVertexInputAttributeDescription desc{};
+    desc.binding = 0;
+    desc.location = param.uvLoc;
+    desc.format = VK_FORMAT_R32G32_SFLOAT;
+    desc.offset = offsetof(render::Vertex, uv);
+    attributeDescriptions.emplace_back(std::move(desc));
+  }
+
+  VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+  vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  if (param.vertexLess) {
+    vertexInputInfo.vertexBindingDescriptionCount = 0;
+    vertexInputInfo.pVertexBindingDescriptions = nullptr;
+    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+    vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+  }
+  else {
+    vertexInputInfo.vertexBindingDescriptionCount = (uint32_t)bindingDescriptions.size();
+    vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(attributeDescriptions.size());
+    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+  }
+
+  // Input assembly
+  VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+  inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+  inputAssembly.topology = param.topology;
+  inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+  // Viewport and scissors
+  // Only specify count since they are dynamic
+  // Will be setup later at drawing time
+  VkPipelineViewportStateCreateInfo viewportState{};
+  viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+  viewportState.viewportCount = 1;
+  viewportState.scissorCount = 1;
+
+  // Rasterizer
+  VkPipelineRasterizationStateCreateInfo rasterizer{};
+  rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+  rasterizer.depthClampEnable = VK_FALSE;
+  rasterizer.rasterizerDiscardEnable = VK_FALSE; // This to true means geometry never passes through rasterizer stage (?)
+  rasterizer.polygonMode = VK_POLYGON_MODE_FILL; // Anything else here requires enabling a GPU feature (wireframe etc)
+  rasterizer.lineWidth = 1.0f; // Thickness of lines in terms of fragments
+  rasterizer.cullMode = param.cullMode;
+  rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+  rasterizer.depthBiasEnable = param.depthBiasEnable ? VK_TRUE : VK_FALSE;
+  if (param.depthBiasEnable) {
+    rasterizer.depthBiasConstantFactor = param.depthBiasConstant;
+    rasterizer.depthBiasSlopeFactor = param.depthBiasSlope;
+    //rasterizer.depthBiasClamp = param.depthBiasConstant * 2.0f;
+  }
+
+  // Multisampling
+  // Needs enabling of a GPU feature to actually use MS
+  VkPipelineMultisampleStateCreateInfo multisampling{};
+  multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+  multisampling.sampleShadingEnable = VK_FALSE;
+  multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+  multisampling.minSampleShading = 1.0f; // Optional
+  multisampling.pSampleMask = nullptr; // Optional
+  multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
+  multisampling.alphaToOneEnable = VK_FALSE; // Optional
+
+  // Depth and stencil testing
+  VkPipelineDepthStencilStateCreateInfo depthStencil{};
+  depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  depthStencil.depthTestEnable = param.depthTest ? VK_TRUE : VK_FALSE;
+  depthStencil.depthWriteEnable = param.depthTest ? VK_TRUE : VK_FALSE;
+  depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+  depthStencil.depthBoundsTestEnable = VK_FALSE;
+  depthStencil.minDepthBounds = 0.0f; // Optional
+  depthStencil.maxDepthBounds = 1.0f; // Optional
+  depthStencil.stencilTestEnable = VK_FALSE;
+  depthStencil.front = {}; // Optional
+  depthStencil.back = {}; // Optional
+
+  // Color blending
+  VkPipelineColorBlendStateCreateInfo colorBlending{};
+  std::vector<VkPipelineColorBlendAttachmentState> colBlendAttachments;
+  if (param.colorAttachment) {
+
+    for (int i = 0; i < param.colorAttachmentCount; ++i) {
+      VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+      colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+      colorBlendAttachment.blendEnable = VK_FALSE;
+      colBlendAttachments.emplace_back(colorBlendAttachment);
+    }
+
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.logicOpEnable = VK_FALSE;
+    colorBlending.logicOp = VK_LOGIC_OP_COPY;
+    colorBlending.attachmentCount = param.colorAttachmentCount;
+    colorBlending.pAttachments = colBlendAttachments.data();
+    colorBlending.blendConstants[0] = 0.0f;
+    colorBlending.blendConstants[1] = 0.0f;
+    colorBlending.blendConstants[2] = 0.0f;
+    colorBlending.blendConstants[3] = 0.0f;
+  }
+  else {
+    colorBlending.attachmentCount = 0;
+  }
+
+  // Dynamic rendering info
+  //std::vector<VkFormat> formats(param.colorAttachmentCount, param.colorFormat);
+  VkPipelineRenderingCreateInfoKHR renderingCreateInfo{};
+  renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+  renderingCreateInfo.colorAttachmentCount = param.colorAttachment ? param.colorAttachmentCount : 0;
+  renderingCreateInfo.pColorAttachmentFormats = param.colorAttachment ? param.colorFormats.data() : nullptr;
+  renderingCreateInfo.depthAttachmentFormat = param.depthFormat;
+
+  // Creating the pipeline
+  VkGraphicsPipelineCreateInfo pipelineInfo{};
+  pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+  pipelineInfo.pNext = &renderingCreateInfo;
+  pipelineInfo.stageCount = (uint32_t)shaderStages.size();
+  pipelineInfo.pStages = shaderStages.data();
+  pipelineInfo.pVertexInputState = &vertexInputInfo;
+  pipelineInfo.pInputAssemblyState = &inputAssembly;
+  pipelineInfo.pViewportState = &viewportState;
+  pipelineInfo.pRasterizationState = &rasterizer;
+  pipelineInfo.pMultisampleState = &multisampling;
+  pipelineInfo.pDepthStencilState = nullptr; // Optional
+  pipelineInfo.pColorBlendState = &colorBlending;
+  pipelineInfo.pDynamicState = &dynamicState;
+  pipelineInfo.layout = pipelineLayout;
+  pipelineInfo.renderPass = nullptr;
+  pipelineInfo.subpass = 0;
+  pipelineInfo.pDepthStencilState = &depthStencil;
+
+  if (vkCreateGraphicsPipelines(param.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &outPipeline) != VK_SUCCESS) {
+    printf("failed to create graphics pipeline!\n");
+    return false;
+  }
+
+  return true;
+}
+
+bool FrameGraphBuilder::buildComputePipeline(ComputePipelineCreateParams params, VkPipelineLayout& pipelineLayout, VkPipeline& outPipeline)
+{
+  // Shaders
+  VkShaderModule compShaderModule;
+  auto compShaderCode = util::readFile(std::string(ASSET_PATH) + params.shader);
+
+  VkShaderModuleCreateInfo createInfo{};
+  createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  createInfo.codeSize = compShaderCode.size();
+  createInfo.pCode = reinterpret_cast<const uint32_t*>(compShaderCode.data());
+
+  if (vkCreateShaderModule(params.device, &createInfo, nullptr, &compShaderModule) != VK_SUCCESS) {
+    printf("Could not create shader module!\n");
+    return false;
+  }
+
+  DEFER([&]() {
+    vkDestroyShaderModule(params.device, compShaderModule, nullptr);
+    });
+
+  VkPipelineShaderStageCreateInfo compShaderStageInfo{};
+  compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+  compShaderStageInfo.module = compShaderModule;
+  compShaderStageInfo.pName = "main";
+
+  // Pipeline
+  VkComputePipelineCreateInfo pipelineInfo{};
+  pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+  pipelineInfo.stage = compShaderStageInfo;
+  pipelineInfo.layout = pipelineLayout;
+
+  if (vkCreateComputePipelines(params.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &outPipeline) != VK_SUCCESS) {
+    printf("Could not create compute pipeline!\n");
+    return false;
+  }
+
+  return true;
+}
+
+VkShaderStageFlags FrameGraphBuilder::findStages(const std::string& resource)
+{
+  std::vector<VkShaderStageFlagBits> output;
+
+  for (auto& sub : _submissions) {
+    for (auto& us : sub._regInfo._resourceUsages) {
+      if (us._resourceName == resource) {
+        if (us._stage.test((std::size_t)Stage::Vertex)) {
+          output.emplace_back(VK_SHADER_STAGE_VERTEX_BIT);
+        }
+        if (us._stage.test((std::size_t)Stage::Compute)) {
+          output.emplace_back(VK_SHADER_STAGE_COMPUTE_BIT);
+        }
+        if (us._stage.test((std::size_t)Stage::Fragment)) {
+          output.emplace_back(VK_SHADER_STAGE_FRAGMENT_BIT);
+        }
+      }
+    }
+  }
+
+  // Uniqueify
+  std::sort(output.begin(), output.end());
+  output.erase(std::unique(output.begin(), output.end()), output.end());
+
+  VkShaderStageFlags flags{};
+  for (auto f : output) {
+    flags = VkShaderStageFlagBits(flags | f);
+  }
+
+  return flags;
+}
+
+bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderResourceVault* vault)
+{
+  // Go through each node in the built graph and build all needed
+  for (auto& node : _builtGraph) {
+    // Only do this if we are a render pass
+    if (!node._rpExe.has_value()) {
+      continue;
+    }
+
+    // Start with descriptor set layout and pipeline layout
+    VkDescriptorSetLayout descLayout{};
+    VkPipelineLayout pipeLayout{};
+
+    DescriptorSetLayoutCreateParams descLayoutParam{};
+    descLayoutParam.renderContext = renderContext;
+
+    int currBinding = 0;
+    for (int i = 0; i < node._resourceUsages.size(); ++i) {
+      auto& usage = node._resourceUsages[i];
+
+      if ((isTypeBuffer(usage._type) && shouldBeDescriptor(usage._stage)) ||
+        (isTypeImage(usage._type) && shouldBeDescriptor(usage._type))) {
+          DescriptorBindInfo bindInfo{};
+          bindInfo.binding = currBinding;
+          bindInfo.stages = findStages(usage._resourceName);
+          bindInfo.type = translateDescriptorType(usage._type);
+          descLayoutParam.bindInfos.emplace_back(bindInfo);
+
+          currBinding++;
+      }
+    }
+
+    if (!buildDescriptorSetLayout(descLayoutParam, descLayout, pipeLayout)) {
+      printf("Could not create descriptor set layout!\n");
+      return false;
+    }
+
+    node._descriptorSetLayout = descLayout;
+    node._pipelineLayout = pipeLayout;
+
+    // Descriptor sets
+    std::vector<VkSampler> samplers;
+    DescriptorSetsCreateParams descParam{};
+    descParam.renderContext = renderContext;
+    descParam.descLayout = descLayout;
+
+    // TODO: This shouldn't be needed...
+    bool multiBuffered = false;
+    currBinding = 0;
+    for (int i = 0; i < node._resourceUsages.size(); ++i) {
+      auto& usage = node._resourceUsages[i];
+      bool advanceBinding = false;
+
+      DescriptorBindInfo bindInfo{};
+      bindInfo.binding = currBinding;
+      bindInfo.stages = findStages(usage._resourceName);
+      bindInfo.type = translateDescriptorType(usage._type);
+
+      multiBuffered = usage._multiBuffered;
+      std::size_t num = usage._multiBuffered ? renderContext->getMultiBufferSize() : 1;
+
+      if (isTypeBuffer(usage._type) && shouldBeDescriptor(usage._stage)) {
+        for (int i = 0; i < num; ++i) {
+          auto buf = (BufferRenderResource*)vault->getResource(usage._resourceName, i);
+          bindInfo.buffer = buf->_buffer._buffer;
+          descParam.bindInfos.emplace_back(bindInfo);
+
+          advanceBinding = true;
+        }
+      }
+      else if (isTypeImage(usage._type) && shouldBeDescriptor(usage._type)) {
+        SamplerCreateParams samplerParam{};
+        samplerParam.renderContext = renderContext;
+        auto sampler = createSampler(samplerParam);
+
+        for (int i = 0; i < num; ++i) {
+          auto view = ((ImageRenderResource*)vault->getResource(usage._resourceName, i))->_view;
+
+          bindInfo.view = view;
+          bindInfo.imageLayout = translateImageLayout(usage._type);
+          bindInfo.sampler = sampler;
+          descParam.bindInfos.emplace_back(bindInfo);
+
+          advanceBinding = true;
+        }
+
+        std::string samplerName = usage._resourceName + "_sampler";
+        renderContext->setDebugName(VK_OBJECT_TYPE_SAMPLER, (uint64_t)sampler, samplerName.c_str());
+        samplers.emplace_back(sampler);
+      }
+
+      if (advanceBinding) currBinding++;
+    }
+
+    node._samplers = std::move(samplers);
+    descParam.multiBuffered = multiBuffered;
+    if (!descParam.bindInfos.empty()) {
+      node._descriptorSets = buildDescriptorSets(descParam);
+    }
+
+    // Compute or graphics pipeline
+    if (node._computeParams.has_value()) {
+      if (!buildComputePipeline(node._computeParams.value(), node._pipelineLayout, node._pipeline)) {
+        printf("Could not build compute pipeline!\n");
+        return false;
+      }
+    }
+    else if (node._graphicsParams.has_value()) {
+      if (!buildGraphicsPipeline(node._graphicsParams.value(), node._pipelineLayout, node._pipeline)) {
+        printf("Could not build graphics pipeline!\n");
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, Submission* submission)
@@ -251,12 +1226,6 @@ void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, S
       GraphNode* nodeOut;
       //if (resourceUsage._invalidateAfterRead) {
         if (stackContainsProducer(localStack, resourceUsage._resourceName, &nodeOut)) {
-          if (resourceUsage._hasExtraRpExeData && !nodeOut->_hasExtraRpExeData) {
-            nodeOut->_hasExtraRpExeData = true;
-            nodeOut->_extraRpExeDataSz = resourceUsage._extraRpExeDataSz;
-            std::memcpy((void*)&nodeOut->_extraRpExeData, (void*)&resourceUsage._extraRpExeData, resourceUsage._extraRpExeDataSz);
-          }
-
           continue;
         }
       /* }
@@ -266,12 +1235,6 @@ void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, S
         tempStack.pop_back();
         tempStack.insert(tempStack.end(), localStack.begin(), localStack.end());
         if (stackContainsProducer(tempStack, resourceUsage._resourceName, &nodeOut)) {
-          if (resourceUsage._hasExtraRpExeData && !nodeOut->_hasExtraRpExeData) {
-            nodeOut->_hasExtraRpExeData = true;
-            nodeOut->_extraRpExeDataSz = resourceUsage._extraRpExeDataSz;
-            std::memcpy((void*)&nodeOut->_extraRpExeData, (void*)&resourceUsage._extraRpExeData, resourceUsage._extraRpExeDataSz);
-          }
-
           // Make sure that we are executed *after* the producer that is already present in the stack.
           ensureOrder(stack, submission->_regInfo._name, nodeOut->_debugName);
           continue;
@@ -296,13 +1259,10 @@ void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, S
         }
       }
       node._rpExe = producer->_exe;
+      node._computeParams = producer->_regInfo._computeParams;
+      node._graphicsParams= producer->_regInfo._graphicsParams;
       node._debugName = std::string(producer->_regInfo._name);
       node._resourceUsages = producer->_regInfo._resourceUsages;
-      if (resourceUsage._hasExtraRpExeData) {
-        node._hasExtraRpExeData = true;
-        node._extraRpExeDataSz = resourceUsage._extraRpExeDataSz;
-        std::memcpy((void*)&node._extraRpExeData, (void*)&resourceUsage._extraRpExeData, resourceUsage._extraRpExeDataSz);
-      }
 
       auto producersCopy = node._producedResources;
 
@@ -437,15 +1397,11 @@ void FrameGraphBuilder::internalBuild3()
           _builtGraph.emplace_back(node);
         }
       }
-
-      if (resUs._hasExtraRpExeData) {
-        node._hasExtraRpExeData = true;
-        node._extraRpExeDataSz = resUs._extraRpExeDataSz;
-        std::memcpy((void*)&node._extraRpExeData, (void*)&resUs._extraRpExeData, resUs._extraRpExeDataSz);
-      }
     }
 
     node._rpExe = sub._exe;
+    node._computeParams = sub._regInfo._computeParams;
+    node._graphicsParams = sub._regInfo._graphicsParams;
     node._debugName = std::string(sub._regInfo._name);
     node._resourceUsages = sub._regInfo._resourceUsages;
 
@@ -459,6 +1415,9 @@ std::pair<VkImageLayout, VkImageLayout> FrameGraphBuilder::findImageLayoutUsage(
       newAccess.test(std::size_t(Access::Read))) {
 
     if (prevType == Type::DepthAttachment && newType == Type::SampledTexture) {
+      return { VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL };
+    }
+    else if (prevType == Type::DepthAttachment && newType == Type::SampledDepthTexture) {
       return { VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL };
     }
     else if (prevType == Type::ColorAttachment && newType == Type::SampledTexture) {

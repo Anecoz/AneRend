@@ -10,9 +10,7 @@ public:
   UIRenderPass();
   ~UIRenderPass();
 
-  bool init(RenderContext* renderContext, RenderResourceVault*) override final;
-
-  void registerToGraph(FrameGraphBuilder&) override final;
+  void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
 };
 
 }

@@ -121,10 +121,14 @@ VulkanRenderer::~VulkanRenderer()
   vkDestroyDescriptorSetLayout(_device, _bindlessDescSetLayout, nullptr);
   vkDestroyPipelineLayout(_device, _bindlessPipelineLayout, nullptr);
 
+  _fgb.reset(this);
+
   for (auto& rp : _renderPasses) {
     rp->cleanup(this, &_vault);
     delete rp;
   }
+
+  _vault.clear(this);
 
   cleanupSwapChain();
 
@@ -828,13 +832,13 @@ void VulkanRenderer::recreateSwapChain()
 
   createSwapChain();
 
-  _fgb.reset();
+  _fgb.reset(this);
 
   for (auto& rp : _renderPasses) {
     rp->cleanup(this, &_vault);
   }
 
-  _vault.clear();
+  _vault.clear(this);
   initFrameGraphBuilder();
 }
 
@@ -1396,13 +1400,13 @@ bool VulkanRenderer::initFrameGraphBuilder()
 {
   for (auto* rp : _renderPasses) {
     rp->init(this, &_vault);
-    rp->registerToGraph(_fgb);
+    rp->registerToGraph(_fgb, this);
   }
 
-  _fgb.build();
+  auto res = _fgb.build(this, &_vault);
   _fgb.printBuiltGraphDebug();
 
-  return true;
+  return res;
 }
 
 bool VulkanRenderer::initRenderPasses()
@@ -1654,10 +1658,10 @@ bool VulkanRenderer::initGpuBuffers()
       VK_IMAGE_ASPECT_COLOR_BIT);
 
     // Add the wind force image view to the vault so that the debug view can watch it
-    auto res = new ImageViewRenderResource();
-    res->_format = VK_FORMAT_R32_SFLOAT;
-    res->_view = _gpuWindForceView[i];
-    _vault.addResource("WindForceView", std::unique_ptr<IRenderResource>(res), true, i);
+    //auto res = new ImageViewRenderResource();
+    //res->_format = VK_FORMAT_R32_SFLOAT;
+    //res->_view = _gpuWindForceView[i];
+    //_vault.addResource("WindForceView", std::unique_ptr<IRenderResource>(res), true, i);
   }
 
   return true;

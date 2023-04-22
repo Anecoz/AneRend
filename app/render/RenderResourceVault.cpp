@@ -1,5 +1,7 @@
 #include "RenderResourceVault.h"
 
+#include "RenderContext.h"
+
 namespace render {
 
 RenderResourceVault::RenderResourceVault(int multiBufferSize)
@@ -70,8 +72,20 @@ void RenderResourceVault::deleteResource(const std::string& name)
   }
 }
 
-void RenderResourceVault::clear()
+void RenderResourceVault::clear(RenderContext* rc)
 {
+  for (auto& res : _resources) {
+    for (auto& ptr : res._resource) {
+      if (auto buf = dynamic_cast<BufferRenderResource*>(ptr.get())) {
+        vmaDestroyBuffer(rc->vmaAllocator(), buf->_buffer._buffer, buf->_buffer._allocation);
+      }
+      else if (auto im = dynamic_cast<ImageRenderResource*>(ptr.get())) {
+        vmaDestroyImage(rc->vmaAllocator(), im->_image._image, im->_image._allocation);
+        vkDestroyImageView(rc->device(), im->_view, nullptr);
+      }
+    }
+  }
+
   _resources.clear();
 }
 
