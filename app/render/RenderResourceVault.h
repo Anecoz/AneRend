@@ -24,7 +24,7 @@ public:
   RenderResourceVault& operator=(const RenderResourceVault&) = delete;
   RenderResourceVault& operator=(RenderResourceVault&&) = delete;
 
-  void addResource(const std::string& name, std::unique_ptr<IRenderResource> resource, bool multiBuffered = false, int multiBufferIdx = 0);
+  void addResource(const std::string& name, std::unique_ptr<IRenderResource> resource, bool multiBuffered = false, int multiBufferIdx = 0, bool noDelete = false);
   void deleteResource(const std::string& name);
 
   void clear(RenderContext* rc);
@@ -45,6 +45,7 @@ private:
   struct InternalResource
   {
     std::string _name;
+    bool _noDelete = false;
     bool _multiBuffered = false;
     std::vector<std::unique_ptr<IRenderResource>> _resource;
   };

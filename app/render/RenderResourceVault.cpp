@@ -9,7 +9,7 @@ RenderResourceVault::RenderResourceVault(int multiBufferSize)
 {
 }
 
-void RenderResourceVault::addResource(const std::string& name, std::unique_ptr<IRenderResource> resource, bool multiBuffered, int multiBufferIdx)
+void RenderResourceVault::addResource(const std::string& name, std::unique_ptr<IRenderResource> resource, bool multiBuffered, int multiBufferIdx, bool noDelete)
 {
   bool found = false;
   for (auto& internal: _resources) {
@@ -29,6 +29,7 @@ void RenderResourceVault::addResource(const std::string& name, std::unique_ptr<I
     InternalResource internal;
     internal._resource.resize(_multiBufferSize);
     internal._name = name;
+    internal._noDelete = noDelete;
     internal._multiBuffered = multiBuffered;
     internal._resource[multiBufferIdx] = std::move(resource);
 
@@ -75,6 +76,8 @@ void RenderResourceVault::deleteResource(const std::string& name)
 void RenderResourceVault::clear(RenderContext* rc)
 {
   for (auto& res : _resources) {
+    if (res._noDelete) continue;
+
     for (auto& ptr : res._resource) {
       if (auto buf = dynamic_cast<BufferRenderResource*>(ptr.get())) {
         vmaDestroyBuffer(rc->vmaAllocator(), buf->_buffer._buffer, buf->_buffer._allocation);

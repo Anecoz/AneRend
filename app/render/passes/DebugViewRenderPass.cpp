@@ -92,6 +92,8 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
   _screenQuad._vertices = graphicsutil::createScreenQuad(0.25f, 0.25f);
   _meshId = rc->registerMesh(_screenQuad._vertices, {});
 
+  _resourceUsages.clear();
+
   RenderPassRegisterInfo info{};
   info._name = "DebugView";
 
