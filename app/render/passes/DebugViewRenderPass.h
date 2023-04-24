@@ -19,7 +19,6 @@ public:
 
 private:
   uint32_t translateNameToBinding(const std::string& name);
-  void writeShader();
 
   std::vector<ResourceUsage> _resourceUsages;
 

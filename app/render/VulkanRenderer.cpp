@@ -650,6 +650,15 @@ bool VulkanRenderer::isDeviceSuitable(VkPhysicalDevice device)
   auto queueFamIndices = findQueueFamilies(device);
   bool extensionsSupported = checkDeviceExtensionSupport(device);
 
+  VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};
+  indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+
+  VkPhysicalDeviceFeatures2 deviceFeatures2{};
+  deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+  deviceFeatures2.pNext = &indexingFeatures;
+
+  vkGetPhysicalDeviceFeatures2(device, &deviceFeatures2);
+
   bool swapChainAdequate = false;
   if (extensionsSupported) {
     SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device, _surface);
@@ -657,6 +666,7 @@ bool VulkanRenderer::isDeviceSuitable(VkPhysicalDevice device)
   }
 
   return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+           indexingFeatures.descriptorBindingPartiallyBound && indexingFeatures.runtimeDescriptorArray &&
            deviceFeatures.geometryShader && queueFamIndices.isComplete() && extensionsSupported 
            && swapChainAdequate && deviceFeatures.samplerAnisotropy;
 }
@@ -776,11 +786,22 @@ bool VulkanRenderer::createLogicalDevice()
     createInfo.enabledLayerCount = 0;
   }
 
+  // Dynamic rendering
   VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
   dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
   dynamicRenderingFeature.dynamicRendering = VK_TRUE;
 
   createInfo.pNext = &dynamicRenderingFeature;
+
+  // Bindless
+  VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};
+  indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+  indexingFeatures.descriptorBindingPartiallyBound = VK_TRUE;
+  indexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
+  indexingFeatures.runtimeDescriptorArray = VK_TRUE;
+  indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+
+  dynamicRenderingFeature.pNext = &indexingFeatures;
 
   if (vkCreateDevice(_physicalDevice, &createInfo, nullptr, &_device) != VK_SUCCESS) {
     printf("Could not create logical device!\n");
@@ -915,7 +936,7 @@ bool VulkanRenderer::createDescriptorPool()
   VkDescriptorPoolSize poolSizes[] =
   {
     { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-    { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+    { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (uint32_t)MAX_BINDLESS_RESOURCES },
     { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
     { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
     { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
@@ -929,6 +950,7 @@ bool VulkanRenderer::createDescriptorPool()
 
   VkDescriptorPoolCreateInfo poolInfo{};
   poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
   poolInfo.poolSizeCount = static_cast<uint32_t>(std::size(poolSizes));
   poolInfo.pPoolSizes = poolSizes;
   poolInfo.maxSets = 1000;
@@ -1987,6 +2009,11 @@ size_t VulkanRenderer::getMaxNumMeshes()
 size_t VulkanRenderer::getMaxNumRenderables()
 {
   return MAX_NUM_RENDERABLES;
+}
+
+size_t VulkanRenderer::getMaxBindlessResources()
+{
+  return MAX_BINDLESS_RESOURCES;
 }
 
 std::vector<Mesh>& VulkanRenderer::getCurrentMeshes()

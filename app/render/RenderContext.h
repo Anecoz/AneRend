@@ -48,6 +48,8 @@ public:
   virtual size_t getMaxNumMeshes() = 0;
   virtual size_t getMaxNumRenderables() = 0;
 
+  virtual size_t getMaxBindlessResources() = 0;
+
   virtual std::vector<Mesh>& getCurrentMeshes() = 0;
   virtual std::unordered_map<MeshId, std::size_t>& getCurrentMeshUsage() = 0;
   virtual size_t getCurrentNumRenderables() = 0;

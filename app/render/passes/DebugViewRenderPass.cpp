@@ -6,40 +6,14 @@
 #include "../RenderResourceVault.h"
 #include "../ImageHelpers.h"
 
-#include <fstream>
-
 namespace render {
 
 DebugViewRenderPass::DebugViewRenderPass()
   : RenderPass()
-{
-}
+{}
 
 DebugViewRenderPass::~DebugViewRenderPass()
-{
-}
-
-namespace {
-
-std::string shaderStart(
-"#version 450\n"
-"layout(location = 0) in vec2 fragTexCoords;\n"
-"layout(location = 0) out vec4 outColor;\n"
-"layout(push_constant) uniform constants {\n"
-  "uint samplerId;\n"
-"} pushConstants;\n");
-
-std::string shaderMainStart(
-  "void main() {\n"
-  "vec4 val = vec4(0.0);\n"
-);
-
-std::string shaderEnd(
-  "outColor = vec4(val);\n"
-"}\n"
-);
-
-}
+{}
 
 uint32_t DebugViewRenderPass::translateNameToBinding(const std::string& name)
 {
@@ -50,40 +24,6 @@ uint32_t DebugViewRenderPass::translateNameToBinding(const std::string& name)
   }
 
   return 0;
-}
-
-void DebugViewRenderPass::writeShader()
-{
-  std::string output;
-  output += shaderStart;
-
-  // Add the "layout(..." parts
-  for (int i = 0; i < _resourceUsages.size(); ++i) {
-    std::string layout = std::string("layout(set = 1, binding = ") + std::to_string(i) + std::string(") uniform sampler2D tex" + std::to_string(i) + "; \n");
-    output += layout;
-  }
-
-  output += shaderMainStart;
-
-  // Add the push constants checks
-  for (int i = 0; i < _resourceUsages.size(); ++i) {
-    std::string check = std::string("if (pushConstants.samplerId == ") + std::to_string(i) + std::string(") {\n");
-    std::string col = std::string("val = texture(tex") + std::to_string(i) + ", fragTexCoords);\n";
-    std::string end = std::string("}\n");
-    output += check;
-    output += col;
-    output += end;
-  }
-
-  output += shaderEnd;
-
-  std::string shaderPath(std::string(ASSET_PATH) + "shaders/debug_view.frag");
-  std::ofstream file;
-  file.open(shaderPath);
-
-  file.write(output.c_str(), output.size());
-
-  file.close();
 }
 
 void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
@@ -110,6 +50,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._resourceName = "GeometryDepthImage";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
     usage._type = Type::SampledDepthTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
@@ -118,6 +59,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._resourceName = "ShadowMap";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
     usage._type = Type::SampledDepthTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
@@ -126,6 +68,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._resourceName = "Geometry0Image";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
     usage._type = Type::SampledTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
@@ -134,6 +77,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._resourceName = "Geometry1Image";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
     usage._type = Type::SampledTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
@@ -142,6 +86,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._resourceName = "FinalImage";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
     usage._type = Type::SampledTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
@@ -150,6 +95,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._resourceName = "SSAOImage";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
     usage._type = Type::SampledTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
@@ -158,6 +104,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._resourceName = "WindForceImage";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
     usage._type = Type::SampledTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
@@ -166,6 +113,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._resourceName = "SSAOBlurImage";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
     usage._type = Type::SampledTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
@@ -173,8 +121,6 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
   for (auto& us : _resourceUsages) {
     info._resourceUsages.emplace_back(us);
   }
-
-  writeShader();
 
   GraphicsPipelineCreateParams param{};
   param.device = rc->device();

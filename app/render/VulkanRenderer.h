@@ -113,6 +113,8 @@ public:
   size_t getMaxNumMeshes() override final;
   size_t getMaxNumRenderables() override final;
 
+  size_t getMaxBindlessResources() override final;
+
   std::vector<Mesh>& getCurrentMeshes() override final;
   std::unordered_map<MeshId, std::size_t>& getCurrentMeshUsage() override final;
   size_t getCurrentNumRenderables() override final;
@@ -138,6 +140,7 @@ private:
   static const std::size_t NUM_PIXELS_CLUSTER_Y = 9;
   static const std::size_t NUM_CLUSTER_DEPTH_SLIZES = 7;
   static const std::size_t MAX_NUM_LIGHTS = 32*32;
+  static const std::size_t MAX_BINDLESS_RESOURCES = 16536;
 
   RenderDebugOptions _debugOptions;
   logic::WindMap _currentWindMap;
