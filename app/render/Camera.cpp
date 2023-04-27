@@ -54,7 +54,9 @@ bool Camera::insideFrustum(const Box3D& box) const
 
 void Camera::updateFrustum()
 {
-  _frustum.transform(_projection, _cameraMatrix);
+  auto proj = _projection;
+  //proj[1][1] *= -1;
+  _frustum.transform(proj, _cameraMatrix);
 }
 
 void Camera::updateViewMatrix()

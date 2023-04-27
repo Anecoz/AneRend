@@ -56,15 +56,14 @@ bool buildDescriptorSetLayout(DescriptorSetLayoutCreateParams params, VkDescript
   layoutInfo.bindingCount = (uint32_t)bindings.size();
   layoutInfo.pBindings = bindings.data();
 
+  VkDescriptorSetLayoutBindingFlagsCreateInfo extendedInfo{};
+  VkDescriptorBindingFlags bindlessFlags =
+    VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
+    VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT |
+    VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT;
   if (containsBindless) {
-    VkDescriptorBindingFlags bindlessFlags = 
-      VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT | 
-      VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT | 
-      VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT;
-
     layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    VkDescriptorSetLayoutBindingFlagsCreateInfo extendedInfo{};
     extendedInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
     extendedInfo.bindingCount = 1;
     extendedInfo.pBindingFlags = &bindlessFlags;
@@ -261,6 +260,14 @@ VkSampler createSampler(SamplerCreateParams params)
   sampler.minLod = params.minLod;
   sampler.maxLod = params.maxLod;
   sampler.borderColor = params.borderColor;
+
+  VkSamplerReductionModeCreateInfo createInfoReduction{};
+  if (params.useMaxFilter) {
+
+    createInfoReduction.sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO;
+    createInfoReduction.reductionMode = VK_SAMPLER_REDUCTION_MODE_MAX;
+    sampler.pNext = &createInfoReduction;
+  }
 
   if (vkCreateSampler(params.renderContext->device(), &sampler, nullptr, &samplerOut) != VK_SUCCESS) {
     printf("Could not create shadow map sampler!\n");

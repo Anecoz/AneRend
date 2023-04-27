@@ -1,0 +1,61 @@
+# Blender MTL File: 'sphere-bot-with-hydraulics.blend'
+# Material Count: 5
+
+newmtl Material
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.000000 0.000000 0.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+
+newmtl Material.002
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.000000 0.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+
+newmtl Sphere_Bot
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.640000 0.640000 0.640000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd Sphere_Bot_color_2.png
+map_Bump Sphere_Bot_nmap.png
+map_Ks Sphere_Bot_metalness.png
+
+newmtl Sphere_Bot_Leg_Nor
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.640000 0.640000 0.640000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd D:\Neuer Ordner (2)\Neuer Ordner\Data\Desktop_2017_09_12\sphere-bot\Sphere_Bot\Sphere_Bot\Leg_Nor.png
+map_Bump Sphere_Bot_nmap.png
+map_Ks Sphere_Bot_metalness.png
+
+newmtl Sphere_Bot_Sphere_Bot_color_2.png
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.640000 0.640000 0.640000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd Sphere_Bot_color_2.png
+map_Bump Sphere_Bot_nmap.png
+map_Ks Sphere_Bot_metalness.png

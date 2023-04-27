@@ -211,6 +211,20 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
   grassObjBufUsage._bufferCreateInfo = grassObjCreateInfo;
   regInfo._resourceUsages.emplace_back(std::move(grassObjBufUsage));
 
+  int currSize = 64;
+  for (int i = 0; i < 6; ++i) {
+    ResourceUsage depthUsage{};
+    depthUsage._resourceName = "HiZ" + std::to_string(currSize);
+    depthUsage._access.set((std::size_t)Access::Read);
+    depthUsage._stage.set((std::size_t)Stage::Compute);
+    depthUsage._multiBuffered = true; // TODO: This is not true, it isn't multi buffered.. but we have to specify since all the other buffers are
+    depthUsage._useMaxSampler = true;
+    depthUsage._type = Type::SampledTexture;
+    regInfo._resourceUsages.emplace_back(std::move(depthUsage));
+    currSize = currSize >> 1;
+  }
+
+
   ComputePipelineCreateParams pipeParam{};
   pipeParam.device = rc->device();
   //pipeParam.pipelineLayout = _pipelineLayout;

@@ -186,6 +186,18 @@ void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* 
         else if (us._type == Type::Present) {
           exeParams.presentImage = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_image._image;
         }
+        else if (us._type == Type::ImageStorage) {
+          auto image = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_image._image;
+          exeParams.images.emplace_back(image);
+        }
+        else if (us._type == Type::SampledTexture) {
+          auto image = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_image._image;
+          exeParams.images.emplace_back(image);
+        }
+        else if (us._type == Type::SampledDepthTexture) {
+          auto image = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_image._image;
+          exeParams.images.emplace_back(image);
+        }
       }
       node._rpExe.value()(exeParams);
     }
@@ -694,14 +706,15 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
       }
       else if (isTypeImage(usage._type) && shouldBeDescriptor(usage._type)) {
         SamplerCreateParams samplerParam{};
+        samplerParam.useMaxFilter = usage._useMaxSampler;
         samplerParam.renderContext = renderContext;
-        auto sampler = createSampler(samplerParam);
+         auto sampler = createSampler(samplerParam);
 
         for (int i = 0; i < num; ++i) {
           auto view = ((ImageRenderResource*)vault->getResource(usage._resourceName, i))->_view;
 
           bindInfo.view = view;
-          bindInfo.imageLayout = translateImageLayout(usage._type);
+          bindInfo.imageLayout = usage._imageAlwaysGeneral ? VK_IMAGE_LAYOUT_GENERAL : translateImageLayout(usage._type);
           bindInfo.sampler = sampler;
           descParam.bindInfos.emplace_back(bindInfo);
 
@@ -994,6 +1007,11 @@ VkImageLayout FrameGraphBuilder::findInitialImageLayout(AccessBits access, Type 
       return VK_IMAGE_LAYOUT_GENERAL;
     }
   }
+  else if (access.test(std::size_t(Access::Read))) {
+    if (type == Type::SampledDepthTexture) {
+      return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+    }
+  }
 
   return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 }
@@ -1259,8 +1277,17 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
       }
 
       if (!nextUsage) {
+        // Are we ourselves using it? Check that first
+        for (auto& us : node._resourceUsages) {
+          if (us._resourceName == usage._resourceName &&
+            us._access != usage._access &&
+            us._type != usage._type) {
+            nextUsage = &us;
+          }
+        }
+
         // Doesn't use this resource, continue
-        continue;
+        if (!nextUsage) continue;
       }
 
       // Do either a execution barrier, buffer memory barrier or image transition
@@ -1280,7 +1307,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         std::uint32_t baseLayer = usage._imageBaseLayer;
 
         // Initial layout transition (before writing)
-        if (!skipPreBarrier) {
+        if (!skipPreBarrier && usage._access.test((std::size_t)Access::Write)) {
           auto initialLayout = findInitialImageLayout(usage._access, usage._type);
 
           BarrierContext beforeWriteBarrier{};

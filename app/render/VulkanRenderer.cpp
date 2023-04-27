@@ -17,6 +17,7 @@
 #include "passes/SSAORenderPass.h"
 #include "passes/SSAOBlurRenderPass.h"
 #include "passes/FXAARenderPass.h"
+#include "passes/HiZRenderPass.h"
 
 #include "../util/Utils.h"
 #include "../util/GraphicsUtils.h"
@@ -278,6 +279,12 @@ bool VulkanRenderer::init()
     val = true;
   }
 
+  std::vector<Vertex> vert;
+  std::vector<std::uint32_t> inds;
+  graphicsutil::createUnitCube(&vert, &inds, false);
+
+  _debugCubeMesh = registerMesh(vert, inds);
+
   return res;
 }
 
@@ -345,7 +352,8 @@ RenderableId VulkanRenderer::registerRenderable(
   MeshId meshId,
   const glm::mat4& transform,
   const glm::vec3& sphereBoundCenter,
-  float sphereBoundRadius)
+  float sphereBoundRadius,
+  bool debugDraw)
 {
   if (_currentRenderables.size() == MAX_NUM_RENDERABLES) {
     printf("Too many renderables!\n");
@@ -368,6 +376,10 @@ RenderableId VulkanRenderer::registerRenderable(
   renderable._boundingSphereCenter = sphereBoundCenter;
   renderable._boundingSphereRadius = sphereBoundRadius;
 
+  if (debugDraw) {
+    registerDebugRenderable(transform, sphereBoundCenter, sphereBoundRadius);
+  }
+
   _currentRenderables.emplace_back(std::move(renderable));
 
   for (auto& val : _renderablesChanged) {
@@ -375,6 +387,31 @@ RenderableId VulkanRenderer::registerRenderable(
   }
 
   return id;
+}
+
+void VulkanRenderer::registerDebugRenderable(const glm::mat4& transform, const glm::vec3& center, float radius)
+{
+  if (_currentRenderables.size() == MAX_NUM_RENDERABLES) {
+    printf("Too many renderables!\n");
+    return;
+  }
+
+  Renderable renderable{};
+
+  auto id = _nextRenderableId++;
+
+  renderable._id = id;
+  renderable._meshId = _debugCubeMesh;
+  renderable._tint = graphicsutil::randomColor();
+  renderable._transform = transform;
+  renderable._boundingSphereCenter = center;
+  renderable._boundingSphereRadius = 50000.0f;
+
+  _currentRenderables.emplace_back(std::move(renderable));
+
+  for (auto& val : _renderablesChanged) {
+    val = true;
+  }
 }
 
 void VulkanRenderer::unregisterRenderable(RenderableId id)
@@ -794,14 +831,25 @@ bool VulkanRenderer::createLogicalDevice()
   createInfo.pNext = &dynamicRenderingFeature;
 
   // Bindless
-  VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};
+  /*VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};
   indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
   indexingFeatures.descriptorBindingPartiallyBound = VK_TRUE;
   indexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
   indexingFeatures.runtimeDescriptorArray = VK_TRUE;
   indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
 
-  dynamicRenderingFeature.pNext = &indexingFeatures;
+  dynamicRenderingFeature.pNext = &indexingFeatures;*/
+
+  // filter min max and bindless
+  VkPhysicalDeviceVulkan12Features vulkan12Features{};
+  vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+  vulkan12Features.samplerFilterMinmax = VK_TRUE;
+  vulkan12Features.descriptorBindingPartiallyBound = VK_TRUE;
+  vulkan12Features.descriptorBindingVariableDescriptorCount = VK_TRUE;
+  vulkan12Features.runtimeDescriptorArray = VK_TRUE;
+  vulkan12Features.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+
+  dynamicRenderingFeature.pNext = &vulkan12Features;
 
   if (vkCreateDevice(_physicalDevice, &createInfo, nullptr, &_device) != VK_SUCCESS) {
     printf("Could not create logical device!\n");
@@ -1443,6 +1491,7 @@ bool VulkanRenderer::initFrameGraphBuilder()
 
 bool VulkanRenderer::initRenderPasses()
 {
+  _renderPasses.emplace_back(new HiZRenderPass());
   _renderPasses.emplace_back(new CullRenderPass());
   _renderPasses.emplace_back(new ShadowRenderPass());
   _renderPasses.emplace_back(new GrassShadowRenderPass());

@@ -6,7 +6,7 @@ C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/standard_instanced_shadow.vert -o %2/sta
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/standard.frag -o %2/standard_frag.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/fullscreen.vert -o %2/fullscreen_vert.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/debug_view.frag -o %2/debug_view_frag.spv
-C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/cull.comp -o %2/cull_comp.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslangValidator.exe -V -gVS -o %2/cull_comp.spv %1/cull.comp
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/pp.vert -o %2/pp_vert.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/pp_color_inv.frag -o %2/pp_color_inv_frag.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/pp_flip.frag -o %2/pp_flip_frag.spv
@@ -19,3 +19,4 @@ C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/deferred_cluster.comp -o %2/deferred_clu
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/deferred_tiled.comp -o %2/deferred_tiled_comp.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/ssao.frag -o %2/ssao_frag.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/ssao_blur.frag -o %2/ssao_blur_frag.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslangValidator.exe -V -gVS -o %2/hiz_comp.spv %1/hiz.comp

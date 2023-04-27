@@ -8,6 +8,7 @@ struct OBJData
   std::vector<float> _vertices;
   std::vector<float> _normals;
   std::vector<float> _colors;
+  std::vector<float> _texCoords;
   std::vector<int> _indices;
 };
 

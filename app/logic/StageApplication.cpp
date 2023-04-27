@@ -68,14 +68,15 @@ bool StageApplication::init()
       auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
 
       auto matrix = trans * rot;
-      glm::vec4 sphereBoundCenter(1.0f);
+      glm::vec3 sphereBoundCenter(0.0f, 4.0f, 0.0f);
       //sphereBoundCenter = trans * sphereBoundCenter;
 
       auto ret = _vkRenderer.registerRenderable(
         _meshId,
         matrix,
-        glm::vec3(sphereBoundCenter.x, sphereBoundCenter.y, sphereBoundCenter.z),
-        10.0f);
+        sphereBoundCenter,
+        3.0f,
+        false);
 
       if (ret == 0) {
         break;
@@ -100,7 +101,7 @@ bool StageApplication::init()
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
-        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(500.0f * x, 0.0f, 500.0f * y));
+        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f + 500.0f * x, 0.0f, 500.0f * y));
         auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
         _vkRenderer.registerRenderable(_meshId3, mat*scale, glm::vec3(1.0f), 500.0f);
       }

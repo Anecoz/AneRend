@@ -75,6 +75,13 @@ layout(std430, set = 1, binding = 3) buffer GrassObjBuffer {
   GrassObj blades[];
 } grassObjBuffer;
 
+layout(set = 1, binding = 4) uniform sampler2D hiZ64;
+layout(set = 1, binding = 5) uniform sampler2D hiZ32;
+layout(set = 1, binding = 6) uniform sampler2D hiZ16;
+layout(set = 1, binding = 7) uniform sampler2D hiZ8;
+layout(set = 1, binding = 8) uniform sampler2D hiZ4;
+layout(set = 1, binding = 9) uniform sampler2D hiZ2;
+
 layout(push_constant) uniform constants {
   mat4 view;
   vec4 frustumPlanes[4];
@@ -100,6 +107,63 @@ float rand(vec2 co){
   return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+// 2D Polyhedral Bounds of a Clipped, Perspective-Projected 3D Sphere. Michael Mara, Morgan McGuire. 2013
+bool projectSphere(vec3 C, float r, float znear, float P00, float P11, out vec4 aabb)
+{
+  if (C.z > r + znear)
+    return false;
+
+  vec2 cx = -C.xz;
+  vec2 vx = vec2(sqrt(dot(cx, cx) - r * r), r);
+  vec2 minx = mat2(vx.x, vx.y, -vx.y, vx.x) * cx;
+  vec2 maxx = mat2(vx.x, -vx.y, vx.y, vx.x) * cx;
+
+  vec2 cy = -C.yz;
+  vec2 vy = vec2(sqrt(dot(cy, cy) - r * r), r);
+  vec2 miny = mat2(vy.x, vy.y, -vy.y, vy.x) * cy;
+  vec2 maxy = mat2(vy.x, -vy.y, vy.y, vy.x) * cy;
+
+  aabb = vec4(minx.x / minx.y * P00, miny.x / miny.y * P11, maxx.x / maxx.y * P00, maxy.x / maxy.y * P11);
+  aabb = aabb.xwzy * vec4(0.5f, -0.5f, 0.5f, -0.5f) + vec4(0.5f); // clip space -> uv space
+
+  return true;
+}
+
+bool projectSphere2(vec3 sphereView, float radius, out vec4 aabb)
+{
+  vec3 botRightView = vec3(sphereView.x + radius, sphereView.y - radius, sphereView.z - radius);
+  vec3 topLeftView = vec3(sphereView.x - radius, sphereView.y + radius, sphereView.z - radius);
+
+  vec4 botRightNDC = ubo.proj * vec4(botRightView, 1.0);
+  botRightNDC /= botRightNDC.w;
+
+  vec4 topLeftNDC = ubo.proj * vec4(topLeftView, 1.0);
+  topLeftNDC /= topLeftNDC.w;
+
+  if (abs(topLeftNDC.x) > 1.0 ||
+    abs(topLeftNDC.y) > 1.0 ||
+    topLeftNDC.z > 1.0 ||
+    topLeftNDC.z < 0.0) {
+    return false;
+  }
+
+  if (abs(botRightNDC.x) > 1.0 ||
+    abs(botRightNDC.y) > 1.0 ||
+    botRightNDC.z > 1.0 ||
+    botRightNDC.z < 0.0) {
+    return false;
+  }
+
+  // -1 to 1 to 0 to 1
+  botRightNDC = botRightNDC * 0.5 + 0.5;
+  topLeftNDC = topLeftNDC * 0.5 + 0.5;
+
+  // (minx, maxx, miny, maxy)
+  aabb = vec4(topLeftNDC.x, botRightNDC.x, topLeftNDC.y, botRightNDC.y);
+
+  return true;
+}
+
 bool sphereVisible(vec3 sphereCenter, float sphereRadius)
 {
   bool visible = true;
@@ -114,6 +178,64 @@ bool sphereVisible(vec3 sphereCenter, float sphereRadius)
 }
 
 const vec3 up = vec3(0.0, 1.0, 0.0);
+
+float sampleHiZ(vec2 coords, uint level)
+{
+  float ret = 0.0;
+
+  if (level == 0) {
+    ret = texture(hiZ64, coords).r;
+  }
+  else if (level == 1) {
+    ret = texture(hiZ32, coords).r;
+  }
+   else if (level == 2) {
+    ret = texture(hiZ16, coords).r;
+  }
+  else if (level == 3) {
+    ret = texture(hiZ8, coords).r;
+  }
+  else if (level == 4) {
+    ret = texture(hiZ4, coords).r;
+  }
+  else if (level == 5 || level == 6) {
+    ret = texture(hiZ2, coords).r;
+  }
+
+  return ret;
+}
+
+bool occlusionCull(vec3 sphereCenterView, float radius)
+{
+  bool visible = true;
+
+  // aabb is (minx, maxx, miny, maxy) in 0-1 coords in NDC space
+  vec4 aabb;
+  bool projOk = projectSphere2(sphereCenterView, radius, aabb);
+  if (projOk) {
+    float width = (aabb.y - aabb.x) * 64.0;
+    float height = (aabb.w - aabb.z) * 64.0;
+
+    uint level = uint(floor(log2(max(width, height))));
+
+    float depth = 1.0;
+    float depth0 = sampleHiZ(vec2(aabb.xz), level - 1);
+    float depth1 = sampleHiZ(vec2(aabb.yw), level - 1);
+    float depth2 = sampleHiZ(vec2(aabb.xw), level - 1);
+    float depth3 = sampleHiZ(vec2(aabb.yz), level - 1);
+
+    depth = max(max(depth0, depth1), max(depth2, depth3));
+
+    vec3 adjusted = vec3(sphereCenterView.x, sphereCenterView.y, sphereCenterView.z + radius);
+    vec4 projected = ubo.proj * vec4(adjusted, 1.0);
+    projected /= projected.w;
+    float depthSphere = projected.z;//pushConstants.nearDist / (sphereCenterView.z - radius);
+
+    visible = depthSphere <= depth;
+  }
+
+  return visible;
+}
 
 void main()
 {
@@ -138,12 +260,17 @@ void main()
 
       if (visible) {
 
-        uint meshId = renderableBuffer.renderables[gID].meshId;
-        uint countBefore = atomicAdd(drawBuffer.draws[meshId].instanceCount, 1);
+        // Do occlusion culling
+        visible = occlusionCull(sphereCenterView, radius);
 
-        // Update translation buffer (from gl_InstanceIndex to renderableId)
-        uint instanceIndex = drawBuffer.draws[meshId].firstInstance + countBefore;
-        translationBuffer.ids[instanceIndex] = gID;
+        if (visible) {
+          uint meshId = renderableBuffer.renderables[gID].meshId;
+          uint countBefore = atomicAdd(drawBuffer.draws[meshId].instanceCount, 1);
+
+          // Update translation buffer (from gl_InstanceIndex to renderableId)
+          uint instanceIndex = drawBuffer.draws[meshId].firstInstance + countBefore;
+          translationBuffer.ids[instanceIndex] = gID;
+        }
       }
     }
   }
@@ -153,8 +280,10 @@ void main()
   uint yPos = gl_GlobalInvocationID.y;
 
   vec3 worldPos = vec3(xPos*0.08, .25, yPos*0.08);
+  vec3 worldPosView = vec3(pushConstants.view * vec4(worldPos, 1.0));
   float radius = 1.5;
   bool visible = sphereVisible(worldPos, radius);
+  visible = visible && occlusionCull(worldPosView, radius);
 
   if (visible) {
     uint countBefore = atomicAdd(grassDrawBuffer.draw.instanceCount, 1);

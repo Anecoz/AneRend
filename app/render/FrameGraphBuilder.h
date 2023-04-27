@@ -33,6 +33,7 @@ struct RenderExeParams
   VkImage presentImage;
   std::vector<VkBuffer> buffers;
   std::vector<VkSampler> samplers;
+  std::vector<VkImage> images;
 };
 
 typedef std::function<void(RenderExeParams)> RenderPassExeFcn;
@@ -106,6 +107,10 @@ struct ResourceUsage
 
   std::optional<BufferInitialCreateInfo> _bufferCreateInfo;
   std::optional<ImageInitialCreateInfo> _imageCreateInfo;
+
+  bool _imageAlwaysGeneral = false; // Override logic about image layout and force to be general.
+
+  bool _useMaxSampler = false; // Special case for Hi-Z generation...
 
   bool _bindless = false; // Currently only supported by combined image/samplers.
 

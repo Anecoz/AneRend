@@ -80,14 +80,15 @@ struct SamplerCreateParams
   RenderContext* renderContext;
 
   VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  VkFilter magFilter = VK_FILTER_NEAREST;
-  VkFilter minFilter = VK_FILTER_NEAREST;
+  VkFilter magFilter = VK_FILTER_LINEAR;
+  VkFilter minFilter = VK_FILTER_LINEAR;
   VkSamplerMipmapMode mipMapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
   float mipLodBias = 0.0f;
   float maxAnisotropy = 1.0f;
   float minLod = 0.0f;
   float maxLod = 1.0f;
   VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+  bool useMaxFilter = false;
 };
 
 bool buildPipelineLayout(PipelineLayoutCreateParams params, VkPipelineLayout& outPipelineLayout);

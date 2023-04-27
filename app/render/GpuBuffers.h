@@ -82,5 +82,13 @@ struct GPUSSAOSampleUbo {
   glm::vec4 samples[64];
 };
 
+struct HiZPushConstants {
+  uint32_t inputIdx;
+  uint32_t outputIdx;
+  uint32_t inputWidth;
+  uint32_t inputHeight;
+  uint32_t outputSize;
+};
+
 }
 }

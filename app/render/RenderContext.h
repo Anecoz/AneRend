@@ -42,7 +42,8 @@ public:
     MeshId meshId,
     const glm::mat4& transform,
     const glm::vec3& sphereBoundCenter,
-    float sphereBoundRadius) = 0;
+    float sphereBoundRadius,
+    bool debugDraw = false) = 0;
   virtual void setRenderableVisible(RenderableId id, bool visible) = 0;
 
   virtual size_t getMaxNumMeshes() = 0;

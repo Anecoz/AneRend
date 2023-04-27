@@ -4,11 +4,74 @@
 #include "../ImageHelpers.h"
 #include "../FrameGraphBuilder.h"
 #include "../RenderResourceVault.h"
+#include "../BufferHelpers.h"
+#include "../AllocatedBuffer.h"
 
 #include <array>
 #include <memory>
 
 namespace render {
+
+namespace {
+
+void initDepthImage(RenderContext* renderContext, VkImage& image)
+{
+  // Create a staging buffer on CPU side first
+  AllocatedBuffer stagingBuffer;
+  std::size_t dataSize = renderContext->swapChainExtent().height * renderContext->swapChainExtent().width * sizeof(float);
+
+  auto allocator = renderContext->vmaAllocator();
+  bufferutil::createBuffer(allocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
+
+  auto cmdBuffer = renderContext->beginSingleTimeCommands();
+
+  // Fill with 0's
+  VkDeviceSize bufOffset{};
+  vkCmdFillBuffer(cmdBuffer, stagingBuffer._buffer, bufOffset, dataSize, 0);
+
+  // Transition image to dst optimal
+  imageutil::transitionImageLayout(
+    cmdBuffer,
+    image,
+    VK_FORMAT_D32_SFLOAT,
+    VK_IMAGE_LAYOUT_UNDEFINED,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+  VkExtent3D extent{};
+  extent.depth = 1;
+  extent.height = 4;
+  extent.width = 4;
+
+  VkOffset3D offset{};
+
+  VkBufferImageCopy imCopy{};
+  imCopy.imageExtent = extent;
+  imCopy.imageOffset = offset;
+  imCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+  imCopy.imageSubresource.layerCount = 1;
+
+  vkCmdCopyBufferToImage(
+    cmdBuffer,
+    stagingBuffer._buffer,
+    image,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    1,
+    &imCopy);
+
+  // Transition to shader read
+  imageutil::transitionImageLayout(
+    cmdBuffer,
+    image,
+    VK_FORMAT_D32_SFLOAT,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+
+  renderContext->endSingleTimeCommands(cmdBuffer);
+
+  vmaDestroyBuffer(allocator, stagingBuffer._buffer, stagingBuffer._allocation);
+}
+
+}
 
 GeometryRenderPass::GeometryRenderPass()
   : RenderPass()
@@ -72,6 +135,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
     createInfo._initialHeight = rc->swapChainExtent().height;
     createInfo._initialWidth = rc->swapChainExtent().width;
     createInfo._intialFormat = VK_FORMAT_D32_SFLOAT;
+    createInfo._initialDataCb = initDepthImage;
 
     usage._imageCreateInfo = createInfo;
 

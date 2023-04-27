@@ -34,8 +34,10 @@ bool OBJLoader::loadFromFile(const std::string& objPath, const std::string& mtlD
   std::vector<int> indices;
   std::vector<float> normals;
   std::vector<float> colors;
+  std::vector<float> texCoords;
   colors.resize(attrib.vertices.size());
   normals.resize(attrib.vertices.size());
+  texCoords.resize(attrib.vertices.size());
   for (int shape = 0; shape < shapes.size(); ++shape) {
     for (int i = 0; i < shapes[shape].mesh.indices.size(); ++i) {
       tinyobj::index_t idx = shapes[shape].mesh.indices[i];
@@ -44,6 +46,15 @@ bool OBJLoader::loadFromFile(const std::string& objPath, const std::string& mtlD
       normals[3 * idx.vertex_index + 0] = attrib.normals[3 * idx.normal_index + 0];
       normals[3 * idx.vertex_index + 1] = attrib.normals[3 * idx.normal_index + 1];
       normals[3 * idx.vertex_index + 2] = attrib.normals[3 * idx.normal_index + 2];
+
+      if (idx.texcoord_index != -1) {
+        texCoords[2 * idx.vertex_index + 0] = attrib.texcoords[2 * idx.texcoord_index + 0];
+        texCoords[2 * idx.vertex_index + 1] = attrib.texcoords[2 * idx.texcoord_index + 1];
+      }
+      else {
+        texCoords[2 * idx.vertex_index + 0] = 0.0;
+        texCoords[2 * idx.vertex_index + 1] = 0.0;
+      }
 
       if (!shapes[shape].mesh.material_ids.empty()) {
         int materialId = shapes[shape].mesh.material_ids[i/3];    
@@ -64,5 +75,6 @@ bool OBJLoader::loadFromFile(const std::string& objPath, const std::string& mtlD
   outData._normals = std::move(normals);
   outData._colors = std::move(colors);
   outData._indices = std::move(indices);
+  outData._texCoords = std::move(texCoords);
   return true;
 }

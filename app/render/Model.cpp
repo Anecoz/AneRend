@@ -79,6 +79,9 @@ bool Model::loadFromObj(const std::string& objPath, const std::string& mtlPath)
     vertex.normal.y = objData._normals[3 * objData._indices[i] + 1];
     vertex.normal.z = objData._normals[3 * objData._indices[i] + 2];
 
+    vertex.uv.x = objData._texCoords[2 * objData._indices[i] + 0];
+    vertex.uv.y = objData._texCoords[2 * objData._indices[i] + 1];
+
     _indices.emplace_back(static_cast<std::uint32_t>(objData._indices[i]));
   }
 
