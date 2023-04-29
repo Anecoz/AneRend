@@ -103,6 +103,23 @@ VulkanRenderer::~VulkanRenderer()
 
   vmaDestroyBuffer(_vmaAllocator, _gigaMeshBuffer._buffer._buffer, _gigaMeshBuffer._buffer._allocation);
 
+  for (auto& mesh : _currentMeshes) {
+    if (mesh._metallicTexIndex != -1) vkDestroySampler(_device, mesh._metallicSampler, nullptr);
+    if (mesh._roughnessTexIndex!= -1) vkDestroySampler(_device, mesh._roughnessSampler, nullptr);
+    if (mesh._albedoTexIndex != -1) vkDestroySampler(_device, mesh._albedoSampler, nullptr);
+    if (mesh._normalTexIndex != -1) vkDestroySampler(_device, mesh._normalSampler, nullptr);
+
+    if (mesh._metallicTexIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._metallicImage._image, mesh._metallicImage._allocation);
+    if (mesh._roughnessTexIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._roughnessImage._image, mesh._roughnessImage._allocation);
+    if (mesh._normalTexIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._normalImage._image, mesh._normalImage._allocation);
+    if (mesh._albedoTexIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._albedoImage._image, mesh._albedoImage._allocation);
+
+    if (mesh._metallicTexIndex != -1) vkDestroyImageView(_device, mesh._metallicView, nullptr);
+    if (mesh._roughnessTexIndex != -1) vkDestroyImageView(_device, mesh._roughnessView, nullptr);
+    if (mesh._normalTexIndex != -1) vkDestroyImageView(_device, mesh._normalView, nullptr);
+    if (mesh._albedoTexIndex != -1) vkDestroyImageView(_device, mesh._albedoView, nullptr);
+  }
+
   for (auto& light: _lights) {
     for (auto& v: light._shadowImageViews) {
       vkDestroyImageView(_device, v, nullptr);
@@ -288,7 +305,13 @@ bool VulkanRenderer::init()
   return res;
 }
 
-MeshId VulkanRenderer::registerMesh(const std::vector<Vertex>& vertices, const std::vector<std::uint32_t>& indices)
+MeshId VulkanRenderer::registerMesh(
+  const std::vector<Vertex>& vertices, 
+  const std::vector<std::uint32_t>& indices,
+  const std::string& metallicTex,
+  const std::string& roughnessTex,
+  const std::string& albedoTex,
+  const std::string& normalTex)
 {
   // Check if we need to pad with 0's before the vertices
   std::vector<std::uint8_t> verticesCopy;
@@ -328,7 +351,46 @@ MeshId VulkanRenderer::registerMesh(const std::vector<Vertex>& vertices, const s
 
   endSingleTimeCommands(cmdBuffer);
 
-  Mesh mesh {};
+  Mesh mesh{};
+  mesh._metallicTexIndex = -1;
+  mesh._roughnessTexIndex = -1;
+  mesh._albedoTexIndex = -1;
+  mesh._normalTexIndex = -1;
+
+  // Do textures
+  if (!metallicTex.empty()) {
+    auto data = imageutil::loadTex(metallicTex);
+    VkFormat format = data.isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
+
+    createTexture(format, data.width, data.height, data.data, mesh._metallicSampler, mesh._metallicImage, mesh._metallicView);
+
+    mesh._metallicTexIndex = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mesh._metallicView, mesh._metallicSampler);
+  }
+  if (!roughnessTex.empty()) {
+    auto data = imageutil::loadTex(roughnessTex);
+    VkFormat format = data.isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
+
+    createTexture(format, data.width, data.height, data.data, mesh._roughnessSampler, mesh._roughnessImage, mesh._roughnessView);
+
+    mesh._roughnessTexIndex = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mesh._roughnessView, mesh._roughnessSampler);
+  }
+  if (!albedoTex.empty()) {
+    auto data = imageutil::loadTex(albedoTex);
+    VkFormat format = data.isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
+
+    createTexture(format, data.width, data.height, data.data, mesh._albedoSampler, mesh._albedoImage, mesh._albedoView);
+
+    mesh._albedoTexIndex = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mesh._albedoView, mesh._albedoSampler);
+  }
+  if (!normalTex.empty()) {
+    auto data = imageutil::loadTex(normalTex);
+    VkFormat format = data.isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
+
+    createTexture(format, data.width, data.height, data.data, mesh._normalSampler, mesh._normalImage, mesh._normalView);
+
+    mesh._normalTexIndex = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mesh._normalView, mesh._normalSampler);
+  }
+
   mesh._id = ++_nextMeshId;
   mesh._numVertices = verticesCopy.size();
   mesh._numIndices = indices.size();
@@ -375,6 +437,10 @@ RenderableId VulkanRenderer::registerRenderable(
   renderable._transform = transform;
   renderable._boundingSphereCenter = sphereBoundCenter;
   renderable._boundingSphereRadius = sphereBoundRadius;
+  renderable._metallicTexIndex = _currentMeshes[meshId]._metallicTexIndex;
+  renderable._roughnessTexIndex = _currentMeshes[meshId]._roughnessTexIndex;
+  renderable._normalTexIndex = _currentMeshes[meshId]._normalTexIndex;
+  renderable._albedoTexIndex = _currentMeshes[meshId]._albedoTexIndex;
 
   if (debugDraw) {
     registerDebugRenderable(transform, sphereBoundCenter, sphereBoundRadius);
@@ -1055,6 +1121,10 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     mappedData[i]._meshId = (uint32_t)renderable._meshId;
     mappedData[i]._bounds = glm::vec4(renderable._boundingSphereCenter, renderable._boundingSphereRadius);
     mappedData[i]._visible = renderable._visible ? 1 : 0;
+    mappedData[i]._metallicTexIndex = renderable._metallicTexIndex;
+    mappedData[i]._roughnessTexIndex = renderable._roughnessTexIndex;
+    mappedData[i]._normalTexIndex = renderable._normalTexIndex;
+    mappedData[i]._albedoTexIndex = renderable._albedoTexIndex;
   }
 
   VkBufferCopy copyRegion{};
@@ -1089,7 +1159,7 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 
 void VulkanRenderer::prefilGPULightBuffer(VkCommandBuffer& commandBuffer)
 {
-  std::size_t dataSize = _lights.size() * sizeof(gpu::GPULight);
+  std::size_t dataSize = MAX_NUM_LIGHTS * sizeof(gpu::GPULight);
   uint8_t* data;
   vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
 
@@ -1327,10 +1397,34 @@ bool VulkanRenderer::initBindless()
     clusterLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     bindings.emplace_back(std::move(clusterLayoutBinding));
 
+    VkDescriptorSetLayoutBinding texLayoutBinding{};
+    texLayoutBinding.binding = _bindlessTextureBinding;
+    texLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    texLayoutBinding.descriptorCount = MAX_BINDLESS_RESOURCES;
+    texLayoutBinding.stageFlags = VK_SHADER_STAGE_ALL;
+    bindings.emplace_back(std::move(texLayoutBinding));
+
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = (uint32_t)bindings.size();
     layoutInfo.pBindings = bindings.data();
+
+    VkDescriptorSetLayoutBindingFlagsCreateInfo extendedInfo{};
+    std::vector<VkDescriptorBindingFlags> flags(bindings.size() - 1, 0);
+    VkDescriptorBindingFlags bindlessFlags =
+      VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
+      VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT |
+      VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT;
+
+    flags.emplace_back(bindlessFlags);
+
+    layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+
+    extendedInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+    extendedInfo.bindingCount = (uint32_t)bindings.size();
+    extendedInfo.pBindingFlags = flags.data();
+
+    layoutInfo.pNext = &extendedInfo;
 
     if (vkCreateDescriptorSetLayout(_device, &layoutInfo, nullptr, &_bindlessDescSetLayout) != VK_SUCCESS) {
       printf("failed to create descriptor set layout!\n");
@@ -1369,6 +1463,16 @@ bool VulkanRenderer::initBindless()
     allocInfo.descriptorPool = _descriptorPool;
     allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
     allocInfo.pSetLayouts = layouts.data();
+
+    VkDescriptorSetVariableDescriptorCountAllocateInfo countInfo{};
+    uint32_t maxBinding = MAX_BINDLESS_RESOURCES - 1;
+    std::vector<uint32_t> counts(MAX_FRAMES_IN_FLIGHT, maxBinding);
+
+    countInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
+    countInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    countInfo.pDescriptorCounts = counts.data();
+
+    allocInfo.pNext = &countInfo;
 
     _bindlessDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
     if (vkAllocateDescriptorSets(_device, &allocInfo, _bindlessDescriptorSets.data()) != VK_SUCCESS) {
@@ -1913,6 +2017,117 @@ void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
   
   // Advance frame
   _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void VulkanRenderer::createTexture(
+  VkFormat format,
+  int width,
+  int height,
+  const std::vector<uint8_t>& data,
+  VkSampler& samplerOut,
+  AllocatedImage& imageOut,
+  VkImageView& viewOut)
+{
+  AllocatedImage image;
+
+  imageutil::createImage(
+    width, height,
+    format,
+    VK_IMAGE_TILING_OPTIMAL,
+    _vmaAllocator,
+    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    image);
+
+  auto view = imageutil::createImageView(
+    _device,
+    image._image,
+    format,
+    VK_IMAGE_ASPECT_COLOR_BIT);
+
+  // Create a staging buffer on CPU side first
+  AllocatedBuffer stagingBuffer;
+  std::size_t dataSize = data.size();
+
+  bufferutil::createBuffer(_vmaAllocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
+
+  glm::uint8_t* mappedData;
+  vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, &(void*)mappedData);
+  std::memcpy(mappedData, data.data(), data.size());
+  vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
+
+  auto cmdBuffer = beginSingleTimeCommands();
+
+  // Transition image to dst optimal
+  imageutil::transitionImageLayout(
+    cmdBuffer,
+    image._image,
+    format,
+    VK_IMAGE_LAYOUT_UNDEFINED,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+  VkExtent3D extent{};
+  extent.depth = 1;
+  extent.height = height;
+  extent.width = width;
+
+  VkOffset3D offset{};
+
+  VkBufferImageCopy imCopy{};
+  imCopy.imageExtent = extent;
+  imCopy.imageOffset = offset;
+  imCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  imCopy.imageSubresource.layerCount = 1;
+
+  vkCmdCopyBufferToImage(
+    cmdBuffer,
+    stagingBuffer._buffer,
+    image._image,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    1,
+    &imCopy);
+
+  // Transition to shader read
+  imageutil::transitionImageLayout(
+    cmdBuffer,
+    image._image,
+    format,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+  endSingleTimeCommands(cmdBuffer);
+
+  vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
+
+  SamplerCreateParams params{};
+  params.renderContext = this;
+
+  imageOut = image;
+  viewOut = view;
+  samplerOut = createSampler(params);
+}
+
+uint32_t VulkanRenderer::addTextureToBindless(VkImageLayout layout, VkImageView view, VkSampler sampler)
+{
+  VkWriteDescriptorSet descriptorWrite{};
+
+  VkDescriptorImageInfo imageInfo{};
+  imageInfo.imageLayout = layout;
+  imageInfo.imageView = view;
+  imageInfo.sampler = sampler;
+
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = _bindlessDescriptorSets[i];
+    descriptorWrite.dstBinding = _bindlessTextureBinding;
+    descriptorWrite.dstArrayElement = _currentBindlessTextureIndex;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pImageInfo = &imageInfo;
+
+    vkUpdateDescriptorSets(_device, 1, &descriptorWrite, 0, nullptr);
+  }
+
+  return _currentBindlessTextureIndex++;
 }
 
 void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageIndex)

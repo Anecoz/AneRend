@@ -37,7 +37,14 @@ public:
   virtual int getCurrentMultiBufferIdx() = 0;
   virtual int getMultiBufferSize() = 0;
 
-  virtual MeshId registerMesh(const std::vector<Vertex>& vertices, const std::vector<std::uint32_t>& indices) = 0;
+  virtual MeshId registerMesh(
+    const std::vector<Vertex>& vertices, 
+    const std::vector<std::uint32_t>& indices,
+    const std::string& metallicTex = "",
+    const std::string& roughnessTex = "",
+    const std::string& albedoTex = "",
+    const std::string& normalTex = "") = 0;
+
   virtual RenderableId registerRenderable(
     MeshId meshId,
     const glm::mat4& transform,

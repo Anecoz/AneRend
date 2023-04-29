@@ -1,8 +1,14 @@
 #pragma once
 
+#include <sstream>
+#include <fstream>
+#include <filesystem>
+
 #include <vulkan/vulkan.h>
 
 #include "AllocatedImage.h"
+
+#include "../util/nanojpeg.h"
 
 namespace render {
 namespace imageutil {
@@ -36,6 +42,93 @@ static void createImage(uint32_t width, uint32_t height, VkFormat format, VkImag
   if (vmaCreateImage(allocator, &imageInfo, &vmaAllocInfo, &image._image, &image._allocation, nullptr) != VK_SUCCESS) {
     printf("Failed to create image!\n");
   }
+}
+
+namespace
+{
+
+// Convert RGB to RGBA
+std::vector<uint8_t> uglyFixData(const std::vector<std::uint8_t>& rgb)
+{
+  std::vector<uint8_t> output;
+  //output.resize(rgb.size() / 3 + rgb.size());
+
+  for (std::size_t i = 0; i < rgb.size();) {
+    output.emplace_back(rgb[i + 0]);
+    output.emplace_back(rgb[i + 1]);
+    output.emplace_back(rgb[i + 2]);
+    output.emplace_back(255);
+
+    i = i + 3;
+  }
+
+  return output;
+}
+
+}
+
+struct TextureData
+{
+  std::vector<uint8_t> data;
+  int width;
+  int height;
+  bool isColor;
+};
+
+static TextureData loadTex(const std::string& tex)
+{
+  TextureData output;
+
+  std::filesystem::path p(tex);
+  auto extension = p.extension().string();
+
+  if (extension == ".jpg") {
+    njInit();
+
+    std::ifstream ifs(p, std::ios::binary);
+    if (!ifs.is_open()) {
+      printf("Could not open jpeg: %s\n", tex.c_str());
+      njDone();
+      return output;
+    }
+
+    std::ostringstream stream;
+    stream << ifs.rdbuf();
+
+    if (njDecode((void*)stream.str().data(), (int)stream.str().size())) {
+      printf("Could not decode jpeg: %s\n", tex.c_str());
+      njDone();
+      return output;
+    }
+
+    bool isColor = njIsColor();
+    int width = njGetWidth();
+    int height = njGetHeight();
+
+    printf("Decoded texture %s (isColor: %d, width: %d, height: %d)\n", tex.c_str(), isColor, width, height);
+
+    output.data.resize(njGetImageSize());
+    std::memcpy(output.data.data(), njGetImage(), njGetImageSize());
+
+    if (isColor) {
+      auto fixed = uglyFixData(output.data);
+      output.data = std::move(fixed);
+    }
+
+    output.isColor = isColor;
+    output.width = width;
+    output.height = height;
+
+    njDone();
+  }
+  else if (extension == ".png") {
+
+  }
+  else {
+    printf("Unsupported extension in loadTex: %s\n", extension.c_str());
+  }
+
+  return output;
 }
 
 static VkImageView createImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t baseLayer = 0, uint32_t layerCount = 1, VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D)

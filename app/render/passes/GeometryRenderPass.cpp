@@ -168,6 +168,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
   param.device = rc->device();
   param.vertShader = "standard_vert.spv";
   param.fragShader = "standard_frag.spv";
+  param.uvLoc = 3;
   param.colorAttachmentCount = 2;
   param.colorFormats = { format, format };
   info._graphicsParams = param;

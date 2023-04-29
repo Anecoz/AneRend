@@ -23,6 +23,10 @@ struct Renderable
   vec4 tint;
   uint meshId;
   uint _visible;
+  int metallicTexIndex;
+  int roughnessTexIndex;
+  int normalTexIndex;
+  int albedoTexIndex;
 };
 
 layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {

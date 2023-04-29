@@ -20,6 +20,10 @@ struct alignas(16) GPURenderable {
   glm::vec4 _tint;
   uint32_t _meshId; // Also index into the mesh GPU buffer
   uint32_t _visible; // TODO: Not sure about if there is a bool type...
+  int32_t _metallicTexIndex;
+  int32_t _roughnessTexIndex;
+  int32_t _normalTexIndex;
+  int32_t _albedoTexIndex;
 };
 
 // One per mesh

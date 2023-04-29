@@ -42,6 +42,10 @@ struct Renderable
   vec4 tint;
   uint meshId;
   uint visible;
+  int metallicTexIndex;
+  int roughnessTexIndex;
+  int normalTexIndex;
+  int albedoTexIndex;
 };
 
 struct GrassObj

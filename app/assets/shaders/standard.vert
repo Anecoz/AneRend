@@ -23,6 +23,10 @@ struct Renderable
   vec4 tint;
   uint meshId;
   uint _visible;
+  int metallicTexIndex;
+  int roughnessTexIndex;
+  int normalTexIndex;
+  int albedoTexIndex;
 };
 
 layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {
@@ -40,10 +44,17 @@ layout(push_constant) uniform constants {
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
 layout(location = 2) in vec3 inNormal;
+layout(location = 3) in vec2 inUV;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec3 fragPos;
+layout(location = 3) out vec2 fragUV;
+layout(location = 4) flat out int fragMetallicIndex;
+layout(location = 5) flat out int fragRoughnessIndex;
+layout(location = 6) flat out int fragAlbedoIndex;
+layout(location = 7) flat out int fragNormalIndex;
+layout(location = 8) flat out mat3 fragModelMtx;
 
 void main() {
   uint renderableId = translationBuffer.ids[gl_InstanceIndex];
@@ -51,6 +62,12 @@ void main() {
 
   gl_Position = ubo.proj * ubo.view * model * vec4(inPosition, 1.0);
   fragColor = inColor * renderableBuffer.renderables[renderableId].tint.rgb;
-  fragNormal = mat3(model) * inNormal;
+  fragModelMtx = mat3(model);
+  fragNormal = fragModelMtx * inNormal;
   fragPos = (model * vec4(inPosition, 1.0)).xyz;
+  fragUV = inUV;
+  fragMetallicIndex = renderableBuffer.renderables[renderableId].metallicTexIndex;
+  fragRoughnessIndex = renderableBuffer.renderables[renderableId].roughnessTexIndex;
+  fragAlbedoIndex = renderableBuffer.renderables[renderableId].albedoTexIndex;
+  fragNormalIndex = renderableBuffer.renderables[renderableId].normalTexIndex;
 }

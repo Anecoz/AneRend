@@ -53,7 +53,11 @@ public:
   // Registers a mesh that a renderable can reference.
   MeshId registerMesh(
     const std::vector<Vertex>& vertices,
-    const std::vector<std::uint32_t>& indices);
+    const std::vector<std::uint32_t>& indices,
+    const std::string& metallicTex = "",
+    const std::string& roughnessTex = "",
+    const std::string& albedoTex = "",
+    const std::string& normalTex = "");
 
   // After doing this, the renderable will be rendered every frame with the given material, until unregistered.
   RenderableId registerRenderable(
@@ -173,6 +177,11 @@ private:
     glm::vec3 _tint;
     glm::vec3 _boundingSphereCenter;
     float _boundingSphereRadius;
+
+    int _metallicTexIndex;
+    int _roughnessTexIndex;
+    int _normalTexIndex;
+    int _albedoTexIndex;
   };
 
   std::vector<Renderable> _currentRenderables;
@@ -187,6 +196,20 @@ private:
   VkPipelineLayout _bindlessPipelineLayout;
   VkDescriptorSetLayout _bindlessDescSetLayout;
   std::vector<VkDescriptorSet> _bindlessDescriptorSets;
+
+  uint32_t _bindlessTextureBinding = 5;
+  uint32_t _currentBindlessTextureIndex = 0;
+
+  void createTexture(
+    VkFormat format, 
+    int width, 
+    int height, 
+    const std::vector<uint8_t>& data,
+    VkSampler& samplerOut,
+    AllocatedImage& imageOut,
+    VkImageView& viewOut);
+
+  uint32_t addTextureToBindless(VkImageLayout layout, VkImageView view, VkSampler sampler);
 
   RenderResourceVault _vault;
   FrameGraphBuilder _fgb;

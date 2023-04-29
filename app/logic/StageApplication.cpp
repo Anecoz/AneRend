@@ -55,13 +55,26 @@ bool StageApplication::init()
     return false;
   }
 
+  if (!_testModel4.loadFromObj(std::string(ASSET_PATH) + "models/old_lantern_pbr/lantern_obj.obj",
+    std::string(ASSET_PATH) + "models/old_lantern_pbr/")) {
+    return false;
+  }
+
   _meshId = _vkRenderer.registerMesh(_testModel._vertices, _testModel._indices);
   _meshId2 = _vkRenderer.registerMesh(_testModel2._vertices, _testModel2._indices);
   _meshId3 = _vkRenderer.registerMesh(_testModel3._vertices, _testModel3._indices);
 
+  _meshId4 = _vkRenderer.registerMesh(
+    _testModel4._vertices, 
+    _testModel4._indices,
+    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Metallic.jpg",
+    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Roughness.jpg", 
+    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Base_Color.jpg",
+    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Normal_OpenGL.jpg");
+
   // Create a bunch of test matrices
   {
-    std::size_t numInstances = 100;
+    std::size_t numInstances = 0;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -97,13 +110,24 @@ bool StageApplication::init()
 
   // Do a couple of the big models
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 1;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
         auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f + 500.0f * x, 0.0f, 500.0f * y));
         auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
         _vkRenderer.registerRenderable(_meshId3, mat*scale, glm::vec3(1.0f), 500.0f);
+      }
+  }
+  {
+    std::size_t numInstances = 10;
+
+    for (int x = 0; x < numInstances; ++x)
+      for (int y = 0; y < numInstances; ++y) {
+        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(16.0f * x, 1.0f, 8.0f * y));
+        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
+        auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
+        _vkRenderer.registerRenderable(_meshId4, mat * rot * scale, glm::vec3(0.0f), 5.0f);
       }
   }
 
@@ -129,7 +153,7 @@ void StageApplication::update(double delta)
 
   _camera.update(delta);
 
-  _windSystem.update(delta);
+  //_windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));
 
   _vkRenderer.update(
