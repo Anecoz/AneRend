@@ -45,4 +45,5 @@ private:
   render::ModelId _meshId4;
   render::ModelId _meshId5;
   render::ModelId _meshId6;
+  render::ModelId _meshId7;
 };

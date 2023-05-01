@@ -24,6 +24,7 @@ struct MeshMaterialInfo
   int roughnessTexIndex;
   int normalTexIndex;
   int albedoTexIndex;
+  int metallicRoughnessTexIndex;
 };
 
 layout(std430, set = 0, binding = 5) readonly buffer MeshMaterialBuffer {
@@ -57,7 +58,16 @@ void main() {
     roughness = texture(textures[nonuniformEXT(matInfo.roughnessTexIndex)], fragUV).r;
   }
   if (matInfo.albedoTexIndex != -1) {
-    color = texture(textures[nonuniformEXT(matInfo.albedoTexIndex)], fragUV).rgb;
+    vec4 samp = texture(textures[nonuniformEXT(matInfo.albedoTexIndex)], fragUV);
+    if (samp.a < 0.1) {
+      discard;
+    }
+    color = samp.rgb;
+  }
+  if (matInfo.metallicRoughnessTexIndex != -1) {
+    vec4 samp = texture(textures[nonuniformEXT(matInfo.metallicRoughnessTexIndex)], fragUV);
+    metallic = samp.b;
+    roughness = samp.g;
   }
   /*if (fragNormalIndex != -1) {
     normal = normalize(fragModelMtx * (texture(textures[nonuniformEXT(fragNormalIndex)], uv).rgb * 2.0 - 1.0));

@@ -109,16 +109,19 @@ VulkanRenderer::~VulkanRenderer()
       if (mesh._roughness._bindlessIndex != -1) vkDestroySampler(_device, mesh._roughness._sampler, nullptr);
       if (mesh._normal._bindlessIndex != -1) vkDestroySampler(_device, mesh._normal._sampler, nullptr);
       if (mesh._albedo._bindlessIndex != -1) vkDestroySampler(_device, mesh._albedo._sampler, nullptr);
+      if (mesh._metallicRoughness._bindlessIndex != -1) vkDestroySampler(_device, mesh._metallicRoughness._sampler, nullptr);
 
       if (mesh._metallic._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._metallic._image._image, mesh._metallic._image._allocation);
       if (mesh._roughness._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._roughness._image._image, mesh._roughness._image._allocation);
       if (mesh._normal._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._normal._image._image, mesh._normal._image._allocation);
       if (mesh._albedo._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._albedo._image._image, mesh._albedo._image._allocation);
+      if (mesh._metallicRoughness._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._metallicRoughness._image._image, mesh._metallicRoughness._image._allocation);
 
       if (mesh._metallic._bindlessIndex != -1) vkDestroyImageView(_device, mesh._metallic._view, nullptr);
       if (mesh._roughness._bindlessIndex != -1) vkDestroyImageView(_device, mesh._roughness._view, nullptr);
       if (mesh._normal._bindlessIndex != -1) vkDestroyImageView(_device, mesh._normal._view, nullptr);
       if (mesh._albedo._bindlessIndex != -1) vkDestroyImageView(_device, mesh._albedo._view, nullptr);
+      if (mesh._metallicRoughness._bindlessIndex != -1) vkDestroyImageView(_device, mesh._metallicRoughness._view, nullptr);
     }
   //}
 
@@ -356,6 +359,7 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh)
   mesh._roughness._bindlessIndex = -1;
   mesh._normal._bindlessIndex = -1;
   mesh._albedo._bindlessIndex = -1;
+  mesh._metallicRoughness._bindlessIndex = -1;
 
   auto loadTexturesFunc = [&](PbrMaterialData& pbrData) {
     auto data = imageutil::loadTex(pbrData._texPath);
@@ -378,6 +382,9 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh)
   }
   if (!mesh._albedo._texPath.empty()) {
     loadTexturesFunc(mesh._albedo);
+  }
+  if (!mesh._metallicRoughness._texPath.empty()) {
+    loadTexturesFunc(mesh._metallicRoughness);
   }
 
   mesh._id = _nextMeshId++;
@@ -1184,6 +1191,7 @@ void VulkanRenderer::prefillGPUMeshMaterialBuffer(VkCommandBuffer& commandBuffer
     mappedData[i]._roughnessTexIndex = mesh._roughness._bindlessIndex;
     mappedData[i]._normalTexIndex = mesh._normal._bindlessIndex;
     mappedData[i]._albedoTexIndex = mesh._albedo._bindlessIndex;
+    mappedData[i]._metallicRoughnessTexIndex = mesh._metallicRoughness._bindlessIndex;
   }
 
   VkBufferCopy copyRegion{};

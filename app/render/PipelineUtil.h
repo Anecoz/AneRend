@@ -79,7 +79,7 @@ struct SamplerCreateParams
 {
   RenderContext* renderContext;
 
-  VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
   VkFilter magFilter = VK_FILTER_LINEAR;
   VkFilter minFilter = VK_FILTER_LINEAR;
   VkSamplerMipmapMode mipMapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;

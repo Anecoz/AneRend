@@ -28,6 +28,7 @@ struct GPUMeshMaterialInfo {
   int32_t _roughnessTexIndex;
   int32_t _normalTexIndex;
   int32_t _albedoTexIndex;
+  int32_t _metallicRoughnessTexIndex;
 };
 
 struct GPUTranslationId

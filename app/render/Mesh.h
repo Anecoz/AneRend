@@ -30,6 +30,7 @@ struct Mesh {
   PbrMaterialData _roughness;
   PbrMaterialData _normal;
   PbrMaterialData _albedo;
+  PbrMaterialData _metallicRoughness; // i.e. gltf-style, G is roughness and B is metalness
 };
 
 }

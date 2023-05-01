@@ -42,12 +42,13 @@ bool StageApplication::init()
   render::Model testModel4;
   render::Model testModel5;
   render::Model testModel6;
+  render::Model testModel7;
 
   if (!_vkRenderer.init()) {
     return false;
   }
 
-  if (!testModel.loadFromObj(std::string(ASSET_PATH) + "models/low_poly_tree.obj",
+  /*if (!testModel.loadFromObj(std::string(ASSET_PATH) + "models/low_poly_tree.obj",
                               std::string(ASSET_PATH) + "models/")) {
     return false;
   }
@@ -87,18 +88,23 @@ bool StageApplication::init()
     std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_nmap.jpg",
     std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_color_2.jpg")) {
     return false;
+  }*/
+
+  if (!testModel7.loadFromGLTF(std::string(ASSET_PATH) + "models/sponza-gltf-pbr/sponza.glb")) {
+    return false;
   }
 
-  _meshId = _vkRenderer.registerModel(std::move(testModel));
+  /*_meshId = _vkRenderer.registerModel(std::move(testModel));
   _meshId2 = _vkRenderer.registerModel(std::move(testModel2));
   _meshId3 = _vkRenderer.registerModel(std::move(testModel3));
   _meshId4 = _vkRenderer.registerModel(std::move(testModel4));
   _meshId5 = _vkRenderer.registerModel(std::move(testModel5));
-  _meshId6 = _vkRenderer.registerModel(std::move(testModel6));
+  _meshId6 = _vkRenderer.registerModel(std::move(testModel6));*/
+  _meshId7 = _vkRenderer.registerModel(std::move(testModel7));
 
   // Create a bunch of test matrices
   {
-    std::size_t numInstances = 10;
+    std::size_t numInstances = 0;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -123,7 +129,7 @@ bool StageApplication::init()
 
   // Do a couple of the big models
   {
-    std::size_t numInstances = 20;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
     for (int y = 0; y < numInstances; ++y) {
@@ -134,7 +140,7 @@ bool StageApplication::init()
 
   // Do a couple of the big models
   {
-    std::size_t numInstances = 1;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -144,7 +150,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 10;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -155,7 +161,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 10;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -166,7 +172,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 10;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -174,6 +180,16 @@ bool StageApplication::init()
         auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(2.0f));
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
         _vkRenderer.registerRenderable(_meshId6, mat * rot * scale, glm::vec3(0.0f), 5.0f);
+      }
+  }
+  {
+    std::size_t numInstances = 1;
+
+    for (int x = 0; x < numInstances; ++x)
+      for (int y = 0; y < numInstances; ++y) {
+        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(12.0f * x, 0.0f, 17.0f * y));
+        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(.01f));
+        _vkRenderer.registerRenderable(_meshId7, mat * scale, glm::vec3(0.0f), 5000.0f);
       }
   }
 

@@ -1,6 +1,7 @@
 #include "Model.h"
 
 #include "../util/OBJLoader.h"
+#include "../util/GLTFLoader.h"
 #include "Vertex.h"
 
 #include <limits>
@@ -73,6 +74,12 @@ bool Model::loadFromObj(
   _meshes.emplace_back(std::move(mesh));
 
   return true;
+}
+
+bool Model::loadFromGLTF(const std::string& gltfPath)
+{
+  Model& model = *this;
+  return GLTFLoader::loadFromFile(gltfPath, model);
 }
 
 }

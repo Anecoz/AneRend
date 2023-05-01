@@ -29,6 +29,8 @@ public:
     const std::string& normalPath = "",
     const std::string& albedoPath = "");
 
+  bool loadFromGLTF(const std::string& gltfPath);
+
   explicit operator bool() const;
 
   std::vector<Mesh> _meshes;
