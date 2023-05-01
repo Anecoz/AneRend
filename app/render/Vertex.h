@@ -22,10 +22,9 @@ struct Vertex
 namespace std {
   template<> struct hash<render::Vertex> {
     size_t operator()(render::Vertex const& vertex) const {
-      return (
-        (hash<glm::vec3>()(vertex.pos) ^
-        (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
-        (hash<glm::vec2>()(vertex.uv) << 1);
+      return 
+        ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+        ((hash<glm::vec3>()(vertex.normal) ^ (hash<glm::vec2>()(vertex.uv) << 1)));
     }
   };
 }
