@@ -50,18 +50,14 @@ public:
   // Initializes surface, device, all material pipelines etc.
   bool init();
 
-  // Registers a mesh that a renderable can reference.
-  MeshId registerMesh(
-    const std::vector<Vertex>& vertices,
-    const std::vector<std::uint32_t>& indices,
-    const std::string& metallicTex = "",
-    const std::string& roughnessTex = "",
-    const std::string& albedoTex = "",
-    const std::string& normalTex = "");
+  // Registers a model that a renderable can reference.
+  virtual ModelId registerModel(Model&& model);
+
+  virtual MeshId registerMesh(Mesh& mesh);
 
   // After doing this, the renderable will be rendered every frame with the given material, until unregistered.
   RenderableId registerRenderable(
-    MeshId meshId,
+    ModelId modelId,
     const glm::mat4& transform,
     const glm::vec3& sphereBoundCenter,
     float sphereBoundRadius,
@@ -106,7 +102,7 @@ public:
   VkDescriptorSetLayout& bindlessDescriptorSetLayout() override final;
   VkExtent2D swapChainExtent() override final;
 
-  void drawGigaBuffer(VkCommandBuffer* commandBuffer) override final;
+  //void drawGigaBuffer(VkCommandBuffer* commandBuffer) override final;
   void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls) override final;
   void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) override final;
   void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) override final;
@@ -156,6 +152,10 @@ private:
 
   RenderableId _nextRenderableId = 1;
   MeshId _nextMeshId = 0;
+  ModelId _nextModelId = 0;
+
+  std::vector<Model> _models;
+  bool modelIdExists(ModelId id);
 
   Camera _latestCamera;
 
@@ -165,11 +165,13 @@ private:
   bool meshIdExists(MeshId meshId) const;
   std::vector<Mesh> _currentMeshes;
   std::unordered_map<MeshId, std::size_t> _currentMeshUsage;
+  std::vector<bool> _meshesChanged;
 
   struct Renderable {
     RenderableId _id;
 
-    MeshId _meshId;
+    MeshId _firstMeshId;
+    uint32_t _numMeshes;
 
     bool _visible = true;
 
@@ -197,7 +199,7 @@ private:
   VkDescriptorSetLayout _bindlessDescSetLayout;
   std::vector<VkDescriptorSet> _bindlessDescriptorSets;
 
-  uint32_t _bindlessTextureBinding = 5;
+  uint32_t _bindlessTextureBinding = 6;
   uint32_t _currentBindlessTextureIndex = 0;
 
   void createTexture(
@@ -233,6 +235,9 @@ private:
   // Contains renderable info for compute culling shader.
   std::vector<AllocatedBuffer> _gpuRenderableBuffer;
 
+  // Contains material info for meshes.
+  std::vector<AllocatedBuffer> _gpuMeshMaterialInfoBuffer;
+
   // SSBO for light information.
   std::vector<AllocatedBuffer> _gpuLightBuffer;
 
@@ -253,6 +258,9 @@ private:
 
   // Fills gpu renderable buffer with current renderable information (could be done async)
   void prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer);
+
+  // Fill gpu material info for the meshes.
+  void prefillGPUMeshMaterialBuffer(VkCommandBuffer& commandBuffer);
 
   // Fills GPU light buffer with current light information.
   void prefilGPULightBuffer(VkCommandBuffer& commandBuffer);

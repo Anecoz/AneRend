@@ -39,12 +39,10 @@ private:
 
   render::VulkanRenderer _vkRenderer;
 
-  render::Model _testModel;
-  render::Model _testModel2;
-  render::Model _testModel3;
-  render::Model _testModel4;
-  render::MeshId _meshId;
-  render::MeshId _meshId2;
-  render::MeshId _meshId3;
-  render::MeshId _meshId4;
+  render::ModelId _meshId;
+  render::ModelId _meshId2;
+  render::ModelId _meshId3;
+  render::ModelId _meshId4;
+  render::ModelId _meshId5;
+  render::ModelId _meshId6;
 };

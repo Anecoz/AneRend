@@ -136,8 +136,7 @@ SSAORenderPass::~SSAORenderPass()
 void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
   _screenQuad._vertices = graphicsutil::createScreenQuad(1.0f, 1.0f);
-
-  _meshId = rc->registerMesh(_screenQuad._vertices, {});
+  _meshId = rc->registerMesh(_screenQuad);
 
   RenderPassRegisterInfo info{};
   info._name = "SSAO";

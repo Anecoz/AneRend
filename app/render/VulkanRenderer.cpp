@@ -103,22 +103,24 @@ VulkanRenderer::~VulkanRenderer()
 
   vmaDestroyBuffer(_vmaAllocator, _gigaMeshBuffer._buffer._buffer, _gigaMeshBuffer._buffer._allocation);
 
-  for (auto& mesh : _currentMeshes) {
-    if (mesh._metallicTexIndex != -1) vkDestroySampler(_device, mesh._metallicSampler, nullptr);
-    if (mesh._roughnessTexIndex!= -1) vkDestroySampler(_device, mesh._roughnessSampler, nullptr);
-    if (mesh._albedoTexIndex != -1) vkDestroySampler(_device, mesh._albedoSampler, nullptr);
-    if (mesh._normalTexIndex != -1) vkDestroySampler(_device, mesh._normalSampler, nullptr);
+  //for (auto& model : _models) {
+    for (auto& mesh : _currentMeshes) {
+      if (mesh._metallic._bindlessIndex != -1) vkDestroySampler(_device, mesh._metallic._sampler, nullptr);
+      if (mesh._roughness._bindlessIndex != -1) vkDestroySampler(_device, mesh._roughness._sampler, nullptr);
+      if (mesh._normal._bindlessIndex != -1) vkDestroySampler(_device, mesh._normal._sampler, nullptr);
+      if (mesh._albedo._bindlessIndex != -1) vkDestroySampler(_device, mesh._albedo._sampler, nullptr);
 
-    if (mesh._metallicTexIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._metallicImage._image, mesh._metallicImage._allocation);
-    if (mesh._roughnessTexIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._roughnessImage._image, mesh._roughnessImage._allocation);
-    if (mesh._normalTexIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._normalImage._image, mesh._normalImage._allocation);
-    if (mesh._albedoTexIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._albedoImage._image, mesh._albedoImage._allocation);
+      if (mesh._metallic._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._metallic._image._image, mesh._metallic._image._allocation);
+      if (mesh._roughness._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._roughness._image._image, mesh._roughness._image._allocation);
+      if (mesh._normal._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._normal._image._image, mesh._normal._image._allocation);
+      if (mesh._albedo._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._albedo._image._image, mesh._albedo._image._allocation);
 
-    if (mesh._metallicTexIndex != -1) vkDestroyImageView(_device, mesh._metallicView, nullptr);
-    if (mesh._roughnessTexIndex != -1) vkDestroyImageView(_device, mesh._roughnessView, nullptr);
-    if (mesh._normalTexIndex != -1) vkDestroyImageView(_device, mesh._normalView, nullptr);
-    if (mesh._albedoTexIndex != -1) vkDestroyImageView(_device, mesh._albedoView, nullptr);
-  }
+      if (mesh._metallic._bindlessIndex != -1) vkDestroyImageView(_device, mesh._metallic._view, nullptr);
+      if (mesh._roughness._bindlessIndex != -1) vkDestroyImageView(_device, mesh._roughness._view, nullptr);
+      if (mesh._normal._bindlessIndex != -1) vkDestroyImageView(_device, mesh._normal._view, nullptr);
+      if (mesh._albedo._bindlessIndex != -1) vkDestroyImageView(_device, mesh._albedo._view, nullptr);
+    }
+  //}
 
   for (auto& light: _lights) {
     for (auto& v: light._shadowImageViews) {
@@ -159,6 +161,7 @@ VulkanRenderer::~VulkanRenderer()
     vkDestroySemaphore(_device, _renderFinishedSemaphores[i], nullptr);
     vkDestroyFence(_device, _inFlightFences[i], nullptr);
     vmaDestroyBuffer(_vmaAllocator, _gpuRenderableBuffer[i]._buffer, _gpuRenderableBuffer[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _gpuMeshMaterialInfoBuffer[i]._buffer, _gpuMeshMaterialInfoBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuStagingBuffer[i]._buffer, _gpuStagingBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSceneDataBuffer[i]._buffer, _gpuSceneDataBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuLightBuffer[i]._buffer, _gpuLightBuffer[i]._allocation);
@@ -291,33 +294,31 @@ bool VulkanRenderer::init()
   printf("Done!\n");
 
   _renderablesChanged.resize(MAX_FRAMES_IN_FLIGHT);
+  _meshesChanged.resize(MAX_FRAMES_IN_FLIGHT);
 
   for (auto& val : _renderablesChanged) {
     val = true;
   }
+  for (auto& val : _meshesChanged) {
+    val = true;
+  }
 
-  std::vector<Vertex> vert;
+  /*std::vector<Vertex> vert;
   std::vector<std::uint32_t> inds;
   graphicsutil::createUnitCube(&vert, &inds, false);
 
-  _debugCubeMesh = registerMesh(vert, inds);
+  _debugCubeMesh = registerMesh(vert, inds);*/
 
   return res;
 }
 
-MeshId VulkanRenderer::registerMesh(
-  const std::vector<Vertex>& vertices, 
-  const std::vector<std::uint32_t>& indices,
-  const std::string& metallicTex,
-  const std::string& roughnessTex,
-  const std::string& albedoTex,
-  const std::string& normalTex)
+MeshId VulkanRenderer::registerMesh(Mesh& mesh)
 {
   // Check if we need to pad with 0's before the vertices
   std::vector<std::uint8_t> verticesCopy;
-  verticesCopy.resize(vertices.size() * sizeof(Vertex));
-  memcpy(verticesCopy.data(), vertices.data(), verticesCopy.size());
-  
+  verticesCopy.resize(mesh._vertices.size() * sizeof(Vertex));
+  memcpy(verticesCopy.data(), mesh._vertices.data(), verticesCopy.size());
+
   std::size_t numZeroes = sizeof(Vertex) - (_gigaMeshBuffer._freeSpacePointer % sizeof(Vertex));
 
   if (numZeroes != 0) {
@@ -328,7 +329,7 @@ MeshId VulkanRenderer::registerMesh(
   // Create a staging buffer on CPU side first
   AllocatedBuffer stagingBuffer;
   std::size_t vertSize = verticesCopy.size();
-  std::size_t indSize = indices.size() * sizeof(std::uint32_t);
+  std::size_t indSize = mesh._indices.size() * sizeof(std::uint32_t);
   std::size_t dataSize = vertSize + indSize;
 
   bufferutil::createBuffer(_vmaAllocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
@@ -337,7 +338,7 @@ MeshId VulkanRenderer::registerMesh(
   vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, &mappedData);
   memcpy(mappedData, verticesCopy.data(), vertSize);
   if (indSize > 0) {
-    memcpy((uint8_t*)mappedData + vertSize, indices.data(), indSize);
+    memcpy((uint8_t*)mappedData + vertSize, mesh._indices.data(), indSize);
   }
   vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
 
@@ -351,49 +352,37 @@ MeshId VulkanRenderer::registerMesh(
 
   endSingleTimeCommands(cmdBuffer);
 
-  Mesh mesh{};
-  mesh._metallicTexIndex = -1;
-  mesh._roughnessTexIndex = -1;
-  mesh._albedoTexIndex = -1;
-  mesh._normalTexIndex = -1;
+  mesh._metallic._bindlessIndex = -1;
+  mesh._roughness._bindlessIndex = -1;
+  mesh._normal._bindlessIndex = -1;
+  mesh._albedo._bindlessIndex = -1;
+
+  auto loadTexturesFunc = [&](PbrMaterialData& pbrData) {
+    auto data = imageutil::loadTex(pbrData._texPath);
+    VkFormat format = data.isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
+
+    createTexture(format, data.width, data.height, data.data, pbrData._sampler, pbrData._image, pbrData._view);
+
+    pbrData._bindlessIndex = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, pbrData._view, pbrData._sampler);
+  };
 
   // Do textures
-  if (!metallicTex.empty()) {
-    auto data = imageutil::loadTex(metallicTex);
-    VkFormat format = data.isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
-
-    createTexture(format, data.width, data.height, data.data, mesh._metallicSampler, mesh._metallicImage, mesh._metallicView);
-
-    mesh._metallicTexIndex = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mesh._metallicView, mesh._metallicSampler);
+  if (!mesh._metallic._texPath.empty()) {
+    loadTexturesFunc(mesh._metallic);
   }
-  if (!roughnessTex.empty()) {
-    auto data = imageutil::loadTex(roughnessTex);
-    VkFormat format = data.isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
-
-    createTexture(format, data.width, data.height, data.data, mesh._roughnessSampler, mesh._roughnessImage, mesh._roughnessView);
-
-    mesh._roughnessTexIndex = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mesh._roughnessView, mesh._roughnessSampler);
+  if (!mesh._roughness._texPath.empty()) {
+    loadTexturesFunc(mesh._roughness);
   }
-  if (!albedoTex.empty()) {
-    auto data = imageutil::loadTex(albedoTex);
-    VkFormat format = data.isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
-
-    createTexture(format, data.width, data.height, data.data, mesh._albedoSampler, mesh._albedoImage, mesh._albedoView);
-
-    mesh._albedoTexIndex = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mesh._albedoView, mesh._albedoSampler);
+  if (!mesh._normal._texPath.empty()) {
+    loadTexturesFunc(mesh._normal);
   }
-  if (!normalTex.empty()) {
-    auto data = imageutil::loadTex(normalTex);
-    VkFormat format = data.isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
-
-    createTexture(format, data.width, data.height, data.data, mesh._normalSampler, mesh._normalImage, mesh._normalView);
-
-    mesh._normalTexIndex = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mesh._normalView, mesh._normalSampler);
+  if (!mesh._albedo._texPath.empty()) {
+    loadTexturesFunc(mesh._albedo);
   }
 
-  mesh._id = ++_nextMeshId;
+  mesh._id = _nextMeshId++;
   mesh._numVertices = verticesCopy.size();
-  mesh._numIndices = indices.size();
+  mesh._numIndices = mesh._indices.size();
   mesh._vertexOffset = (_gigaMeshBuffer._freeSpacePointer + numZeroes) / sizeof(Vertex);
   mesh._indexOffset = (_gigaMeshBuffer._freeSpacePointer + vertSize) / sizeof(uint32_t);
 
@@ -404,14 +393,30 @@ MeshId VulkanRenderer::registerMesh(
 
   vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
 
-  MeshId idOut = (std::uint32_t)_currentMeshes.size() - 1;
+  return _currentMeshes.size() - 1;
+}
+
+ModelId VulkanRenderer::registerModel(Model&& model)
+{
+  // Go through each mesh of the model and add it to our meshes
+
+  for (auto& mesh : model._meshes) {
+    registerMesh(mesh);
+  }
+
+  _models.emplace_back(std::move(model));
 
   //printf("Mesh registered, id: %u\n", idOut);
-  return idOut;
+  return _models.size() - 1;
+}
+
+bool VulkanRenderer::modelIdExists(ModelId id)
+{
+  return id < (int64_t)_models.size();
 }
 
 RenderableId VulkanRenderer::registerRenderable(
-  MeshId meshId,
+  ModelId modelId,
   const glm::mat4& transform,
   const glm::vec3& sphereBoundCenter,
   float sphereBoundRadius,
@@ -422,8 +427,15 @@ RenderableId VulkanRenderer::registerRenderable(
     return 0;
   }
 
-  if (!meshIdExists(meshId)) {
-    printf("Mesh id %u does not exist!\n", meshId);
+  if (!modelIdExists(modelId)) {
+    printf("Model id %u does not exist!\n", modelId);
+    return 0;
+  }
+
+  Model& model = _models[modelId];
+
+  if (model._meshes.empty()) {
+    printf("Model Id %u contains no meshes!\n", modelId);
     return 0;
   }
 
@@ -432,15 +444,12 @@ RenderableId VulkanRenderer::registerRenderable(
   auto id = _nextRenderableId++;
 
   renderable._id = id;
-  renderable._meshId = meshId;
+  renderable._firstMeshId = model._meshes[0]._id;
+  renderable._numMeshes = model._meshes.size();
   renderable._tint = glm::vec3(1.0f);
   renderable._transform = transform;
   renderable._boundingSphereCenter = sphereBoundCenter;
   renderable._boundingSphereRadius = sphereBoundRadius;
-  renderable._metallicTexIndex = _currentMeshes[meshId]._metallicTexIndex;
-  renderable._roughnessTexIndex = _currentMeshes[meshId]._roughnessTexIndex;
-  renderable._normalTexIndex = _currentMeshes[meshId]._normalTexIndex;
-  renderable._albedoTexIndex = _currentMeshes[meshId]._albedoTexIndex;
 
   if (debugDraw) {
     registerDebugRenderable(transform, sphereBoundCenter, sphereBoundRadius);
@@ -457,7 +466,7 @@ RenderableId VulkanRenderer::registerRenderable(
 
 void VulkanRenderer::registerDebugRenderable(const glm::mat4& transform, const glm::vec3& center, float radius)
 {
-  if (_currentRenderables.size() == MAX_NUM_RENDERABLES) {
+  /*if (_currentRenderables.size() == MAX_NUM_RENDERABLES) {
     printf("Too many renderables!\n");
     return;
   }
@@ -477,7 +486,7 @@ void VulkanRenderer::registerDebugRenderable(const glm::mat4& transform, const g
 
   for (auto& val : _renderablesChanged) {
     val = true;
-  }
+  }*/
 }
 
 void VulkanRenderer::unregisterRenderable(RenderableId id)
@@ -1114,17 +1123,16 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 
     if (!renderable._visible) continue;
 
-    _currentMeshUsage[renderable._meshId]++;
+    for (int i = 0; i < renderable._numMeshes; ++i) {
+      _currentMeshUsage[renderable._firstMeshId + i]++;
+    }    
     
     mappedData[i]._transform = renderable._transform;
     mappedData[i]._tint = glm::vec4(renderable._tint, 1.0f);
-    mappedData[i]._meshId = (uint32_t)renderable._meshId;
+    mappedData[i]._firstMeshId = (uint32_t)renderable._firstMeshId;
+    mappedData[i]._numMeshIds = (uint32_t)renderable._numMeshes;
     mappedData[i]._bounds = glm::vec4(renderable._boundingSphereCenter, renderable._boundingSphereRadius);
     mappedData[i]._visible = renderable._visible ? 1 : 0;
-    mappedData[i]._metallicTexIndex = renderable._metallicTexIndex;
-    mappedData[i]._roughnessTexIndex = renderable._roughnessTexIndex;
-    mappedData[i]._normalTexIndex = renderable._normalTexIndex;
-    mappedData[i]._albedoTexIndex = renderable._albedoTexIndex;
   }
 
   VkBufferCopy copyRegion{};
@@ -1148,6 +1156,57 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     VK_PIPELINE_STAGE_TRANSFER_BIT,
     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
     0, 0, nullptr, 
+    1, &memBarr,
+    0, nullptr);
+
+  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+
+  // Update staging offset
+  _currentStagingOffset += dataSize;
+}
+
+void VulkanRenderer::prefillGPUMeshMaterialBuffer(VkCommandBuffer& commandBuffer)
+{
+  // Go through each mesh of each model and update corresponding spot in the buffer
+  std::size_t dataSize = _currentMeshes.size() * sizeof(gpu::GPUMeshMaterialInfo);
+  uint8_t* data;
+  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+
+  // Offset according to current staging buffer usage
+  data = data + _currentStagingOffset;
+
+  gpu::GPUMeshMaterialInfo* mappedData = reinterpret_cast<gpu::GPUMeshMaterialInfo*>(data);
+
+  for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
+    auto& mesh = _currentMeshes[i];
+
+    mappedData[i]._metallicTexIndex = mesh._metallic._bindlessIndex;
+    mappedData[i]._roughnessTexIndex = mesh._roughness._bindlessIndex;
+    mappedData[i]._normalTexIndex = mesh._normal._bindlessIndex;
+    mappedData[i]._albedoTexIndex = mesh._albedo._bindlessIndex;
+  }
+
+  VkBufferCopy copyRegion{};
+  copyRegion.dstOffset = 0;
+  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.size = dataSize;
+  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuMeshMaterialInfoBuffer[_currentFrame]._buffer, 1, &copyRegion);
+
+  VkBufferMemoryBarrier memBarr{};
+  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  memBarr.srcQueueFamilyIndex = _queueIndices.graphicsFamily.value();
+  memBarr.dstQueueFamilyIndex = _queueIndices.graphicsFamily.value();
+  memBarr.buffer = _gpuMeshMaterialInfoBuffer[_currentFrame]._buffer;
+  memBarr.offset = 0;
+  memBarr.size = VK_WHOLE_SIZE;
+
+  vkCmdPipelineBarrier(
+    commandBuffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    0, 0, nullptr,
     1, &memBarr,
     0, nullptr);
 
@@ -1350,6 +1409,7 @@ bool VulkanRenderer::initBindless()
   * 2: Renderable buffer (SSBO)
   * 3: Light buffer (SSBO)
   * 4: View cluster buffer (SSBO)
+  * 5: Mesh material info (SSBO)
   */
 
   uint32_t uboBinding = 0;
@@ -1357,6 +1417,7 @@ bool VulkanRenderer::initBindless()
   uint32_t renderableBinding = 2;
   uint32_t lightBinding = 3;
   uint32_t clusterBinding = 4;
+  uint32_t materialBinding = 5;
 
   // Descriptor set layout
   {
@@ -1396,6 +1457,13 @@ bool VulkanRenderer::initBindless()
     clusterLayoutBinding.descriptorCount = 1;
     clusterLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     bindings.emplace_back(std::move(clusterLayoutBinding));
+
+    VkDescriptorSetLayoutBinding materialLayoutBinding{};
+    materialLayoutBinding.binding = materialBinding;
+    materialLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    materialLayoutBinding.descriptorCount = 1;
+    materialLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    bindings.emplace_back(std::move(materialLayoutBinding));
 
     VkDescriptorSetLayoutBinding texLayoutBinding{};
     texLayoutBinding.binding = _bindlessTextureBinding;
@@ -1553,6 +1621,24 @@ bool VulkanRenderer::initBindless()
       clusterBufWrite.pBufferInfo = &clusterBufferInfo;
 
       descriptorWrites.emplace_back(std::move(clusterBufWrite));
+
+      // Material info SSBO
+      VkDescriptorBufferInfo matBufferInfo{};
+      VkWriteDescriptorSet matBufWrite{};
+
+      matBufferInfo.buffer = _gpuMeshMaterialInfoBuffer[i]._buffer;
+      matBufferInfo.offset = 0;
+      matBufferInfo.range = VK_WHOLE_SIZE;
+
+      matBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      matBufWrite.dstSet = _bindlessDescriptorSets[i];
+      matBufWrite.dstBinding = materialBinding;
+      matBufWrite.dstArrayElement = 0;
+      matBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      matBufWrite.descriptorCount = 1;
+      matBufWrite.pBufferInfo = &matBufferInfo;
+
+      descriptorWrites.emplace_back(std::move(matBufWrite));
 
       // Samplers
       std::vector<VkDescriptorImageInfo> imageInfos;
@@ -1761,6 +1847,7 @@ bool VulkanRenderer::initGpuBuffers()
 {
   _gpuStagingBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuRenderableBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuMeshMaterialInfoBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuSceneDataBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuWindForceSampler.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuWindForceImage.resize(MAX_FRAMES_IN_FLIGHT);
@@ -1784,6 +1871,14 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuRenderableBuffer[i]);
+
+    // Create a buffer that will contain renderable information for use by the frustum culling compute shader.
+    bufferutil::createBuffer(
+      _vmaAllocator,
+      MAX_NUM_MESHES * sizeof(gpu::GPUMeshMaterialInfo),
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+      0,
+      _gpuMeshMaterialInfoBuffer[i]);
 
     // Used as a UBO in most shaders for accessing scene data.
     bufferutil::createBuffer(
@@ -2154,6 +2249,11 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
     _renderablesChanged[_currentFrame] = false;
   }
 
+  if (_meshesChanged[_currentFrame]) {
+    prefillGPUMeshMaterialBuffer(commandBuffer);
+    _meshesChanged[_currentFrame] = false;
+  }
+
   // Only do if lights have updated
   prefilGPULightBuffer(commandBuffer);
 
@@ -2214,7 +2314,7 @@ VkExtent2D VulkanRenderer::swapChainExtent()
   return _swapChain._swapChainExtent;
 }
 
-void VulkanRenderer::drawGigaBuffer(VkCommandBuffer* commandBuffer)
+/*void VulkanRenderer::drawGigaBuffer(VkCommandBuffer* commandBuffer)
 {
   // There is an assumption that the giga buffers have been bound already.
 
@@ -2232,7 +2332,7 @@ void VulkanRenderer::drawGigaBuffer(VkCommandBuffer* commandBuffer)
       (uint32_t)mesh._vertexOffset,
       0);
   }
-}
+}*/
 
 void VulkanRenderer::drawGigaBufferIndirect(VkCommandBuffer* commandBuffer, VkBuffer drawCalls)
 {

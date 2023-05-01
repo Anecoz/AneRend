@@ -4,7 +4,8 @@
 
 #include "vma/vk_mem_alloc.h"
 
-#include "Mesh.h"
+#include "Model.h"
+#include "MeshId.h"
 #include "Vertex.h"
 #include "RenderableId.h"
 #include "GpuBuffers.h"
@@ -28,7 +29,7 @@ public:
   virtual VkExtent2D swapChainExtent() = 0;
 
   //virtual void bindGigaBuffers(VkCommandBuffer*) = 0;
-  virtual void drawGigaBuffer(VkCommandBuffer*) = 0;
+  //virtual void drawGigaBuffer(VkCommandBuffer*) = 0;
   virtual void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls) = 0;
   virtual void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) = 0;
   virtual void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) = 0;
@@ -37,16 +38,12 @@ public:
   virtual int getCurrentMultiBufferIdx() = 0;
   virtual int getMultiBufferSize() = 0;
 
-  virtual MeshId registerMesh(
-    const std::vector<Vertex>& vertices, 
-    const std::vector<std::uint32_t>& indices,
-    const std::string& metallicTex = "",
-    const std::string& roughnessTex = "",
-    const std::string& albedoTex = "",
-    const std::string& normalTex = "") = 0;
+  virtual ModelId registerModel(Model&& model) = 0;
+
+  virtual MeshId registerMesh(Mesh& mesh) = 0;
 
   virtual RenderableId registerRenderable(
-    MeshId meshId,
+    ModelId modelId,
     const glm::mat4& transform,
     const glm::vec3& sphereBoundCenter,
     float sphereBoundRadius,

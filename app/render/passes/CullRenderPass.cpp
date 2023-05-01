@@ -183,7 +183,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
   translationBufUsage._type = Type::SSBO;
   BufferInitialCreateInfo transCreateInfo{};
   transCreateInfo._multiBuffered = true;
-  transCreateInfo._initialSize = rc->getMaxNumRenderables() * sizeof(uint32_t);
+  transCreateInfo._initialSize = rc->getMaxNumRenderables() * sizeof(gpu::GPUTranslationId);
   translationBufUsage._bufferCreateInfo = transCreateInfo;
   regInfo._resourceUsages.emplace_back(std::move(translationBufUsage));
 

@@ -15,7 +15,7 @@ public:
   void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
 
 private:
-  Model _screenQuad;
+  Mesh _screenQuad;
   MeshId _meshId;
 };
 

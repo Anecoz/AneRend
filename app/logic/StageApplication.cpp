@@ -36,45 +36,69 @@ bool StageApplication::init()
   glfwSetWindowUserPointer(_window, this);
   glfwSetFramebufferSizeCallback(_window, framebufferResizeCallback);
 
+  render::Model testModel;
+  render::Model testModel2;
+  render::Model testModel3;
+  render::Model testModel4;
+  render::Model testModel5;
+  render::Model testModel6;
+
   if (!_vkRenderer.init()) {
     return false;
   }
 
-  if (!_testModel.loadFromObj(std::string(ASSET_PATH) + "models/low_poly_tree.obj",
+  if (!testModel.loadFromObj(std::string(ASSET_PATH) + "models/low_poly_tree.obj",
                               std::string(ASSET_PATH) + "models/")) {
     return false;
   }
 
-  if (!_testModel2.loadFromObj(std::string(ASSET_PATH) + "models/lots_of_models.obj",
+  if (!testModel2.loadFromObj(std::string(ASSET_PATH) + "models/lots_of_models.obj",
                               std::string(ASSET_PATH) + "models/")) {
     return false;
   }
 
-  if (!_testModel3.loadFromObj(std::string(ASSET_PATH) + "models/sponza.obj",
+  if (!testModel3.loadFromObj(std::string(ASSET_PATH) + "models/sponza.obj",
     std::string(ASSET_PATH) + "models/")) {
     return false;
   }
 
-  if (!_testModel4.loadFromObj(std::string(ASSET_PATH) + "models/old_lantern_pbr/lantern_obj.obj",
-    std::string(ASSET_PATH) + "models/old_lantern_pbr/")) {
+  if (!testModel4.loadFromObj(std::string(ASSET_PATH) + "models/old_lantern_pbr/lantern_obj.obj",
+    std::string(ASSET_PATH) + "models/old_lantern_pbr/",
+    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Metallic.jpg",
+    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Roughness.jpg",
+    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Normal_OpenGL.jpg",
+    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Base_Color.jpg")) {
     return false;
   }
 
-  _meshId = _vkRenderer.registerMesh(_testModel._vertices, _testModel._indices);
-  _meshId2 = _vkRenderer.registerMesh(_testModel2._vertices, _testModel2._indices);
-  _meshId3 = _vkRenderer.registerMesh(_testModel3._vertices, _testModel3._indices);
+  if (!testModel5.loadFromObj(std::string(ASSET_PATH) + "models/gas_tank/GasTank.obj",
+    std::string(ASSET_PATH) + "models/gas_tank/",
+    std::string(ASSET_PATH) + "models/gas_tank/GasTank_Metallic.png",
+    std::string(ASSET_PATH) + "models/gas_tank/GasTank_Roughness.png",
+    std::string(ASSET_PATH) + "models/gas_tank/GasTank_Normal.png",
+    std::string(ASSET_PATH) + "models/gas_tank/GasTank_Base_Color.png")) {
+    return false;
+  }
 
-  _meshId4 = _vkRenderer.registerMesh(
-    _testModel4._vertices, 
-    _testModel4._indices,
-    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Metallic.jpg",
-    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Roughness.jpg", 
-    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Base_Color.jpg",
-    std::string(ASSET_PATH) + "models/old_lantern_pbr/textures/lantern_Normal_OpenGL.jpg");
+  if (!testModel6.loadFromObj(std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/sphere-bot-with-hydraulics.obj",
+    std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/",
+    std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_metalness.jpg",
+    std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_rough.jpg",
+    std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_nmap.jpg",
+    std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_color_2.jpg")) {
+    return false;
+  }
+
+  _meshId = _vkRenderer.registerModel(std::move(testModel));
+  _meshId2 = _vkRenderer.registerModel(std::move(testModel2));
+  _meshId3 = _vkRenderer.registerModel(std::move(testModel3));
+  _meshId4 = _vkRenderer.registerModel(std::move(testModel4));
+  _meshId5 = _vkRenderer.registerModel(std::move(testModel5));
+  _meshId6 = _vkRenderer.registerModel(std::move(testModel6));
 
   // Create a bunch of test matrices
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 10;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -128,6 +152,28 @@ bool StageApplication::init()
         auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
         _vkRenderer.registerRenderable(_meshId4, mat * rot * scale, glm::vec3(0.0f), 5.0f);
+      }
+  }
+  {
+    std::size_t numInstances = 10;
+
+    for (int x = 0; x < numInstances; ++x)
+      for (int y = 0; y < numInstances; ++y) {
+        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(5.0f * x, 1.0f, 5.0f * y));
+        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, 1.0f));
+        auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
+        _vkRenderer.registerRenderable(_meshId5, mat * rot * scale, glm::vec3(0.0f), 5.0f);
+      }
+  }
+  {
+    std::size_t numInstances = 10;
+
+    for (int x = 0; x < numInstances; ++x)
+      for (int y = 0; y < numInstances; ++y) {
+        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(12.0f * x, 1.0f, 17.0f * y));
+        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(2.0f));
+        auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
+        _vkRenderer.registerRenderable(_meshId6, mat * rot * scale, glm::vec3(0.0f), 5.0f);
       }
   }
 

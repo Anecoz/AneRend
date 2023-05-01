@@ -2,7 +2,7 @@
 
 #include "RenderPass.h"
 #include "../AllocatedBuffer.h"
-#include "../Model.h"
+#include "../Mesh.h"
 
 namespace render {
 
@@ -16,7 +16,7 @@ namespace render {
     void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
 
   private:
-    Model _screenQuad;
+    Mesh _screenQuad;
     MeshId _meshId;
   };
 

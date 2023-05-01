@@ -6,8 +6,13 @@
 #include <stdio.h>
 #include <iostream>
 #include <algorithm>
+#include <unordered_map>
 
-bool OBJLoader::loadFromFile(const std::string& objPath, const std::string& mtlDir, OBJData& outData)
+bool OBJLoader::loadFromFile(
+  const std::string& objPath,
+  const std::string& mtlDir,
+  std::vector<render::Vertex>& outVerts,
+  std::vector<uint32_t>& outIndices)
 {
 	tinyobj::attrib_t attrib;
   std::vector<tinyobj::shape_t> shapes;
@@ -31,50 +36,63 @@ bool OBJLoader::loadFromFile(const std::string& objPath, const std::string& mtlD
 
   printf("OBJ: Loading %zu shapes\n", shapes.size());
 
-  std::vector<int> indices;
-  std::vector<float> normals;
-  std::vector<float> colors;
-  std::vector<float> texCoords;
-  colors.resize(attrib.vertices.size());
-  normals.resize(attrib.vertices.size());
-  texCoords.resize(attrib.vertices.size());
+  std::unordered_map<render::Vertex, uint32_t> uniqueVertices{};
+
   for (int shape = 0; shape < shapes.size(); ++shape) {
     for (int i = 0; i < shapes[shape].mesh.indices.size(); ++i) {
       tinyobj::index_t idx = shapes[shape].mesh.indices[i];
-      indices.emplace_back(idx.vertex_index);
 
-      normals[3 * idx.vertex_index + 0] = attrib.normals[3 * idx.normal_index + 0];
-      normals[3 * idx.vertex_index + 1] = attrib.normals[3 * idx.normal_index + 1];
-      normals[3 * idx.vertex_index + 2] = attrib.normals[3 * idx.normal_index + 2];
+      render::Vertex vert{};
+
+      vert.pos = {
+        attrib.vertices[3 * idx.vertex_index + 0],
+        attrib.vertices[3 * idx.vertex_index + 1],
+        attrib.vertices[3 * idx.vertex_index + 2]
+      };
+
+      vert.normal = {
+        attrib.normals[3 * idx.normal_index + 0],
+        attrib.normals[3 * idx.normal_index + 1],
+        attrib.normals[3 * idx.normal_index + 2]
+      };
 
       if (idx.texcoord_index != -1) {
-        texCoords[2 * idx.vertex_index + 0] = attrib.texcoords[2 * idx.texcoord_index + 0];
-        texCoords[2 * idx.vertex_index + 1] = attrib.texcoords[2 * idx.texcoord_index + 1];
+        vert.uv = {
+          attrib.texcoords[2 * idx.texcoord_index + 0],
+          1.0f - attrib.texcoords[2 * idx.texcoord_index + 1]
+        };
       }
       else {
-        texCoords[2 * idx.vertex_index + 0] = 0.0;
-        texCoords[2 * idx.vertex_index + 1] = 0.0;
+        vert.uv = {
+          0.0,
+          0.0
+        };
       }
 
       if (!shapes[shape].mesh.material_ids.empty()) {
-        int materialId = shapes[shape].mesh.material_ids[i/3];    
+        int materialId = shapes[shape].mesh.material_ids[i / 3];
 
-        colors[3 * idx.vertex_index + 0] = materials[materialId].diffuse[0];
-        colors[3 * idx.vertex_index + 1] = materials[materialId].diffuse[1];
-        colors[3 * idx.vertex_index + 2] = materials[materialId].diffuse[2];
+        vert.color = {
+          materials[materialId].diffuse[0],
+          materials[materialId].diffuse[1],
+          materials[materialId].diffuse[2]
+        };
       }
       else {
-        colors[3 * idx.vertex_index + 0] = 1.0;
-        colors[3 * idx.vertex_index + 1] = 1.0;
-        colors[3 * idx.vertex_index + 2] = 1.0;
+        vert.color = {
+          1.0f,
+          1.0f,
+          1.0f
+        };
       }
+
+      if (uniqueVertices.count(vert) == 0) {
+        uniqueVertices[vert] = static_cast<uint32_t>(outVerts.size());
+        outVerts.emplace_back(vert);
+      }
+
+      outIndices.emplace_back(uniqueVertices[vert]);
     }
   }
-
-  outData._vertices = std::move(attrib.vertices);
-  outData._normals = std::move(normals);
-  outData._colors = std::move(colors);
-  outData._indices = std::move(indices);
-  outData._texCoords = std::move(texCoords);
   return true;
 }

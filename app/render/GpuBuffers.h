@@ -18,12 +18,22 @@ struct alignas(16) GPURenderable {
   glm::mat4 _transform;
   glm::vec4 _bounds;
   glm::vec4 _tint;
-  uint32_t _meshId; // Also index into the mesh GPU buffer
-  uint32_t _visible; // TODO: Not sure about if there is a bool type...
+  uint32_t _firstMeshId;
+  uint32_t _numMeshIds;
+  uint32_t _visible;
+};
+
+struct GPUMeshMaterialInfo {
   int32_t _metallicTexIndex;
   int32_t _roughnessTexIndex;
   int32_t _normalTexIndex;
   int32_t _albedoTexIndex;
+};
+
+struct GPUTranslationId
+{
+  uint32_t _renderableId;
+  uint32_t _meshId;
 };
 
 // One per mesh

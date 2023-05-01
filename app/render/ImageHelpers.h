@@ -9,6 +9,7 @@
 #include "AllocatedImage.h"
 
 #include "../util/nanojpeg.h"
+#include "../LodePng/lodepng.h"
 
 namespace render {
 namespace imageutil {
@@ -77,7 +78,7 @@ struct TextureData
 
 static TextureData loadTex(const std::string& tex)
 {
-  TextureData output;
+  TextureData output{};
 
   std::filesystem::path p(tex);
   auto extension = p.extension().string();
@@ -122,7 +123,20 @@ static TextureData loadTex(const std::string& tex)
     njDone();
   }
   else if (extension == ".png") {
+    unsigned width, height;
 
+    unsigned error = lodepng::decode(output.data, width, height, tex.c_str());
+    if (error != 0) {
+      printf("Failed to decode png: %s\n", tex.c_str());
+      printf("Error is: %s\n", lodepng_error_text(error));
+      return output;
+    }
+
+    output.width = width;
+    output.height = height;
+    output.isColor = true;
+
+    printf("Decoded texture %s (width: %d, height: %d)\n", tex.c_str(), output.width, output.height);
   }
   else {
     printf("Unsupported extension in loadTex: %s\n", extension.c_str());

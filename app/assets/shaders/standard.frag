@@ -18,17 +18,25 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   uint screenHeight;
 } ubo;
 
-layout(set = 0, binding = 5) uniform sampler2D textures[];
+struct MeshMaterialInfo
+{
+  int metallicTexIndex;
+  int roughnessTexIndex;
+  int normalTexIndex;
+  int albedoTexIndex;
+};
+
+layout(std430, set = 0, binding = 5) readonly buffer MeshMaterialBuffer {
+  MeshMaterialInfo infos[];
+} materialBuffer;
+
+layout(set = 0, binding = 6) uniform sampler2D textures[];
 
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec3 fragNormal;
 layout(location = 2) in vec3 fragPos;
 layout(location = 3) in vec2 fragUV;
-layout(location = 4) flat in int fragMetallicIndex;
-layout(location = 5) flat in int fragRoughnessIndex;
-layout(location = 6) flat in int fragAlbedoIndex;
-layout(location = 7) flat in int fragNormalIndex;
-layout(location = 8) flat in mat3 fragModelMtx;
+layout(location = 4) in flat uint fragMeshId;
 
 layout(location = 0) out vec4 outCol0;
 layout(location = 1) out vec4 outCol1;
@@ -40,16 +48,16 @@ void main() {
   float roughness = 0.5;
   vec3 color = fragColor;
 
-  vec2 uv = vec2(fragUV.x, 1.0 - fragUV.y);
+  MeshMaterialInfo matInfo = materialBuffer.infos[fragMeshId];
 
-  if (fragMetallicIndex != -1) {
-    metallic = texture(textures[nonuniformEXT(fragMetallicIndex)], uv).r;
+  if (matInfo.metallicTexIndex != -1) {
+    metallic = texture(textures[nonuniformEXT(matInfo.metallicTexIndex)], fragUV).r;
   }
-  if (fragRoughnessIndex != -1) {
-    roughness = texture(textures[nonuniformEXT(fragRoughnessIndex)], uv).r;
+  if (matInfo.roughnessTexIndex != -1) {
+    roughness = texture(textures[nonuniformEXT(matInfo.roughnessTexIndex)], fragUV).r;
   }
-  if (fragAlbedoIndex != -1) {
-    color = texture(textures[nonuniformEXT(fragAlbedoIndex)], uv).rgb;
+  if (matInfo.albedoTexIndex != -1) {
+    color = texture(textures[nonuniformEXT(matInfo.albedoTexIndex)], fragUV).rgb;
   }
   /*if (fragNormalIndex != -1) {
     normal = normalize(fragModelMtx * (texture(textures[nonuniformEXT(fragNormalIndex)], uv).rgb * 2.0 - 1.0));

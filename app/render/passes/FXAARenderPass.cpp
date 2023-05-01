@@ -19,7 +19,7 @@ void FXAARenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
   // Screen quad
   _screenQuad._vertices = graphicsutil::createScreenQuad(1.0f, 1.0f);
-  _meshId = rc->registerMesh(_screenQuad._vertices, {});
+  _meshId = rc->registerMesh(_screenQuad);
 
   RenderPassRegisterInfo info{};
   info._name = "FXAA";

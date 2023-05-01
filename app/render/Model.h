@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Vertex.h"
+#include "Mesh.h"
 
 #include <cstdint>
 #include <string>
@@ -8,22 +8,34 @@
 
 namespace render {
 
+typedef std::uint32_t ModelId;
+
 class Model
 {
 public:
   Model();
   ~Model();
 
-  Model(const Model&);
+  Model(const Model&) = delete;
   Model(Model&&);
-  Model& operator=(const Model&);
+  Model& operator=(const Model&) = delete;
   Model& operator=(Model&&);
 
-  bool loadFromObj(const std::string& objPath, const std::string& mtlPath);
+  bool loadFromObj(
+    const std::string& objPath,
+    const std::string& mtlPath,
+    const std::string& metallicPath = "",
+    const std::string& roughnessPath = "",
+    const std::string& normalPath = "",
+    const std::string& albedoPath = "");
 
   explicit operator bool() const;
 
-  std::vector<Vertex> _vertices;
-  std::vector<std::uint32_t> _indices;
+  std::vector<Mesh> _meshes;
+
+  std::string _metallicPath;
+  std::string _roughnessPath;
+  std::string _normalPath;
+  std::string _albedoPath;
 };
 }

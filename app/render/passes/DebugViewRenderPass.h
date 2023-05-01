@@ -22,7 +22,7 @@ private:
 
   std::vector<ResourceUsage> _resourceUsages;
 
-  Model _screenQuad;
+  Mesh _screenQuad;
   MeshId _meshId;
 
   std::string _currResource;

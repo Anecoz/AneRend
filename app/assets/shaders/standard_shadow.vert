@@ -21,12 +21,15 @@ struct Renderable
   mat4 transform;
   vec4 bounds;
   vec4 tint;
-  uint meshId;
+  uint firstMeshId;
+  uint numMeshIds;
   uint _visible;
-  int metallicTexIndex;
-  int roughnessTexIndex;
-  int normalTexIndex;
-  int albedoTexIndex;
+};
+
+struct TranslationId
+{
+  uint renderableId;
+  uint meshId;
 };
 
 layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {
@@ -34,7 +37,7 @@ layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {
 } renderableBuffer;
 
 layout(std430, set = 1, binding = 0) buffer TranslationBuffer {
-  uint ids[];
+  TranslationId ids[];
 } translationBuffer;
 
 layout(location = 0) in vec3 inPosition;
@@ -42,7 +45,7 @@ layout(location = 0) in vec3 inPosition;
 layout(location = 0) out vec3 fragPositionWorld;
 
 void main() {
-  uint renderableId = translationBuffer.ids[gl_InstanceIndex];
+  uint renderableId = translationBuffer.ids[gl_InstanceIndex].renderableId;
   mat4 model = renderableBuffer.renderables[renderableId].transform;
   gl_Position = ubo.directionalShadowMatrixProj * ubo.directionalShadowMatrixView * model * vec4(inPosition, 1.0);
   fragPositionWorld = vec3(model * vec4(inPosition, 1.0));

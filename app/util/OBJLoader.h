@@ -1,16 +1,9 @@
 #pragma once
 
+#include "../render/Vertex.h"
+
 #include <string>
 #include <vector>
-
-struct OBJData
-{
-  std::vector<float> _vertices;
-  std::vector<float> _normals;
-  std::vector<float> _colors;
-  std::vector<float> _texCoords;
-  std::vector<int> _indices;
-};
 
 class OBJLoader
 {
@@ -18,6 +11,10 @@ public:
 	OBJLoader() = default;
 	~OBJLoader() = default;
 
-	static bool loadFromFile(const std::string& objPath, const std::string& mtlDir, OBJData& outData);
+	static bool loadFromFile(
+    const std::string& objPath,
+    const std::string& mtlDir,
+    std::vector<render::Vertex>& outVerts,
+    std::vector<uint32_t>& outIndices);
 };
 

@@ -30,7 +30,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
 {
   // Screen quad
   _screenQuad._vertices = graphicsutil::createScreenQuad(0.25f, 0.25f);
-  _meshId = rc->registerMesh(_screenQuad._vertices, {});
+  _meshId = rc->registerMesh(_screenQuad);
 
   _resourceUsages.clear();
 
