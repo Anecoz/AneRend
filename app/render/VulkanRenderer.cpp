@@ -94,7 +94,9 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _fgb(&_vault)
   , _window(window)
   , _enableValidationLayers(true)
-{}
+{
+  imageutil::init();
+}
 
 VulkanRenderer::~VulkanRenderer()
 {
@@ -362,12 +364,27 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh)
   mesh._metallicRoughness._bindlessIndex = -1;
 
   auto loadTexturesFunc = [&](PbrMaterialData& pbrData) {
-    auto data = imageutil::loadTex(pbrData._texPath);
-    VkFormat format = data.isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
+    std::vector<uint8_t>& data = pbrData._data;
+    bool isColor = true;
+    int width = pbrData._width;
+    int height = pbrData._height;
 
-    createTexture(format, data.width, data.height, data.data, pbrData._sampler, pbrData._image, pbrData._view);
+    if (data.empty()) {
+      auto loaded = imageutil::loadTex(pbrData._texPath);
+      data = std::move(loaded.data);
+      width = loaded.width;
+      height = loaded.height;
+      isColor = loaded.isColor;
+    }
+    
+    VkFormat format = isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
+
+    createTexture(format, width, height, data, pbrData._sampler, pbrData._image, pbrData._view);
 
     pbrData._bindlessIndex = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, pbrData._view, pbrData._sampler);
+
+    // No need to keep on CPU
+    data = std::vector<uint8_t>();
   };
 
   // Do textures

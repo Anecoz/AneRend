@@ -76,6 +76,10 @@ struct TextureData
   bool isColor;
 };
 
+static void init()
+{
+}
+
 static TextureData loadTex(const std::string& tex)
 {
   TextureData output{};
@@ -106,8 +110,6 @@ static TextureData loadTex(const std::string& tex)
     int width = njGetWidth();
     int height = njGetHeight();
 
-    printf("Decoded texture %s (isColor: %d, width: %d, height: %d)\n", tex.c_str(), isColor, width, height);
-
     output.data.resize(njGetImageSize());
     std::memcpy(output.data.data(), njGetImage(), njGetImageSize());
 
@@ -135,12 +137,13 @@ static TextureData loadTex(const std::string& tex)
     output.width = width;
     output.height = height;
     output.isColor = true;
-
-    printf("Decoded texture %s (width: %d, height: %d)\n", tex.c_str(), output.width, output.height);
   }
   else {
     printf("Unsupported extension in loadTex: %s\n", extension.c_str());
+    return output;
   }
+
+  printf("Decoded texture %s (isColor: %d, width: %d, height: %d)\n", tex.c_str(), output.isColor, output.width, output.height);
 
   return output;
 }

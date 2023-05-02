@@ -35,6 +35,10 @@ public:
 
   std::vector<Mesh> _meshes;
 
+  // These are in model space (i.e. have to be scaled by any renderable transform before use)
+  glm::vec3 _min;
+  glm::vec3 _max;
+
   std::string _metallicPath;
   std::string _roughnessPath;
   std::string _normalPath;

@@ -48,12 +48,12 @@ bool StageApplication::init()
     return false;
   }
 
-  /*if (!testModel.loadFromObj(std::string(ASSET_PATH) + "models/low_poly_tree.obj",
+  if (!testModel.loadFromObj(std::string(ASSET_PATH) + "models/low_poly_tree.obj",
                               std::string(ASSET_PATH) + "models/")) {
     return false;
   }
 
-  if (!testModel2.loadFromObj(std::string(ASSET_PATH) + "models/lots_of_models.obj",
+  /*if (!testModel2.loadFromObj(std::string(ASSET_PATH) + "models/lots_of_models.obj",
                               std::string(ASSET_PATH) + "models/")) {
     return false;
   }
@@ -94,8 +94,11 @@ bool StageApplication::init()
     return false;
   }
 
-  /*_meshId = _vkRenderer.registerModel(std::move(testModel));
-  _meshId2 = _vkRenderer.registerModel(std::move(testModel2));
+  auto testMin = testModel7._min;
+  auto testMax = testModel7._max;
+
+  _meshId = _vkRenderer.registerModel(std::move(testModel));
+  /*_meshId2 = _vkRenderer.registerModel(std::move(testModel2));
   _meshId3 = _vkRenderer.registerModel(std::move(testModel3));
   _meshId4 = _vkRenderer.registerModel(std::move(testModel4));
   _meshId5 = _vkRenderer.registerModel(std::move(testModel5));
@@ -104,7 +107,7 @@ bool StageApplication::init()
 
   // Create a bunch of test matrices
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 10;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -185,11 +188,17 @@ bool StageApplication::init()
   {
     std::size_t numInstances = 1;
 
+    glm::vec3 sphereCenter = (testMin + testMax) / 2.0f;
+    float radius = std::max(std::abs(testMax.z - testMin.z), std::max(std::abs(testMax.x - testMin.x), std::abs(testMax.y - testMin.y)));
+
+    float scale = 0.01f;
+    radius *= scale;
+
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
         auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(12.0f * x, 0.0f, 17.0f * y));
-        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(.01f));
-        _vkRenderer.registerRenderable(_meshId7, mat * scale, glm::vec3(0.0f), 5000.0f);
+        auto scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
+        _vkRenderer.registerRenderable(_meshId7, mat * scaleMat, sphereCenter, radius);
       }
   }
 
