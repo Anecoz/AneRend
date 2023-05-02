@@ -599,6 +599,7 @@ void VulkanRenderer::update(
   ubo.screenWidth = swapChainExtent().width;
   ubo.ssaoEnabled = _renderOptions.ssao;
   ubo.fxaaEnabled = _renderOptions.fxaa;
+  ubo.directionalShadowsEnabled = _renderOptions.directionalShadows;
 
   for (int i = 0; i < _lights.size(); ++i) {
     _lights[i].debugUpdatePos(delta);

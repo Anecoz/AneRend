@@ -53,7 +53,7 @@ bool StageApplication::init()
     return false;
   }
 
-  /*if (!testModel2.loadFromObj(std::string(ASSET_PATH) + "models/lots_of_models.obj",
+  if (!testModel2.loadFromObj(std::string(ASSET_PATH) + "models/lots_of_models.obj",
                               std::string(ASSET_PATH) + "models/")) {
     return false;
   }
@@ -88,7 +88,7 @@ bool StageApplication::init()
     std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_nmap.jpg",
     std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_color_2.jpg")) {
     return false;
-  }*/
+  }
 
   if (!testModel7.loadFromGLTF(std::string(ASSET_PATH) + "models/sponza-gltf-pbr/sponza.glb")) {
     return false;
@@ -98,11 +98,11 @@ bool StageApplication::init()
   auto testMax = testModel7._max;
 
   _meshId = _vkRenderer.registerModel(std::move(testModel));
-  /*_meshId2 = _vkRenderer.registerModel(std::move(testModel2));
+  _meshId2 = _vkRenderer.registerModel(std::move(testModel2));
   _meshId3 = _vkRenderer.registerModel(std::move(testModel3));
   _meshId4 = _vkRenderer.registerModel(std::move(testModel4));
   _meshId5 = _vkRenderer.registerModel(std::move(testModel5));
-  _meshId6 = _vkRenderer.registerModel(std::move(testModel6));*/
+  _meshId6 = _vkRenderer.registerModel(std::move(testModel6));
   _meshId7 = _vkRenderer.registerModel(std::move(testModel7));
 
   // Create a bunch of test matrices
@@ -132,7 +132,7 @@ bool StageApplication::init()
 
   // Do a couple of the big models
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 10;
 
     for (int x = 0; x < numInstances; ++x)
     for (int y = 0; y < numInstances; ++y) {
@@ -153,7 +153,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 10;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -164,7 +164,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 10;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -175,7 +175,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 10;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -284,6 +284,7 @@ void StageApplication::render()
     ImGui::Begin("Render Options");
     ImGui::Checkbox("SSAO", &_renderOptions.ssao);
     ImGui::Checkbox("FXAA", &_renderOptions.fxaa);
+    ImGui::Checkbox("Shadows", &_renderOptions.directionalShadows);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
   }
 

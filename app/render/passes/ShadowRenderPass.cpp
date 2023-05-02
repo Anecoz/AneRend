@@ -64,7 +64,7 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
   params.depthBiasEnable = true;
   params.depthBiasConstant = 4.0f;
   params.depthBiasSlope = 1.5f;
-  params.cullMode = VK_CULL_MODE_FRONT_BIT;
+  //params.cullMode = VK_CULL_MODE_FRONT_BIT;
   info._graphicsParams = params;
 
   fgb.registerRenderPass(std::move(info));
@@ -72,6 +72,8 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
   fgb.registerRenderPassExe("Shadow",
     [this](RenderExeParams exeParams)
     {
+      if (!exeParams.rc->getRenderOptions().directionalShadows) return;
+
       VkExtent2D extent{};
       extent.width = 8192;
       extent.height = 8192;

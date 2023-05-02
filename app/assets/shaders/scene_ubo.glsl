@@ -14,4 +14,5 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   uint screenHeight;
   int ssaoEnabled;
   int fxaaEnabled;
+  int directionalShadowsEnabled;
 } ubo;

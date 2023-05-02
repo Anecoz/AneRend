@@ -93,6 +93,7 @@ struct GPUSceneData {
   uint32_t screenHeight;
   int32_t ssaoEnabled;
   int32_t fxaaEnabled;
+  int32_t directionalShadowsEnabled;
 };
 
 struct GPUSSAOSampleUbo {
