@@ -161,6 +161,7 @@ bool GLTFLoader::loadFromFile(
       if (primitive.material >= 0) {
         auto& material = model.materials[primitive.material];
 
+        // TODO: Copying image data down here is naive... the same texture can be reused multiple times, a cache would be good
         int baseColIdx = material.pbrMetallicRoughness.baseColorTexture.index;
         if (baseColIdx >= 0) {
           int imageIdx = model.textures[baseColIdx].source;
