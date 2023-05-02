@@ -10,6 +10,7 @@
 #include "RenderableId.h"
 #include "GpuBuffers.h"
 #include "RenderDebugOptions.h"
+#include "RenderOptions.h"
 
 #include <unordered_map>
 
@@ -62,6 +63,7 @@ public:
   virtual gpu::GPUCullPushConstants getCullParams() = 0;
 
   virtual RenderDebugOptions& getDebugOptions() = 0;
+  virtual RenderOptions& getRenderOptions() = 0;
 
   virtual void setDebugName(VkObjectType objectType, uint64_t objectHandle, const char* name) = 0;
 

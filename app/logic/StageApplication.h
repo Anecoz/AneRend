@@ -8,6 +8,7 @@
 #include "../render/Model.h"
 #include "../render/Camera.h"
 #include "../render/RenderDebugOptions.h"
+#include "../render/RenderOptions.h"
 #include "WindSystem.h"
 
 class StageApplication : public Application
@@ -31,6 +32,7 @@ private:
   glm::vec3 _sunDir;
 
   render::RenderDebugOptions _renderDebugOptions;
+  render::RenderOptions _renderOptions;
   logic::WindSystem _windSystem;
   glm::vec2 _windDir;
 

@@ -1,5 +1,8 @@
 #version 450
 
+#extension GL_GOOGLE_include_directive : enable
+#include "scene_ubo.glsl"
+
 layout(set = 1, binding = 0) uniform sampler2D inputTex;
 
 layout(location = 0) in vec2 fragTexCoords;
@@ -93,7 +96,12 @@ vec4 apply(sampler2D tex, vec2 fragCoord, vec2 resolution) {
 }
 
 void main() {
-  vec2 resolution = textureSize(inputTex, 0);
-  vec2 fragCoord = vec2(fragTexCoords.x * resolution.x, fragTexCoords.y * resolution.y);
-  outColor = apply(inputTex, fragCoord, resolution);
+  if (ubo.fxaaEnabled == 1) {
+    vec2 resolution = textureSize(inputTex, 0);
+    vec2 fragCoord = vec2(fragTexCoords.x * resolution.x, fragTexCoords.y * resolution.y);  
+    outColor = apply(inputTex, fragCoord, resolution);    
+  }
+  else {
+    outColor = texture(inputTex, fragTexCoords);
+  }
 }

@@ -67,6 +67,8 @@ void FXAARenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 
   fgb.registerRenderPassExe("FXAA",
     [this](RenderExeParams exeParams) {
+      //if (!exeParams.rc->getRenderOptions().fxaa) return;
+
       VkClearValue clearValue{};
       clearValue.color = { {0.5f, 0.5f, 0.2f, 1.0f} };
       VkRenderingAttachmentInfoKHR colorAttachmentInfo{};

@@ -224,6 +224,7 @@ void StageApplication::update(double delta)
     glm::vec4(_sunDir, 0.0f),
     delta, glfwGetTime(),
     g_LockFrustumCulling,
+    _renderOptions,
     _renderDebugOptions,
     _windSystem.getCurrentWindMap());
 
@@ -237,6 +238,8 @@ void StageApplication::update(double delta)
 void StageApplication::render()
 {
   _vkRenderer.prepare();
+
+  ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
   {
     ImGui::Begin("Debug");
@@ -262,13 +265,17 @@ void StageApplication::render()
     if (ImGui::InputText("Debug view resource", debugResStr, IM_ARRAYSIZE(debugResStr), ImGuiInputTextFlags_EnterReturnsTrue)) {
       _renderDebugOptions.debugViewResource = std::string(debugResStr);
     }
-    ImGui::Slider2DFloat("Sun dir", &_sunDir.x, &_sunDir.z, -1.0f, 1.0f, -1.0f, 1.0f);
-    ImGui::Slider2DFloat("Wind dir", &_windDir.x, &_windDir.y, -1.0f, 1.0f, -1.0f, 1.0f);
-    ImGui::Checkbox("Shadow debug", &_renderDebugOptions.debugView);
-    ImGui::Checkbox("Apply post processing", &g_PP);
-    ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
-    ImGui::SliderFloat("Wind strength", &_renderDebugOptions.windStrength, 0.0, 1.0f);
+    /*ImGui::Slider2DFloat("Sun dir", &_sunDir.x, &_sunDir.z, -1.0f, 1.0f, -1.0f, 1.0f);
+    ImGui::Slider2DFloat("Wind dir", &_windDir.x, &_windDir.y, -1.0f, 1.0f, -1.0f, 1.0f);*/
+    ImGui::Checkbox("Texture Debug View", &_renderDebugOptions.debugView);
+    //ImGui::Checkbox("Apply post processing", &g_PP);
     ImGui::End();
+  }
+  {
+    ImGui::Begin("Render Options");
+    ImGui::Checkbox("SSAO", &_renderOptions.ssao);
+    ImGui::Checkbox("FXAA", &_renderOptions.fxaa);
+    ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
   }
 
   _vkRenderer.drawFrame(g_PP, g_DebugShadow);

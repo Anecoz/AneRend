@@ -543,7 +543,8 @@ void VulkanRenderer::update(
   double delta,
   double time,
   bool lockCulling,
-  RenderDebugOptions options,
+  RenderOptions renderOptions,
+  RenderDebugOptions debugOptions,
   logic::WindMap windMap)
 {
   // TODO: We can't write to this frames UBO's until the GPU is finished with it.
@@ -552,7 +553,8 @@ void VulkanRenderer::update(
   // but we might be writing into memory that is currently accessed by the GPU.
   vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
 
-  _debugOptions = options;
+  _renderOptions = renderOptions;
+  _debugOptions = debugOptions;
   _currentWindMap = windMap;
 
   // Update bindless UBO
@@ -578,6 +580,8 @@ void VulkanRenderer::update(
   ubo.time = time;
   ubo.screenHeight = swapChainExtent().height;
   ubo.screenWidth = swapChainExtent().width;
+  ubo.ssaoEnabled = _renderOptions.ssao;
+  ubo.fxaaEnabled = _renderOptions.fxaa;
 
   for (int i = 0; i < _lights.size(); ++i) {
     _lights[i].debugUpdatePos(delta);
@@ -1991,7 +1995,8 @@ bool VulkanRenderer::initImgui()
 
   //this initializes the core structures of imgui
   ImGui::CreateContext();
-  ImGuiIO& io = ImGui::GetIO(); (void)io;
+  ImGuiIO& io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
   ImGui::StyleColorsDark();
 
@@ -2011,7 +2016,7 @@ bool VulkanRenderer::initImgui()
   init_info.ImageCount = 3;
   init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
   init_info.UseDynamicRendering = true;
-  init_info.ColorAttachmentFormat = _swapChain._swapChainImageFormat;
+  init_info.ColorAttachmentFormat = VK_FORMAT_R16G16B16A16_UNORM;
 
   if (!ImGui_ImplVulkan_Init(&init_info, nullptr)) {
     printf("Could not init impl vulkan for imgui!\n");
@@ -2420,6 +2425,11 @@ gpu::GPUCullPushConstants VulkanRenderer::getCullParams()
   cullPushConstants._windDirY = wind.y;
 
   return cullPushConstants;
+}
+
+RenderOptions& VulkanRenderer::getRenderOptions()
+{
+  return _renderOptions;
 }
 
 RenderDebugOptions& VulkanRenderer::getDebugOptions()

@@ -67,6 +67,8 @@ void SSAOBlurRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
 
   fgb.registerRenderPassExe("SSAOBlur",
     [this](RenderExeParams exeParams) {
+      if (!exeParams.rc->getRenderOptions().ssao) return;
+
       VkClearValue clearValue{};
       clearValue.color = { {1.0f, 1.0f, 1.0f, 1.0f} };
       VkRenderingAttachmentInfoKHR colorAttachmentInfo{};

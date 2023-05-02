@@ -225,6 +225,8 @@ void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 
   fgb.registerRenderPassExe("SSAO",
     [this](RenderExeParams exeParams) {
+      if (!exeParams.rc->getRenderOptions().ssao) return;
+
       VkClearValue clearValue{};
       clearValue.color = { {1.0f, 1.0f, 1.0f, 1.0f} };
       VkRenderingAttachmentInfoKHR colorAttachmentInfo{};

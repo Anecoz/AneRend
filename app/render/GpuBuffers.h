@@ -91,6 +91,8 @@ struct GPUSceneData {
   float time;
   uint32_t screenWidth;
   uint32_t screenHeight;
+  int32_t ssaoEnabled;
+  int32_t fxaaEnabled;
 };
 
 struct GPUSSAOSampleUbo {

@@ -79,7 +79,8 @@ public:
     double delta,
     double time,
     bool lockCulling,
-    RenderDebugOptions options,
+    RenderOptions renderOptions,
+    RenderDebugOptions debugOptions,
     logic::WindMap windMap);
 
   // Prepares some things for drawing (imgui stuff as of now).
@@ -122,6 +123,7 @@ public:
 
   gpu::GPUCullPushConstants getCullParams() override final;
 
+  RenderOptions& getRenderOptions() override final;
   RenderDebugOptions& getDebugOptions() override final;
 
   void setDebugName(VkObjectType objectType, uint64_t objectHandle, const char* name) override final;
@@ -148,6 +150,7 @@ private:
   void registerDebugRenderable(const glm::mat4& transform, const glm::vec3& center, float radius);
 
   RenderDebugOptions _debugOptions;
+  RenderOptions _renderOptions;
   logic::WindMap _currentWindMap;
 
   RenderableId _nextRenderableId = 1;
