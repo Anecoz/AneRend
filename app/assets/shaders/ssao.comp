@@ -1,6 +1,9 @@
 #version 450
 
 #extension GL_GOOGLE_include_directive : enable
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
 #include "scene_ubo.glsl"
 
 layout(set = 1, binding = 0) uniform sampler2D gbuffer0Tex;
@@ -11,9 +14,7 @@ layout(set = 1, binding = 3) uniform UniformBufferObjectSamples {
   vec4 samples[64];
 } samplesUbo;
 
-layout(location = 0) in vec2 fragTexCoords;
-
-layout(location = 0) out vec4 outColor;
+layout(set = 1, binding = 4, r32f) uniform writeonly image2D outputIm;
 
 vec3 calcViewSpacePos(vec2 texCoord, float depthSamp)
 {
@@ -26,22 +27,44 @@ vec3 calcViewSpacePos(vec2 texCoord, float depthSamp)
 }
 
 void main() {
+  if (gl_GlobalInvocationID.x > ubo.screenWidth || gl_GlobalInvocationID.y > ubo.screenHeight) {
+    return;
+  }
+
+  ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  vec2 texCoords = vec2(pixel) / vec2(ubo.screenWidth - 1, ubo.screenHeight - 1);
+
+  float depthSamp = texture(depthTex, texCoords).r;
+
+  // Early exit if we're in the sky
+  if (depthSamp == 1.0f) {
+    imageStore(outputIm, pixel, vec4(1.0));
+    return;
+  }
+
   const vec2 noiseScale = vec2(float(ubo.screenWidth)/4.0, float(ubo.screenHeight)/4.0);
 
-  float depthSamp = texture(depthTex, fragTexCoords).r;
-
   // From learnopengl.com
-  vec3 fragPos   = calcViewSpacePos(fragTexCoords, depthSamp);
-  vec3 normal    = mat3(ubo.view) * texture(gbuffer0Tex, fragTexCoords).rgb;
-  vec3 randomVec = texture(noiseTex, fragTexCoords * noiseScale).xyz;
+  vec3 fragPos   = calcViewSpacePos(texCoords, depthSamp);
+
+  // Early exit if we're extremely close to the camera
+  if (-fragPos.z < 0.5) {
+    imageStore(outputIm, pixel, vec4(1.0));
+    return;
+  }
+
+  vec3 normal    = mat3(ubo.view) * texture(gbuffer0Tex, texCoords).rgb;
+  vec3 randomVec = texture(noiseTex, texCoords * noiseScale).xyz;
 
   vec3 tangent   = normalize(randomVec - normal * dot(randomVec, normal));
   vec3 bitangent = cross(normal, tangent);
   mat3 TBN       = mat3(tangent, bitangent, normal);
 
+  float maxDist = 10.0;
+
   float occlusion = 0.0;
   int kernelSize = 64;
-  float radius = 0.5;
+  float radius = mix(0.01, 0.5, clamp(-fragPos.z/maxDist, 0.0, 1.0));
   float bias = 0.025;
   for(int i = 0; i < kernelSize; ++i) {
     // get sample position
@@ -61,5 +84,6 @@ void main() {
   }
 
   occlusion = 1.0 - (occlusion / kernelSize);
-  outColor.r = occlusion;
+
+  imageStore(outputIm, pixel, vec4(occlusion));
 }

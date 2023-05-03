@@ -39,11 +39,43 @@ void fillSampleUBO(RenderContext* renderContext, AllocatedBuffer& ubo)
     ssaoKernel.push_back(sample);
   }
 
-  void* data;
+  // Create a staging buffer on CPU side first
+  AllocatedBuffer stagingBuffer;
+  std::size_t dataSize = 64 * sizeof(glm::vec4);
+
+  auto allocator = renderContext->vmaAllocator();
+  bufferutil::createBuffer(allocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
+
+  glm::vec4* mappedData;
+  vmaMapMemory(allocator, stagingBuffer._allocation, &(void*)mappedData);
+
+  for (std::size_t i = 0; i < ssaoKernel.size(); ++i) {
+    mappedData[i] = ssaoKernel[i];
+  }
+
+  auto cmdBuf = renderContext->beginSingleTimeCommands();
+
+  VkBufferCopy copyRegion{};
+  copyRegion.srcOffset = 0;
+  copyRegion.dstOffset = 0;
+  copyRegion.size = dataSize;
+
+  vkCmdCopyBuffer(
+    cmdBuf,
+    stagingBuffer._buffer,
+    ubo._buffer,
+    1, &copyRegion);
+
+  renderContext->endSingleTimeCommands(cmdBuf);
+
+  vmaUnmapMemory(allocator, stagingBuffer._allocation);
+  vmaDestroyBuffer(allocator, stagingBuffer._buffer, stagingBuffer._allocation);
+
+  /*void* data;
   auto allocator = renderContext->vmaAllocator();
   vmaMapMemory(allocator, ubo._allocation, &data);
   memcpy(data, ssaoKernel.data(), sizeof(gpu::GPUSSAOSampleUbo));
-  vmaUnmapMemory(allocator, ubo._allocation);
+  vmaUnmapMemory(allocator, ubo._allocation);*/
 }
   
 void fillNoiseTex(RenderContext* renderContext, VkImage& image)
@@ -135,9 +167,6 @@ SSAORenderPass::~SSAORenderPass()
 
 void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
-  _screenQuad._vertices = graphicsutil::createScreenQuad(1.0f, 1.0f);
-  _meshId = rc->registerMesh(_screenQuad);
-
   RenderPassRegisterInfo info{};
   info._name = "SSAO";
 
@@ -146,7 +175,7 @@ void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     ResourceUsage usage{};
     usage._resourceName = "Geometry0Image";
     usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SampledTexture;
     resourceUsages.emplace_back(std::move(usage));
   }
@@ -154,7 +183,7 @@ void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     ResourceUsage usage{};
     usage._resourceName = "GeometryDepthImage";
     usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SampledDepthTexture;
     resourceUsages.emplace_back(std::move(usage));
   }
@@ -162,7 +191,7 @@ void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     ResourceUsage usage{};
     usage._resourceName = "SSAONoiseImage";
     usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._stage.set((std::size_t)Stage::Compute);
 
     ImageInitialCreateInfo createInfo{};
     createInfo._initialHeight = 4;
@@ -179,10 +208,12 @@ void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     ResourceUsage usage{};
     usage._resourceName = "SSAOSampleUbo";
     usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._access.set((std::size_t)Access::Write);
+    usage._stage.set((std::size_t)Stage::Transfer);
 
     BufferInitialCreateInfo createInfo{};
-    createInfo._hostWritable = true;
+    //createInfo._hostWritable = true;
     createInfo._initialSize = sizeof(gpu::GPUSSAOSampleUbo);
     createInfo._initialDataCb = fillSampleUBO;
 
@@ -195,7 +226,7 @@ void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     ResourceUsage usage{};
     usage._resourceName = "SSAOImage";
     usage._access.set((std::size_t)Access::Write);
-    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._stage.set((std::size_t)Stage::Compute);
 
     ImageInitialCreateInfo createInfo{};
     createInfo._initialHeight = rc->swapChainExtent().height;
@@ -204,22 +235,16 @@ void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 
     usage._imageCreateInfo = createInfo;
 
-    usage._type = Type::ColorAttachment;
+    usage._type = Type::ImageStorage;
     resourceUsages.emplace_back(std::move(usage));
   }
 
   info._resourceUsages = std::move(resourceUsages);
 
-  GraphicsPipelineCreateParams param{};
+  ComputePipelineCreateParams param{};
   param.device = rc->device();
-  param.vertShader = "fullscreen_vert.spv";
-  param.fragShader = "ssao_frag.spv";
-  param.depthTest = false;
-  param.normalLoc = -1;
-  param.colorLoc = -1;
-  param.uvLoc = 1;
-  param.colorFormats = { VK_FORMAT_R32_SFLOAT };
-  info._graphicsParams = param;
+  param.shader = "ssao_comp.spv";
+  info._computeParams = param;
 
   fgb.registerRenderPass(std::move(info));
 
@@ -227,57 +252,20 @@ void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     [this](RenderExeParams exeParams) {
       if (!exeParams.rc->getRenderOptions().ssao) return;
 
-      VkClearValue clearValue{};
-      clearValue.color = { {1.0f, 1.0f, 1.0f, 1.0f} };
-      VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
-      colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-      colorAttachmentInfo.imageView = exeParams.colorAttachmentViews[0];
-      colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-      colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-      colorAttachmentInfo.clearValue = clearValue;
-
-      VkRenderingInfoKHR renderInfo{};
-      renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-      renderInfo.renderArea.extent = exeParams.rc->swapChainExtent();
-      renderInfo.renderArea.offset = { 0, 0 };
-      renderInfo.layerCount = 1;
-      renderInfo.colorAttachmentCount = 1;
-      renderInfo.pColorAttachments = &colorAttachmentInfo;
-      renderInfo.pDepthAttachment = nullptr;
-
-      vkCmdBeginRendering(*exeParams.cmdBuffer, &renderInfo);
-
-      // Viewport and scissor
-      VkViewport viewport{};
-      viewport.x = 0.0f;
-      viewport.y = 0.0f;
-      viewport.width = static_cast<float>(exeParams.rc->swapChainExtent().width);
-      viewport.height = static_cast<float>(exeParams.rc->swapChainExtent().height);
-      viewport.minDepth = 0.0f;
-      viewport.maxDepth = 1.0f;
-
-      VkRect2D scissor{};
-      scissor.offset = { 0, 0 };
-      scissor.extent = exeParams.rc->swapChainExtent();
-
-      // Bind pipeline
-      vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, *exeParams.pipeline);
+      vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, *exeParams.pipeline);
 
       vkCmdBindDescriptorSets(
         *exeParams.cmdBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        VK_PIPELINE_BIND_POINT_COMPUTE,
         *exeParams.pipelineLayout,
         1, 1, &(*exeParams.descriptorSets)[0],
         0, nullptr);
 
-      // Set dynamic viewport and scissor
-      vkCmdSetViewport(*exeParams.cmdBuffer, 0, 1, &viewport);
-      vkCmdSetScissor(*exeParams.cmdBuffer, 0, 1, &scissor);
+      uint32_t localSize = 16;
+      uint32_t numY = exeParams.rc->swapChainExtent().height / localSize;
+      uint32_t numX = exeParams.rc->swapChainExtent().width / localSize;
 
-      exeParams.rc->drawMeshId(exeParams.cmdBuffer, _meshId, 6, 1);
-
-      vkCmdEndRendering(*exeParams.cmdBuffer);
+      vkCmdDispatch(*exeParams.cmdBuffer, numX + 1, numY + 1, 1);
     });
 }
 
