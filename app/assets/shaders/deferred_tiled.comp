@@ -38,6 +38,8 @@ shared uint groupLocalNumIndices;
 
 void doLight(ivec2 pixel);
 
+const vec3 clearColor = vec3(0.2, 0.5, 0.7);
+
 void main()
 {
   if (gl_GlobalInvocationID.x > pushConstants.screenWidth || gl_GlobalInvocationID.y > pushConstants.screenHeight) {
@@ -57,7 +59,7 @@ void main()
   float depthSamp = texture(depth, texCoords).r;
 
   if (depthSamp == 1.0f) {
-    imageStore(outputIm, pixel, vec4(0.5, 0.5, 0.5, 1.0));
+    imageStore(outputIm, pixel, vec4(clearColor, 1.0));
     return;
   }
 

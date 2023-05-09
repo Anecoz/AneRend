@@ -95,7 +95,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
     ImageInitialCreateInfo createInfo{};
     createInfo._initialHeight = rc->swapChainExtent().height;
     createInfo._initialWidth = rc->swapChainExtent().width;
-    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    createInfo._intialFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
     usage._imageCreateInfo = createInfo;
     usage._type = Type::ColorAttachment;
@@ -110,7 +110,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
     ImageInitialCreateInfo createInfo{};
     createInfo._initialHeight = rc->swapChainExtent().height;
     createInfo._initialWidth = rc->swapChainExtent().width;
-    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    createInfo._intialFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
     usage._imageCreateInfo = createInfo;
 
@@ -163,7 +163,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
 
   info._resourceUsages = std::move(resourceUsages);
 
-  VkFormat format = VK_FORMAT_R16G16B16A16_SFLOAT;
+  VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
   GraphicsPipelineCreateParams param{};
   param.device = rc->device();
   param.vertShader = "standard_vert.spv";

@@ -50,11 +50,11 @@ void main()
   vec3 origin = worldPos;
   vec3 direction = -ubo.lightDir.xyz;
 
-  uint  rayFlags = gl_RayFlagsOpaqueEXT;
+  uint  rayFlags = gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT | gl_RayFlagsTerminateOnFirstHitEXT;
   float tMin     = 0.1;
   float tMax     = 100.0;
 
-  prd.hitValue = 1.0f;
+  prd.hitValue = 0.0f;
 
   traceRayEXT(tlas, // acceleration structure
           rayFlags,       // rayFlags

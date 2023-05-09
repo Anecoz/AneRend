@@ -194,7 +194,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
   param.normalLoc = -1;
   param.colorLoc = -1;
   param.uvLoc = 1;
-  param.colorFormats = { VK_FORMAT_R16G16B16A16_UNORM };
+  param.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM };
   info._graphicsParams = param;
 
   fgb.registerRenderPass(std::move(info));
