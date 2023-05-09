@@ -21,13 +21,13 @@ static std::vector<render::Vertex> createScreenQuad(float widthPercent, float he
   float y = -1.0f + heightPercent * 2.0f;
 
   return { 
-    {{-1.0f, -1.0f, depth}, color, normal, {0.0f, 0.0f}},
-    {{-1.0f, y, depth}, color, normal, {0.0f, 1.0f}},
-    {{x, -1.0f, depth}, color, normal, {1.0f, 0.0f}},
+    {{-1.0f, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{-1.0f, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+    {{x, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
 
-    {{x, -1.0f, depth}, color, normal, {1.0f, 0.0f}},
-    {{-1.0f, y, depth}, color, normal, {0.0f, 1.0f}},
-    {{x, y, depth}, color, normal, {1.0f, 1.0f}}
+    {{x, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+    {{-1.0f, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+    {{x, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 1.0f}}
   };
 }
 
@@ -80,16 +80,17 @@ static void createUnitCube(std::vector<render::Vertex>* vertOut, std::vector<std
     4, 7, 5
   };
 
-  // pos, color, normal, tex
+  glm::vec4 tangent{ 0.0f, 0.0f, 0.0f, 0.0f };
+  // pos, color, normal, tangent, tex
   std::vector<render::Vertex> verts{
-    {{-0.5, -0.5, 0.5}, color, normal, tex}, // 0
-    {{0.5, -0.5, 0.5}, color, normal, tex},//1
-    {{-0.5, 0.5, 0.5}, color, normal, tex},//2
-    {{0.5, 0.5, 0.5}, color, normal, tex},//3
-    {{-0.5, -0.5, -0.5}, color, normal, tex},//4
-    {{0.5, -0.5, -0.5}, color, normal, tex},//5
-    {{-0.5, 0.5, -0.5}, color, normal, tex},//6
-    {{0.5, 0.5, -0.5}, color, normal, tex}//7
+    {{-0.5, -0.5, 0.5}, color, normal, tangent, tex}, // 0
+    {{0.5, -0.5, 0.5}, color, normal, tangent, tex},//1
+    {{-0.5, 0.5, 0.5}, color, normal, tangent, tex},//2
+    {{0.5, 0.5, 0.5}, color, normal, tangent, tex},//3
+    {{-0.5, -0.5, -0.5}, color, normal, tangent, tex},//4
+    {{0.5, -0.5, -0.5}, color, normal, tangent, tex},//5
+    {{-0.5, 0.5, -0.5}, color, normal, tangent, tex},//6
+    {{0.5, 0.5, -0.5}, color, normal, tangent, tex}//7
   };
 
   *vertOut = verts;

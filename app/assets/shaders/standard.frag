@@ -25,6 +25,8 @@ layout(location = 1) in vec3 fragNormal;
 layout(location = 2) in vec3 fragPos;
 layout(location = 3) in vec2 fragUV;
 layout(location = 4) in flat uint fragMeshId;
+layout(location = 5) in vec3 fragTangent;
+layout(location = 6) in mat3 fragTBN;
 
 layout(location = 0) out vec4 outCol0;
 layout(location = 1) out vec4 outCol1;
@@ -56,9 +58,10 @@ void main() {
     metallic = samp.b;
     roughness = samp.g;
   }
-  /*if (fragNormalIndex != -1) {
-    normal = normalize(fragModelMtx * (texture(textures[nonuniformEXT(fragNormalIndex)], uv).rgb * 2.0 - 1.0));
-  }*/
+  if (matInfo.normalTexIndex != -1 && fragTangent.xyz != vec3(0.0f)) {
+    normal = normalize(texture(textures[nonuniformEXT(matInfo.normalTexIndex)], fragUV).rgb * 2.0 - 1.0);
+    normal = normalize(fragTBN * normal);
+  }
 
   outCol0 = vec4(normal, color.x);
   outCol1 = vec4(color.yz, metallic, roughness);

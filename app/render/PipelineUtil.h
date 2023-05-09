@@ -24,6 +24,7 @@ struct GraphicsPipelineCreateParams
   int colorLoc = 1;
   int normalLoc = 2;
   int uvLoc = -1;
+  int tangentLoc = -1;
   VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
   bool depthBiasEnable = false;
   float depthBiasConstant = 0.0f;

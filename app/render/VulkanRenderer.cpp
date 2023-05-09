@@ -2549,7 +2549,7 @@ bool VulkanRenderer::initImgui()
   init_info.ImageCount = 3;
   init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
   init_info.UseDynamicRendering = true;
-  init_info.ColorAttachmentFormat = VK_FORMAT_R16G16B16A16_UNORM;
+  init_info.ColorAttachmentFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
   if (!ImGui_ImplVulkan_Init(&init_info, nullptr)) {
     printf("Could not init impl vulkan for imgui!\n");

@@ -169,6 +169,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
   param.vertShader = "standard_vert.spv";
   param.fragShader = "standard_frag.spv";
   param.uvLoc = 3;
+  param.tangentLoc = 4;
   param.colorAttachmentCount = 2;
   param.colorFormats = { format, format };
   info._graphicsParams = param;

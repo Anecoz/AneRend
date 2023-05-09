@@ -87,7 +87,7 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
     ImageInitialCreateInfo createInfo{};
     createInfo._initialHeight = rc->swapChainExtent().height;
     createInfo._initialWidth = rc->swapChainExtent().width;
-    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_UNORM;
+    createInfo._intialFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
     usage._imageCreateInfo = createInfo;
 

@@ -88,6 +88,7 @@ bool GLTFLoader::loadFromFile(
       const float* positionBuffer = nullptr;
       const float* normalsBuffer = nullptr;
       const float* texCoordsBuffer = nullptr;
+      const float* tangentBuffer = nullptr;
       const float* colorBuffer = nullptr;
       size_t vertexCount = 0;
 
@@ -118,6 +119,11 @@ bool GLTFLoader::loadFromFile(
         const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("COLOR_0")->second];
         const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
         colorBuffer = reinterpret_cast<const float*>(&(model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+      }
+      if (primitive.attributes.find("TANGENT") != primitive.attributes.end()) {
+        const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("TANGENT")->second];
+        const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+        tangentBuffer = reinterpret_cast<const float*>(&(model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
       }
 
       mesh._vertices.resize(vertexCount);
@@ -153,6 +159,14 @@ bool GLTFLoader::loadFromFile(
             colorBuffer[3 * v + 2]
           };
         }
+        if (tangentBuffer) {
+          vert.tangent = {
+            tangentBuffer[4 * v + 0],
+            tangentBuffer[4 * v + 1],
+            tangentBuffer[4 * v + 2],
+            tangentBuffer[4 * v + 3],
+          };
+        }
 
         mesh._vertices[v] = std::move(vert);
       }
@@ -182,6 +196,17 @@ bool GLTFLoader::loadFromFile(
           mesh._metallicRoughness._data = image.image;
           mesh._metallicRoughness._width = image.width;
           mesh._metallicRoughness._height = image.height;
+        }
+
+        int normalIdx = material.normalTexture.index;
+        if (normalIdx >= 0) {
+          int imageIdx = model.textures[normalIdx].source;
+          auto& image = model.images[normalIdx];
+
+          mesh._normal._texPath = p.replace_filename(image.uri).string();
+          mesh._normal._data = image.image;
+          mesh._normal._width = image.width;
+          mesh._normal._height = image.height;
         }
       }
 

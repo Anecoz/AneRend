@@ -394,6 +394,15 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
     attributeDescriptions.emplace_back(std::move(desc));
   }
 
+  if (param.tangentLoc != -1) {
+    VkVertexInputAttributeDescription desc{};
+    desc.binding = 0;
+    desc.location = param.tangentLoc;
+    desc.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    desc.offset = offsetof(render::Vertex, tangent);
+    attributeDescriptions.emplace_back(std::move(desc));
+  }
+
   VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
   vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
   if (param.vertexLess) {
