@@ -40,8 +40,8 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
     usage._type = Type::DepthAttachment;
     ImageInitialCreateInfo createInfo{};
     createInfo._intialFormat = VK_FORMAT_D32_SFLOAT;
-    createInfo._initialHeight = 8192;
-    createInfo._initialWidth = 8192;
+    createInfo._initialHeight = 2048;
+    createInfo._initialWidth = 2048;
     usage._imageCreateInfo = createInfo;
     info._resourceUsages.emplace_back(std::move(usage));
   }
@@ -75,8 +75,8 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
       if (!exeParams.rc->getRenderOptions().directionalShadows) return;
 
       VkExtent2D extent{};
-      extent.width = 8192;
-      extent.height = 8192;
+      extent.width = 2048;
+      extent.height = 2048;
 
       VkClearValue clearValue;
       clearValue.depthStencil = { 1.0f, 0 };

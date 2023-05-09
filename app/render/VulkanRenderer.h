@@ -53,7 +53,7 @@ public:
   // Registers a model that a renderable can reference.
   virtual ModelId registerModel(Model&& model);
 
-  virtual MeshId registerMesh(Mesh& mesh);
+  virtual MeshId registerMesh(Mesh& mesh, bool buildBlas = true);
 
   // After doing this, the renderable will be rendered every frame with the given material, until unregistered.
   RenderableId registerRenderable(
@@ -133,6 +133,8 @@ public:
   VkCommandBuffer beginSingleTimeCommands() override final;
   void endSingleTimeCommands(VkCommandBuffer buffer) override final;
 
+  VkPhysicalDeviceRayTracingPipelinePropertiesKHR getRtPipeProps() override final;
+
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
@@ -170,6 +172,12 @@ private:
   std::unordered_map<MeshId, std::size_t> _currentMeshUsage;
   std::vector<bool> _meshesChanged;
 
+  // Ray tracing related
+  void registerBottomLevelAS(MeshId meshId);
+  void buildTopLevelAS();
+  void writeTLASDescriptor();
+  bool _topLevelBuilt = false;
+
   struct Renderable {
     RenderableId _id;
 
@@ -193,6 +201,17 @@ private:
   std::vector<bool> _renderablesChanged;
   void cleanupRenderable(const Renderable& renderable);
 
+  struct AccelerationStructure
+  {
+    AllocatedBuffer _buffer;
+    VkAccelerationStructureKHR _as;
+  };
+
+  std::unordered_map<MeshId, AccelerationStructure> _blases;
+  AccelerationStructure _tlas;
+
+  VkPhysicalDeviceRayTracingPipelinePropertiesKHR _rtPipeProps;
+
   /* 
   * "Bindless" descriptor set layout and pipeline layout, used for every render pass.
   * The render passes create their own pipelines, specifying these on creation (accessed via RenderContext).
@@ -202,7 +221,8 @@ private:
   VkDescriptorSetLayout _bindlessDescSetLayout;
   std::vector<VkDescriptorSet> _bindlessDescriptorSets;
 
-  uint32_t _bindlessTextureBinding = 6;
+  uint32_t _tlasBinding = 6;
+  uint32_t _bindlessTextureBinding = 7;
   uint32_t _currentBindlessTextureIndex = 0;
 
   void createTexture(
@@ -357,7 +377,10 @@ private:
 
   const std::vector<const char*> _deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME
+    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+    VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+    VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+    VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
   };
 
   std::uint32_t _currentFrame = 0;

@@ -6,7 +6,7 @@
 namespace render {
 
 struct AllocatedBuffer {
-  VkBuffer _buffer;
+  VkBuffer _buffer = VK_NULL_HANDLE;
   VmaAllocation _allocation;
 };
 

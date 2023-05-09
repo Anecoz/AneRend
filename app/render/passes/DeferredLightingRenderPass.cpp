@@ -71,6 +71,14 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
   }
   {
     ResourceUsage usage{};
+    usage._resourceName = "RTShadowImage";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SampledTexture;
+    resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
     usage._resourceName = "FinalImage";
     usage._access.set((std::size_t)Access::Read);
     usage._access.set((std::size_t)Access::Write);

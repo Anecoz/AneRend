@@ -69,8 +69,8 @@ void GrassShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContex
       if (!exeParams.rc->getRenderOptions().directionalShadows) return;
 
       VkExtent2D extent{};
-      extent.width = 8192;
-      extent.height = 8192;
+      extent.width = 2048;
+      extent.height = 2048;
 
       VkClearValue clearValue;
       clearValue.depthStencil = { 1.0f, 0 };

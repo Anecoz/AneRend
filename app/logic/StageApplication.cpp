@@ -107,7 +107,7 @@ bool StageApplication::init()
 
   // Create a bunch of test matrices
   {
-    std::size_t numInstances = 1;
+    std::size_t numInstances = 100;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -132,7 +132,7 @@ bool StageApplication::init()
 
   // Do a couple of the big models
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 20;
 
     for (int x = 0; x < numInstances; ++x)
     for (int y = 0; y < numInstances; ++y) {
@@ -153,7 +153,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 10;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -164,7 +164,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 10;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -175,7 +175,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 10;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -286,6 +286,7 @@ void StageApplication::render()
     ImGui::Checkbox("FXAA", &_renderOptions.fxaa);
     ImGui::Checkbox("Shadows", &_renderOptions.directionalShadows);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
+    ImGui::End();
   }
 
   _vkRenderer.drawFrame(g_PP, g_DebugShadow);

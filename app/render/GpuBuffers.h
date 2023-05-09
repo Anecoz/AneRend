@@ -80,6 +80,7 @@ struct GPUCullPushConstants {
 struct GPUSceneData {
   glm::mat4 view;
   glm::mat4 proj;
+  glm::mat4 invView;
   glm::mat4 invProj;
   glm::mat4 invViewProj;
   glm::mat4 directionalShadowMatrixProj;

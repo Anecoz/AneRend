@@ -20,7 +20,7 @@ Camera::Camera(glm::vec3 initialPosition, ProjectionType type)
   , _forward(0.0f, 0.0f, 0.0f)
   , _cameraMatrix(glm::lookAt(_position, _forward, _up))
 {
-  _near = 1.0f;
+  _near = .1f;
   if (type == ProjectionType::Orthogonal) {
     _projection = glm::ortho(-20.0f, 20.0f, -20.0f, 20.0f, _near, 50.0f);
     _far = 50.0f;

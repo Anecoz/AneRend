@@ -30,7 +30,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
 {
   // Screen quad
   _screenQuad._vertices = graphicsutil::createScreenQuad(0.25f, 0.25f);
-  _meshId = rc->registerMesh(_screenQuad);
+  _meshId = rc->registerMesh(_screenQuad, false);
 
   _resourceUsages.clear();
 
@@ -42,6 +42,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._resourceName = "FinalImagePP";
     usage._access.set((std::size_t)Access::Read);
     usage._access.set((std::size_t)Access::Write);
+    usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::ColorAttachment;
     info._resourceUsages.emplace_back(std::move(usage));
   }
@@ -165,6 +166,15 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
   {
     ResourceUsage usage{};
     usage._resourceName = "HiZ2";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "RTShadowImage";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
     usage._bindless = true;

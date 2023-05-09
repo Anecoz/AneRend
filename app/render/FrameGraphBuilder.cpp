@@ -26,6 +26,32 @@ bool isTypeImage(Type type)
     type == Type::Present || type == Type::SampledTexture || type == Type::ImageStorage;
 }
 
+bool isDepth(Type type)
+{
+  return type == Type::DepthAttachment || type == Type::SampledDepthTexture;
+}
+
+VkAccessFlags findWriteAccessMask(Type type)
+{
+  if (type == Type::ImageStorage) {
+    return VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+  }
+  else if (type == Type::ColorAttachment) {
+    return VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+  }
+  else if (type == Type::DepthAttachment) {
+    return VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;;
+  }
+  else if (type == Type::SampledTexture || type == Type::SampledDepthTexture) {
+    return VK_ACCESS_SHADER_READ_BIT;
+  }
+  else if (type == Type::Present) {
+    return 0;
+  }
+
+  return VK_ACCESS_SHADER_READ_BIT;
+}
+
 VkDescriptorType translateDescriptorType(Type type)
 {
   if (type == Type::SSBO) {
@@ -105,6 +131,10 @@ void FrameGraphBuilder::reset(RenderContext* rc)
     for (auto& sampler : node._samplers) {
       vkDestroySampler(rc->device(), sampler, nullptr);
     }
+
+    if (node._sbt._buffer._buffer != VK_NULL_HANDLE) {
+      vmaDestroyBuffer(rc->vmaAllocator(), node._sbt._buffer._buffer, node._sbt._buffer._allocation);
+    }
   }
 
   _submissions.clear();
@@ -167,6 +197,7 @@ void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* 
       exeParams.pipelineLayout = &node._pipelineLayout;
       exeParams.descriptorSets = &node._descriptorSets;
       exeParams.samplers = node._samplers;
+      exeParams.sbt = &node._sbt;
 
       // Views and buffers
       int multiIdx = renderContext->getCurrentMultiBufferIdx();
@@ -598,6 +629,9 @@ VkShaderStageFlags FrameGraphBuilder::findStages(const std::string& resource)
         if (us._stage.test((std::size_t)Stage::Fragment)) {
           output.emplace_back(VK_SHADER_STAGE_FRAGMENT_BIT);
         }
+        if (us._stage.test((std::size_t)Stage::RayTrace)) {
+          output.emplace_back(VK_SHADER_STAGE_RAYGEN_BIT_KHR);
+        }
       }
     }
   }
@@ -735,7 +769,7 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
       node._descriptorSets = buildDescriptorSets(descParam);
     }
 
-    // Compute or graphics pipeline
+    // Compute, graphics or raytracing pipeline
     if (node._computeParams.has_value()) {
       if (!buildComputePipeline(node._computeParams.value(), node._pipelineLayout, node._pipeline)) {
         printf("Could not build compute pipeline!\n");
@@ -745,6 +779,12 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
     else if (node._graphicsParams.has_value()) {
       if (!buildGraphicsPipeline(node._graphicsParams.value(), node._pipelineLayout, node._pipeline)) {
         printf("Could not build graphics pipeline!\n");
+        return false;
+      }
+    }
+    else if (node._rtParams.has_value()) {
+      if (!buildRayTracingPipeline(node._rtParams.value(), node._pipelineLayout, node._pipeline, node._sbt)) {
+        printf("Could not build ray tracing pipeline!\n");
         return false;
       }
     }
@@ -805,6 +845,7 @@ void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, S
       node._rpExe = producer->_exe;
       node._computeParams = producer->_regInfo._computeParams;
       node._graphicsParams= producer->_regInfo._graphicsParams;
+      node._rtParams = producer->_regInfo._rtParams;
       node._debugName = std::string(producer->_regInfo._name);
       node._resourceUsages = producer->_regInfo._resourceUsages;
 
@@ -946,6 +987,7 @@ void FrameGraphBuilder::internalBuild3()
     node._rpExe = sub._exe;
     node._computeParams = sub._regInfo._computeParams;
     node._graphicsParams = sub._regInfo._graphicsParams;
+    node._rtParams = sub._regInfo._rtParams;
     node._debugName = std::string(sub._regInfo._name);
     node._resourceUsages = sub._regInfo._resourceUsages;
 
@@ -1107,6 +1149,9 @@ std::pair<VkAccessFlagBits, VkAccessFlagBits> FrameGraphBuilder::findBufferAcces
         if (newStage.test((std::size_t)Stage::Compute)) {
           return { VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT };
         }
+        if (newStage.test((std::size_t)Stage::RayTrace)) {
+          return { VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT };
+        }
       }
     }
   }
@@ -1114,10 +1159,10 @@ std::pair<VkAccessFlagBits, VkAccessFlagBits> FrameGraphBuilder::findBufferAcces
   return std::pair<VkAccessFlagBits, VkAccessFlagBits>();
 }
 
-std::pair<VkPipelineStageFlagBits, VkPipelineStageFlagBits> FrameGraphBuilder::translateStageBits(StageBits prevStage, StageBits newStage)
+std::pair<VkPipelineStageFlagBits, VkPipelineStageFlagBits> FrameGraphBuilder::translateStageBits(Type prevType, Type newType, StageBits prevStage, StageBits newStage)
 {
-  VkPipelineStageFlagBits prev;
-  VkPipelineStageFlagBits next;
+  VkPipelineStageFlagBits prev = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+  VkPipelineStageFlagBits next = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 
   if (prevStage.test((std::size_t)Stage::Transfer)) {
     prev = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -1132,7 +1177,18 @@ std::pair<VkPipelineStageFlagBits, VkPipelineStageFlagBits> FrameGraphBuilder::t
     prev = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
   }
   else if (prevStage.test((std::size_t)Stage::Fragment)) {
-    prev = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    if (prevType == Type::DepthAttachment) {
+      prev = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    }
+    else if (prevType == Type::ColorAttachment) {
+      prev = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
+    else {
+      prev = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+  }
+  else if (prevStage.test((std::size_t)Stage::RayTrace)) {
+    prev = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
   }
 
   if (newStage.test((std::size_t)Stage::Transfer)) {
@@ -1148,7 +1204,22 @@ std::pair<VkPipelineStageFlagBits, VkPipelineStageFlagBits> FrameGraphBuilder::t
     next = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
   }
   else if (newStage.test((std::size_t)Stage::Fragment)) {
-    next = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    if (newType == Type::DepthAttachment) {
+      next = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    }
+    else if (newType == Type::ColorAttachment) {
+      next = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
+    else {
+      next = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+  }
+  else if (newStage.test((std::size_t)Stage::RayTrace)) {
+    next = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+  }
+  
+  if (newType == Type::Present) {
+    next = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
   }
 
   return std::pair<VkPipelineStageFlagBits, VkPipelineStageFlagBits>(prev, next);
@@ -1199,6 +1270,9 @@ std::string FrameGraphBuilder::debugConstructBufferBarrierName(VkAccessFlagBits 
   if (oldStage & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
     srcStage.append(" | VERTEX");
   }
+  if (oldStage & VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR) {
+    srcStage.append(" | RAYTRACE");
+  }
   if (newStage & VK_PIPELINE_STAGE_TRANSFER_BIT) {
     dstStage.append(" | TRANSFER");
   }
@@ -1213,6 +1287,9 @@ std::string FrameGraphBuilder::debugConstructBufferBarrierName(VkAccessFlagBits 
   }
   if (newStage & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
     dstStage.append(" | VERTEX");
+  }
+  if (newStage & VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR) {
+    dstStage.append(" | RAYTRACE");
   }
 
   output.append("Buffer barrier: ");
@@ -1309,19 +1386,46 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         // Initial layout transition (before writing)
         if (!skipPreBarrier && usage._access.test((std::size_t)Access::Write)) {
           auto initialLayout = findInitialImageLayout(usage._access, usage._type);
+          auto stageBits = translateStageBits(usage._type, usage._type, usage._stage, usage._stage);
+          bool depth = isDepth(usage._type);
+          auto dstAccessMask = findWriteAccessMask(usage._type);
 
           BarrierContext beforeWriteBarrier{};
           beforeWriteBarrier._resourceName = usage._resourceName;
-          beforeWriteBarrier._barrierFcn = [baseLayer, initialLayout](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
+          beforeWriteBarrier._barrierFcn = [baseLayer, initialLayout, stageBits, depth, dstAccessMask](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
             auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
 
-            imageutil::transitionImageLayout(
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrier.newLayout = initialLayout;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = imageResource->_image._image;
+            barrier.subresourceRange.aspectMask = depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = baseLayer;
+            barrier.subresourceRange.layerCount = 1;
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = dstAccessMask;
+
+            vkCmdPipelineBarrier(
+              cmdBuffer,
+              VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, stageBits.second,
+              0,
+              0, nullptr,
+              0, nullptr,
+              1, &barrier
+            );
+
+            /*imageutil::transitionImageLayout(
               cmdBuffer,
               imageResource->_image._image,
               imageResource->_format,
               VK_IMAGE_LAYOUT_UNDEFINED,
               initialLayout,
-              baseLayer);
+              baseLayer);*/
           };
 
           // Add the pre-write barrier _before_ writing
@@ -1341,20 +1445,48 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
 
         // Gather some metadata about the image resource usage
         auto transitionPair = findImageLayoutUsage(usage._access, usage._type, nextUsage->_access, nextUsage->_type);
+        auto stageBits = translateStageBits(usage._type, nextUsage->_type, usage._stage, nextUsage->_stage);
+        bool depth = isDepth(usage._type);
+        auto srcAccessMask = findWriteAccessMask(usage._type);
+        auto dstAccessMask = findWriteAccessMask(nextUsage->_type);
 
         // If the next usage is the same as the current, no need to have a barrier...?
         // Probably an execution barrier is still needed?
         if (transitionPair.first != transitionPair.second) {
-          afterWriteBarrier._barrierFcn = [transitionPair, baseLayer](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
+          afterWriteBarrier._barrierFcn = [transitionPair, baseLayer, stageBits, depth, dstAccessMask, srcAccessMask](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
             auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
 
-            imageutil::transitionImageLayout(
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = transitionPair.first;
+            barrier.newLayout = transitionPair.second;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = imageResource->_image._image;
+            barrier.subresourceRange.aspectMask = depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = baseLayer;
+            barrier.subresourceRange.layerCount = 1;
+            barrier.srcAccessMask = srcAccessMask;
+            barrier.dstAccessMask = dstAccessMask;
+
+            vkCmdPipelineBarrier(
+              cmdBuffer,
+              stageBits.first, stageBits.second,
+              0,
+              0, nullptr,
+              0, nullptr,
+              1, &barrier
+            );
+
+            /*imageutil::transitionImageLayout(
               cmdBuffer,
               imageResource->_image._image,
               imageResource->_format,
               transitionPair.first,
               transitionPair.second,
-              baseLayer);
+              baseLayer);*/
           };
 
           GraphNode afterWriteNode{};
@@ -1368,7 +1500,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
       }
       else if (isTypeBuffer(usage._type)) {
         auto accessFlagPair = findBufferAccessFlags(usage._access, usage._stage, nextUsage->_access, nextUsage->_stage);
-        auto transStagePair = translateStageBits(usage._stage, nextUsage->_stage);
+        auto transStagePair = translateStageBits(usage._type, nextUsage->_type, usage._stage, nextUsage->_stage);
 
         BarrierContext bufBarrier{};
         bufBarrier._resourceName = usage._resourceName;

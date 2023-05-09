@@ -20,3 +20,6 @@ C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/deferred_tiled.comp -o %2/deferred_tiled
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/ssao.comp -o %2/ssao_comp.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/ssao_blur.comp -o %2/ssao_blur_comp.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslangValidator.exe -V -o %2/hiz_comp.spv %1/hiz.comp
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/shadow.rgen -o %2/shadow_rgen.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/shadow.rmiss -o %2/shadow_rmiss.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/shadow.rchit -o %2/shadow_rchit.spv

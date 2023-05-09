@@ -3,12 +3,21 @@
 #include "../util/Utils.h"
 #include "Vertex.h"
 #include "RenderContext.h"
+#include "AllocatedBuffer.h"
+#include "BufferHelpers.h"
+#include "VulkanExtensions.h"
 
+#include <array>
 #include <cstddef>
 #include <optional>
 
 namespace
 {
+
+uint32_t alignUp(uint32_t a, uint32_t b)
+{
+  return (a + (b - 1)) & ~(b - 1);
+}
 
 std::optional<VkShaderModule> createShaderModule(const std::vector<char>& code, VkDevice device)
 {
@@ -515,6 +524,173 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
   return true;
 }
 
+bool buildRayTracingPipeline(RayTracingPipelineCreateParams param, VkPipelineLayout& pipelineLayout, VkPipeline& outPipeline, ShaderBindingTable& sbtOut)
+{
+  VkShaderModule raygenModule{};
+  VkShaderModule missModule{};
+  VkShaderModule chitModule{};
+
+  // Shaders
+  auto raygenShaderCode = util::readFile(std::string(ASSET_PATH) + param.raygenShader);
+  auto optRay = createShaderModule(raygenShaderCode, param.device);
+  if (!optRay) {
+    printf("Could not create raygen shader!\n");
+    return false;
+  }
+  raygenModule = optRay.value();
+
+  auto missShaderCode = util::readFile(std::string(ASSET_PATH) + param.missShader);
+  auto optMiss = createShaderModule(missShaderCode, param.device);
+  if (!optMiss) {
+    printf("Could not create miss shader!\n");
+    return false;
+  }
+  missModule = optMiss.value();
+
+  auto chitShaderCode = util::readFile(std::string(ASSET_PATH) + param.closestHitShader);
+  auto optChit = createShaderModule(chitShaderCode, param.device);
+  if (!optChit) {
+    printf("Could not create closest hit shader!\n");
+    return false;
+  }
+  chitModule = optChit.value();
+
+  DEFER([&]() {
+    vkDestroyShaderModule(param.device, raygenModule, nullptr);
+    vkDestroyShaderModule(param.device, missModule, nullptr);
+    vkDestroyShaderModule(param.device, chitModule, nullptr);
+  });
+
+  std::array<VkPipelineShaderStageCreateInfo, 3 > pssci{};
+  
+  std::size_t rayGenIndex = 0;
+  std::size_t missIndex = 1;
+  std::size_t chitIndex = 2;
+
+  pssci[rayGenIndex].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  pssci[rayGenIndex].module = raygenModule;
+  pssci[rayGenIndex].pName = "main";
+  pssci[rayGenIndex].stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+  
+  pssci[missIndex].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  pssci[missIndex].module = missModule;
+  pssci[missIndex].pName = "main";
+  pssci[missIndex].stage = VK_SHADER_STAGE_MISS_BIT_KHR;
+  
+  pssci[chitIndex].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  pssci[chitIndex].module = chitModule;
+  pssci[chitIndex].pName = "main";
+  pssci[chitIndex].stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+
+  // Shader groups
+  std::array<VkRayTracingShaderGroupCreateInfoKHR, 3 > rtsgci{};
+  
+  rtsgci[rayGenIndex].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+  rtsgci[rayGenIndex].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+  rtsgci[rayGenIndex].generalShader = rayGenIndex;
+  rtsgci[rayGenIndex].closestHitShader = VK_SHADER_UNUSED_KHR;
+  rtsgci[rayGenIndex].anyHitShader = VK_SHADER_UNUSED_KHR;
+  rtsgci[rayGenIndex].intersectionShader = VK_SHADER_UNUSED_KHR;
+  
+  // Miss groups also use the general group type.
+  rtsgci[missIndex] = rtsgci[rayGenIndex];
+  rtsgci[missIndex].generalShader = missIndex;
+  
+  // This hit group uses a TRIANGLES_HIT_GROUP group type.
+  rtsgci[chitIndex].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+  rtsgci[chitIndex].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+  rtsgci[chitIndex].generalShader = VK_SHADER_UNUSED_KHR;
+  rtsgci[chitIndex].closestHitShader = chitIndex;
+  rtsgci[chitIndex].anyHitShader = VK_SHADER_UNUSED_KHR;
+  rtsgci[chitIndex].intersectionShader = VK_SHADER_UNUSED_KHR;
+
+  // Create the ray tracing pipeline
+  VkRayTracingPipelineCreateInfoKHR rtpci{ VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR };
+  rtpci.stageCount = uint32_t(pssci.size());
+  rtpci.pStages = pssci.data();
+  rtpci.groupCount = uint32_t(rtsgci.size());
+  rtpci.pGroups = rtsgci.data();
+  rtpci.maxPipelineRayRecursionDepth = 1;
+  rtpci.layout = pipelineLayout;
+  
+  if (vkext::vkCreateRayTracingPipelinesKHR(
+    param.device, // The VkDevice
+    VK_NULL_HANDLE, // Don't request deferral
+    VK_NULL_HANDLE,
+    1, &rtpci, // Array of structures
+    nullptr, // Default host allocator
+    &outPipeline) != VK_SUCCESS) {
+    printf("Could not create ray tracing pipeline!\n");
+    return false;
+  }
+
+  // Create SBT
+  auto groupCount = (uint32_t)rtsgci.size();
+
+  // The size of a program identifier
+  uint32_t groupHandleSize = param.rc->getRtPipeProps().shaderGroupHandleSize;
+
+  // Compute the actual size needed per SBT entry by rounding up to the
+  // alignment needed.
+  uint32_t groupSizeAligned = alignUp(groupHandleSize, param.rc->getRtPipeProps().shaderGroupBaseAlignment);
+  // Bytes needed for the SBT
+  uint32_t sbtSize = groupCount * groupSizeAligned;
+
+  // Fetch all the shader handles used in the pipeline.
+  // This is opaque data, so we store it in a vector of bytes.
+  std::vector<uint8_t > shaderHandleStorage(sbtSize);
+  if (vkext::vkGetRayTracingShaderGroupHandlesKHR(
+    param.device, // The device
+    outPipeline, // The ray tracing pipeline
+    0, // Index of the group to start from
+    groupCount, // The number of groups
+    sbtSize, // Size of the output buffer in bytes
+    shaderHandleStorage.data()) != VK_SUCCESS) {
+    printf("Could not get group handles!\n");
+      return false;
+  }
+
+  // Allocate a buffer for storing the SBT.
+  auto allocator = param.rc->vmaAllocator();
+  bufferutil::createBuffer(
+    allocator,
+    sbtSize,
+    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR,
+    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+    sbtOut._buffer);
+ 
+  // Map the SBT buffer and write in the handles.
+  void* mapped;
+  vmaMapMemory(allocator, sbtOut._buffer._allocation, &mapped);
+
+  auto * pData = reinterpret_cast <uint8_t*>(mapped);
+  for (uint32_t g = 0; g < groupCount; g++) {
+    memcpy(pData, shaderHandleStorage.data() + g * groupHandleSize, groupHandleSize);
+    pData += groupSizeAligned;
+  }
+  vmaUnmapMemory(allocator, sbtOut._buffer._allocation);
+
+  // Construct the regions
+  VkBufferDeviceAddressInfo addrInfo{};
+  addrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+  addrInfo.buffer = sbtOut._buffer._buffer;
+  VkDeviceAddress sbtAddr = vkGetBufferDeviceAddress(param.device, &addrInfo);
+
+  sbtOut._rgenRegion.deviceAddress = sbtAddr;
+  sbtOut._rgenRegion.size = groupSizeAligned;
+  sbtOut._rgenRegion.stride = groupSizeAligned;
+
+  sbtOut._missRegion.deviceAddress = sbtAddr + sbtOut._rgenRegion.size;
+  sbtOut._missRegion.size = groupSizeAligned;
+  sbtOut._missRegion.stride = groupSizeAligned;
+
+  sbtOut._chitRegion.deviceAddress = sbtAddr + sbtOut._rgenRegion.size + sbtOut._missRegion.size;
+  sbtOut._chitRegion.size = groupSizeAligned;
+  sbtOut._chitRegion.stride = groupSizeAligned;
+
+  return true;
+}
+
 bool buildComputePipeline(ComputePipelineCreateParams params, VkPipelineLayout& pipelineLayout, VkPipeline& outPipeline)
 {
   // Shaders
@@ -533,7 +709,7 @@ bool buildComputePipeline(ComputePipelineCreateParams params, VkPipelineLayout& 
 
   DEFER([&]() {
     vkDestroyShaderModule(params.device, compShaderModule, nullptr);
-    });
+  });
 
   VkPipelineShaderStageCreateInfo compShaderStageInfo{};
   compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;

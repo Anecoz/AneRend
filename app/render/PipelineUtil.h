@@ -2,6 +2,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include "ShaderBindingTable.h"
+
 #include <string>
 #include <vector>
 
@@ -35,6 +37,15 @@ struct ComputePipelineCreateParams
 {
   VkDevice device = nullptr;
   std::string shader;
+};
+
+struct RayTracingPipelineCreateParams
+{
+  VkDevice device = nullptr;
+  RenderContext* rc;
+  std::string raygenShader;
+  std::string missShader;
+  std::string closestHitShader;
 };
 
 struct DescriptorBindInfo
@@ -97,5 +108,6 @@ std::vector<VkDescriptorSet> buildDescriptorSets(DescriptorSetsCreateParams para
 VkSampler createSampler(SamplerCreateParams params);
 bool buildComputePipeline(ComputePipelineCreateParams params, VkPipelineLayout& pipelineLayout, VkPipeline& outPipeline);
 bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout& pipelineLayout, VkPipeline& outPipeline);
+bool buildRayTracingPipeline(RayTracingPipelineCreateParams param, VkPipelineLayout& pipelineLayout, VkPipeline& outPipeline, ShaderBindingTable& sbtOut);
 
 }

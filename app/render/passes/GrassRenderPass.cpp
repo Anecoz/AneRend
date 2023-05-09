@@ -24,6 +24,7 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     usage._resourceName = "Geometry0Image";
     usage._access.set((std::size_t)Access::Write);
     usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::ColorAttachment;
     resourceUsages.emplace_back(std::move(usage));
   }
@@ -32,6 +33,7 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     usage._resourceName = "Geometry1Image";
     usage._access.set((std::size_t)Access::Write);
     usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::ColorAttachment;
     resourceUsages.emplace_back(std::move(usage));
   }
@@ -48,6 +50,7 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     usage._resourceName = "GeometryDepthImage";
     usage._access.set((std::size_t)Access::Write);
     usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::DepthAttachment;
     resourceUsages.emplace_back(std::move(usage));
   }

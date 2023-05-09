@@ -9,6 +9,7 @@
 
 #include "AllocatedBuffer.h"
 #include "PipelineUtil.h"
+#include "ShaderBindingTable.h"
 
 #include <vulkan/vulkan.h>
 
@@ -27,6 +28,7 @@ struct RenderExeParams
   VkPipeline* pipeline;
   VkPipelineLayout* pipelineLayout;
   std::vector<VkDescriptorSet>* descriptorSets;
+  ShaderBindingTable* sbt; // For ray trace pipelines
 
   std::vector<VkImageView> colorAttachmentViews;
   std::vector<VkImageView> depthAttachmentViews;
@@ -57,6 +59,7 @@ enum class Stage : std::size_t
   Vertex,
   Fragment,
   Irrelevant,
+  RayTrace,
   Count
 };
 
@@ -125,6 +128,7 @@ struct RenderPassRegisterInfo
 
   std::optional<ComputePipelineCreateParams> _computeParams;
   std::optional<GraphicsPipelineCreateParams> _graphicsParams;
+  std::optional<RayTracingPipelineCreateParams> _rtParams;
 };
 
 class FrameGraphBuilder
@@ -187,6 +191,7 @@ private:
 
     std::optional<ComputePipelineCreateParams> _computeParams;
     std::optional<GraphicsPipelineCreateParams> _graphicsParams;
+    std::optional<RayTracingPipelineCreateParams> _rtParams;
 
     // Things that are bound in the case this is a render pass exe
     VkPipeline _pipeline;
@@ -194,6 +199,7 @@ private:
     VkDescriptorSetLayout _descriptorSetLayout;
     std::vector<VkDescriptorSet> _descriptorSets;
     std::vector<VkSampler> _samplers;
+    ShaderBindingTable _sbt;
   };
 
   struct ResourceGraphInfo
@@ -226,7 +232,7 @@ private:
   std::string debugConstructImageBarrierName(VkImageLayout old, VkImageLayout newLayout);
 
   std::pair<VkAccessFlagBits, VkAccessFlagBits> findBufferAccessFlags(AccessBits prevAccess, StageBits prevStage, AccessBits newAccess, StageBits newStage);
-  std::pair<VkPipelineStageFlagBits, VkPipelineStageFlagBits> translateStageBits(StageBits prevStage, StageBits newStage);
+  std::pair<VkPipelineStageFlagBits, VkPipelineStageFlagBits> translateStageBits(Type prevType, Type newType, StageBits prevStage, StageBits newStage);
   std::string debugConstructBufferBarrierName(VkAccessFlagBits oldAccess, VkPipelineStageFlagBits oldStage, VkAccessFlagBits newAccess, VkPipelineStageFlagBits newStage);
 
   void insertBarriers(std::vector<GraphNode>& stack);

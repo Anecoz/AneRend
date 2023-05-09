@@ -18,7 +18,7 @@ layout(std430, set = 0, binding = 5) readonly buffer MeshMaterialBuffer {
   MeshMaterialInfo infos[];
 } materialBuffer;
 
-layout(set = 0, binding = 6) uniform sampler2D textures[];
+layout(set = 0, binding = 7) uniform sampler2D textures[];
 
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec3 fragNormal;

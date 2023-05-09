@@ -12,7 +12,8 @@ layout(set = 1, binding = 1) uniform sampler2D im1;
 layout(set = 1, binding = 2) uniform sampler2D depth;
 layout(set = 1, binding = 3) uniform sampler2D shadowMap;
 layout(set = 1, binding = 4) uniform sampler2D ssao;
-layout(set = 1, binding = 5, rgba16) uniform writeonly image2D outputIm;
+layout(set = 1, binding = 5) uniform sampler2D rtShadowMask;
+layout(set = 1, binding = 6, rgba16) uniform writeonly image2D outputIm;
 
 struct Light 
 {
@@ -318,6 +319,10 @@ void doLight(ivec2 pixel)
   
   if (ubo.directionalShadowsEnabled == 1) {
     shadow = inShadow(fragWorldPos);
+    shadow = clamp(1.0 - shadow, 0.3, 1.0);
+  }
+  else {
+    shadow = 1.0 - texture(rtShadowMask, texCoords).r;
     shadow = clamp(1.0 - shadow, 0.3, 1.0);
   }
 

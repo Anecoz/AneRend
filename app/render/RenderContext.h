@@ -41,7 +41,7 @@ public:
 
   virtual ModelId registerModel(Model&& model) = 0;
 
-  virtual MeshId registerMesh(Mesh& mesh) = 0;
+  virtual MeshId registerMesh(Mesh& mesh, bool buildBlas = true) = 0;
 
   virtual RenderableId registerRenderable(
     ModelId modelId,
@@ -71,6 +71,8 @@ public:
 
   virtual VkCommandBuffer beginSingleTimeCommands() = 0;
   virtual void endSingleTimeCommands(VkCommandBuffer buffer) = 0;
+
+  virtual VkPhysicalDeviceRayTracingPipelinePropertiesKHR getRtPipeProps() = 0;
 };
 
 }
