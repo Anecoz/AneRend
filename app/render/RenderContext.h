@@ -73,6 +73,10 @@ public:
   virtual void endSingleTimeCommands(VkCommandBuffer buffer) = 0;
 
   virtual VkPhysicalDeviceRayTracingPipelinePropertiesKHR getRtPipeProps() = 0;
+
+  virtual void registerPerFrameTimer(const std::string& name) = 0;
+  virtual void startTimer(const std::string& name, VkCommandBuffer cmdBuffer) = 0;
+  virtual void stopTimer(const std::string& name, VkCommandBuffer cmdBuffer) = 0;
 };
 
 }

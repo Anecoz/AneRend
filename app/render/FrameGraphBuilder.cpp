@@ -230,7 +230,10 @@ void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* 
           exeParams.images.emplace_back(image);
         }
       }
+
+      renderContext->startTimer(node._debugName, cmdBuffer);
       node._rpExe.value()(exeParams);
+      renderContext->stopTimer(node._debugName, cmdBuffer);
     }
   }
 }
@@ -359,6 +362,13 @@ bool FrameGraphBuilder::build(RenderContext* renderContext, RenderResourceVault*
 
   //internalBuild2(presentSubmission);
   internalBuild3();
+
+  // Insert timers
+  for (auto& node : _builtGraph) {
+    if (node._rpExe) {
+      renderContext->registerPerFrameTimer(node._debugName);
+    }
+  }
 
   // Do another pass and create all pipelines, pipelinelayouts, descriptor set layouts and descriptor sets
   // that each render pass needs

@@ -282,6 +282,8 @@ VulkanRenderer::~VulkanRenderer()
     vkDestroyImageView(_device, _gpuWindForceView[i], nullptr);
     vmaDestroyImage(_vmaAllocator, _gpuWindForceImage[i]._image, _gpuWindForceImage[i]._allocation);
     vkDestroySampler(_device, _gpuWindForceSampler[i], nullptr);
+
+    vkDestroyQueryPool(_device, _queryPools[i], nullptr);
   }
 
   vkDestroyCommandPool(_device, _commandPool, nullptr);
@@ -347,6 +349,11 @@ bool VulkanRenderer::init()
 
   printf("Creating command pool...");
   res &= createCommandPool();
+  if (!res) return false;
+  printf("Done!\n");
+
+  printf("Creating query pool...");
+  res &= createQueryPool();
   if (!res) return false;
   printf("Done!\n");
 
@@ -1422,6 +1429,7 @@ bool VulkanRenderer::createLogicalDevice()
   vulkan12Features.runtimeDescriptorArray = VK_TRUE;
   vulkan12Features.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
   vulkan12Features.bufferDeviceAddress = VK_TRUE;
+  vulkan12Features.hostQueryReset = VK_TRUE;
 
   dynamicRenderingFeature.pNext = &vulkan12Features;
 
@@ -1448,6 +1456,9 @@ bool VulkanRenderer::createLogicalDevice()
   deviceProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
   deviceProps.pNext = &_rtPipeProps;
   vkGetPhysicalDeviceProperties2(_physicalDevice, &deviceProps);
+
+  // TS period for interpreting timestamp queries
+  _timestampPeriod = deviceProps.properties.limits.timestampPeriod;
 
   _queueIndices = familyIndices;
   vkGetDeviceQueue(_device, familyIndices.computeFamily.value(), 0, &_computeQ);
@@ -1538,6 +1549,30 @@ bool VulkanRenderer::createCommandPool()
   return true;
 }
 
+bool VulkanRenderer::createQueryPool()
+{
+  _queryPools.resize(MAX_FRAMES_IN_FLIGHT);
+
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    VkQueryPoolCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    createInfo.flags = 0; // Reserved for future use, must be 0!
+
+    createInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    createInfo.queryCount = (uint32_t)MAX_TIMESTAMP_QUERIES;
+
+    VkResult result = vkCreateQueryPool(_device, &createInfo, nullptr, &_queryPools[i]);
+    if (result != VK_SUCCESS) {
+      printf("Could not create query pool!\n");
+      return false;
+    }
+
+    vkResetQueryPool(_device, _queryPools[i], 0, (uint32_t)MAX_TIMESTAMP_QUERIES);
+  }
+
+  return true;
+}
+
 VkCommandBuffer VulkanRenderer::beginSingleTimeCommands()
 {
   VkCommandBufferAllocateInfo allocInfo{};
@@ -1586,6 +1621,125 @@ void VulkanRenderer::endSingleTimeCommands(VkCommandBuffer commandBuffer)
 VkPhysicalDeviceRayTracingPipelinePropertiesKHR VulkanRenderer::getRtPipeProps()
 {
   return _rtPipeProps;
+}
+
+int VulkanRenderer::findTimerIndex(const std::string& timer)
+{
+  for (std::size_t i = 0; i < _perFrameTimers.size(); ++i) {
+    if (_perFrameTimers[i]._name == timer) {
+      return i;
+    }
+  }
+  
+  return -1;
+}
+
+void VulkanRenderer::resetPerFrameQueries(VkCommandBuffer cmdBuffer)
+{
+  vkCmdResetQueryPool(cmdBuffer, _queryPools[_currentFrame], 0, MAX_TIMESTAMP_QUERIES);
+}
+
+void VulkanRenderer::computePerFrameQueries()
+{
+  // Do it for last frame (so hopefully is ready)
+  uint32_t frame = _currentFrame;// == 0 ? MAX_FRAMES_IN_FLIGHT - 1 : _currentFrame - 1;
+
+  VkQueryResultFlags queryResFlags = VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT;
+  /*if (firstDone) {
+    queryResFlags |= VK_QUERY_RESULT_WAIT_BIT;
+   }
+  else {
+    firstDone = true;
+  }*/
+
+  for (int idx = 0; idx < _perFrameTimers.size(); ++idx) {
+    // The "stop" query index
+    uint32_t queryIdx = idx * 2 + 1;
+
+    uint64_t buffer[2];
+    auto res = vkGetQueryPoolResults(
+      _device,
+      _queryPools[frame],
+      queryIdx - 1,
+      2,
+      2 * sizeof(uint64_t),
+      buffer,
+      sizeof(uint64_t),
+      queryResFlags);
+
+    if (res == VK_SUCCESS) {
+      PerFrameTimer& pfTimer = _perFrameTimers[idx];
+      uint64_t diff = (buffer[1] - buffer[0]);
+      double ns = diff * _timestampPeriod;
+
+      pfTimer._durationMs = ns / 1000000.0f;
+
+      pfTimer._cumulative10 += pfTimer._durationMs;
+      pfTimer._cumulative100 += pfTimer._durationMs;
+
+      pfTimer._currNum10++;
+      pfTimer._currNum100++;
+
+      if (pfTimer._currNum10 == 10) {
+        pfTimer._currNum10 = 0;
+        pfTimer._avg10 = pfTimer._cumulative10 / 10.0f;
+        pfTimer._cumulative10 = 0.0f;
+      }
+
+      if (pfTimer._currNum100 == 100) {
+        pfTimer._currNum100 = 0;
+        pfTimer._avg100 = pfTimer._cumulative100 / 100.0f;
+        pfTimer._cumulative100 = 0.0f;
+      }
+
+      pfTimer._buf.emplace_back(pfTimer._durationMs);
+      pfTimer._buf.erase(pfTimer._buf.begin());
+    }
+  }
+}
+
+void VulkanRenderer::registerPerFrameTimer(const std::string& name)
+{
+  PerFrameTimer timer{ name };
+  timer._buf.resize(1000);
+  _perFrameTimers.emplace_back(std::move(timer));
+}
+
+void VulkanRenderer::startTimer(const std::string& name, VkCommandBuffer cmdBuffer)
+{
+  int idx = findTimerIndex(name);
+
+  //printf("Idx for %s is %d\n", name.c_str(), idx);
+
+  if (idx == -1) {
+    printf("Timer %s does not exist!\n", name.c_str());
+    return;
+  }
+
+  uint32_t queryIdx = idx * 2;
+
+  //printf("Query idx for start is %d, frame is %u, queryPool is %p\n", queryIdx, _currentFrame, _queryPools[_currentFrame]);
+  vkCmdWriteTimestamp(cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, _queryPools[_currentFrame], queryIdx);
+}
+
+void VulkanRenderer::stopTimer(const std::string& name, VkCommandBuffer cmdBuffer)
+{
+  int idx = findTimerIndex(name);
+
+  if (idx == -1) {
+    printf("Timer %s does not exist!\n", name.c_str());
+    return;
+  }
+
+  uint32_t queryIdx = idx * 2 + 1;
+
+  //printf("Query idx for stop is %d, frame is %u\n", queryIdx, _currentFrame);
+  vkCmdWriteTimestamp(cmdBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, _queryPools[_currentFrame], queryIdx);
+}
+
+std::vector<PerFrameTimer> VulkanRenderer::getPerFrameTimers()
+{
+  return _perFrameTimers;
 }
 
 bool VulkanRenderer::createDescriptorPool()
@@ -2606,6 +2760,7 @@ void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
 
   // Recording command buffer
   vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
+
   executeFrameGraph(_commandBuffers[_currentFrame], imageIndex);
 
   // Submit the command buffer
@@ -2656,6 +2811,8 @@ void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
     printf("failed to present swap chain image!\n");
   }
   
+  computePerFrameQueries();
+
   // Advance frame
   _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
@@ -2783,6 +2940,8 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
     printf("failed to begin recording command buffer!\n");
     return;
   }
+
+  resetPerFrameQueries(_commandBuffers[_currentFrame]);
 
   // The swapchain image has to go to transfer DST, which is the last thing the frame graph does.
   imageutil::transitionImageLayout(commandBuffer, _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,

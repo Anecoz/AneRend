@@ -36,6 +36,24 @@
 
 namespace render {
 
+struct PerFrameTimer
+{
+  std::string _name;
+  double _durationMs = 0.0f;
+  double _avg10 = 0.0f;
+  double _avg100 = 0.0f;
+
+  double _cumulative10 = 0.0f;
+  int _currNum10 = 0;
+
+  double _cumulative100 = 0.0f;
+  int _currNum100 = 0;
+
+  std::vector<float> _buf;
+  //float _buf[1000]; // Last 1000 values
+  //int _currBufIdx = 0;
+};
+
 class VulkanRenderer : public RenderContext
 {
 public:
@@ -135,6 +153,12 @@ public:
 
   VkPhysicalDeviceRayTracingPipelinePropertiesKHR getRtPipeProps() override final;
 
+  void registerPerFrameTimer(const std::string& name) override final;
+  void startTimer(const std::string& name, VkCommandBuffer cmdBuffer) override final;
+  void stopTimer(const std::string& name, VkCommandBuffer cmdBuffer) override final;
+
+  std::vector<PerFrameTimer> getPerFrameTimers();
+
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
@@ -146,6 +170,7 @@ private:
   static const std::size_t NUM_CLUSTER_DEPTH_SLIZES = 7;
   static const std::size_t MAX_NUM_LIGHTS = 32*32;
   static const std::size_t MAX_BINDLESS_RESOURCES = 16536;
+  static const std::size_t MAX_TIMESTAMP_QUERIES = 100;
 
   MeshId _debugCubeMesh;
 
@@ -163,6 +188,19 @@ private:
   bool modelIdExists(ModelId id);
 
   Camera _latestCamera;
+
+  // Query pool for timestamps, one per frame
+  std::vector<VkQueryPool> _queryPools;
+
+  // How to interpret timestamp results
+  float _timestampPeriod;
+
+  // Timers that run per frame and then get reset
+  std::vector<PerFrameTimer> _perFrameTimers;
+
+  int findTimerIndex(const std::string& timer);
+  void resetPerFrameQueries(VkCommandBuffer cmdBuffer);
+  void computePerFrameQueries();
 
   // This is dangerous, but points to "current" image index in the swap chain
   uint32_t _currentSwapChainIndex;
@@ -313,6 +351,7 @@ private:
   bool createSurface();
   bool createSwapChain();
   bool createCommandPool();
+  bool createQueryPool();
   bool createCommandBuffers();
   bool createSyncObjects();
   bool createDescriptorPool();
