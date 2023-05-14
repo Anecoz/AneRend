@@ -63,7 +63,7 @@ void main() {
     normal = normalize(fragTBN * normal);
   }
 
-  outCol0 = vec4(normal, color.x);
+  outCol0 = vec4(normal * 0.5 + 0.5, color.x);
   outCol1 = vec4(color.yz, metallic, roughness);
   //outCol2 = vec4(fragPos, 0.0);
 }

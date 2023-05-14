@@ -298,7 +298,7 @@ void StageApplication::render()
       sum += timer._avg10;
       ImGui::Text("%s: %f", timer._name.c_str(), timer._avg10);
 
-      ImGui::PlotLines("Last 1k", timer._buf.data(), 1000);
+      ImGui::PlotLines("", timer._buf.data(), 1000);
     }
     ImGui::Text("Sum: %f", sum);
 

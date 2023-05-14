@@ -1644,7 +1644,7 @@ void VulkanRenderer::computePerFrameQueries()
   // Do it for last frame (so hopefully is ready)
   uint32_t frame = _currentFrame;// == 0 ? MAX_FRAMES_IN_FLIGHT - 1 : _currentFrame - 1;
 
-  VkQueryResultFlags queryResFlags = VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT;
+  VkQueryResultFlags queryResFlags = VK_QUERY_RESULT_64_BIT;
   /*if (firstDone) {
     queryResFlags |= VK_QUERY_RESULT_WAIT_BIT;
    }
