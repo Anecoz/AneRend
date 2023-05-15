@@ -16,4 +16,5 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   int ssaoEnabled;
   int fxaaEnabled;
   int directionalShadowsEnabled;
+  int rtShadowsEnabled;
 } ubo;

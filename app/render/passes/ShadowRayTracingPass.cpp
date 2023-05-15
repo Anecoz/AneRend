@@ -54,6 +54,8 @@ void ShadowRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext
 
   fgb.registerRenderPassExe("ShadowRT",
     [this](RenderExeParams exeParams) {
+      if (!exeParams.rc->getRenderOptions().raytracedShadows) return;
+
       // Bind pipeline
       vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, *exeParams.pipeline);
 

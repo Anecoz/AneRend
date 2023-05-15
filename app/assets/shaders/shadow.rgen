@@ -27,6 +27,10 @@ vec3 calcWorldPos(vec2 texCoord, float depthSamp)
 
 void main()
 {
+  if (ubo.rtShadowsEnabled != 1) {
+    return;
+  }
+
   const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
   vec2 texCoords = vec2(pixel) / vec2(ubo.screenWidth - 1, ubo.screenHeight - 1);
 

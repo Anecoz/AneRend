@@ -6,7 +6,8 @@ struct RenderOptions
 {
   bool ssao = true;
   bool fxaa = true;
-  bool directionalShadows = true;
+  bool directionalShadows = false;
+  bool raytracedShadows = true;
 };
 
 }

@@ -95,6 +95,7 @@ struct GPUSceneData {
   int32_t ssaoEnabled;
   int32_t fxaaEnabled;
   int32_t directionalShadowsEnabled;
+  int32_t rtShadowsEnabled;
 };
 
 struct GPUSSAOSampleUbo {

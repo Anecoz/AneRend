@@ -284,7 +284,8 @@ void StageApplication::render()
     ImGui::Begin("Render Options");
     ImGui::Checkbox("SSAO", &_renderOptions.ssao);
     ImGui::Checkbox("FXAA", &_renderOptions.fxaa);
-    ImGui::Checkbox("Shadows", &_renderOptions.directionalShadows);
+    ImGui::Checkbox("Shadow map", &_renderOptions.directionalShadows);
+    ImGui::Checkbox("Ray traced shadows", &_renderOptions.raytracedShadows);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
     ImGui::End();
   }
