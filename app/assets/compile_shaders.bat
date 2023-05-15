@@ -23,3 +23,5 @@ C:/VulkanSDK/1.3.239.0/Bin/glslangValidator.exe -V -o %2/hiz_comp.spv %1/hiz.com
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/shadow.rgen -o %2/shadow_rgen.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/shadow.rmiss -o %2/shadow_rmiss.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/shadow.rchit -o %2/shadow_rchit.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/debug_spheres.vert -o %2/debug_spheres_vert.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe %1/debug_spheres.frag -o %2/debug_spheres_frag.spv

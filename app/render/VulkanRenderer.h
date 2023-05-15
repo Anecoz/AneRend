@@ -122,7 +122,7 @@ public:
   VkExtent2D swapChainExtent() override final;
 
   //void drawGigaBuffer(VkCommandBuffer* commandBuffer) override final;
-  void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls) override final;
+  void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount) override final;
   void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) override final;
   void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) override final;
 
@@ -156,6 +156,8 @@ public:
   void registerPerFrameTimer(const std::string& name) override final;
   void startTimer(const std::string& name, VkCommandBuffer cmdBuffer) override final;
   void stopTimer(const std::string& name, VkCommandBuffer cmdBuffer) override final;
+
+  Mesh& getSphereMesh() override final;
 
   std::vector<PerFrameTimer> getPerFrameTimers();
 

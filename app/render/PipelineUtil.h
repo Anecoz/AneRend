@@ -32,6 +32,7 @@ struct GraphicsPipelineCreateParams
   bool depthTest = true;
   bool colorAttachment = true;
   bool vertexLess = false;
+  VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
 };
 
 struct ComputePipelineCreateParams

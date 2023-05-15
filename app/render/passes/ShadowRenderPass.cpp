@@ -128,7 +128,7 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
       vkCmdSetScissor(*exeParams.cmdBuffer, 0, 1, &scissor);
 
       // Ask render context to draw big giga buffer
-      exeParams.rc->drawGigaBufferIndirect(exeParams.cmdBuffer, exeParams.buffers[1]);
+      exeParams.rc->drawGigaBufferIndirect(exeParams.cmdBuffer, exeParams.buffers[1], exeParams.rc->getCurrentMeshes().size());
 
       // Stop dynamic rendering
       vkCmdEndRendering(*exeParams.cmdBuffer);

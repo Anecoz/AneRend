@@ -8,6 +8,7 @@ struct RenderOptions
   bool fxaa = true;
   bool directionalShadows = false;
   bool raytracedShadows = true;
+  bool visualizeBoundingSpheres = false;
 };
 
 }

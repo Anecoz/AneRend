@@ -20,6 +20,7 @@
 #include "passes/FXAARenderPass.h"
 #include "passes/HiZRenderPass.h"
 #include "passes/ShadowRayTracingPass.h"
+#include "passes/DebugBSRenderPass.h"
 
 #include "../util/Utils.h"
 #include "../util/GraphicsUtils.h"
@@ -433,7 +434,7 @@ bool VulkanRenderer::init()
   // TESTING
   std::vector<Vertex> vert;
   std::vector<std::uint32_t> inds;
-  graphicsutil::createSphere(100.0f, &vert, &inds, true);
+  graphicsutil::createSphere(1.0f, &vert, &inds, true);
 
   Model sphereModel{};
   Mesh sphereMesh{};
@@ -753,6 +754,7 @@ void VulkanRenderer::update(
   ubo.fxaaEnabled = _renderOptions.fxaa;
   ubo.directionalShadowsEnabled = _renderOptions.directionalShadows;
   ubo.rtShadowsEnabled = _renderOptions.raytracedShadows;
+  ubo.visualizeBoundingSpheresEnabled = _renderOptions.visualizeBoundingSpheres;
 
   for (int i = 0; i < _lights.size(); ++i) {
     _lights[i].debugUpdatePos(delta);
@@ -1759,6 +1761,11 @@ void VulkanRenderer::stopTimer(const std::string& name, VkCommandBuffer cmdBuffe
   vkCmdWriteTimestamp(cmdBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, _queryPools[_currentFrame], queryIdx);
 }
 
+Mesh& VulkanRenderer::getSphereMesh()
+{
+  return _currentMeshes[_debugSphereMeshId];
+}
+
 std::vector<PerFrameTimer> VulkanRenderer::getPerFrameTimers()
 {
   return _perFrameTimers;
@@ -2425,6 +2432,7 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new SSAOBlurRenderPass());
   _renderPasses.emplace_back(new DeferredLightingRenderPass());
   _renderPasses.emplace_back(new FXAARenderPass());
+  _renderPasses.emplace_back(new DebugBSRenderPass());
   _renderPasses.emplace_back(new DebugViewRenderPass());
   _renderPasses.emplace_back(new UIRenderPass());
   _renderPasses.emplace_back(new PresentationRenderPass());
@@ -3075,9 +3083,9 @@ VkExtent2D VulkanRenderer::swapChainExtent()
   }
 }*/
 
-void VulkanRenderer::drawGigaBufferIndirect(VkCommandBuffer* commandBuffer, VkBuffer drawCalls)
+void VulkanRenderer::drawGigaBufferIndirect(VkCommandBuffer* commandBuffer, VkBuffer drawCalls, uint32_t drawCount)
 {
-  vkCmdDrawIndexedIndirect(*commandBuffer, drawCalls, 0, (uint32_t)_currentMeshes.size(), sizeof(gpu::GPUDrawCallCmd));
+  vkCmdDrawIndexedIndirect(*commandBuffer, drawCalls, 0, drawCount, sizeof(gpu::GPUDrawCallCmd));
 }
 
 void VulkanRenderer::drawNonIndexIndirect(VkCommandBuffer* cmdBuffer, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride)

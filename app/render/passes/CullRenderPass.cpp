@@ -140,6 +140,69 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       _currentStagingOffset += sizeof(gpu::GPUNonIndexDrawCallCmd);
     });
 
+  // An initializer for the bounding sphere visualizer draw buffer
+  {
+    ResourceUsage initUsage{};
+    initUsage._type = Type::SSBO;
+    initUsage._access.set((std::size_t)Access::Write);
+    initUsage._stage.set((std::size_t)Stage::Transfer);
+
+    fgb.registerResourceInitExe("CullBSDrawBuf", std::move(initUsage),
+      [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
+        auto buf = (BufferRenderResource*)resource;
+
+        std::size_t dataSize = sizeof(gpu::GPUDrawCallCmd);
+
+        if (_currentStagingOffset + dataSize >= renderContext->getMaxNumRenderables() * sizeof(gpu::GPURenderable) * 2) {
+          _currentStagingOffset = 0;
+        }
+
+        uint8_t* data;
+        vmaMapMemory(renderContext->vmaAllocator(), _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._allocation, (void**)&data);
+        data += _currentStagingOffset;
+
+        auto& mesh = renderContext->getSphereMesh();
+
+        gpu::GPUDrawCallCmd* mappedData = reinterpret_cast<gpu::GPUDrawCallCmd*>(data);
+
+        mappedData->_command.indexCount = (uint32_t)mesh._numIndices;
+        mappedData->_command.instanceCount = 0; // Updated by GPU compute shader
+        mappedData->_command.firstIndex = (uint32_t)mesh._indexOffset;
+        mappedData->_command.vertexOffset = (uint32_t)mesh._vertexOffset;
+        mappedData->_command.firstInstance = 0;
+
+        VkBufferCopy copyRegion{};
+        copyRegion.srcOffset = _currentStagingOffset;
+        copyRegion.dstOffset = 0;
+        copyRegion.size = dataSize;
+        vkCmdCopyBuffer(cmdBuffer, _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._buffer, buf->_buffer._buffer, 1, &copyRegion);
+
+        vmaUnmapMemory(renderContext->vmaAllocator(), _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._allocation);
+        _currentStagingOffset += dataSize;
+      });
+  }
+
+  // Add an initializer for bounding sphere translation buffer
+  {
+    ResourceUsage initUsage{};
+    initUsage._type = Type::SSBO;
+    initUsage._access.set((std::size_t)Access::Write);
+    initUsage._stage.set((std::size_t)Stage::Transfer);
+
+    fgb.registerResourceInitExe("CullBSTransBuf", std::move(initUsage),
+      [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
+        // Just fill buffer with 0's
+        auto buf = (BufferRenderResource*)resource;
+
+        vkCmdFillBuffer(
+          cmdBuffer,
+          buf->_buffer._buffer,
+          0,
+          VK_WHOLE_SIZE,
+          0);
+      });
+  }
+
   // Add an initializer for the grass obj buffer
   /*ResourceUsage grassObjBufInitUsage{};
   grassObjBufInitUsage._type = Type::SSBO;
@@ -222,6 +285,34 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     depthUsage._type = Type::SampledTexture;
     regInfo._resourceUsages.emplace_back(std::move(depthUsage));
     currSize = currSize >> 1;
+  }
+
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "CullBSDrawBuf";
+    usage._access.set((std::size_t)Access::Write);
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SSBO;
+    BufferInitialCreateInfo createInfo{};
+    createInfo._multiBuffered = true;
+    createInfo._initialSize = sizeof(gpu::GPUDrawCallCmd);
+    usage._bufferCreateInfo = createInfo;
+    regInfo._resourceUsages.emplace_back(std::move(usage));
+  }
+
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "CullBSTransBuf";
+    usage._access.set((std::size_t)Access::Write);
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SSBO;
+    BufferInitialCreateInfo createInfo{};
+    createInfo._multiBuffered = true;
+    createInfo._initialSize = rc->getMaxNumRenderables() * sizeof(gpu::GPUTranslationId);
+    usage._bufferCreateInfo = createInfo;
+    regInfo._resourceUsages.emplace_back(std::move(usage));
   }
 
 

@@ -76,6 +76,14 @@ layout(set = 1, binding = 7) uniform sampler2D hiZ8;
 layout(set = 1, binding = 8) uniform sampler2D hiZ4;
 layout(set = 1, binding = 9) uniform sampler2D hiZ2;
 
+layout(std430, set = 1, binding = 10) buffer DebugSphereDrawBuffer {
+  DrawCommand draw;
+} debugSphereDrawBuffer;
+
+layout(std430, set = 1, binding = 11) buffer DebugSphereTranslationBuffer {
+  TranslationId ids[];
+} debugSphereTransBuffer;
+
 layout(push_constant) uniform constants {
   mat4 view;
   vec4 frustumPlanes[4];
@@ -231,6 +239,17 @@ bool occlusionCull(vec3 sphereCenterView, float radius)
   return visible;
 }
 
+mat4 buildTranslation(mat4 model)
+{
+  vec3 delta = vec3(model[3][0], model[3][1], model[3][2]);
+
+  return mat4(
+        vec4(1.0, 0.0, 0.0, 0.0),
+        vec4(0.0, 1.0, 0.0, 0.0),
+        vec4(0.0, 0.0, 1.0, 0.0),
+        vec4(delta, 1.0));
+}
+
 void main()
 {
   // Renderable culling
@@ -243,12 +262,13 @@ void main()
     if (visible) {
 
       mat4 model = renderableBuffer.renderables[gID].transform;
+      mat4 trans = buildTranslation(model);
       vec4 sphereBounds = renderableBuffer.renderables[gID].bounds;
       float radius = sphereBounds.w;
-      vec3 sphereCenterView = vec3(pushConstants.view * model * vec4(sphereBounds.xyz, 1.0));
-      vec3 sphereCenter = vec3(model * vec4(sphereBounds.xyz, 1.0));
+      vec3 sphereCenterView = vec3(pushConstants.view * trans * vec4(sphereBounds.xyz, 1.0));
+      vec3 sphereCenter = vec3(trans * vec4(sphereBounds.xyz, 1.0));
 
-      visible = visible && sphereCenterView.z > -pushConstants.farDist;
+      //visible = visible && sphereCenterView.z > -pushConstants.farDist;
       //visible = visible && sphereCenterView.z < pushConstants.nearDist;
       visible = visible && sphereVisible(sphereCenter, radius);
 
@@ -266,6 +286,13 @@ void main()
             uint instanceIndex = drawBuffer.draws[meshId].firstInstance + countBefore;
             translationBuffer.ids[instanceIndex].renderableId = gID;
             translationBuffer.ids[instanceIndex].meshId = meshId;
+
+            // Also add debug sphere instances if it is enabled
+            if (ubo.visualizeBoundingSpheresEnabled == 1) {
+              uint countBef = atomicAdd(debugSphereDrawBuffer.draw.instanceCount, 1);
+              debugSphereTransBuffer.ids[countBef].renderableId = gID;
+              debugSphereTransBuffer.ids[countBef].meshId = meshId;
+            }
           }
         }
       }

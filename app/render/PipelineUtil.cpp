@@ -437,7 +437,7 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
   rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
   rasterizer.depthClampEnable = VK_FALSE;
   rasterizer.rasterizerDiscardEnable = VK_FALSE; // This to true means geometry never passes through rasterizer stage (?)
-  rasterizer.polygonMode = VK_POLYGON_MODE_FILL; // Anything else here requires enabling a GPU feature (wireframe etc)
+  rasterizer.polygonMode = param.polygonMode;
   rasterizer.lineWidth = 1.0f; // Thickness of lines in terms of fragments
   rasterizer.cullMode = param.cullMode;
   rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;

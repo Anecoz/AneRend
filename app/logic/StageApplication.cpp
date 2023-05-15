@@ -137,7 +137,7 @@ bool StageApplication::init()
     for (int x = 0; x < numInstances; ++x)
     for (int y = 0; y < numInstances; ++y) {
       auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(30.0f * x, 0.0f, 30.0f * y));
-      _vkRenderer.registerRenderable(_meshId2, mat, glm::vec3(1.0f), 50.0f);
+      _vkRenderer.registerRenderable(_meshId2, mat, glm::vec3(1.0f), 15.0f);
     }
   }
 
@@ -160,7 +160,7 @@ bool StageApplication::init()
         auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(16.0f * x, 1.0f, 8.0f * y));
         auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
-        _vkRenderer.registerRenderable(_meshId4, mat * rot * scale, glm::vec3(0.0f), 10.0f, true);
+        _vkRenderer.registerRenderable(_meshId4, mat * rot * scale, glm::vec3(0.0f, 0.2f, 0.0f), .7f);
       }
   }
   {
@@ -188,8 +188,9 @@ bool StageApplication::init()
   {
     std::size_t numInstances = 1;
 
-    glm::vec3 sphereCenter = (testMin + testMax) / 2.0f;
+    glm::vec3 sphereCenter{ 0.0f };
     float radius = std::max(std::abs(testMax.z - testMin.z), std::max(std::abs(testMax.x - testMin.x), std::abs(testMax.y - testMin.y)));
+    radius /= 2.0f;
 
     float scale = 0.01f;
     radius *= scale;
@@ -286,6 +287,7 @@ void StageApplication::render()
     ImGui::Checkbox("FXAA", &_renderOptions.fxaa);
     ImGui::Checkbox("Shadow map", &_renderOptions.directionalShadows);
     ImGui::Checkbox("Ray traced shadows", &_renderOptions.raytracedShadows);
+    ImGui::Checkbox("Visualize bounding spheres", &_renderOptions.visualizeBoundingSpheres);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
     ImGui::End();
   }
