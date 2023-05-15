@@ -19,8 +19,8 @@ void main() {
   vec3 diffuseColor = fragBladeHash * col0 + (1.0 - fragBladeHash) * col1 * fragT;
 
   vec3 normal = -normalize(fragNormal);
-  float metallic = 0.5;
-  float roughness = 0.5;
+  float metallic = 0.2;
+  float roughness = 0.8;
 
   outColor0 = vec4(normal, diffuseColor.x);
   outColor1 = vec4(diffuseColor.yz, metallic, roughness);

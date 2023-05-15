@@ -137,7 +137,7 @@ bool StageApplication::init()
     for (int x = 0; x < numInstances; ++x)
     for (int y = 0; y < numInstances; ++y) {
       auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(30.0f * x, 0.0f, 30.0f * y));
-      _vkRenderer.registerRenderable(_meshId2, mat, glm::vec3(1.0f), 15.0f);
+      _vkRenderer.registerRenderable(_meshId2, mat, glm::vec3(0.0f), 50.0f);
     }
   }
 
@@ -160,7 +160,7 @@ bool StageApplication::init()
         auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(16.0f * x, 1.0f, 8.0f * y));
         auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
-        _vkRenderer.registerRenderable(_meshId4, mat * rot * scale, glm::vec3(0.0f, 0.2f, 0.0f), .7f);
+        _vkRenderer.registerRenderable(_meshId4, mat * rot * scale, glm::vec3(0.0f, 0.3f, 0.0f), .7f);
       }
   }
   {

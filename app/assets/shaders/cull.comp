@@ -268,14 +268,14 @@ void main()
       vec3 sphereCenterView = vec3(pushConstants.view * trans * vec4(sphereBounds.xyz, 1.0));
       vec3 sphereCenter = vec3(trans * vec4(sphereBounds.xyz, 1.0));
 
-      //visible = visible && sphereCenterView.z > -pushConstants.farDist;
-      //visible = visible && sphereCenterView.z < pushConstants.nearDist;
+      visible = visible && sphereCenterView.z + radius > -pushConstants.farDist;
+      visible = visible && sphereCenterView.z - radius < pushConstants.nearDist;
       visible = visible && sphereVisible(sphereCenter, radius);
 
       if (visible) {
 
         // Do occlusion culling
-        visible = occlusionCull(sphereCenterView, radius);
+        visible = true;//occlusionCull(sphereCenterView, radius);
 
         if (visible) {
           for (int i = 0; i < renderableBuffer.renderables[gID].numMeshIds; ++i) {
@@ -307,7 +307,7 @@ void main()
   vec3 worldPosView = vec3(pushConstants.view * vec4(worldPos, 1.0));
   float radius = 1.5;
   bool visible = sphereVisible(worldPos, radius);
-  visible = visible && occlusionCull(worldPosView, radius);
+  //visible = visible && occlusionCull(worldPosView, radius);
 
   if (visible) {
     uint countBefore = atomicAdd(grassDrawBuffer.draw.instanceCount, 1);
