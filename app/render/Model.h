@@ -16,9 +16,9 @@ public:
   Model();
   ~Model();
 
-  Model(const Model&) = delete;
+  //Model(const Model&);
   Model(Model&&);
-  Model& operator=(const Model&) = delete;
+  //Model& operator=(const Model&);
   Model& operator=(Model&&);
 
   bool loadFromObj(

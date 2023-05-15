@@ -16,7 +16,15 @@ Model::~Model()
 {}
 
 /*Model::Model(const Model& rhs)
-{}*/
+{
+  _meshes = rhs._meshes;
+  _min = rhs._min;
+  _max = rhs._max;
+  _metallicPath = rhs._metallicPath;
+  _roughnessPath = rhs._roughnessPath;
+  _normalPath = rhs._normalPath;
+  _albedoPath = rhs._albedoPath;
+}*/
 
 Model::Model(Model&& rhs)
 {
@@ -26,7 +34,13 @@ Model::Model(Model&& rhs)
 /*Model& Model::operator=(const Model& rhs)
 {
   if (this != &rhs) {
-    _vertices = rhs._meshes;
+    _meshes = rhs._meshes;
+    _min = rhs._min;
+    _max = rhs._max;
+    _metallicPath = rhs._metallicPath;
+    _roughnessPath = rhs._roughnessPath;
+    _normalPath = rhs._normalPath;
+    _albedoPath = rhs._albedoPath;
   }
   return *this;
 }*/

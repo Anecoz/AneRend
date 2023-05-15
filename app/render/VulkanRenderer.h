@@ -159,6 +159,8 @@ public:
 
   std::vector<PerFrameTimer> getPerFrameTimers();
 
+  std::vector<MeshId> getMeshIds(ModelId model);
+
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
@@ -173,6 +175,9 @@ private:
   static const std::size_t MAX_TIMESTAMP_QUERIES = 100;
 
   MeshId _debugCubeMesh;
+  ModelId _debugSphereModelId;
+  MeshId _debugSphereMeshId;
+  RenderableId _debugSphereRenderable;
 
   void registerDebugRenderable(const glm::mat4& transform, const glm::vec3& center, float radius);
 

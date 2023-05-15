@@ -83,7 +83,7 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
   param.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
   param.vertexLess = true;
   param.colorAttachmentCount = 2;
-  param.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM };
+  param.colorFormats = { VK_FORMAT_R16G16B16A16_UNORM, VK_FORMAT_R8G8B8A8_UNORM };
   info._graphicsParams = param;
 
   fgb.registerRenderPass(std::move(info));

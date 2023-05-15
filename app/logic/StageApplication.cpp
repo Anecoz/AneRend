@@ -107,7 +107,7 @@ bool StageApplication::init()
 
   // Create a bunch of test matrices
   {
-    std::size_t numInstances = 100;
+    std::size_t numInstances = 1;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -160,7 +160,7 @@ bool StageApplication::init()
         auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(16.0f * x, 1.0f, 8.0f * y));
         auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
-        _vkRenderer.registerRenderable(_meshId4, mat * rot * scale, glm::vec3(0.0f), 5.0f);
+        _vkRenderer.registerRenderable(_meshId4, mat * rot * scale, glm::vec3(0.0f), 10.0f, true);
       }
   }
   {

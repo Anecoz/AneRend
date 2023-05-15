@@ -430,6 +430,26 @@ bool VulkanRenderer::init()
 
   _debugCubeMesh = registerMesh(vert, inds);*/
 
+  // TESTING
+  std::vector<Vertex> vert;
+  std::vector<std::uint32_t> inds;
+  graphicsutil::createSphere(100.0f, &vert, &inds, true);
+
+  Model sphereModel{};
+  Mesh sphereMesh{};
+  sphereMesh._indices = std::move(inds);
+  sphereMesh._vertices = std::move(vert);
+  sphereModel._meshes.emplace_back(std::move(sphereMesh));
+
+  _debugSphereModelId = registerModel(std::move(sphereModel));
+  _debugSphereMeshId = getMeshIds(_debugSphereModelId)[0];
+
+  /*_debugSphereRenderable = registerRenderable(
+    _debugSphereModelId,
+    glm::mat4(1.0f),
+    glm::vec3(0.0f),
+    5000.0f);*/
+
   return res;
 }
 
@@ -613,7 +633,7 @@ RenderableId VulkanRenderer::registerRenderable(
 
 void VulkanRenderer::registerDebugRenderable(const glm::mat4& transform, const glm::vec3& center, float radius)
 {
-  /*if (_currentRenderables.size() == MAX_NUM_RENDERABLES) {
+  if (_currentRenderables.size() == MAX_NUM_RENDERABLES) {
     printf("Too many renderables!\n");
     return;
   }
@@ -623,7 +643,8 @@ void VulkanRenderer::registerDebugRenderable(const glm::mat4& transform, const g
   auto id = _nextRenderableId++;
 
   renderable._id = id;
-  renderable._meshId = _debugCubeMesh;
+  renderable._firstMeshId = _debugSphereMeshId;
+  renderable._numMeshes = 1;
   renderable._tint = graphicsutil::randomColor();
   renderable._transform = transform;
   renderable._boundingSphereCenter = center;
@@ -633,7 +654,7 @@ void VulkanRenderer::registerDebugRenderable(const glm::mat4& transform, const g
 
   for (auto& val : _renderablesChanged) {
     val = true;
-  }*/
+  }
 }
 
 void VulkanRenderer::unregisterRenderable(RenderableId id)
@@ -1740,6 +1761,19 @@ void VulkanRenderer::stopTimer(const std::string& name, VkCommandBuffer cmdBuffe
 std::vector<PerFrameTimer> VulkanRenderer::getPerFrameTimers()
 {
   return _perFrameTimers;
+}
+
+std::vector<MeshId> VulkanRenderer::getMeshIds(ModelId model)
+{
+  std::vector<MeshId> out;
+
+  Model& m = _models[model];
+
+  for (auto& mesh : m._meshes) {
+    out.emplace_back(mesh._id);
+  }
+
+  return out;
 }
 
 bool VulkanRenderer::createDescriptorPool()

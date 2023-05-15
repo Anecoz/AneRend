@@ -95,7 +95,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
     ImageInitialCreateInfo createInfo{};
     createInfo._initialHeight = rc->swapChainExtent().height;
     createInfo._initialWidth = rc->swapChainExtent().width;
-    createInfo._intialFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_UNORM;
 
     usage._imageCreateInfo = createInfo;
     usage._type = Type::ColorAttachment;
@@ -171,7 +171,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
   param.uvLoc = 3;
   param.tangentLoc = 4;
   param.colorAttachmentCount = 2;
-  param.colorFormats = { format, format };
+  param.colorFormats = { VK_FORMAT_R16G16B16A16_UNORM, VK_FORMAT_R8G8B8A8_UNORM };
   info._graphicsParams = param;
 
   fgb.registerRenderPass(std::move(info));
