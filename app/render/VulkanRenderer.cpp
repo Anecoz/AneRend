@@ -1553,6 +1553,8 @@ void VulkanRenderer::recreateSwapChain()
 
   createSwapChain();
 
+  _perFrameTimers.clear();
+
   _fgb.reset(this);
 
   for (auto& rp : _renderPasses) {
