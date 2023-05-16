@@ -107,7 +107,7 @@ bool StageApplication::init()
 
   // Create a bunch of test matrices
   {
-    std::size_t numInstances = 1;
+    std::size_t numInstances = 100;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));

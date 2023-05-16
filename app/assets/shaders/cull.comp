@@ -131,37 +131,65 @@ bool projectSphere(vec3 C, float r, float znear, float P00, float P11, out vec4 
   return true;
 }
 
-bool projectSphere2(vec3 sphereView, float radius, out vec4 aabb)
+bool projectSphere2(vec3 sphereView, float radius, out vec4 aabb, out vec2 zMinMax)
 {
-  vec3 botRightView = vec3(sphereView.x + radius, sphereView.y - radius, sphereView.z - radius);
-  vec3 topLeftView = vec3(sphereView.x - radius, sphereView.y + radius, sphereView.z - radius);
+  vec3 botRightViewFar = vec3(sphereView.x + radius, sphereView.y - radius, sphereView.z - radius);
+  vec3 topLeftViewFar = vec3(sphereView.x - radius, sphereView.y + radius, sphereView.z - radius);
+  vec3 botRightViewNear = vec3(sphereView.x + radius, sphereView.y - radius, sphereView.z + radius);
+  vec3 topLeftViewNear = vec3(sphereView.x - radius, sphereView.y + radius, sphereView.z + radius);
 
-  vec4 botRightNDC = ubo.proj * vec4(botRightView, 1.0);
-  botRightNDC /= botRightNDC.w;
+  vec4 botRightNDCFar = ubo.proj * vec4(botRightViewFar, 1.0);
+  botRightNDCFar /= botRightNDCFar.w;
 
-  vec4 topLeftNDC = ubo.proj * vec4(topLeftView, 1.0);
-  topLeftNDC /= topLeftNDC.w;
+  vec4 topLeftNDCFar = ubo.proj * vec4(topLeftViewFar, 1.0);
+  topLeftNDCFar /= topLeftNDCFar.w;
 
-  if (abs(topLeftNDC.x) > 1.0 ||
-    abs(topLeftNDC.y) > 1.0 ||
-    topLeftNDC.z > 1.0 ||
-    topLeftNDC.z < 0.0) {
+  vec4 botRightNDCNear = ubo.proj * vec4(botRightViewNear, 1.0);
+  botRightNDCNear /= botRightNDCNear.w;
+
+  vec4 topLeftNDCNear = ubo.proj * vec4(topLeftViewNear, 1.0);
+  topLeftNDCNear /= topLeftNDCNear.w;
+
+  if (abs(topLeftNDCFar.x) > 1.0 ||
+    abs(topLeftNDCFar.y) > 1.0 ||
+    topLeftNDCFar.z > 1.0 ||
+    topLeftNDCFar.z < 0.0) {
     return false;
   }
 
-  if (abs(botRightNDC.x) > 1.0 ||
-    abs(botRightNDC.y) > 1.0 ||
-    botRightNDC.z > 1.0 ||
-    botRightNDC.z < 0.0) {
+  if (abs(botRightNDCFar.x) > 1.0 ||
+    abs(botRightNDCFar.y) > 1.0 ||
+    botRightNDCFar.z > 1.0 ||
+    botRightNDCFar.z < 0.0) {
     return false;
   }
+
+  if (abs(topLeftNDCNear.x) > 1.0 ||
+    abs(topLeftNDCNear.y) > 1.0 ||
+    topLeftNDCNear.z > 1.0 ||
+    topLeftNDCNear.z < 0.0) {
+    return false;
+  }
+
+  if (abs(botRightNDCNear.x) > 1.0 ||
+    abs(botRightNDCNear.y) > 1.0 ||
+    botRightNDCNear.z > 1.0 ||
+    botRightNDCNear.z < 0.0) {
+    return false;
+  }
+
+  float minZ = min(topLeftNDCNear.z, botRightNDCNear.z);
+  float maxZ = max(topLeftNDCFar.z, botRightNDCFar.z);
+  zMinMax = vec2(minZ, maxZ);
 
   // -1 to 1 to 0 to 1
-  botRightNDC = botRightNDC * 0.5 + 0.5;
-  topLeftNDC = topLeftNDC * 0.5 + 0.5;
+  botRightNDCFar = botRightNDCFar * 0.5 + 0.5;
+  topLeftNDCFar = topLeftNDCFar * 0.5 + 0.5;
+  botRightNDCNear = botRightNDCNear * 0.5 + 0.5;
+  topLeftNDCNear = topLeftNDCNear * 0.5 + 0.5;
 
   // (minx, maxx, miny, maxy)
-  aabb = vec4(topLeftNDC.x, botRightNDC.x, topLeftNDC.y, botRightNDC.y);
+  aabb = vec4(topLeftNDCFar.x, botRightNDCFar.x, topLeftNDCFar.y, botRightNDCFar.y);
 
   return true;
 }
@@ -213,12 +241,13 @@ bool occlusionCull(vec3 sphereCenterView, float radius)
 
   // aabb is (minx, maxx, miny, maxy) in 0-1 coords in NDC space
   vec4 aabb;
-  bool projOk = projectSphere2(sphereCenterView, radius, aabb);
+  vec2 zMinMax;
+  bool projOk = projectSphere2(sphereCenterView, radius, aabb, zMinMax);
   if (projOk) {
     float width = (aabb.y - aabb.x) * 64.0;
     float height = (aabb.w - aabb.z) * 64.0;
 
-    uint level = uint(floor(log2(max(width, height))));
+    uint level = uint(max(floor(log2(max(width, height))), 1));
 
     float depth = 1.0;
     float depth0 = sampleHiZ(vec2(aabb.xz), level - 1);
@@ -231,7 +260,7 @@ bool occlusionCull(vec3 sphereCenterView, float radius)
     vec3 adjusted = vec3(sphereCenterView.x, sphereCenterView.y, sphereCenterView.z + radius);
     vec4 projected = ubo.proj * vec4(adjusted, 1.0);
     projected /= projected.w;
-    float depthSphere = projected.z;//pushConstants.nearDist / (sphereCenterView.z - radius);
+    float depthSphere = zMinMax.x;//projected.z;//pushConstants.nearDist / (sphereCenterView.z - radius);
 
     visible = depthSphere <= depth;
   }
@@ -275,7 +304,7 @@ void main()
       if (visible) {
 
         // Do occlusion culling
-        visible = true;//occlusionCull(sphereCenterView, radius);
+        visible = occlusionCull(sphereCenterView, radius);
 
         if (visible) {
           for (int i = 0; i < renderableBuffer.renderables[gID].numMeshIds; ++i) {
@@ -307,7 +336,7 @@ void main()
   vec3 worldPosView = vec3(pushConstants.view * vec4(worldPos, 1.0));
   float radius = 1.5;
   bool visible = sphereVisible(worldPos, radius);
-  //visible = visible && occlusionCull(worldPosView, radius);
+  visible = visible && occlusionCull(worldPosView, radius);
 
   if (visible) {
     uint countBefore = atomicAdd(grassDrawBuffer.draw.instanceCount, 1);

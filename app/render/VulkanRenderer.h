@@ -388,6 +388,7 @@ private:
 
   GLFWwindow* _window;
   bool _enableValidationLayers;
+  bool _enableRayTracing;
 
   VkInstance _instance;
   VkPhysicalDevice _physicalDevice = VK_NULL_HANDLE;
@@ -423,10 +424,15 @@ private:
 
   const std::vector<const char*> _deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-    VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-    VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-    VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
+    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME
+  };
+
+  const std::vector<const char*> _deviceExtensionsRT = {
+  VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+  VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+  VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+  VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+  VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
   };
 
   std::uint32_t _currentFrame = 0;

@@ -196,6 +196,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _fgb(&_vault)
   , _window(window)
   , _enableValidationLayers(true)
+  , _enableRayTracing(true)
 {
   imageutil::init();
 }
@@ -227,13 +228,15 @@ VulkanRenderer::~VulkanRenderer()
     if (mesh._metallicRoughness._bindlessIndex != -1) vkDestroyImageView(_device, mesh._metallicRoughness._view, nullptr);
   }
 
-  for (auto& blas : _blases) {
-    vmaDestroyBuffer(_vmaAllocator, blas.second._buffer._buffer, blas.second._buffer._allocation);
-    DestroyAccelerationStructureKHR(_device, blas.second._as, nullptr);
-  }
+  if (_enableRayTracing) {
+    for (auto& blas : _blases) {
+      vmaDestroyBuffer(_vmaAllocator, blas.second._buffer._buffer, blas.second._buffer._allocation);
+      DestroyAccelerationStructureKHR(_device, blas.second._as, nullptr);
+    }
 
-  vmaDestroyBuffer(_vmaAllocator, _tlas._buffer._buffer, _tlas._buffer._allocation);
-  DestroyAccelerationStructureKHR(_device, _tlas._as, nullptr);
+    vmaDestroyBuffer(_vmaAllocator, _tlas._buffer._buffer, _tlas._buffer._allocation);
+    DestroyAccelerationStructureKHR(_device, _tlas._as, nullptr);
+  }
 
   for (auto& light: _lights) {
     for (auto& v: light._shadowImageViews) {
@@ -404,6 +407,7 @@ bool VulkanRenderer::init()
   printf("Done!\n");
 
   vkext::vulkanExtensionInit(_device);
+  _renderOptions.raytracingEnabled = _enableRayTracing;
 
   printf("Init frame graph builder...");
   res &= initFrameGraphBuilder();
@@ -557,7 +561,7 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh, bool buildBlas)
   vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
 
   // Build BLAS
-  if (buildBlas) {
+  if (_enableRayTracing && buildBlas) {
     registerBottomLevelAS(idCopy);
   }
 
@@ -716,7 +720,7 @@ void VulkanRenderer::update(
   vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
 
   // TODO: Fix
-  if (!_topLevelBuilt) {
+  if (_enableRayTracing && !_topLevelBuilt) {
     buildTopLevelAS();
     writeTLASDescriptor();
     _topLevelBuilt = true;
@@ -725,6 +729,11 @@ void VulkanRenderer::update(
   _renderOptions = renderOptions;
   _debugOptions = debugOptions;
   _currentWindMap = windMap;
+
+  if (!_enableRayTracing) {
+    _renderOptions.raytracedShadows = false;
+    _renderOptions.raytracingEnabled = false;
+  }
 
   // Update bindless UBO
   auto shadowProj = shadowCamera.getProjection();
@@ -1168,7 +1177,13 @@ bool VulkanRenderer::checkDeviceExtensionSupport(VkPhysicalDevice device)
   std::vector<VkExtensionProperties> availableExtensions(extensionCount);
   vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
 
-  std::set<std::string> requiredExtensions(_deviceExtensions.begin(), _deviceExtensions.end());
+  std::set<std::string> requiredExtensions;
+  if (_enableRayTracing) {
+    requiredExtensions = std::set<std::string>(_deviceExtensionsRT.begin(), _deviceExtensionsRT.end());
+  }
+  else {
+    requiredExtensions = std::set<std::string>(_deviceExtensions.begin(), _deviceExtensions.end());
+  }
 
   for (const auto& extension : availableExtensions) {
     requiredExtensions.erase(extension.extensionName);
@@ -1417,8 +1432,14 @@ bool VulkanRenderer::createLogicalDevice()
 
   createInfo.pEnabledFeatures = &deviceFeatures;
 
-  createInfo.enabledExtensionCount = static_cast<std::uint32_t>(_deviceExtensions.size());
-  createInfo.ppEnabledExtensionNames = _deviceExtensions.data();
+  if (_enableRayTracing) {
+    createInfo.enabledExtensionCount = static_cast<std::uint32_t>(_deviceExtensionsRT.size());
+    createInfo.ppEnabledExtensionNames = _deviceExtensionsRT.data();
+  }
+  else {
+    createInfo.enabledExtensionCount = static_cast<std::uint32_t>(_deviceExtensions.size());
+    createInfo.ppEnabledExtensionNames = _deviceExtensions.data();
+  }
 
   if (_enableValidationLayers) {
     createInfo.enabledLayerCount = static_cast<uint32_t>(_validationLayers.size());
@@ -1459,14 +1480,16 @@ bool VulkanRenderer::createLogicalDevice()
 
   // Ray tracing
   VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipeFeatures{};
-  rtPipeFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-  rtPipeFeatures.rayTracingPipeline = VK_TRUE;
-  vulkan12Features.pNext = &rtPipeFeatures;
-
   VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures{};
-  asFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-  asFeatures.accelerationStructure = VK_TRUE;
-  rtPipeFeatures.pNext = &asFeatures;
+  if (_enableRayTracing) {
+    rtPipeFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+    rtPipeFeatures.rayTracingPipeline = VK_TRUE;
+    vulkan12Features.pNext = &rtPipeFeatures;
+
+    asFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+    asFeatures.accelerationStructure = VK_TRUE;
+    rtPipeFeatures.pNext = &asFeatures;
+  }
 
   if (vkCreateDevice(_physicalDevice, &createInfo, nullptr, &_device) != VK_SUCCESS) {
     printf("Could not create logical device!\n");

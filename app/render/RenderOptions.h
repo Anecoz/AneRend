@@ -9,6 +9,7 @@ struct RenderOptions
   bool directionalShadows = false;
   bool raytracedShadows = true;
   bool visualizeBoundingSpheres = false;
+  bool raytracingEnabled = true;
 };
 
 }

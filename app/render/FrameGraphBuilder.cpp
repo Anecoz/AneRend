@@ -792,7 +792,7 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
         return false;
       }
     }
-    else if (node._rtParams.has_value()) {
+    else if (renderContext->getRenderOptions().raytracingEnabled && node._rtParams.has_value()) {
       if (!buildRayTracingPipeline(node._rtParams.value(), node._pipelineLayout, node._pipeline, node._sbt)) {
         printf("Could not build ray tracing pipeline!\n");
         return false;
