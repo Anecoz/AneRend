@@ -206,7 +206,8 @@ VulkanRenderer::~VulkanRenderer()
   // Let logical device finish operations first
   vkDeviceWaitIdle(_device);
 
-  vmaDestroyBuffer(_vmaAllocator, _gigaMeshBuffer._buffer._buffer, _gigaMeshBuffer._buffer._allocation);
+  vmaDestroyBuffer(_vmaAllocator, _gigaVtxBuffer._buffer._buffer, _gigaVtxBuffer._buffer._allocation);
+  vmaDestroyBuffer(_vmaAllocator, _gigaIdxBuffer._buffer._buffer, _gigaIdxBuffer._buffer._allocation);
 
   for (auto& mesh : _currentMeshes) {
     if (mesh._metallic._bindlessIndex != -1) vkDestroySampler(_device, mesh._metallic._sampler, nullptr);
@@ -460,7 +461,7 @@ bool VulkanRenderer::init()
 
 MeshId VulkanRenderer::registerMesh(Mesh& mesh, bool buildBlas)
 {
-  // Check if we need to pad with 0's before the vertices
+  /*// Check if we need to pad with 0's before the vertices
   std::vector<std::uint8_t> verticesCopy;
   verticesCopy.resize(mesh._vertices.size() * sizeof(Vertex));
   memcpy(verticesCopy.data(), mesh._vertices.data(), verticesCopy.size());
@@ -470,33 +471,52 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh, bool buildBlas)
   if (numZeroes != 0) {
     std::vector<std::uint8_t> zeroVec(numZeroes, 0);
     verticesCopy.insert(verticesCopy.begin(), zeroVec.begin(), zeroVec.end());
-  }
+  }*/
 
   // Create a staging buffer on CPU side first
   AllocatedBuffer stagingBuffer;
-  std::size_t vertSize = verticesCopy.size();
+  std::size_t vertSize = mesh._vertices.size() * sizeof(Vertex);//verticesCopy.size();
   std::size_t indSize = mesh._indices.size() * sizeof(std::uint32_t);
-  std::size_t dataSize = vertSize + indSize;
+  std::size_t stagingBufSize = std::max(vertSize, indSize);
+  //std::size_t dataSize = vertSize + indSize;
 
-  bufferutil::createBuffer(_vmaAllocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
+  bufferutil::createBuffer(_vmaAllocator, stagingBufSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
 
-  void* mappedData;
-  vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, &mappedData);
-  memcpy(mappedData, verticesCopy.data(), vertSize);
-  if (indSize > 0) {
-    memcpy((uint8_t*)mappedData + vertSize, mesh._indices.data(), indSize);
+  // Vertices first
+  {
+    void* mappedData;
+    vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, &mappedData);
+    memcpy(mappedData, mesh._vertices.data(), vertSize);
+    vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
+
+    // Find where to copy data in the fat buffer
+    auto cmdBuffer = beginSingleTimeCommands();
+
+    VkBufferCopy copyRegion{};
+    copyRegion.dstOffset = _gigaVtxBuffer._freeSpacePointer;
+    copyRegion.size = vertSize;
+    vkCmdCopyBuffer(cmdBuffer, stagingBuffer._buffer, _gigaVtxBuffer._buffer._buffer, 1, &copyRegion);
+
+    endSingleTimeCommands(cmdBuffer);
   }
-  vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
 
-  // Find where to copy data in the fat buffer
-  auto cmdBuffer = beginSingleTimeCommands();
+  // Now indices
+  if (indSize > 0) {
+    void* mappedData;
+    vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, &mappedData);
+    memcpy(mappedData, mesh._indices.data(), indSize);
+    vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
 
-  VkBufferCopy copyRegion{};
-  copyRegion.dstOffset = _gigaMeshBuffer._freeSpacePointer;
-  copyRegion.size = dataSize;
-  vkCmdCopyBuffer(cmdBuffer, stagingBuffer._buffer, _gigaMeshBuffer._buffer._buffer, 1, &copyRegion);
+    // Find where to copy data in the fat buffer
+    auto cmdBuffer = beginSingleTimeCommands();
 
-  endSingleTimeCommands(cmdBuffer);
+    VkBufferCopy copyRegion{};
+    copyRegion.dstOffset = _gigaIdxBuffer._freeSpacePointer;
+    copyRegion.size = indSize;
+    vkCmdCopyBuffer(cmdBuffer, stagingBuffer._buffer, _gigaIdxBuffer._buffer._buffer, 1, &copyRegion);
+
+    endSingleTimeCommands(cmdBuffer);
+  }
 
   mesh._metallic._bindlessIndex = -1;
   mesh._roughness._bindlessIndex = -1;
@@ -546,17 +566,18 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh, bool buildBlas)
   }
 
   mesh._id = _nextMeshId++;
-  mesh._numVertices = verticesCopy.size();
+  mesh._numVertices = mesh._vertices.size();
   mesh._numIndices = mesh._indices.size();
-  mesh._vertexOffset = (_gigaMeshBuffer._freeSpacePointer + numZeroes) / sizeof(Vertex);
-  mesh._indexOffset = (_gigaMeshBuffer._freeSpacePointer + vertSize) / sizeof(uint32_t);
+  mesh._vertexOffset = _gigaVtxBuffer._freeSpacePointer / sizeof(Vertex);
+  mesh._indexOffset = _gigaIdxBuffer._freeSpacePointer / sizeof(uint32_t);
 
   auto idCopy = mesh._id;
 
   _currentMeshes.emplace_back(std::move(mesh));
 
-  // Advance free space pointer
-  _gigaMeshBuffer._freeSpacePointer += dataSize;
+  // Advance free space pointers
+  _gigaVtxBuffer._freeSpacePointer += vertSize;
+  _gigaIdxBuffer._freeSpacePointer += indSize;
 
   vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
 
@@ -803,16 +824,21 @@ void VulkanRenderer::registerBottomLevelAS(MeshId meshId)
   Mesh& mesh = _currentMeshes[meshId];
 
   // Retrieve gigabuffer device address
-  VkBufferDeviceAddressInfo addrInfo{};
-  addrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-  addrInfo.buffer = _gigaMeshBuffer._buffer._buffer;
+  VkBufferDeviceAddressInfo vertAddrInfo{};
+  vertAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+  vertAddrInfo.buffer = _gigaVtxBuffer._buffer._buffer;
 
-  VkDeviceAddress gigaAddress = vkGetBufferDeviceAddress(_device, &addrInfo);
+  VkBufferDeviceAddressInfo indAddrInfo{};
+  indAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+  indAddrInfo.buffer = _gigaIdxBuffer._buffer._buffer;
+
+  VkDeviceAddress gigaVtxAddress = vkGetBufferDeviceAddress(_device, &vertAddrInfo);
+  VkDeviceAddress gigaIdxAddress = vkGetBufferDeviceAddress(_device, &indAddrInfo);
 
   // According to spec it is ok to get address of offset data using a simple uint64_t offset
   // Also note, the vertexoffset and indexoffset are not _bytes_ but "numbers"
-  VkDeviceAddress vertexAddress = gigaAddress + mesh._vertexOffset * sizeof(Vertex);
-  VkDeviceAddress indexAddress = gigaAddress + mesh._indexOffset * sizeof(uint32_t);
+  VkDeviceAddress vertexAddress = gigaVtxAddress + mesh._vertexOffset * sizeof(Vertex);
+  VkDeviceAddress indexAddress = gigaIdxAddress + mesh._indexOffset * sizeof(uint32_t);
 
   // Now we create a structure for the triangle and index data for this mesh
   VkAccelerationStructureGeometryTrianglesDataKHR triangles{};
@@ -2606,7 +2632,8 @@ bool VulkanRenderer::initViewClusters()
 bool VulkanRenderer::initGigaMeshBuffer()
 {
   // Allocate "big enough" size... 
-  bufferutil::createBuffer(_vmaAllocator, _gigaMeshBuffer._size, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 0, _gigaMeshBuffer._buffer);
+  bufferutil::createBuffer(_vmaAllocator, _gigaVtxBuffer._size, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 0, _gigaVtxBuffer._buffer);
+  bufferutil::createBuffer(_vmaAllocator, _gigaIdxBuffer._size, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 0, _gigaIdxBuffer._buffer);
   return true;
 }
 
@@ -3035,8 +3062,8 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
   // Bind giga buffers and bindless descriptors
   VkDeviceSize offsets[] = { 0 };
-  vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaMeshBuffer._buffer._buffer, offsets);
-  vkCmdBindIndexBuffer(commandBuffer, _gigaMeshBuffer._buffer._buffer, 0, VK_INDEX_TYPE_UINT32);
+  vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_gigaVtxBuffer._buffer._buffer, offsets);
+  vkCmdBindIndexBuffer(commandBuffer, _gigaIdxBuffer._buffer._buffer, 0, VK_INDEX_TYPE_UINT32);
 
   vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _bindlessPipelineLayout, 0, 1, &_bindlessDescriptorSets[_currentFrame], 0, nullptr);
   vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _bindlessPipelineLayout, 0, 1, &_bindlessDescriptorSets[_currentFrame], 0, nullptr);

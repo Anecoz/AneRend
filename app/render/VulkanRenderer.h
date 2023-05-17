@@ -166,7 +166,7 @@ public:
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
-  static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 256;
+  static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 128;
   static const std::size_t MAX_NUM_RENDERABLES = std::size_t(1e5);
   static const std::size_t MAX_NUM_MESHES = std::size_t(1e3);
   static const std::size_t NUM_PIXELS_CLUSTER_X = 16;
@@ -287,14 +287,17 @@ private:
 
   void executeFrameGraph(VkCommandBuffer commandBuffer, int imageIndex);
 
-  // Giga mesh buffer that contains both vertex and index data of all currently registered meshes
   struct GigaMeshBuffer {
     AllocatedBuffer _buffer;
 
     std::size_t _size = 1024 * 1024 * GIGA_MESH_BUFFER_SIZE_MB; // in bytes
 
     std::size_t _freeSpacePointer = 0; // points to where we currently can insert things into the buffer
-  } _gigaMeshBuffer;
+  };
+
+  // These buffers contain vertex and index data for all current meshes
+  GigaMeshBuffer _gigaVtxBuffer;
+  GigaMeshBuffer _gigaIdxBuffer;
 
   // Staging buffer for copying data to the gpu buffers.
   std::vector<AllocatedBuffer> _gpuStagingBuffer;
