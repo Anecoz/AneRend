@@ -461,24 +461,11 @@ bool VulkanRenderer::init()
 
 MeshId VulkanRenderer::registerMesh(Mesh& mesh, bool buildBlas)
 {
-  /*// Check if we need to pad with 0's before the vertices
-  std::vector<std::uint8_t> verticesCopy;
-  verticesCopy.resize(mesh._vertices.size() * sizeof(Vertex));
-  memcpy(verticesCopy.data(), mesh._vertices.data(), verticesCopy.size());
-
-  std::size_t numZeroes = sizeof(Vertex) - (_gigaMeshBuffer._freeSpacePointer % sizeof(Vertex));
-
-  if (numZeroes != 0) {
-    std::vector<std::uint8_t> zeroVec(numZeroes, 0);
-    verticesCopy.insert(verticesCopy.begin(), zeroVec.begin(), zeroVec.end());
-  }*/
-
   // Create a staging buffer on CPU side first
   AllocatedBuffer stagingBuffer;
   std::size_t vertSize = mesh._vertices.size() * sizeof(Vertex);//verticesCopy.size();
   std::size_t indSize = mesh._indices.size() * sizeof(std::uint32_t);
   std::size_t stagingBufSize = std::max(vertSize, indSize);
-  //std::size_t dataSize = vertSize + indSize;
 
   bufferutil::createBuffer(_vmaAllocator, stagingBufSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
 
