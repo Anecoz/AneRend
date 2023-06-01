@@ -7,11 +7,11 @@ namespace render {
 
 struct Vertex
 {
-  glm::vec3 pos;
-  glm::vec3 color;
-  glm::vec3 normal;
+  glm::vec4 pos;
+  glm::vec4 color;
+  glm::vec4 normal;
   glm::vec4 tangent;
-  glm::vec2 uv;
+  glm::vec4 uv;
 
   bool operator==(const Vertex& other) const {
     return pos == other.pos && color == other.color && uv == other.uv && normal == other.normal;

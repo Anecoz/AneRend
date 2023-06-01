@@ -3,6 +3,7 @@
 #extension GL_GOOGLE_include_directive : enable
 
 #include "scene_ubo.glsl"
+#include "bindless.glsl"
 
 struct hitPayload
 {
@@ -11,7 +12,6 @@ struct hitPayload
 
 layout(location = 0) rayPayloadEXT hitPayload prd;
 
-layout(set = 0, binding = 6) uniform accelerationStructureEXT tlas;
 layout(set = 1, binding = 0) uniform sampler2D depth;
 layout(set = 1, binding = 1, r32f) uniform writeonly image2D outputIm;
 
@@ -54,7 +54,7 @@ void main()
   vec3 origin = worldPos;
   vec3 direction = -ubo.lightDir.xyz;
 
-  uint  rayFlags = gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT | gl_RayFlagsTerminateOnFirstHitEXT;
+  uint  rayFlags = gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT;
   float tMin     = 0.1;
   float tMax     = 100.0;
 

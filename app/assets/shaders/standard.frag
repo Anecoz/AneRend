@@ -4,21 +4,7 @@
 #extension GL_GOOGLE_include_directive : enable
 
 #include "scene_ubo.glsl"
-
-struct MeshMaterialInfo
-{
-  int metallicTexIndex;
-  int roughnessTexIndex;
-  int normalTexIndex;
-  int albedoTexIndex;
-  int metallicRoughnessTexIndex;
-};
-
-layout(std430, set = 0, binding = 5) readonly buffer MeshMaterialBuffer {
-  MeshMaterialInfo infos[];
-} materialBuffer;
-
-layout(set = 0, binding = 7) uniform sampler2D textures[];
+#include "bindless.glsl"
 
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec3 fragNormal;

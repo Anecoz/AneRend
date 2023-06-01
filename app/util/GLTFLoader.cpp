@@ -134,14 +134,16 @@ bool GLTFLoader::loadFromFile(
         vert.pos = {
           positionBuffer[3 * v + 0],
           positionBuffer[3 * v + 1],
-          positionBuffer[3 * v + 2]
+          positionBuffer[3 * v + 2],
+          0.0
         };
 
         if (normalsBuffer) {
           vert.normal = {
             normalsBuffer[3 * v + 0],
             normalsBuffer[3 * v + 1],
-            normalsBuffer[3 * v + 2]
+            normalsBuffer[3 * v + 2],
+            0.0
           };
         }
 
@@ -149,6 +151,8 @@ bool GLTFLoader::loadFromFile(
           vert.uv = {
             texCoordsBuffer[2 * v + 0],
             texCoordsBuffer[2 * v + 1],
+            0.0f,
+            0.0f,
           };
         }
 
@@ -156,8 +160,12 @@ bool GLTFLoader::loadFromFile(
           vert.color = {
             colorBuffer[3 * v + 0],
             colorBuffer[3 * v + 1],
-            colorBuffer[3 * v + 2]
+            colorBuffer[3 * v + 2],
+            1.0
           };
+        }
+        else {
+          vert.color = { 1.0f };
         }
         if (tangentBuffer) {
           vert.tangent = {

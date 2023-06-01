@@ -266,8 +266,11 @@ private:
   VkDescriptorSetLayout _bindlessDescSetLayout;
   std::vector<VkDescriptorSet> _bindlessDescriptorSets;
 
-  uint32_t _tlasBinding = 6;
-  uint32_t _bindlessTextureBinding = 7;
+  uint32_t _gigaIdxBinding = 6;
+  uint32_t _gigaVtxBinding = _gigaIdxBinding + 1;
+  uint32_t _meshBinding = _gigaVtxBinding + 1;
+  uint32_t _tlasBinding = _meshBinding + 1;
+  uint32_t _bindlessTextureBinding = _tlasBinding + 1;
   uint32_t _currentBindlessTextureIndex = 0;
 
   void createTexture(
@@ -309,6 +312,15 @@ private:
   // Contains material info for meshes.
   std::vector<AllocatedBuffer> _gpuMeshMaterialInfoBuffer;
 
+  // Contains mesh info
+  std::vector<AllocatedBuffer> _gpuMeshInfoBuffer;
+
+  // Contains the index buffer for the scene
+  /*std::vector<AllocatedBuffer> _gpuIdxBuffer;
+
+  // Contains the vertex buffer for the scene
+  std::vector<AllocatedBuffer> _gpuVtxBuffer;*/
+
   // SSBO for light information.
   std::vector<AllocatedBuffer> _gpuLightBuffer;
 
@@ -332,6 +344,9 @@ private:
 
   // Fill gpu material info for the meshes.
   void prefillGPUMeshMaterialBuffer(VkCommandBuffer& commandBuffer);
+
+  // Fill gpu mesh info.
+  void prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer);
 
   // Fills GPU light buffer with current light information.
   void prefilGPULightBuffer(VkCommandBuffer& commandBuffer);

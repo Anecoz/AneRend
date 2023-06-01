@@ -47,25 +47,23 @@ bool OBJLoader::loadFromFile(
       vert.pos = {
         attrib.vertices[3 * idx.vertex_index + 0],
         attrib.vertices[3 * idx.vertex_index + 1],
-        attrib.vertices[3 * idx.vertex_index + 2]
+        attrib.vertices[3 * idx.vertex_index + 2],
+        0.0
       };
 
       vert.normal = {
         attrib.normals[3 * idx.normal_index + 0],
         attrib.normals[3 * idx.normal_index + 1],
-        attrib.normals[3 * idx.normal_index + 2]
+        attrib.normals[3 * idx.normal_index + 2],
+        0.0
       };
 
       if (idx.texcoord_index != -1) {
         vert.uv = {
           attrib.texcoords[2 * idx.texcoord_index + 0],
-          1.0f - attrib.texcoords[2 * idx.texcoord_index + 1]
-        };
-      }
-      else {
-        vert.uv = {
-          0.0,
-          0.0
+          1.0f - attrib.texcoords[2 * idx.texcoord_index + 1],
+          0.0f,
+          0.0f
         };
       }
 
@@ -75,11 +73,13 @@ bool OBJLoader::loadFromFile(
         vert.color = {
           materials[materialId].diffuse[0],
           materials[materialId].diffuse[1],
-          materials[materialId].diffuse[2]
+          materials[materialId].diffuse[2],
+          1.0f
         };
       }
       else {
         vert.color = {
+          1.0f,
           1.0f,
           1.0f,
           1.0f

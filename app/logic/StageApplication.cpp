@@ -213,10 +213,6 @@ bool StageApplication::init()
 
 void StageApplication::update(double delta)
 {
-  /*if (glfwGetTime() > 5.0) {
-    glfwSetTime(0.0);
-  }*/
-
   calculateShadowMatrix();
 
   if (KeyInput::isKeyClicked(GLFW_KEY_ESCAPE)) {
@@ -237,12 +233,6 @@ void StageApplication::update(double delta)
     _renderOptions,
     _renderDebugOptions,
     _windSystem.getCurrentWindMap());
-
-  static auto currAngle = 0.0f;
-  currAngle += 1.0f * (float)delta;
-  auto model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
-  //auto model = glm::rotate(glm::mat4(1.0f), currAngle, glm::vec3(0.0f, 1.0f, 0.0f));
-  //_vkRenderer.queuePushConstant(_modelId2, 4 * 16, &model);
 }
 
 void StageApplication::render()

@@ -2,26 +2,13 @@
 
 #extension GL_GOOGLE_include_directive : enable
 #include "scene_ubo.glsl"
-
-struct Renderable
-{
-  mat4 transform;
-  vec4 bounds;
-  vec4 tint;
-  uint firstMeshId;
-  uint numMeshIds;
-  uint _visible;
-};
+#include "bindless.glsl"
 
 struct TranslationId
 {
   uint renderableId;
   uint meshId;
 };
-
-layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {
-  Renderable renderables[];
-} renderableBuffer;
 
 layout(std430, set = 1, binding = 0) buffer TranslationBuffer {
   TranslationId ids[];

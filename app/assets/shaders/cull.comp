@@ -2,6 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : enable
 #include "scene_ubo.glsl"
+#include "bindless.glsl"
 
 layout (local_size_x = 32, local_size_y = 32) in;
 
@@ -22,16 +23,6 @@ struct GrassDrawCommand
   uint firstInstance;
 };
 
-struct Renderable
-{
-  mat4 transform;
-  vec4 bounds;
-  vec4 tint;
-  uint firstMeshId;
-  uint numMeshIds;
-  uint visible;
-};
-
 struct GrassObj
 {
   vec4 worldPos;
@@ -46,12 +37,6 @@ struct TranslationId
   uint renderableId;
   uint meshId;
 };
-
-layout(set = 0, binding = 1) uniform sampler2D windForceTex;
-
-layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {
-  Renderable renderables[];
-} renderableBuffer;
 
 layout(std430, set = 1, binding = 0) buffer DrawBuffer {
   DrawCommand draws[];

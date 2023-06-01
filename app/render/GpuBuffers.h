@@ -31,6 +31,11 @@ struct GPUMeshMaterialInfo {
   int32_t _metallicRoughnessTexIndex;
 };
 
+struct GPUMeshInfo {
+  uint32_t _vertexOffset;
+  uint32_t _indexOffset;
+};
+
 struct GPUTranslationId
 {
   uint32_t _renderableId;
