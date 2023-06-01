@@ -152,12 +152,7 @@ vec3 calcLight(
   vec3 specular     = numerator / denominator;
 
   // Add to outgoing radiance Lo
-  if (directional == 1) {
-    Lo += (kD * albedo / PI + specular) * radiance * NdotL;
-  }
-  else {
-    Lo += (kD * albedo / PI + specular) * radiance * NdotL;
-  }
+  Lo += (kD * albedo / PI + specular) * radiance * NdotL;
 
   return Lo;
 }
