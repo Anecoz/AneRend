@@ -448,7 +448,7 @@ bool VulkanRenderer::init()
   sphereMesh._vertices = std::move(vert);
   sphereModel._meshes.emplace_back(std::move(sphereMesh));
 
-  _debugSphereModelId = registerModel(std::move(sphereModel));
+  _debugSphereModelId = registerModel(std::move(sphereModel), false);
   _debugSphereMeshId = getMeshIds(_debugSphereModelId)[0];
 
   /*_debugSphereRenderable = registerRenderable(
@@ -577,12 +577,12 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh, bool buildBlas)
   return _currentMeshes.size() - 1;
 }
 
-ModelId VulkanRenderer::registerModel(Model&& model)
+ModelId VulkanRenderer::registerModel(Model&& model, bool buildBlas)
 {
   // Go through each mesh of the model and add it to our meshes
 
   for (auto& mesh : model._meshes) {
-    registerMesh(mesh);
+    registerMesh(mesh, buildBlas);
   }
 
   _models.emplace_back(std::move(model));

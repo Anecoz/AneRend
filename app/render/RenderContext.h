@@ -39,7 +39,7 @@ public:
   virtual int getCurrentMultiBufferIdx() = 0;
   virtual int getMultiBufferSize() = 0;
 
-  virtual ModelId registerModel(Model&& model) = 0;
+  virtual ModelId registerModel(Model&& model, bool buildBlas = true) = 0;
 
   virtual MeshId registerMesh(Mesh& mesh, bool buildBlas = true) = 0;
 

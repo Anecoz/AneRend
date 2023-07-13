@@ -69,7 +69,7 @@ public:
   bool init();
 
   // Registers a model that a renderable can reference.
-  virtual ModelId registerModel(Model&& model);
+  virtual ModelId registerModel(Model&& model, bool buildBlas = true);
 
   virtual MeshId registerMesh(Mesh& mesh, bool buildBlas = true);
 
