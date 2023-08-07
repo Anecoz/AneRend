@@ -94,7 +94,7 @@ void main()
     metallic = samp.b;
     roughness = samp.g;
   }
-  if (matInfo.normalTexIndex != -1 && tangent != vec3(0.0f)) {
+  /*if (matInfo.normalTexIndex != -1 && tangent != vec3(0.0f)) {
     vec3 bitangentL = cross(normal, tangent);
     vec3 T = normalize(mat3(gl_ObjectToWorldEXT) * tangent);
     vec3 B = normalize(mat3(gl_ObjectToWorldEXT) * bitangentL);
@@ -103,7 +103,7 @@ void main()
 
     normal = normalize(texture(textures[nonuniformEXT(matInfo.normalTexIndex)], uv).rgb * 2.0 - 1.0);
     normal = normalize(TBN * normal);
-  }
+  }*/
 
   Light dummyLight;
 

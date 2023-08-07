@@ -45,7 +45,7 @@ void main()
   vec2 texelSize = 1.0 / vec2(textureSize(inputIm, 0));
 
   // 8x8 kernel
-  int kernelSize = 8;
+  int kernelSize = 4;
 
   /*
     As the range parameter sigmaR increases, the bilateral filter gradually approaches Gaussian convolution more closely because the range Gaussian widens and flattens, which means that it becomes nearly constant over the intensity interval of the image.
