@@ -203,11 +203,11 @@ void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* 
       int multiIdx = renderContext->getCurrentMultiBufferIdx();
       for (auto& us : node._resourceUsages) {
         if (us._type == Type::ColorAttachment) {
-          auto view = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_view;
+          auto view = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_views[0];
           exeParams.colorAttachmentViews.emplace_back(view);
         }
         else if (us._type == Type::DepthAttachment) {
-          auto view = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_view;
+          auto view = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_views[0];
           exeParams.depthAttachmentViews.emplace_back(view);
         }
         else if (us._type == Type::SSBO) {
@@ -571,18 +571,53 @@ bool FrameGraphBuilder::createResources(RenderContext* renderContext, RenderReso
                 VK_IMAGE_TILING_OPTIMAL,
                 renderContext->vmaAllocator(),
                 flag,
-                im->_image);
+                im->_image,
+                usage._imageCreateInfo->_mipLevels
+              );
 
-              im->_view = imageutil::createImageView(
+              // Do a transition if we're not undefined from the start (this is hacky...)
+              if (usage._imageCreateInfo->_initialLayout != VK_IMAGE_LAYOUT_UNDEFINED) {
+                auto cmdBuffer = renderContext->beginSingleTimeCommands();
+                imageutil::transitionImageLayout(
+                  cmdBuffer,
+                  im->_image._image,
+                  im->_format,
+                  VK_IMAGE_LAYOUT_UNDEFINED,
+                  usage._imageCreateInfo->_initialLayout,
+                  0,
+                  usage._imageCreateInfo->_mipLevels
+                );
+                renderContext->endSingleTimeCommands(cmdBuffer);
+              }
+
+              im->_views.emplace_back(imageutil::createImageView(
                 renderContext->device(), 
                 im->_image._image,
                 im->_format,
-                usage._type == Type::DepthAttachment ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
+                usage._type == Type::DepthAttachment ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
+                0,
+                usage._imageCreateInfo->_mipLevels));
+
+              // Create separate views for each mip (if there are any more)
+              if (usage._imageCreateInfo->_mipLevels > 1) {
+                for (int j = 0; j < usage._imageCreateInfo->_mipLevels; ++j) {
+                  im->_views.emplace_back(imageutil::createImageView(
+                    renderContext->device(),
+                    im->_image._image,
+                    im->_format,
+                    usage._type == Type::DepthAttachment ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
+                    j,
+                    1));
+
+                  std::string viewName = usage._resourceName + "View" + std::to_string(i) + "_mip_" + std::to_string(j);
+                  renderContext->setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)im->_views[j+1], viewName.c_str());
+                }
+              }
 
               std::string name = usage._resourceName + "_" + std::to_string(i);
               std::string viewName = usage._resourceName + "View" + std::to_string(i);
               renderContext->setDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)im->_image._image, name.c_str());
-              renderContext->setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)im->_view, viewName.c_str());
+              renderContext->setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)im->_views[0], viewName.c_str());
 
               if (usage._imageCreateInfo->_initialDataCb) {
                 usage._imageCreateInfo->_initialDataCb(renderContext, im->_image._image);
@@ -641,6 +676,7 @@ VkShaderStageFlags FrameGraphBuilder::findStages(const std::string& resource)
         }
         if (us._stage.test((std::size_t)Stage::RayTrace)) {
           output.emplace_back(VK_SHADER_STAGE_RAYGEN_BIT_KHR);
+          output.emplace_back(VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
         }
       }
     }
@@ -752,10 +788,20 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
         SamplerCreateParams samplerParam{};
         samplerParam.useMaxFilter = usage._useMaxSampler;
         samplerParam.renderContext = renderContext;
-         auto sampler = createSampler(samplerParam);
+        if (usage._samplerClamp) {
+          samplerParam.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        }
+        auto sampler = createSampler(samplerParam);
 
         for (int i = 0; i < num; ++i) {
-          auto view = ((ImageRenderResource*)vault->getResource(usage._resourceName, i))->_view;
+          VkImageView view;
+
+          if (usage._allMips) {
+            view = ((ImageRenderResource*)vault->getResource(usage._resourceName, i))->_views[0];
+          }
+          else {
+            view = ((ImageRenderResource*)vault->getResource(usage._resourceName, i))->_views[usage._mip + 1];
+          }
 
           bindInfo.view = view;
           bindInfo.imageLayout = usage._imageAlwaysGeneral ? VK_IMAGE_LAYOUT_GENERAL : translateImageLayout(usage._type);
@@ -1336,7 +1382,8 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
       for (std::size_t j = 0; j < i; ++j) {
         auto& prevNode = stack[j];
         for (auto& prev : prevNode._resourceUsages) {
-          if (prev._resourceName == usage._resourceName) {
+          if (prev._resourceName == usage._resourceName &&
+             (prev._allMips || prev._mip == usage._mip)) {
             prevUsage = &prev;
             break;
           }
@@ -1352,7 +1399,8 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
       for (std::size_t j = i + 1; j < stack.size(); ++j) {
         auto& nextNode = stack[j];
         for (auto& next : nextNode._resourceUsages) {
-          if (next._resourceName == usage._resourceName) {
+          if (next._resourceName == usage._resourceName &&
+             (next._allMips || next._mip == usage._mip)) {
             nextUsage = &next;
             break;
           }
@@ -1367,6 +1415,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         // Are we ourselves using it? Check that first
         for (auto& us : node._resourceUsages) {
           if (us._resourceName == usage._resourceName &&
+            us._mip == usage._mip &&
             us._access != usage._access &&
             us._type != usage._type) {
             nextUsage = &us;
@@ -1392,6 +1441,8 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         }
 
         std::uint32_t baseLayer = usage._imageBaseLayer;
+        std::uint32_t mip = usage._mip;
+        bool allMips = usage._allMips;
 
         // Initial layout transition (before writing)
         if (!skipPreBarrier && usage._access.test((std::size_t)Access::Write)) {
@@ -1402,7 +1453,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
 
           BarrierContext beforeWriteBarrier{};
           beforeWriteBarrier._resourceName = usage._resourceName;
-          beforeWriteBarrier._barrierFcn = [baseLayer, initialLayout, stageBits, depth, dstAccessMask](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
+          beforeWriteBarrier._barrierFcn = [allMips, mip, baseLayer, initialLayout, stageBits, depth, dstAccessMask](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
             auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
 
             VkImageMemoryBarrier barrier{};
@@ -1413,8 +1464,8 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
             barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             barrier.image = imageResource->_image._image;
             barrier.subresourceRange.aspectMask = depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier.subresourceRange.baseMipLevel = 0;
-            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseMipLevel = allMips ? 0 : mip;
+            barrier.subresourceRange.levelCount = allMips ? (imageResource->_views.size() == 1 ? 1 : imageResource->_views.size() - 1) : 1;
             barrier.subresourceRange.baseArrayLayer = baseLayer;
             barrier.subresourceRange.layerCount = 1;
             barrier.srcAccessMask = 0;
@@ -1441,7 +1492,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
           // Add the pre-write barrier _before_ writing
           GraphNode beforeWriteNode{};
           auto beforeName = debugConstructImageBarrierName(VK_IMAGE_LAYOUT_UNDEFINED, initialLayout);
-          beforeWriteNode._debugName = "Before write " + usage._resourceName + " (" + beforeName + ")";
+          beforeWriteNode._debugName = "Before write " + usage._resourceName + " (" + beforeName + "), mip " + std::to_string(mip) + " (allMips = " + std::to_string(allMips) + ")";
           beforeWriteNode._barrier = std::move(beforeWriteBarrier);
 
           updatedStack.insert(updatedStack.begin() + currentNodeIdx, std::move(beforeWriteNode));
@@ -1460,10 +1511,14 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         auto srcAccessMask = findWriteAccessMask(usage._type);
         auto dstAccessMask = findWriteAccessMask(nextUsage->_type);
 
+        // Change mip info to after-write
+        //allMips = nextUsage->_allMips;
+        //mip = nextUsage->_mip;
+
         // If the next usage is the same as the current, no need to have a barrier...?
         // Probably an execution barrier is still needed?
         if (transitionPair.first != transitionPair.second) {
-          afterWriteBarrier._barrierFcn = [transitionPair, baseLayer, stageBits, depth, dstAccessMask, srcAccessMask](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
+          afterWriteBarrier._barrierFcn = [allMips, mip, transitionPair, baseLayer, stageBits, depth, dstAccessMask, srcAccessMask](IRenderResource* resource, VkCommandBuffer& cmdBuffer) {
             auto imageResource = dynamic_cast<ImageRenderResource*>(resource);
 
             VkImageMemoryBarrier barrier{};
@@ -1474,8 +1529,8 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
             barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             barrier.image = imageResource->_image._image;
             barrier.subresourceRange.aspectMask = depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier.subresourceRange.baseMipLevel = 0;
-            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseMipLevel = allMips ? 0 : mip;
+            barrier.subresourceRange.levelCount = allMips ? (imageResource->_views.size() == 1 ? 1 : imageResource->_views.size() - 1) : 1;
             barrier.subresourceRange.baseArrayLayer = baseLayer;
             barrier.subresourceRange.layerCount = 1;
             barrier.srcAccessMask = srcAccessMask;
@@ -1501,7 +1556,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
 
           GraphNode afterWriteNode{};
           auto afterName = debugConstructImageBarrierName(transitionPair.first, transitionPair.second);
-          afterWriteNode._debugName = "After write " + usage._resourceName + " (" + afterName + ")";
+          afterWriteNode._debugName = "After write " + usage._resourceName + " (" + afterName + "), mip " + std::to_string(mip) + " (allMips = " + std::to_string(allMips) + ")";
           afterWriteNode._barrier = std::move(afterWriteBarrier);
 
           // Add this after the current idx

@@ -102,6 +102,7 @@ struct GPUSceneData {
   int32_t directionalShadowsEnabled;
   int32_t rtShadowsEnabled;
   int32_t visualizeBoundingSpheresEnabled;
+  int32_t hack;
 };
 
 struct GPUSSAOSampleUbo {
@@ -114,6 +115,17 @@ struct HiZPushConstants {
   uint32_t inputWidth;
   uint32_t inputHeight;
   uint32_t outputSize;
+};
+
+struct GPUIrradianceProbe
+{
+  glm::vec4 pos; //xyz and w is active/inactive
+  glm::vec4 irr0; //n.r, n.g, n.b, sum-of-weights
+  glm::vec4 irr1; //e.r, e.g, e.b, sum-of-weights
+  glm::vec4 irr2; //s.r, s.g, s.b, sum-of-weights
+  glm::vec4 irr3; //w.r, w.g, w.b, sum-of-weights
+  glm::vec4 irr4; //u.r, u.g, u.b, sum-of-weights
+  glm::vec4 irr5; //d.r, d.g, d.b, sum-of-weights
 };
 
 }

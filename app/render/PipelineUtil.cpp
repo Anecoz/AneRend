@@ -66,16 +66,23 @@ bool buildDescriptorSetLayout(DescriptorSetLayoutCreateParams params, VkDescript
   layoutInfo.pBindings = bindings.data();
 
   VkDescriptorSetLayoutBindingFlagsCreateInfo extendedInfo{};
+  //VkDescriptorBindingFlags zeroFlag = 0;
   VkDescriptorBindingFlags bindlessFlags =
     VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
     VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT |
     VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT;
+
+  std::vector<VkDescriptorBindingFlags> bindingFlags(bindings.size(), 0);
+  if (bindings.size() > 0) {
+    bindingFlags.back() = bindlessFlags;
+  }
+
   if (containsBindless) {
     layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
     extendedInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-    extendedInfo.bindingCount = 1;
-    extendedInfo.pBindingFlags = &bindlessFlags;
+    extendedInfo.bindingCount = (uint32_t)bindings.size();
+    extendedInfo.pBindingFlags = bindingFlags.data();
 
     layoutInfo.pNext = &extendedInfo;
   }
@@ -237,7 +244,7 @@ std::vector<VkDescriptorSet> buildDescriptorSets(DescriptorSetsCreateParams para
       imWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       imWrite.dstSet = sets[currIdx];
       imWrite.dstBinding = params.bindInfos[j].binding;
-      imWrite.dstArrayElement = 0;
+      imWrite.dstArrayElement = params.bindInfos[j].bindless ? currBindlessIdx++ : 0;
       imWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
       imWrite.descriptorCount = 1;
       imWrite.pImageInfo = &imageInfo;
@@ -265,6 +272,7 @@ VkSampler createSampler(SamplerCreateParams params)
   sampler.addressModeV = sampler.addressModeU;
   sampler.addressModeW = sampler.addressModeU;
   sampler.mipLodBias = params.mipLodBias;
+  sampler.anisotropyEnable = VK_TRUE;
   sampler.maxAnisotropy = params.maxAnisotropy;
   sampler.minLod = params.minLod;
   sampler.maxLod = params.maxLod;
@@ -619,7 +627,7 @@ bool buildRayTracingPipeline(RayTracingPipelineCreateParams param, VkPipelineLay
   rtpci.pStages = pssci.data();
   rtpci.groupCount = uint32_t(rtsgci.size());
   rtpci.pGroups = rtsgci.data();
-  rtpci.maxPipelineRayRecursionDepth = 1;
+  rtpci.maxPipelineRayRecursionDepth = param.maxRecursionDepth;
   rtpci.layout = pipelineLayout;
   
   if (vkext::vkCreateRayTracingPipelinesKHR(

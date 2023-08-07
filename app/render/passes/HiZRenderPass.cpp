@@ -57,6 +57,7 @@ void HiZRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       createInfo._initialHeight = currSize;
       createInfo._initialWidth = currSize;
       createInfo._intialFormat = VK_FORMAT_R32_SFLOAT;
+      createInfo._initialLayout = VK_IMAGE_LAYOUT_GENERAL;
       usage._imageCreateInfo = createInfo;
 
       info._resourceUsages.emplace_back(std::move(usage));

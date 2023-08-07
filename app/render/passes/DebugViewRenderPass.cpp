@@ -29,7 +29,8 @@ uint32_t DebugViewRenderPass::translateNameToBinding(const std::string& name)
 void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
   // Screen quad
-  _screenQuad._vertices = graphicsutil::createScreenQuad(0.25f, 0.25f);
+  _screenQuad._vertices = graphicsutil::createScreenQuad(0.75f, 0.75f);
+  //_screenQuad._vertices = graphicsutil::createScreenQuad(1.0f, 1.0f);
   _meshId = rc->registerMesh(_screenQuad, false);
 
   _resourceUsages.clear();
@@ -181,6 +182,90 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._type = Type::SampledTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "ProbeRaysIrrTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "ProbeRaysDirTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "ProbeRaysConvTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "ReflectTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    //usage._allMips = false;
+    //usage._mip = 9;
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  /* {
+    ResourceUsage usage{};
+    usage._resourceName = "SurfelTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "SurfelConvTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }*/
+  /*for (int x = 0; x < 60; ++x)
+  for (int y = 0; y < 34; ++y) {
+    ResourceUsage usage{};
+    usage._resourceName = "SurfelTex_" + std::to_string(x) + "_" + std::to_string(y);
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }*/
+  /* {
+    ResourceUsage usage{};
+    usage._resourceName = "SSGITex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "SSGIBlurTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }*/
 
   for (auto& us : _resourceUsages) {
     info._resourceUsages.emplace_back(us);

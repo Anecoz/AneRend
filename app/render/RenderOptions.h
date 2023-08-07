@@ -10,6 +10,8 @@ struct RenderOptions
   bool raytracedShadows = true;
   bool visualizeBoundingSpheres = false;
   bool raytracingEnabled = true;
+  bool probesDebug = false;
+  bool hack = false;
 };
 
 }

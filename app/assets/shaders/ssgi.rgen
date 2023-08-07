@@ -1,0 +1,81 @@
+#version 460
+#extension GL_EXT_ray_tracing : enable
+#extension GL_GOOGLE_include_directive : enable
+
+#include "bindless.glsl"
+#include "bindless_tlas.glsl"
+#include "scene_ubo.glsl"
+
+struct hitPayload
+{
+  vec3 irradiance;
+  bool shadow;
+};
+
+const vec3 clearColor = vec3(0.2, 0.5, 0.7);
+
+layout(location = 0) rayPayloadEXT hitPayload payload;
+
+layout(set = 1, binding = 0) uniform sampler2D depth;
+layout(set = 1, binding = 1) uniform sampler2D im0;
+layout(set = 1, binding = 2, rgba8) uniform writeonly image2D outputIm;
+
+vec3 calcWorldPos(vec2 texCoord, float depthSamp)
+{
+  vec4 clipSpacePos = vec4(texCoord * 2.0 - vec2(1.0), depthSamp, 1.0);
+
+  vec4 position = ubo.invViewProj * clipSpacePos; // Use this for world space
+
+  return(position.xyz / position.w);
+}
+
+void main()
+{
+  const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+  vec2 texCoord = vec2(pixel) / vec2(ubo.screenWidth/2 - 1, ubo.screenHeight/2 - 1);
+
+  // Sanity check
+  if (texCoord.x > 1.0 || texCoord.y > 1.0) {
+    imageStore(outputIm, pixel, vec4(0.0));
+    return;
+  }
+
+  // Check if we're on a lit surface, early exit in that case
+  /*float shadowRTSamp = texture(shadowRT, texCoord).r;
+  if (shadowRTSamp > 0.5) {
+    //imageStore(outputIm, outputPixel, vec4(0.0));
+    imageStore(outputIm, pixel, vec4(0.0));
+    return;
+  }*/
+
+  float depthSamp = texture(depth, texCoord).r;
+
+  // If we're in the sky, early exit
+  if (depthSamp == 1.0f) {
+    imageStore(outputIm, pixel, vec4(0.0));
+    return;
+  }
+
+  vec3 worldPos = calcWorldPos(texCoord, depthSamp);
+  uint  rayFlags =  gl_RayFlagsOpaqueEXT; // All geometry is considered opaque
+  float tMin     = 0.1;
+  float tMax     = 100.0;
+  vec4 im0Samp = texture(im0, texCoord);
+  vec3 normal = im0Samp.rgb * 2.0 - 1.0;
+
+  payload.irradiance = vec3(0.0);
+
+  traceRayEXT(tlas,     // acceleration structure
+        rayFlags,       // rayFlags
+        0xFF,           // cullMask
+        0,              // sbtRecordOffset
+        0,              // sbtRecordStride
+        0,              // missIndex
+        worldPos,       // ray origin
+        tMin,           // ray min range
+        normal,         // ray direction
+        tMax,           // ray max range
+        0);             // payload (location = 0)
+
+  imageStore(outputIm, pixel, vec4(payload.irradiance, 1.0));
+}

@@ -107,7 +107,7 @@ bool StageApplication::init()
 
   // Create a bunch of test matrices
   {
-    std::size_t numInstances = 100;
+    std::size_t numInstances = 0;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -132,7 +132,7 @@ bool StageApplication::init()
 
   // Do a couple of the big models
   {
-    std::size_t numInstances = 20;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
     for (int y = 0; y < numInstances; ++y) {
@@ -153,7 +153,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 10;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -197,7 +197,7 @@ bool StageApplication::init()
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
-        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(12.0f * x, 0.0f, 17.0f * y));
+        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(16.0f + 12.0f * x, -1.0f, 16.0f + 17.0f * y));
         auto scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
         _vkRenderer.registerRenderable(_meshId7, mat * scaleMat, sphereCenter, radius);
       }
@@ -256,7 +256,7 @@ void StageApplication::render()
       _sunDir.x = dir[0];
       _sunDir.z = dir[1];
     }
-    if (ImGui::SliderFloat("Sun height", &_sunDir.y, -1.0f, 0.0f)) {
+    if (ImGui::SliderFloat("Sun height", &_sunDir.y, -1.0f, 1.0f)) {
       _sunDir.x = dir[0];
       _sunDir.z = dir[1];
     }
@@ -278,6 +278,8 @@ void StageApplication::render()
     ImGui::Checkbox("Shadow map", &_renderOptions.directionalShadows);
     ImGui::Checkbox("Ray traced shadows", &_renderOptions.raytracedShadows);
     ImGui::Checkbox("Visualize bounding spheres", &_renderOptions.visualizeBoundingSpheres);
+    ImGui::Checkbox("Debug probes", &_renderOptions.probesDebug);
+    ImGui::Checkbox("Hack", &_renderOptions.hack);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
     ImGui::End();
   }

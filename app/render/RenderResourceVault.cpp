@@ -84,7 +84,9 @@ void RenderResourceVault::clear(RenderContext* rc)
       }
       else if (auto im = dynamic_cast<ImageRenderResource*>(ptr.get())) {
         vmaDestroyImage(rc->vmaAllocator(), im->_image._image, im->_image._allocation);
-        vkDestroyImageView(rc->device(), im->_view, nullptr);
+        for (int i = 0; i < im->_views.size(); ++i) {
+          vkDestroyImageView(rc->device(), im->_views[i], nullptr);
+        }
       }
     }
   }

@@ -77,6 +77,14 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
     usage._type = Type::SampledTexture;
     resourceUsages.emplace_back(std::move(usage));
   }
+  /*{
+    ResourceUsage usage{};
+    usage._resourceName = "IrradianceProbeSSBO";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SSBO;
+    resourceUsages.emplace_back(std::move(usage));
+  }*/
   {
     ResourceUsage usage{};
     usage._resourceName = "FinalImage";
@@ -92,6 +100,41 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
     usage._imageCreateInfo = createInfo;
 
     usage._type = Type::ImageStorage;
+    resourceUsages.emplace_back(std::move(usage));
+  }
+  /* {
+    ResourceUsage usage{};
+    usage._resourceName = "SurfelConvTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._samplerClamp = true;
+    usage._type = Type::SampledTexture;
+    resourceUsages.emplace_back(std::move(usage));
+  }*/
+  /* {
+    ResourceUsage usage{};
+    usage._resourceName = "SSGIBlurTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    //usage._samplerClamp = true;
+    usage._type = Type::SampledTexture;
+    resourceUsages.emplace_back(std::move(usage));
+  }*/
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "ProbeRaysConvTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._samplerClamp = true;
+    usage._type = Type::SampledTexture;
+    resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "ReflectTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SampledTexture;
     resourceUsages.emplace_back(std::move(usage));
   }
 

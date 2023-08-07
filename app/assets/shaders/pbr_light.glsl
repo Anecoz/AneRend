@@ -100,7 +100,7 @@ vec3 calcLight(
   int directional)
 {
   vec3 color = vec3(0.0);
-  vec3 lightColor = vec3(1.0);
+  vec3 lightColor = 10.0 * vec3(1.0);
 
   /* Implementation from https://learnopengl.com/PBR/Theory */
   vec3 N = normal;
@@ -120,7 +120,7 @@ vec3 calcLight(
 
   if (directional == 1) {
     attenuation = 1.0; // Directional light
-    L = normalize(ubo.lightDir.xyz * vec3(-1.0, 1.0, -1.0));
+    L = normalize(-ubo.lightDir.xyz);// * vec3(-1.0, 1.0, -1.0));
   }
   else {
     vec3 lightWorldPos = light.worldPos.xyz;
@@ -155,4 +155,188 @@ vec3 calcLight(
   Lo += (kD * albedo / PI + specular) * radiance * NdotL;
 
   return Lo;
+}
+
+vec3 sampleSingleProbe(sampler2D probeTex, ivec3 probeIndex, vec3 normal)
+{
+  const int probePixSize = 8;
+  const int probesPerPlane = 32;
+  ivec2 probeTexSize = textureSize(probeTex, 0);
+
+  ivec2 probePixelStart = ivec2(
+    (probePixSize + 2) * probeIndex.x + 1,
+    (probePixSize + 2) * probesPerPlane * probeIndex.y + (probePixSize + 2) * probeIndex.z + 1);
+
+  ivec2 probePixelEnd = probePixelStart + probePixSize - 1;
+
+  vec2 probeTexStart = vec2(
+    float(probePixelStart.x) / float(probeTexSize.x - 1),
+    float(probePixelStart.y) / float(probeTexSize.y - 1));
+
+  vec2 probeTexEnd = vec2(
+    float(probePixelEnd.x) / float(probeTexSize.x - 1),
+    float(probePixelEnd.y) / float(probeTexSize.y - 1));
+
+  // This returns on -1 to 1, so change to 0 to 1
+  vec2 oct = octEncode(normalize(normal));
+  oct = (oct + vec2(1.0)) * 0.5;
+
+  vec2 octTexCoord = probeTexStart + (probeTexEnd - probeTexStart) * oct;
+
+  //vec4 irr = texture(probeTex, octTexCoord);
+  //return irr.rgb / irr.w;
+  return texture(probeTex, octTexCoord).rgb;
+}
+
+vec4 weightProbe(sampler2D probeTex, vec3 worldPos, vec3 normal, ivec3 probeIndex, vec3 alpha, ivec3 offset)
+{
+  vec3 probePos = vec3(probeIndex.x, probeIndex.y * 2.0, probeIndex.z);
+  vec3 trilinear = mix(1.0 - alpha, alpha, offset);
+  float weight = 1.0;
+  vec3 probeIrradiance = vec3(0.0);
+
+  // Smooth backface test
+  {
+    // Computed without the biasing applied to the "dir" variable. 
+    // This test can cause reflection-map looking errors in the image
+    // (stuff looks shiny) if the transition is poor.
+    vec3 trueDirectionToProbe = normalize(probePos - worldPos);
+
+    // The naive soft backface weight would ignore a probe when
+    // it is behind the surface. That's good for walls. But for small details inside of a
+    // room, the normals on the details might rule out all of the probes that have mutual
+    // visibility to the point. So, we instead use a "wrap shading" test below inspired by
+    // NPR work.
+    // weight *= max(0.0001, dot(trueDirectionToProbe, wsN));
+
+    // The small offset at the end reduces the "going to zero" impact
+    // where this is really close to exactly opposite
+    weight *= pow(max(0.0001, (dot(trueDirectionToProbe, normal) + 1.0) * 0.5), 2) + 0.2;
+  }
+
+  // Avoid zero weight
+  weight = max(0.000001, weight);
+
+  // A tiny bit of light is really visible due to log perception, so
+  // crush tiny weights but keep the curve continuous. This must be done
+  // before the trilinear weights, because those should be preserved.
+  const float crushThreshold = 0.2;
+  if (weight < crushThreshold) {
+    weight *= weight * weight * (1.0 / pow(crushThreshold, 2));
+  }
+
+  // Trilinear weights
+  weight *= trilinear.x * trilinear.y * trilinear.z;
+
+  probeIrradiance += sampleSingleProbe(probeTex, probeIndex, normal);
+
+  // Weight in a more-perceptual brightness space instead of radiance space.
+  // This softens the transitions between probes with respect to translation.
+  // It makes little difference most of the time, but when there are radical transitions
+  // between probes this helps soften the ramp.
+  probeIrradiance = sqrt(probeIrradiance);
+
+  return vec4(probeIrradiance, weight);
+}
+
+vec3 sampleProbe(sampler2D probeTex, vec3 worldPos, vec3 normal)
+{
+  // Find closest probe to worldPos
+  int probeX = clamp(int(floor(worldPos.x)), 0, 31);
+  int probeY = clamp(int(floor(worldPos.y / 2.0)), 0, 7);
+  int probeZ = clamp(int(floor(worldPos.z)), 0, 31);
+
+  vec3 baseProbePos = vec3(probeX, probeY * 2.0, probeZ);
+  vec3 probeStep = vec3(1.0, 2.0, 1.0);
+
+  float sumWeight = 0.0;
+  vec3 sumIrradiance = vec3(0.0);
+
+  // alpha is how far from the floor(currentVertex) position. on [0, 1] for each axis.
+  vec3 alpha = clamp((worldPos - baseProbePos) / probeStep, vec3(0.0), vec3(1.0));
+
+  vec4 res = weightProbe(probeTex, worldPos, normal, ivec3(probeX, probeY, probeZ), alpha, ivec3(0));
+  sumIrradiance += res.w * res.rgb;
+  sumWeight += res.w;
+
+  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX + 1, probeY + 1, probeZ + 1), alpha, ivec3(1, 1, 1));
+  sumIrradiance += res.w * res.rgb;
+  sumWeight += res.w;
+
+  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX + 1, probeY + 1, probeZ), alpha, ivec3(1, 1, 0));
+  sumIrradiance += res.w * res.rgb;
+  sumWeight += res.w;
+
+  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX + 1, probeY, probeZ), alpha, ivec3(1, 0, 0));
+  sumIrradiance += res.w * res.rgb;
+  sumWeight += res.w;
+
+  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX, probeY + 1, probeZ + 1), alpha, ivec3(0, 1, 1));
+  sumIrradiance += res.w * res.rgb;
+  sumWeight += res.w;
+
+  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX, probeY + 1, probeZ), alpha, ivec3(0, 1, 0));
+  sumIrradiance += res.w * res.rgb;
+  sumWeight += res.w;
+
+  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX, probeY, probeZ + 1), alpha, ivec3(0, 0, 1));
+  sumIrradiance += res.w * res.rgb;
+  sumWeight += res.w;
+
+  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX + 1, probeY, probeZ + 1), alpha, ivec3(1, 0, 1));
+  sumIrradiance += res.w * res.rgb;
+  sumWeight += res.w;
+
+  vec3 netIrradiance = sumIrradiance / sumWeight;
+
+  // Go back to linear irradiance
+  netIrradiance = pow(netIrradiance, ivec3(2));
+
+  return netIrradiance * .5 * 3.1415926;
+}
+
+vec3 calcIndirectDiffuseLight(
+  vec3 normal,
+  vec3 albedo,
+  float metallic,
+  float roughness,
+  vec3 worldPos,
+  vec3 viewPos,
+  sampler2D probeTex)
+{
+  vec3 ambient = vec3(0.0);
+
+  vec3 V = normalize(viewPos - worldPos);
+  vec3 F0 = vec3(0.04);
+  F0 = mix(F0, albedo, metallic);
+
+  vec3 kS = fresnelSchlickRoughness(max(dot(normal, V), 0.0), F0, roughness);
+  vec3 kD = 1.0 - kS;
+  kD *= 1.0 - metallic;
+  vec3 irradiance = sampleProbe(probeTex, worldPos, normal);
+  vec3 diffuse = irradiance * albedo;
+  ambient = kD * diffuse;
+
+  return ambient;
+}
+
+vec3 calcIndirectSpecularLight(
+  vec3 normal,
+  vec3 albedo,
+  float metallic,
+  float roughness,
+  vec3 worldPos,
+  vec2 texCoords,
+  sampler2D specTex)
+{
+  vec3 V = normalize(ubo.cameraPos.xyz - worldPos);
+  vec3 F0 = vec3(0.04);
+  F0 = mix(F0, albedo, metallic);
+
+  vec3 kS = fresnelSchlickRoughness(max(dot(normal, V), 0.0), F0, roughness);
+  const float MAX_REFLECTION_LOD = 4.0;
+  vec3 refl = textureLod(specTex, texCoords, roughness * MAX_REFLECTION_LOD).rgb;
+  vec3 specular = refl * kS;
+
+  return specular;
 }

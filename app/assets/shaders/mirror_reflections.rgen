@@ -1,0 +1,76 @@
+#version 460
+#extension GL_EXT_ray_tracing : enable
+#extension GL_GOOGLE_include_directive : enable
+
+#include "bindless.glsl"
+#include "bindless_tlas.glsl"
+#include "scene_ubo.glsl"
+
+layout(set = 1, binding = 0, rgba16f) uniform writeonly image2D outputIm;
+layout(set = 1, binding = 1) uniform sampler2D depthIm;
+layout(set = 1, binding = 2) uniform sampler2D geom0Im; // contains normals in rgb
+
+struct hitPayload
+{
+  vec3 irradiance;
+  float dist;
+  float shadow;
+};
+
+layout(location = 0) rayPayloadEXT hitPayload payload;
+
+vec3 calcWorldPos(vec2 texCoord, float depthSamp)
+{
+  vec4 clipSpacePos = vec4(texCoord * 2.0 - vec2(1.0), depthSamp, 1.0);
+
+  //vec4 position = inverse_projection_matrix * clip_space_position; // Use this for view space
+  vec4 position = ubo.invViewProj * clipSpacePos; // Use this for world space
+
+  return(position.xyz / position.w);
+}
+
+void main()
+{
+  ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+
+  vec2 texCoords = (vec2(pixel) + 0.5) / vec2(ubo.screenWidth/2, ubo.screenHeight/2);
+
+  // Retrieve normal and depth from gbuffer textures
+  vec4 im0Samp = texture(geom0Im, texCoords);
+  float depthSamp = texture(depthIm, texCoords).r;
+
+  // If we're in the sky, no point to attempt to reflect...
+  if (depthSamp == 1.0f) {
+    imageStore(outputIm, pixel, vec4(0.0));
+    return;
+  }
+
+  vec3 normal = im0Samp.rgb * 2.0 - 1.0;
+  vec3 pos = calcWorldPos(texCoords, depthSamp);
+
+  // Reflect camera view vector around the normal
+  vec3 v = normalize(pos - ubo.cameraPos.xyz);
+  vec3 dir = reflect(v, normal);
+
+  uint  rayFlags =  gl_RayFlagsOpaqueEXT; // All geometry is considered opaque
+  float tMin     = 0.1;
+  float tMax     = 100.0;
+  vec3 origin = pos;
+
+  payload.irradiance = vec3(0.0);
+  payload.dist = 0.0;
+
+  traceRayEXT(tlas,     // acceleration structure
+        rayFlags,       // rayFlags
+        0xFF,           // cullMask
+        0,              // sbtRecordOffset
+        0,              // sbtRecordStride
+        0,              // missIndex
+        origin,         // ray origin
+        tMin,           // ray min range
+        dir,            // ray direction
+        tMax,           // ray max range
+        0);             // payload (location = 0)
+
+  imageStore(outputIm, pixel, vec4(payload.irradiance, payload.dist));
+}

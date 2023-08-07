@@ -17,20 +17,20 @@ namespace graphicsutil {
 // z -> in toward screen
 static std::vector<render::Vertex> createScreenQuad(float widthPercent, float heightPercent) {
   float depth = 0.1f; // Vulkan NDC depth range is 0,1, be close to camera...
-  glm::vec4 color {1.0f, 1.0f, 1.0f, 1.0f}; // don't care
-  glm::vec4 normal {0.0f, 0.0f, 0.0f, 0.0f}; // don't care
+  glm::vec3 color {1.0f}; // don't care
+  glm::vec3 normal {0.0f}; // don't care
 
   float x = -1.0f + widthPercent * 2.0f;
   float y = -1.0f + heightPercent * 2.0f;
 
   return { 
-    {{-1.0f, -1.0f, depth, 0.0f}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}},
-    {{-1.0f, y, depth, 0.0f}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}},
-    {{x, -1.0f, depth, 0.0f}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 0.0f}},
+    {{-1.0f, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{-1.0f, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+    {{x, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
 
-    {{x, -1.0f, depth, 0.0f}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 0.0f}},
-    {{-1.0f, y, depth, 0.0f}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}},
-    {{x, y, depth, 0.0f}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 0.0f, 0.0f}}
+    {{x, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+    {{-1.0f, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+    {{x, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 1.0f}}
   };
 }
 
@@ -44,14 +44,14 @@ static glm::vec3 randomColor()
 }
 
 static void createUnitCube(std::vector<render::Vertex>* vertOut, std::vector<std::uint32_t>* indOut, bool randomColor = true) {
-  glm::vec4 color{ 1.0f };
+  glm::vec3 color{ 1.0f };
 
   if (randomColor) {
-    color = glm::vec4(graphicsutil::randomColor(), 0.0f);
+    color = graphicsutil::randomColor();
   }
 
-  glm::vec4 normal{ 0.0f, 1.0f, 0.0f, 0.0f };
-  glm::vec4 tex{ 0.0f, 0.0f, 0.0f, 0.0f };
+  glm::vec3 normal{ 0.0f, 1.0f, 0.0f};
+  glm::vec2 tex{ 0.0f};
 
   std::vector<std::uint32_t> indices{
     //Top
@@ -82,14 +82,14 @@ static void createUnitCube(std::vector<render::Vertex>* vertOut, std::vector<std
   glm::vec4 tangent{ 0.0f, 0.0f, 0.0f, 0.0f };
   // pos, color, normal, tangent, tex
   std::vector<render::Vertex> verts{
-    {{-0.5, -0.5, 0.5, 0.0f}, color, normal, tangent, tex}, // 0
-    {{0.5, -0.5, 0.5, 0.0f}, color, normal, tangent, tex},//1
-    {{-0.5, 0.5, 0.5, 0.0f}, color, normal, tangent, tex},//2
-    {{0.5, 0.5, 0.5, 0.0f}, color, normal, tangent, tex},//3
-    {{-0.5, -0.5, -0.5, 0.0f}, color, normal, tangent, tex},//4
-    {{0.5, -0.5, -0.5, 0.0f}, color, normal, tangent, tex},//5
-    {{-0.5, 0.5, -0.5, 0.0f}, color, normal, tangent, tex},//6
-    {{0.5, 0.5, -0.5, 0.0f}, color, normal, tangent, tex}//7
+    {{-0.5, -0.5, 0.5}, color, normal, tangent, tex}, // 0
+    {{0.5, -0.5, 0.5}, color, normal, tangent, tex},//1
+    {{-0.5, 0.5, 0.5}, color, normal, tangent, tex},//2
+    {{0.5, 0.5, 0.5}, color, normal, tangent, tex},//3
+    {{-0.5, -0.5, -0.5}, color, normal, tangent, tex},//4
+    {{0.5, -0.5, -0.5}, color, normal, tangent, tex},//5
+    {{-0.5, 0.5, -0.5}, color, normal, tangent, tex},//6
+    {{0.5, 0.5, -0.5}, color, normal, tangent, tex}//7
   };
 
   *vertOut = verts;
@@ -133,18 +133,18 @@ static void createSphere(float radius, std::vector<render::Vertex>* vertOut, std
       // vertex position (x, y, z)
       x = xy * cosf(sectorAngle);             // r * cos(u) * cos(v)
       y = xy * sinf(sectorAngle);             // r * cos(u) * sin(v)
-      vert.pos = { x, y, z, 0.0f };
+      vert.pos = { x, y, z };
 
       // normalized vertex normal (nx, ny, nz)
       nx = x * lengthInv;
       ny = y * lengthInv;
       nz = z * lengthInv;
-      vert.normal = { nx, ny, nz, 0.0f };
+      vert.normal = { nx, ny, nz };
 
       // vertex tex coord (s, t) range between [0, 1]
       s = (float)j / sectorCount;
       t = (float)i / stackCount;
-      vert.uv = { s, t, 0.0f, 0.0f };
+      vert.uv = { s, t };
 
       vertOut->emplace_back(std::move(vert));
     }

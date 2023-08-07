@@ -21,6 +21,14 @@
 #include "passes/HiZRenderPass.h"
 #include "passes/ShadowRayTracingPass.h"
 #include "passes/DebugBSRenderPass.h"
+#include "passes/IrradianceProbeRayTracingPass.h"
+//#include "passes/SurfelUpdateRayTracingPass.h"
+//#include "passes/SSGlobalIlluminationRayTracingPass.h"
+//#include "passes/SSGIBlurRenderPass.h"
+//#include "passes/SurfelConvolveRenderPass.h"
+#include "passes/IrradianceProbeConvolvePass.h"
+#include "passes/SpecularGIRTPass.h"
+#include "passes/SpecularGIMipPass.h"
 
 #include "../util/Utils.h"
 #include "../util/GraphicsUtils.h"
@@ -398,6 +406,11 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
+  printf("Init irradiance probes...");
+  res &= initIrradianceProbes();
+  if (!res) return false;
+  printf("Done!\n");
+
   printf("Init bindless...");
   res &= initBindless();
   if (!res) return false;
@@ -601,7 +614,8 @@ RenderableId VulkanRenderer::registerRenderable(
   const glm::mat4& transform,
   const glm::vec3& sphereBoundCenter,
   float sphereBoundRadius,
-  bool debugDraw)
+  bool debugDraw,
+  bool buildTlas)
 {
   if (_currentRenderables.size() == MAX_NUM_RENDERABLES) {
     printf("Too many renderables!\n");
@@ -631,6 +645,7 @@ RenderableId VulkanRenderer::registerRenderable(
   renderable._transform = transform;
   renderable._boundingSphereCenter = sphereBoundCenter;
   renderable._boundingSphereRadius = sphereBoundRadius;
+  renderable._buildTlas = buildTlas;
 
   if (debugDraw) {
     registerDebugRenderable(transform, sphereBoundCenter, sphereBoundRadius);
@@ -687,6 +702,9 @@ void VulkanRenderer::setRenderableVisible(RenderableId id, bool visible)
   for (auto& rend : _currentRenderables) {
     if (rend._id == id) {
       rend._visible = visible;
+      for (auto& v : _renderablesChanged) {
+        v = true;
+      }
       return;
     }
   }
@@ -735,6 +753,8 @@ void VulkanRenderer::update(
     _topLevelBuilt = true;
   }
 
+  bool probesDebugChanged = renderOptions.probesDebug != _renderOptions.probesDebug;
+
   _renderOptions = renderOptions;
   _debugOptions = debugOptions;
   _currentWindMap = windMap;
@@ -773,11 +793,18 @@ void VulkanRenderer::update(
   ubo.directionalShadowsEnabled = _renderOptions.directionalShadows;
   ubo.rtShadowsEnabled = _renderOptions.raytracedShadows;
   ubo.visualizeBoundingSpheresEnabled = _renderOptions.visualizeBoundingSpheres;
+  ubo.hack = _renderOptions.hack;
 
   for (int i = 0; i < _lights.size(); ++i) {
     _lights[i].debugUpdatePos(delta);
     //ubo.lightColor[i] = glm::vec4(_lights[i]._color, 1.0);
     //ubo.lightPos[i] = glm::vec4(_lights[i]._pos, 0.0);
+  }
+
+  if (probesDebugChanged) {
+    for (auto& id : _debugIrradianceProbes) {
+      setRenderableVisible(id, _renderOptions.probesDebug);
+    }
   }
 
   void* data;
@@ -943,6 +970,7 @@ void VulkanRenderer::buildTopLevelAS()
   std::vector<VkAccelerationStructureInstanceKHR> instances;
 
   for (auto& rend : _currentRenderables) {
+    if (!rend._buildTlas) continue;
     for (uint32_t i = 0; i < rend._numMeshes; ++i) {
       auto& blas = _blases[rend._firstMeshId + i];
 
@@ -1320,9 +1348,13 @@ bool VulkanRenderer::isDeviceSuitable(VkPhysicalDevice device)
   VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};
   indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
 
+  VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFloatFeatures{};
+  atomicFloatFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
+  atomicFloatFeatures.pNext = &indexingFeatures;
+
   VkPhysicalDeviceFeatures2 deviceFeatures2{};
   deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-  deviceFeatures2.pNext = &indexingFeatures;
+  deviceFeatures2.pNext = &atomicFloatFeatures;
 
   VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtFeatures{};
   rtFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
@@ -1339,6 +1371,7 @@ bool VulkanRenderer::isDeviceSuitable(VkPhysicalDevice device)
   return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
            indexingFeatures.descriptorBindingPartiallyBound && indexingFeatures.runtimeDescriptorArray &&
            deviceFeatures.geometryShader && rtFeatures.rayTracingPipeline && queueFamIndices.isComplete() && 
+           atomicFloatFeatures.shaderBufferFloat32AtomicAdd &&
            extensionsSupported && swapChainAdequate && deviceFeatures.samplerAnisotropy;
 }
 
@@ -1439,6 +1472,7 @@ bool VulkanRenderer::createLogicalDevice()
   VkPhysicalDeviceFeatures deviceFeatures{};
   deviceFeatures.samplerAnisotropy = VK_TRUE;
   deviceFeatures.multiDrawIndirect = VK_TRUE;
+  deviceFeatures.fillModeNonSolid = VK_TRUE;
 
   VkDeviceCreateInfo createInfo{};
   createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1470,6 +1504,13 @@ bool VulkanRenderer::createLogicalDevice()
 
   createInfo.pNext = &dynamicRenderingFeature;
 
+  // Atomic float
+  VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFloatFeature{};
+  atomicFloatFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
+  atomicFloatFeature.shaderBufferFloat32AtomicAdd = VK_TRUE;
+
+  dynamicRenderingFeature.pNext = &atomicFloatFeature;
+
   // Bindless
   /*VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};
   indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
@@ -1488,10 +1529,12 @@ bool VulkanRenderer::createLogicalDevice()
   vulkan12Features.descriptorBindingVariableDescriptorCount = VK_TRUE;
   vulkan12Features.runtimeDescriptorArray = VK_TRUE;
   vulkan12Features.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+  vulkan12Features.descriptorBindingStorageImageUpdateAfterBind = VK_TRUE;
   vulkan12Features.bufferDeviceAddress = VK_TRUE;
   vulkan12Features.hostQueryReset = VK_TRUE;
+  vulkan12Features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 
-  dynamicRenderingFeature.pNext = &vulkan12Features;
+  atomicFloatFeature.pNext = &vulkan12Features;
 
   // Ray tracing
   VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipeFeatures{};
@@ -1583,7 +1626,7 @@ void VulkanRenderer::recreateSwapChain()
     auto res = new ImageRenderResource();
     res->_format = VK_FORMAT_R32_SFLOAT;
     res->_image = _gpuWindForceImage[i];
-    res->_view = _gpuWindForceView[i];
+    res->_views.emplace_back(_gpuWindForceView[i]);
     _vault.addResource("WindForceImage", std::unique_ptr<IRenderResource>(res), true, i, true);
   }
 
@@ -1806,6 +1849,21 @@ Mesh& VulkanRenderer::getSphereMesh()
   return _currentMeshes[_debugSphereMeshId];
 }
 
+size_t VulkanRenderer::getNumIrradianceProbesXZ()
+{
+  return NUM_IRRADIANCE_PROBES_XZ;
+}
+
+size_t VulkanRenderer::getNumIrradianceProbesY()
+{
+  return NUM_IRRADIANCE_PROBES_Y;
+}
+
+std::vector<gpu::GPUIrradianceProbe>& VulkanRenderer::getIrradianceProbes()
+{
+  return _irradianceProbes;
+}
+
 std::vector<PerFrameTimer> VulkanRenderer::getPerFrameTimers()
 {
   return _perFrameTimers;
@@ -1892,11 +1950,11 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
   for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
     auto& renderable = _currentRenderables[i];
 
-    if (!renderable._visible) continue;
+    //if (!renderable._visible) continue;
 
     for (int i = 0; i < renderable._numMeshes; ++i) {
       _currentMeshUsage[renderable._firstMeshId + i]++;
-    }    
+    }
     
     mappedData[i]._transform = renderable._transform;
     mappedData[i]._tint = glm::vec4(renderable._tint, 1.0f);
@@ -2181,7 +2239,7 @@ bool VulkanRenderer::createSyncObjects()
 
 bool VulkanRenderer::initLights()
 {
-  _lights.resize(MAX_NUM_LIGHTS);
+  //_lights.resize(MAX_NUM_LIGHTS);
 
   std::random_device dev;
   std::mt19937 rng(dev());
@@ -2252,7 +2310,7 @@ bool VulkanRenderer::initBindless()
     uboLayoutBinding.binding = uboBinding;
     uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     uboLayoutBinding.descriptorCount = 1;
-    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
     bindings.emplace_back(std::move(uboLayoutBinding));
 
     VkDescriptorSetLayoutBinding renderableLayoutBinding{};
@@ -2312,11 +2370,18 @@ bool VulkanRenderer::initBindless()
     meshLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
     bindings.emplace_back(std::move(meshLayoutBinding));
 
+    /*VkDescriptorSetLayoutBinding probeLayoutBinding{};
+    probeLayoutBinding.binding = _probeBinding;
+    probeLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    probeLayoutBinding.descriptorCount = 1;
+    probeLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    bindings.emplace_back(std::move(probeLayoutBinding));*/
+
     VkDescriptorSetLayoutBinding tlasLayoutBinding{};
     tlasLayoutBinding.binding = _tlasBinding;
     tlasLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
     tlasLayoutBinding.descriptorCount = 1;
-    tlasLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+    tlasLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
     bindings.emplace_back(std::move(tlasLayoutBinding));
 
     VkDescriptorSetLayoutBinding texLayoutBinding{};
@@ -2548,6 +2613,24 @@ bool VulkanRenderer::initBindless()
 
       descriptorWrites.emplace_back(std::move(meshBufWrite));
 
+      // Probe buffer
+      /*VkDescriptorBufferInfo probeBufferInfo{};
+      VkWriteDescriptorSet probeBufWrite{};
+
+      probeBufferInfo.buffer = _gpuIrradianceProbeBuffer[i]._buffer;
+      probeBufferInfo.offset = 0;
+      probeBufferInfo.range = VK_WHOLE_SIZE;
+
+      probeBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      probeBufWrite.dstSet = _bindlessDescriptorSets[i];
+      probeBufWrite.dstBinding = _probeBinding;
+      probeBufWrite.dstArrayElement = 0;
+      probeBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      probeBufWrite.descriptorCount = 1;
+      probeBufWrite.pBufferInfo = &probeBufferInfo;
+
+      descriptorWrites.emplace_back(std::move(probeBufWrite));*/
+
       // Samplers
       std::vector<VkDescriptorImageInfo> imageInfos;
       VkWriteDescriptorSet imWrite{};
@@ -2591,11 +2674,19 @@ bool VulkanRenderer::initRenderPasses()
 {
   _renderPasses.emplace_back(new HiZRenderPass());
   _renderPasses.emplace_back(new CullRenderPass());
+  _renderPasses.emplace_back(new IrradianceProbeRayTracingPass());
+  _renderPasses.emplace_back(new IrradianceProbeConvolvePass());
   _renderPasses.emplace_back(new ShadowRenderPass());
   _renderPasses.emplace_back(new GrassShadowRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());
   _renderPasses.emplace_back(new GrassRenderPass());
   _renderPasses.emplace_back(new ShadowRayTracingPass());
+  _renderPasses.emplace_back(new SpecularGIRTPass());
+  _renderPasses.emplace_back(new SpecularGIMipPass());
+  //_renderPasses.emplace_back(new SSGlobalIlluminationRayTracingPass());
+  //_renderPasses.emplace_back(new SSGIBlurRenderPass());
+  //_renderPasses.emplace_back(new SurfelUpdateRayTracingPass());
+  //_renderPasses.emplace_back(new SurfelConvolveRenderPass());
   _renderPasses.emplace_back(new SSAORenderPass());
   _renderPasses.emplace_back(new SSAOBlurRenderPass());
   _renderPasses.emplace_back(new DeferredLightingRenderPass());
@@ -2746,6 +2837,50 @@ bool VulkanRenderer::initViewClusters()
   return true;
 }
 
+bool VulkanRenderer::initIrradianceProbes()
+{
+  // Debug visualization model
+  std::vector<Vertex> verts;
+  std::vector<std::uint32_t> inds;
+  graphicsutil::createSphere(0.2f, &verts, &inds, false);
+
+  Model sphereModel{};
+  Mesh sphereMesh{};
+  sphereMesh._indices = std::move(inds);
+  sphereMesh._vertices = std::move(verts);
+  sphereModel._meshes.emplace_back(std::move(sphereMesh));
+
+  auto modelId = registerModel(std::move(sphereModel), false);
+
+  const std::size_t width = NUM_IRRADIANCE_PROBES_XZ;
+  const std::size_t height = NUM_IRRADIANCE_PROBES_Y;
+  const std::size_t depth = NUM_IRRADIANCE_PROBES_XZ;
+
+  _irradianceProbes.resize(width * height * depth);
+
+  for (std::size_t z = 0; z < depth; ++z)
+  for (std::size_t y = 0; y < height; ++y)
+  for (std::size_t x = 0; x < width; ++x) {
+    gpu::GPUIrradianceProbe* probe = &_irradianceProbes[x + (y * width) + (z * width * height)];
+
+    glm::vec3 pos{ float(x), float(y * 2), float(z) }; // Half resolution vertically
+
+    probe->pos = glm::vec4(pos.x, pos.y, pos.z, 1.0f);
+
+    // Debug renderables
+    _debugIrradianceProbes.emplace_back(registerRenderable(
+      modelId,
+      glm::translate(glm::mat4(1.0f), pos),
+      glm::vec3(0.0f),
+      50000.0f,
+      false,
+      false));
+    setRenderableVisible(_debugIrradianceProbes.back(), false);
+  }
+
+  return true;
+}
+
 bool VulkanRenderer::initGigaMeshBuffer()
 {
   // Allocate "big enough" size... 
@@ -2760,6 +2895,7 @@ bool VulkanRenderer::initGpuBuffers()
   _gpuRenderableBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuMeshMaterialInfoBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuMeshInfoBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+  //_gpuIrradianceProbeBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuSceneDataBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuWindForceSampler.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuWindForceImage.resize(MAX_FRAMES_IN_FLIGHT);
@@ -2799,6 +2935,13 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuMeshInfoBuffer[i]);
+
+    /*bufferutil::createBuffer(
+      _vmaAllocator,
+      NUM_IRRADIANCE_PROBES_XZ * NUM_IRRADIANCE_PROBES_XZ * NUM_IRRADIANCE_PROBES_Y * sizeof(gpu::GPUIrradianceProbe),
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+      0,
+      _gpuIrradianceProbeBuffer[i]);*/
 
     // Used as a UBO in most shaders for accessing scene data.
     bufferutil::createBuffer(
@@ -2861,7 +3004,7 @@ bool VulkanRenderer::initGpuBuffers()
     auto res = new ImageRenderResource();
     res->_format = VK_FORMAT_R32_SFLOAT;
     res->_image = _gpuWindForceImage[i];
-    res->_view = _gpuWindForceView[i];
+    res->_views.emplace_back(_gpuWindForceView[i]);
     _vault.addResource("WindForceImage", std::unique_ptr<IRenderResource>(res), true, i, true);
   }
 

@@ -48,7 +48,8 @@ public:
     const glm::mat4& transform,
     const glm::vec3& sphereBoundCenter,
     float sphereBoundRadius,
-    bool debugDraw = false) = 0;
+    bool debugDraw = false,
+    bool buildTlas = true) = 0;
   virtual void setRenderableVisible(RenderableId id, bool visible) = 0;
 
   virtual size_t getMaxNumMeshes() = 0;
@@ -79,6 +80,10 @@ public:
   virtual void stopTimer(const std::string& name, VkCommandBuffer cmdBuffer) = 0;
 
   virtual Mesh& getSphereMesh() = 0;
+
+  virtual size_t getNumIrradianceProbesXZ() = 0;
+  virtual size_t getNumIrradianceProbesY() = 0;
+  virtual std::vector<gpu::GPUIrradianceProbe>& getIrradianceProbes() = 0;
 };
 
 }

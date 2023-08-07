@@ -79,7 +79,8 @@ public:
     const glm::mat4& transform,
     const glm::vec3& sphereBoundCenter,
     float sphereBoundRadius,
-    bool debugDraw = false);
+    bool debugDraw = false,
+    bool buildTlas = true);
 
   // Completely removes all data related to this id and will stop rendering it.
   void unregisterRenderable(RenderableId id);
@@ -159,6 +160,10 @@ public:
 
   Mesh& getSphereMesh() override final;
 
+  size_t getNumIrradianceProbesXZ() override final;
+  size_t getNumIrradianceProbesY() override final;
+  std::vector<gpu::GPUIrradianceProbe>& getIrradianceProbes() override final;
+
   std::vector<PerFrameTimer> getPerFrameTimers();
 
   std::vector<MeshId> getMeshIds(ModelId model);
@@ -175,11 +180,17 @@ private:
   static const std::size_t MAX_NUM_LIGHTS = 32*32;
   static const std::size_t MAX_BINDLESS_RESOURCES = 16536;
   static const std::size_t MAX_TIMESTAMP_QUERIES = 100;
+  static const std::size_t NUM_IRRADIANCE_PROBES_XZ = 32;
+  static const std::size_t NUM_IRRADIANCE_PROBES_Y = 8;
 
   MeshId _debugCubeMesh;
   ModelId _debugSphereModelId;
   MeshId _debugSphereMeshId;
   RenderableId _debugSphereRenderable;
+
+  std::vector<RenderableId> _debugIrradianceProbes;
+
+  std::vector<gpu::GPUIrradianceProbe> _irradianceProbes;
 
   void registerDebugRenderable(const glm::mat4& transform, const glm::vec3& center, float radius);
 
@@ -229,6 +240,7 @@ private:
     MeshId _firstMeshId;
     uint32_t _numMeshes;
 
+    bool _buildTlas = true;
     bool _visible = true;
 
     glm::mat4 _transform;
@@ -388,6 +400,7 @@ private:
   bool initFrameGraphBuilder();
   bool initRenderPasses();
   bool initViewClusters();
+  bool initIrradianceProbes();
 
   bool checkValidationLayerSupport();
   bool checkDeviceExtensionSupport(VkPhysicalDevice device);

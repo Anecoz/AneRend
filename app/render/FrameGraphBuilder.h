@@ -93,6 +93,8 @@ struct ImageInitialCreateInfo
   std::size_t _initialWidth;
   std::size_t _initialHeight;
   VkFormat _intialFormat;
+  std::uint32_t _mipLevels = 1;
+  VkImageLayout _initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   std::function<void(RenderContext*, VkImage&)> _initialDataCb = nullptr;
   bool _multiBuffered = false;
 };
@@ -112,6 +114,11 @@ struct ResourceUsage
   std::optional<ImageInitialCreateInfo> _imageCreateInfo;
 
   bool _imageAlwaysGeneral = false; // Override logic about image layout and force to be general.
+
+  bool _samplerClamp = false; // Use clamping for samplers.
+
+  bool _allMips = true;
+  uint32_t _mip = 0; // if _allMips is false, this specifies which mip level to use.
 
   bool _useMaxSampler = false; // Special case for Hi-Z generation...
 

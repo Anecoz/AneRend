@@ -134,25 +134,21 @@ bool GLTFLoader::loadFromFile(
         vert.pos = {
           positionBuffer[3 * v + 0],
           positionBuffer[3 * v + 1],
-          positionBuffer[3 * v + 2],
-          0.0
+          positionBuffer[3 * v + 2]
         };
 
         if (normalsBuffer) {
           vert.normal = {
             normalsBuffer[3 * v + 0],
             normalsBuffer[3 * v + 1],
-            normalsBuffer[3 * v + 2],
-            0.0
+            normalsBuffer[3 * v + 2]
           };
         }
 
         if (texCoordsBuffer) {
           vert.uv = {
             texCoordsBuffer[2 * v + 0],
-            texCoordsBuffer[2 * v + 1],
-            0.0f,
-            0.0f,
+            texCoordsBuffer[2 * v + 1]
           };
         }
 
@@ -160,8 +156,7 @@ bool GLTFLoader::loadFromFile(
           vert.color = {
             colorBuffer[3 * v + 0],
             colorBuffer[3 * v + 1],
-            colorBuffer[3 * v + 2],
-            1.0
+            colorBuffer[3 * v + 2]
           };
         }
         else {

@@ -18,4 +18,5 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   int directionalShadowsEnabled;
   int rtShadowsEnabled;
   int visualizeBoundingSpheresEnabled;
+  int hack;
 } ubo;

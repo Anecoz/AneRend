@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <variant>
+#include <vector>
 
 namespace render {
 
@@ -49,7 +50,7 @@ struct ImageRenderResource : public IRenderResource
   ImageRenderResource() : IRenderResource(Type::Image) {}
 
   AllocatedImage _image;
-  VkImageView _view;
+  std::vector<VkImageView> _views; // 0 contains all mips, rest contains separate views for each mip (if there are any further mips)
   VkFormat _format;
 };
 
