@@ -29,6 +29,25 @@ void initDepthImage(RenderContext* renderContext, VkImage& image)
   VkDeviceSize bufOffset{};
   vkCmdFillBuffer(cmdBuffer, stagingBuffer._buffer, bufOffset, dataSize, 0);
 
+  // Barrier after filling
+  VkBufferMemoryBarrier memBarr{};
+  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  memBarr.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+  memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.buffer = stagingBuffer._buffer;
+  memBarr.offset = 0;
+  memBarr.size = VK_WHOLE_SIZE;
+
+  vkCmdPipelineBarrier(
+    cmdBuffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    0, 0, nullptr,
+    1, &memBarr,
+    0, nullptr);
+
   // Transition image to dst optimal
   imageutil::transitionImageLayout(
     cmdBuffer,

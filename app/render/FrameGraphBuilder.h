@@ -237,6 +237,7 @@ private:
   std::pair<VkImageLayout, VkImageLayout> findImageLayoutUsage(AccessBits prevAccess, Type prevType, AccessBits newAccess, Type newType);
   VkImageLayout findInitialImageLayout(AccessBits access, Type type);
   std::string debugConstructImageBarrierName(VkImageLayout old, VkImageLayout newLayout);
+  std::vector<ResourceUsage*> findPrevMipUsages(const ResourceUsage& usage, std::vector<GraphNode>& stack, int stackIdx);
 
   std::pair<VkAccessFlagBits, VkAccessFlagBits> findBufferAccessFlags(AccessBits prevAccess, StageBits prevStage, AccessBits newAccess, StageBits newStage);
   std::pair<VkPipelineStageFlagBits, VkPipelineStageFlagBits> translateStageBits(Type prevType, Type newType, StageBits prevStage, StageBits newStage);

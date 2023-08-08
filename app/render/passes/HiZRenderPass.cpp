@@ -6,105 +6,86 @@
 namespace render
 {
 
-HiZRenderPass::HiZRenderPass()
-  : RenderPass()
-{}
+  HiZRenderPass::HiZRenderPass()
+    : RenderPass()
+  {}
 
-HiZRenderPass::~HiZRenderPass()
-{}
+  HiZRenderPass::~HiZRenderPass()
+  {}
 
-void HiZRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
-{
-  // Takes the (previous frame's) depth buffer and downsamples into
-  // a couple of low-res versions, i.e. a manual mipmap.
-  // Sizes:
-  // 64
-  // 32
-  // 16
-  // 8
-  // 4
-  // 2
-
-  RenderPassRegisterInfo info{};
-  info._name = "HiZ";
-
-  // Register all mips as both sampled depth texture and imagestore, 
-  // because the compute pass later runs in a successive fashion where 
-  // the previous mip is used as input (sampler) for the current output mip (imagestore)
+  void HiZRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
   {
-    ResourceUsage usage{};
-    usage._resourceName = "GeometryDepthImage";
-    usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Compute);
-    usage._type = Type::SampledDepthTexture;
-    usage._useMaxSampler = true;
+    // Takes the (previous frame's) depth buffer and downsamples into
+    // a couple of low-res versions, i.e. a manual mipmap.
+    // Sizes:
+    // 64
+    // 32
+    // 16
+    // 8
+    // 4
+    // 2
 
-    info._resourceUsages.emplace_back(std::move(usage));
-  }
+    RenderPassRegisterInfo info{};
+    info._name = "HiZ";
 
-  int currSize = 64;
-  for (int i = 0; i < 6; ++i) {
+    // Register all mips as both sampled depth texture and imagestore, 
+    // because the compute pass later runs in a successive fashion where 
+    // the previous mip is used as input (sampler) for the current output mip (imagestore)
     {
       ResourceUsage usage{};
-      usage._resourceName = "HiZ" + std::to_string(currSize);
+      usage._resourceName = "GeometryDepthImage";
       usage._access.set((std::size_t)Access::Read);
       usage._stage.set((std::size_t)Stage::Compute);
-      usage._type = Type::SampledTexture;
+      usage._type = Type::SampledDepthTexture;
       usage._useMaxSampler = true;
-      usage._imageAlwaysGeneral = true;
-
-      ImageInitialCreateInfo createInfo{};
-      createInfo._initialHeight = currSize;
-      createInfo._initialWidth = currSize;
-      createInfo._intialFormat = VK_FORMAT_R32_SFLOAT;
-      createInfo._initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-      usage._imageCreateInfo = createInfo;
-
-      info._resourceUsages.emplace_back(std::move(usage));
-    }
-    {
-      ResourceUsage usage{};
-      usage._resourceName = "HiZ" + std::to_string(currSize);
-      usage._access.set((std::size_t)Access::Write);
-      usage._stage.set((std::size_t)Stage::Compute);
-      usage._type = Type::ImageStorage;
 
       info._resourceUsages.emplace_back(std::move(usage));
     }
 
-    currSize = currSize >> 1;
-  }
+    int currSize = 64;
+    for (int i = 0; i < 6; ++i) {
+      {
+        ResourceUsage usage{};
+        usage._resourceName = "HiZ" + std::to_string(currSize);
+        usage._access.set((std::size_t)Access::Read);
+        usage._stage.set((std::size_t)Stage::Compute);
+        usage._type = Type::SampledTexture;
+        usage._useMaxSampler = true;
+        usage._imageAlwaysGeneral = true;
 
-  ComputePipelineCreateParams compParams{};
-  compParams.device = rc->device();
-  compParams.shader = "hiz_comp.spv";
+        ImageInitialCreateInfo createInfo{};
+        createInfo._initialHeight = currSize;
+        createInfo._initialWidth = currSize;
+        createInfo._intialFormat = VK_FORMAT_R32_SFLOAT;
+        createInfo._initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        usage._imageCreateInfo = createInfo;
 
-  info._computeParams = compParams;
+        info._resourceUsages.emplace_back(std::move(usage));
+      }
+      {
+        ResourceUsage usage{};
+        usage._resourceName = "HiZ" + std::to_string(currSize);
+        usage._access.set((std::size_t)Access::Write);
+        usage._stage.set((std::size_t)Stage::Compute);
+        usage._type = Type::ImageStorage;
 
-  fgb.registerRenderPass(std::move(info));
+        info._resourceUsages.emplace_back(std::move(usage));
+      }
 
-  fgb.registerRenderPassExe("HiZ",
-    [this](RenderExeParams exeParams) {
-      // Run downsampling for each mip level
+      currSize = currSize >> 1;
+    }
 
-      int currSize = 128; // start one too high
-      for (int i = 0; i < 6; ++i) {
-        gpu::HiZPushConstants push{};
+    ComputePipelineCreateParams compParams{};
+    compParams.device = rc->device();
+    compParams.shader = "hiz_comp.spv";
 
-        push.inputIdx = 1 + 2 * (i - 1);
-        push.outputIdx = push.inputIdx + 3;
+    info._computeParams = compParams;
 
-        if (i == 0) {
-          push.inputIdx = 0;
-          push.outputIdx = 2;
-          push.inputHeight = exeParams.rc->swapChainExtent().height;
-          push.inputWidth = exeParams.rc->swapChainExtent().width;
-          push.outputSize = 64;
-        }
-        else {
-          push.inputWidth = currSize;
-          push.outputSize = currSize >> 1;
-        }
+    fgb.registerRenderPass(std::move(info));
+
+    fgb.registerRenderPassExe("HiZ",
+      [this](RenderExeParams exeParams) {
+        // Run downsampling for each mip level
 
         vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, *exeParams.pipeline);
 
@@ -116,53 +97,76 @@ void HiZRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
           1, 1, &(*exeParams.descriptorSets)[0],
           0, nullptr);
 
-        vkCmdPushConstants(
-          *exeParams.cmdBuffer,
-          *exeParams.pipelineLayout,
-          VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
-          0,
-          sizeof(gpu::HiZPushConstants),
-          &push);
+        int currSize = 128; // start one too high
+        for (int i = 0; i < 6; ++i) {
+          gpu::HiZPushConstants push{};
 
-        // 32 is the local group size in the comp shader
-        const uint32_t localSize = 4;
-        uint32_t num = push.outputSize / localSize;
-        
-        if (num == 0) {
-          num = 1;
+          push.inputIdx = 1 + 2 * (i - 1);
+          push.outputIdx = push.inputIdx + 3;
+
+          if (i == 0) {
+            push.inputIdx = 0;
+            push.outputIdx = 2;
+            push.inputHeight = exeParams.rc->swapChainExtent().height;
+            push.inputWidth = exeParams.rc->swapChainExtent().width;
+            push.outputSize = 64;
+          }
+          else {
+            push.inputWidth = currSize;
+            push.outputSize = currSize >> 1;
+          }
+
+          vkCmdPushConstants(
+            *exeParams.cmdBuffer,
+            *exeParams.pipelineLayout,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+            0,
+            sizeof(gpu::HiZPushConstants),
+            &push);
+
+          // 32 is the local group size in the comp shader
+          const uint32_t localSize = 4;
+          uint32_t num = push.outputSize / localSize;
+
+          if (num == 0) {
+            num = 1;
+          }
+
+          vkCmdDispatch(*exeParams.cmdBuffer, num, num, 1);
+
+          // Manual barrier before next iteration
+          std::vector<VkImageMemoryBarrier> barriers;
+          for (int j = 0; j < 6; ++j) {
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+            barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = exeParams.images[j * 2 + 1];
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = 1;
+            barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            barriers.emplace_back(barrier);
+          }
+
+          vkCmdPipelineBarrier(
+            *exeParams.cmdBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            barriers.size(), barriers.data()
+          );
+
+          currSize = currSize >> 1;
         }
-
-        vkCmdDispatch(*exeParams.cmdBuffer, num, num, 1);
-
-        // Manual barrier before next iteration
-        VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = exeParams.images[push.outputIdx];
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-        vkCmdPipelineBarrier(
-          *exeParams.cmdBuffer,
-          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-          0,
-          0, nullptr,
-          0, nullptr,
-          1, &barrier
-        );
-
-        currSize = currSize >> 1;
       }
-    }
-  );
-}
+    );
+  }
 
 }

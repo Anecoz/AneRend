@@ -25,7 +25,6 @@ void UIRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
   {
     ResourceUsage usage{};
     usage._resourceName = "FinalImagePP";
-    usage._access.set((std::size_t)Access::Read);
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::ColorAttachment;
