@@ -1514,7 +1514,8 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         if (prevUsage) {
           if (usage._access.test((std::size_t)Access::Read) && prevUsage->_access.test((std::size_t)Access::Read) &&
               usage._stage == prevUsage->_stage &&
-              usage._allMips == prevUsage->_allMips) {
+              usage._allMips == prevUsage->_allMips &&
+              !(usage._imageAlwaysGeneral || prevUsage->_imageAlwaysGeneral)) {
             skipPreBarrier = true;
           }
 
@@ -1531,7 +1532,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
 
         // Initial layout transition (before executing)
         if (!skipPreBarrier) {
-          auto initialLayout = findInitialImageLayout(usage._access, usage._type);
+          auto initialLayout = usage._imageAlwaysGeneral ? VK_IMAGE_LAYOUT_GENERAL : findInitialImageLayout(usage._access, usage._type);
           VkImageLayout oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
           auto stageBits = translateStageBits(usage._type, usage._type, usage._stage, usage._stage);
           bool depth = isDepth(usage._type);
@@ -1541,7 +1542,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
           if (prevUsage) {
             srcAccessMask = findWriteAccessMask(prevUsage->_type);
             stageBits = translateStageBits(prevUsage->_type, usage._type, prevUsage->_stage, usage._stage);
-            oldLayout = findInitialImageLayout(prevUsage->_access, prevUsage->_type);
+            oldLayout = prevUsage->_imageAlwaysGeneral ? VK_IMAGE_LAYOUT_GENERAL : findInitialImageLayout(prevUsage->_access, prevUsage->_type);
           }
 
           // Do a loop for all prev mip usages (this is most of the time going to be empty)
@@ -1549,7 +1550,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
             for (auto prevMipUsage : prevMipUsages) {
               srcAccessMask = findWriteAccessMask(prevMipUsage->_type);
               stageBits = translateStageBits(prevMipUsage->_type, usage._type, prevMipUsage->_stage, usage._stage);
-              oldLayout = findInitialImageLayout(prevMipUsage->_access, prevMipUsage->_type);
+              oldLayout = prevMipUsage->_imageAlwaysGeneral ? VK_IMAGE_LAYOUT_GENERAL : findInitialImageLayout(prevMipUsage->_access, prevMipUsage->_type);
 
               BarrierContext beforeWriteBarrier{};
               beforeWriteBarrier._resourceName = usage._resourceName;

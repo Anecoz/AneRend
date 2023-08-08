@@ -22,7 +22,6 @@ void DebugBSRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
   {
     ResourceUsage usage{};
     usage._resourceName = "FinalImagePP";
-    usage._access.set((std::size_t)Access::Read);
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::ColorAttachment;
@@ -31,7 +30,7 @@ void DebugBSRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
   {
     ResourceUsage usage{};
     usage._resourceName = "GeometryDepthImage";
-    usage._access.set((std::size_t)Access::Read);
+    usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::DepthAttachment;
     info._resourceUsages.emplace_back(std::move(usage));
