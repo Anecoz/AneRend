@@ -16,7 +16,7 @@ void main()
   const int octPixelSize = 8;
   const int numProbesPerPlane = 32;
   const int numProbePlanes = 8;
-  const int inputPixSize = 8;
+  const int inputPixSize = 16;
   const int xs = numProbesPerPlane * octPixelSize;
   const int ys = numProbesPerPlane * numProbePlanes * octPixelSize;
 

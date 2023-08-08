@@ -1864,6 +1864,11 @@ std::vector<gpu::GPUIrradianceProbe>& VulkanRenderer::getIrradianceProbes()
   return _irradianceProbes;
 }
 
+double VulkanRenderer::getElapsedTime()
+{
+  return glfwGetTime();
+}
+
 std::vector<PerFrameTimer> VulkanRenderer::getPerFrameTimers()
 {
   return _perFrameTimers;

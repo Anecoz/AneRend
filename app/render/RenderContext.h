@@ -84,6 +84,8 @@ public:
   virtual size_t getNumIrradianceProbesXZ() = 0;
   virtual size_t getNumIrradianceProbesY() = 0;
   virtual std::vector<gpu::GPUIrradianceProbe>& getIrradianceProbes() = 0;
+
+  virtual double getElapsedTime() = 0;
 };
 
 }

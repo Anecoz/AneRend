@@ -164,6 +164,8 @@ public:
   size_t getNumIrradianceProbesY() override final;
   std::vector<gpu::GPUIrradianceProbe>& getIrradianceProbes() override final;
 
+  double getElapsedTime() override final;
+
   std::vector<PerFrameTimer> getPerFrameTimers();
 
   std::vector<MeshId> getMeshIds(ModelId model);

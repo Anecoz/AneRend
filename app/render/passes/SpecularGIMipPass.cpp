@@ -61,6 +61,8 @@ void SpecularGIMipPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
 
     fgb.registerRenderPassExe("SpecularGIMipGen" + std::to_string(i),
       [this, i](RenderExeParams exeParams) {
+        double elapsedTime = exeParams.rc->getElapsedTime();
+
         // Bind pipeline
         vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, *exeParams.pipeline);
 

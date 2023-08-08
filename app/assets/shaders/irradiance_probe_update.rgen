@@ -10,7 +10,7 @@ layout(set = 1, binding = 0, rgba16f) uniform writeonly image2D irradianceIm;
 layout(set = 1, binding = 1, rgba16f) uniform writeonly image2D dirIm;
 
 const float GOLDEN_RATIO = 1.6180339887;
-const uint NUM_RAYS = 64;
+const uint NUM_RAYS = 256;
 const float PI = 3.14159265359;
 const float EPSILON = 1e-6;
 
@@ -44,7 +44,7 @@ void main()
 {
   // Find which probe this invocation corresponds to
   ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
-  const int probePixelSize = 8; // sqrt(256)
+  const int probePixelSize = 16; // sqrt(256)
   const int numProbesPerPlane = 32;
   const int numPlanes = 8;
 

@@ -60,7 +60,7 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
   RenderPassRegisterInfo info{};
   info._name = "IrradianceProbeRT";
 
-  const int numRaysPerProbe = 64;
+  const int numRaysPerProbe = 256;
   const int sqrtNumRays = std::sqrt(numRaysPerProbe);
   const int numProbesPlane = rc->getNumIrradianceProbesXZ();
   const int numProbesHeight = rc->getNumIrradianceProbesY();
@@ -137,6 +137,11 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
 
   fgb.registerRenderPassExe("IrradianceProbeRT",
     [this, numProbesHeight, numProbesPlane, sqrtNumRays](RenderExeParams exeParams) {
+      double elapsedTime = exeParams.rc->getElapsedTime();
+      if (elapsedTime - _lastRayTraceTime < (1.0 / _traceRate)) {
+        return;
+      }
+
       // Bind pipeline
       vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, *exeParams.pipeline);
 
@@ -160,6 +165,8 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
         sqrtNumRays * numProbesPlane,
         sqrtNumRays * numProbesPlane * numProbesHeight,
         1);
+
+      _lastRayTraceTime = elapsedTime;
     });
 }
 

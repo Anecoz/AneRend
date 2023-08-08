@@ -65,6 +65,11 @@ void IrradianceProbeConvolvePass::registerToGraph(FrameGraphBuilder& fgb, Render
 
   fgb.registerRenderPassExe("IrradianceProbeConvolve",
     [this, numProbesPlane, numProbesHeight, octPixelSize](RenderExeParams exeParams) {
+      double elapsedTime = exeParams.rc->getElapsedTime();
+      if (elapsedTime - _lastRayTraceTime < (1.0 / _traceRate)) {
+        return;
+      }
+
       // Bind pipeline
       vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, *exeParams.pipeline);
 
@@ -83,6 +88,8 @@ void IrradianceProbeConvolvePass::registerToGraph(FrameGraphBuilder& fgb, Render
       numY = numY / 8;
 
       vkCmdDispatch(*exeParams.cmdBuffer, numX, numY + 1, 1);
+
+      _lastRayTraceTime = elapsedTime;
     });
 }
 
