@@ -204,7 +204,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _fgb(&_vault)
   , _window(window)
   , _enableValidationLayers(true)
-  , _enableRayTracing(false)
+  , _enableRayTracing(true)
 {
   imageutil::init();
 }
