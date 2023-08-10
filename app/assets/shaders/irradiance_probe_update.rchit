@@ -122,12 +122,15 @@ void main()
   }
 
   // Always calculate indirect light
-  payload.irradiance += calcIndirectDiffuseLight(
-    normal,
-    color,
-    metallic,
-    roughness,
-    pos,
-    gl_ObjectRayOriginEXT,
-    probeTex);
+  if (ubo.multiBounceDdgiEnabled == 1) {
+    payload.irradiance += calcIndirectDiffuseLight(
+      normal,
+      color,
+      metallic,
+      roughness,
+      pos,
+      gl_ObjectRayOriginEXT,
+      probeTex);
+  }
+
 }

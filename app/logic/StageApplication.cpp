@@ -107,7 +107,7 @@ bool StageApplication::init()
 
   // Create a bunch of test matrices
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 100;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -121,7 +121,7 @@ bool StageApplication::init()
         _meshId,
         matrix,
         sphereBoundCenter,
-        3.0f,
+        5.0f,
         false);
 
       if (ret == 0) {
@@ -132,7 +132,7 @@ bool StageApplication::init()
 
   // Do a couple of the big models
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 20;
 
     for (int x = 0; x < numInstances; ++x)
     for (int y = 0; y < numInstances; ++y) {
@@ -186,7 +186,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 1;
+    std::size_t numInstances = 0;
 
     glm::vec3 sphereCenter{ 0.0f };
     float radius = std::max(std::abs(testMax.z - testMin.z), std::max(std::abs(testMax.x - testMin.x), std::abs(testMax.y - testMin.y)));
@@ -277,6 +277,9 @@ void StageApplication::render()
     ImGui::Checkbox("FXAA", &_renderOptions.fxaa);
     ImGui::Checkbox("Shadow map", &_renderOptions.directionalShadows);
     ImGui::Checkbox("Ray traced shadows", &_renderOptions.raytracedShadows);
+    ImGui::Checkbox("DDGI", &_renderOptions.ddgiEnabled);
+    ImGui::Checkbox("Multi-bounce DDGI", &_renderOptions.multiBounceDdgiEnabled);
+    ImGui::Checkbox("Specular GI", &_renderOptions.specularGiEnabled);
     ImGui::Checkbox("Visualize bounding spheres", &_renderOptions.visualizeBoundingSpheres);
     ImGui::Checkbox("Debug probes", &_renderOptions.probesDebug);
     ImGui::Checkbox("Hack", &_renderOptions.hack);

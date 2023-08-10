@@ -137,6 +137,9 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
 
   fgb.registerRenderPassExe("IrradianceProbeRT",
     [this, numProbesHeight, numProbesPlane, sqrtNumRays](RenderExeParams exeParams) {
+      if (!exeParams.rc->getRenderOptions().raytracingEnabled) return;
+      if (!exeParams.rc->getRenderOptions().ddgiEnabled) return;
+
       double elapsedTime = exeParams.rc->getElapsedTime();
       if (elapsedTime - _lastRayTraceTime < (1.0 / _traceRate)) {
         return;

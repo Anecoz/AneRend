@@ -427,7 +427,7 @@ void doLight(ivec2 pixel)
 
   vec3 Lo = vec3(0.0);
   vec3 directionalLo = vec3(0.0);
-  vec3 ambient = vec3(0.0);//vec3(0.3) * albedo * shadow;
+  vec3 ambient = vec3(0.0);
 
   for (int i = 0; i < 1 + groupLocalNumIndices; ++i) {
 
@@ -458,23 +458,30 @@ void doLight(ivec2 pixel)
     }
   }
 
-  ambient += calcIndirectDiffuseLight(
-    normal,
-    albedo,
-    metallic,
-    roughness,
-    fragWorldPos,
-    ubo.cameraPos.xyz,
-    probeTex);
+  if (ubo.ddgiEnabled == 1) {
+    ambient += calcIndirectDiffuseLight(
+      normal,
+      albedo,
+      metallic,
+      roughness,
+      fragWorldPos,
+      ubo.cameraPos.xyz,
+      probeTex);
+  }
+  else {
+    ambient = vec3(0.3) * albedo * clamp(shadow, 0.3, 1.0);
+  }
 
-  ambient += calcIndirectSpecularLight(
-    normal,
-    albedo,
-    metallic,
-    roughness,
-    fragWorldPos,
-    texCoords,
-    specularGiTex);
+  if (ubo.specularGiEnabled == 1) {
+    ambient += calcIndirectSpecularLight(
+      normal,
+      albedo,
+      metallic,
+      roughness,
+      fragWorldPos,
+      texCoords,
+      specularGiTex);
+  }
 
   directionalLo *= shadow;
   vec3 color = (ambient + Lo + directionalLo) * occlusion;

@@ -101,6 +101,9 @@ struct GPUSceneData {
   int32_t fxaaEnabled;
   int32_t directionalShadowsEnabled;
   int32_t rtShadowsEnabled;
+  int32_t ddgiEnabled;
+  int32_t multiBounceDdgiEnabled;
+  int32_t specularGiEnabled;
   int32_t visualizeBoundingSpheresEnabled;
   int32_t hack;
 };

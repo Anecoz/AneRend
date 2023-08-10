@@ -196,7 +196,7 @@ const vec3 up = vec3(0.0, 1.0, 0.0);
 
 float sampleHiZ(vec2 coords, uint level)
 {
-  float ret = 0.0;
+  float ret = 1.0;
 
   if (level == 0) {
     ret = texture(hiZ64, coords).r;
@@ -245,7 +245,7 @@ bool occlusionCull(vec3 sphereCenterView, float radius)
     vec3 adjusted = vec3(sphereCenterView.x, sphereCenterView.y, sphereCenterView.z + radius);
     vec4 projected = ubo.proj * vec4(adjusted, 1.0);
     projected /= projected.w;
-    float depthSphere = zMinMax.x;//projected.z;//pushConstants.nearDist / (sphereCenterView.z - radius);
+    float depthSphere = zMinMax.x - 0.001;//projected.z;//pushConstants.nearDist / (sphereCenterView.z - radius);
 
     visible = depthSphere <= depth;
   }

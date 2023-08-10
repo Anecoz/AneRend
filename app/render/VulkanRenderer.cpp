@@ -204,7 +204,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _fgb(&_vault)
   , _window(window)
   , _enableValidationLayers(true)
-  , _enableRayTracing(true)
+  , _enableRayTracing(false)
 {
   imageutil::init();
 }
@@ -762,6 +762,9 @@ void VulkanRenderer::update(
   if (!_enableRayTracing) {
     _renderOptions.raytracedShadows = false;
     _renderOptions.raytracingEnabled = false;
+    _renderOptions.ddgiEnabled = false;
+    _renderOptions.multiBounceDdgiEnabled = false;
+    _renderOptions.specularGiEnabled = false;
   }
 
   // Update bindless UBO
@@ -792,6 +795,9 @@ void VulkanRenderer::update(
   ubo.fxaaEnabled = _renderOptions.fxaa;
   ubo.directionalShadowsEnabled = _renderOptions.directionalShadows;
   ubo.rtShadowsEnabled = _renderOptions.raytracedShadows;
+  ubo.ddgiEnabled = _renderOptions.ddgiEnabled;
+  ubo.multiBounceDdgiEnabled = _renderOptions.multiBounceDdgiEnabled;
+  ubo.specularGiEnabled = _renderOptions.specularGiEnabled;
   ubo.visualizeBoundingSpheresEnabled = _renderOptions.visualizeBoundingSpheres;
   ubo.hack = _renderOptions.hack;
 

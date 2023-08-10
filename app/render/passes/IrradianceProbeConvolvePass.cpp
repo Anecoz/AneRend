@@ -65,6 +65,9 @@ void IrradianceProbeConvolvePass::registerToGraph(FrameGraphBuilder& fgb, Render
 
   fgb.registerRenderPassExe("IrradianceProbeConvolve",
     [this, numProbesPlane, numProbesHeight, octPixelSize](RenderExeParams exeParams) {
+      if (!exeParams.rc->getRenderOptions().raytracingEnabled) return;
+      if (!exeParams.rc->getRenderOptions().ddgiEnabled) return;
+
       double elapsedTime = exeParams.rc->getElapsedTime();
       if (elapsedTime - _lastRayTraceTime < (1.0 / _traceRate)) {
         return;
