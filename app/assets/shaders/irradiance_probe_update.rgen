@@ -5,12 +5,12 @@
 #include "bindless.glsl"
 #include "bindless_tlas.glsl"
 #include "scene_ubo.glsl"
+#include "probe_helpers.glsl"
 
 layout(set = 1, binding = 0, rgba16f) uniform writeonly image2D irradianceIm;
 layout(set = 1, binding = 1, rgba16f) uniform writeonly image2D dirIm;
 
 const float GOLDEN_RATIO = 1.6180339887;
-const uint NUM_RAYS = 256;
 const float PI = 3.14159265359;
 const float EPSILON = 1e-6;
 
@@ -30,7 +30,7 @@ float rand(vec2 co){
 vec3 worldDirFromFibonacciIndex(uint idx)
 {
   float theta = 2.0 * PI * float(idx) / GOLDEN_RATIO;
-  float phi = acos(1.0 - 2.0 * (float(idx) + 0.5) / float(NUM_RAYS));
+  float phi = acos(1.0 - 2.0 * (float(idx) + 0.5) / float(NUM_RAYS_PER_PROBE));
 
   vec3 outDir = vec3(
     cos(theta) * sin(phi),
@@ -44,18 +44,16 @@ void main()
 {
   // Find which probe this invocation corresponds to
   ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
-  const int probePixelSize = 16; // sqrt(256)
-  const int numProbesPerPlane = 32;
-  const int numPlanes = 8;
 
-  int probeX = pixel.x / probePixelSize;
-  int probeY = pixel.y / (probePixelSize * numProbesPerPlane);   // THIS IS THE HEIGHT, AKA PLANE!
-  int probeZ = (pixel.y - (probeY * probePixelSize * numProbesPerPlane)) / probePixelSize;
+  int probeX = pixel.x / PROBE_IRR_DIR_PIX_SIZE;
+  int probeY = pixel.y / (PROBE_IRR_DIR_PIX_SIZE * NUM_PROBES_PER_PLANE);   // THIS IS THE HEIGHT, AKA PLANE!
+  int probeZ = (pixel.y - (probeY * PROBE_IRR_DIR_PIX_SIZE * NUM_PROBES_PER_PLANE)) / PROBE_IRR_DIR_PIX_SIZE;
 
-  ivec2 pixelWithinProbe = ivec2(pixel.x - probeX * probePixelSize, pixel.y - probeY * numProbesPerPlane * probePixelSize - probeZ * probePixelSize);
-  int rayIndex = pixelWithinProbe.y * probePixelSize + pixelWithinProbe.x;
+  ivec2 pixelWithinProbe = ivec2(pixel.x - probeX * PROBE_IRR_DIR_PIX_SIZE, pixel.y - probeY * NUM_PROBES_PER_PLANE * PROBE_IRR_DIR_PIX_SIZE - probeZ * PROBE_IRR_DIR_PIX_SIZE);
+  int rayIndex = pixelWithinProbe.y * PROBE_IRR_DIR_PIX_SIZE + pixelWithinProbe.x;
 
-  vec3 origin = vec3(float(probeX), float(probeY) * 2.0, float(probeZ));
+  vec3 camOffset = vec3(ubo.cameraGridPos.x - float(NUM_PROBES_PER_PLANE)/2.0, 0.0, ubo.cameraGridPos.z - float(NUM_PROBES_PER_PLANE)/2.0);
+  vec3 origin = vec3(float(probeX), float(probeY) * 2.0, float(probeZ)) + camOffset;
 
   // Create a directional vector from the "ray index"
   vec3 worldDir = worldDirFromFibonacciIndex(rayIndex);

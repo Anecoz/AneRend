@@ -20,8 +20,8 @@ layout(location = 1) out vec4 outCol1;
 
 void main() {
   vec3 normal = normalize(fragNormal);
-  float metallic = 0.3;
-  float roughness = 0.5;
+  float metallic = 0.1;
+  float roughness = 0.8;
   vec3 color = fragColor;
 
   MeshMaterialInfo matInfo = materialBuffer.infos[fragMeshId];

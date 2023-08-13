@@ -1,5 +1,7 @@
 #extension GL_GOOGLE_include_directive : enable
 
+#include "probe_helpers.glsl"
+
 const float PI = 3.14159265359;
 
 float DistributionGGX(vec3 N, vec3 H, float roughness)
@@ -159,15 +161,13 @@ vec3 calcLight(
 
 vec3 sampleSingleProbe(sampler2D probeTex, ivec3 probeIndex, vec3 normal)
 {
-  const int probePixSize = 8;
-  const int probesPerPlane = 32;
   ivec2 probeTexSize = textureSize(probeTex, 0);
 
   ivec2 probePixelStart = ivec2(
-    (probePixSize + 2) * probeIndex.x + 1,
-    (probePixSize + 2) * probesPerPlane * probeIndex.y + (probePixSize + 2) * probeIndex.z + 1);
+    (PROBE_CONV_PIX_SIZE + 2) * probeIndex.x + 1,
+    (PROBE_CONV_PIX_SIZE + 2) * NUM_PROBES_PER_PLANE * probeIndex.y + (PROBE_CONV_PIX_SIZE + 2) * probeIndex.z + 1);
 
-  ivec2 probePixelEnd = probePixelStart + probePixSize - 1;
+  ivec2 probePixelEnd = probePixelStart + PROBE_CONV_PIX_SIZE - 1;
 
   vec2 probeTexStart = vec2(
     float(probePixelStart.x) / float(probeTexSize.x - 1),
@@ -188,9 +188,8 @@ vec3 sampleSingleProbe(sampler2D probeTex, ivec3 probeIndex, vec3 normal)
   return texture(probeTex, octTexCoord).rgb;
 }
 
-vec4 weightProbe(sampler2D probeTex, vec3 worldPos, vec3 normal, ivec3 probeIndex, vec3 alpha, ivec3 offset)
+vec4 weightProbe(sampler2D probeTex, vec3 worldPos, vec3 probePos, vec3 normal, ivec3 probeIndex, vec3 alpha, ivec3 offset)
 {
-  vec3 probePos = vec3(probeIndex.x, probeIndex.y * 2.0, probeIndex.z);
   vec3 trilinear = mix(1.0 - alpha, alpha, offset);
   float weight = 1.0;
   vec3 probeIrradiance = vec3(0.0);
@@ -242,48 +241,58 @@ vec4 weightProbe(sampler2D probeTex, vec3 worldPos, vec3 normal, ivec3 probeInde
 vec3 sampleProbe(sampler2D probeTex, vec3 worldPos, vec3 normal)
 {
   // Find closest probe to worldPos
-  int probeX = clamp(int(floor(worldPos.x)), 0, 31);
-  int probeY = clamp(int(floor(worldPos.y / 2.0)), 0, 7);
-  int probeZ = clamp(int(floor(worldPos.z)), 0, 31);
+  vec3 camOffset = vec3(floor(ubo.cameraPos.x) - float(NUM_PROBES_PER_PLANE) / 2.0, 0.0, floor(ubo.cameraPos.z) - float(NUM_PROBES_PER_PLANE) / 2.0);
 
-  vec3 baseProbePos = vec3(probeX, probeY * 2.0, probeZ);
-  vec3 probeStep = vec3(1.0, 2.0, 1.0);
+  int probeX = clamp(int(floor(worldPos.x - camOffset.x)), 0, NUM_PROBES_PER_PLANE - 1);
+  int probeY = clamp(int(floor(worldPos.y / 2.0)), 0, NUM_PROBE_PLANES - 1);
+  int probeZ = clamp(int(floor(worldPos.z - camOffset.z)), 0, NUM_PROBES_PER_PLANE - 1);
+
+  vec3 baseProbePos = vec3(probeX + camOffset.x, probeY * 2.0, probeZ + camOffset.z);
 
   float sumWeight = 0.0;
   vec3 sumIrradiance = vec3(0.0);
 
   // alpha is how far from the floor(currentVertex) position. on [0, 1] for each axis.
-  vec3 alpha = clamp((worldPos - baseProbePos) / probeStep, vec3(0.0), vec3(1.0));
+  vec3 alpha = clamp((worldPos - baseProbePos) / PROBE_STEP, vec3(0.0), vec3(1.0));
 
-  vec4 res = weightProbe(probeTex, worldPos, normal, ivec3(probeX, probeY, probeZ), alpha, ivec3(0));
+  vec3 probePos = baseProbePos;
+
+  vec4 res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX, probeY, probeZ), alpha, ivec3(0));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX + 1, probeY + 1, probeZ + 1), alpha, ivec3(1, 1, 1));
+  probePos = baseProbePos + vec3(1.0, 1.0, 1.0);
+  res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY + 1, probeZ + 1), alpha, ivec3(1, 1, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX + 1, probeY + 1, probeZ), alpha, ivec3(1, 1, 0));
+  probePos = baseProbePos + vec3(1.0, 1.0, 0.0);
+  res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY + 1, probeZ), alpha, ivec3(1, 1, 0));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX + 1, probeY, probeZ), alpha, ivec3(1, 0, 0));
+  probePos = baseProbePos + vec3(1.0, 0.0, 0.0);
+  res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY, probeZ), alpha, ivec3(1, 0, 0));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX, probeY + 1, probeZ + 1), alpha, ivec3(0, 1, 1));
+  probePos = baseProbePos + vec3(0.0, 1.0, 1.0);
+  res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX, probeY + 1, probeZ + 1), alpha, ivec3(0, 1, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX, probeY + 1, probeZ), alpha, ivec3(0, 1, 0));
+  probePos = baseProbePos + vec3(0.0, 1.0, 0.0);
+  res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX, probeY + 1, probeZ), alpha, ivec3(0, 1, 0));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX, probeY, probeZ + 1), alpha, ivec3(0, 0, 1));
+  probePos = baseProbePos + vec3(0.0, 0.0, 1.0);
+  res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX, probeY, probeZ + 1), alpha, ivec3(0, 0, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  res = weightProbe(probeTex, worldPos, normal, ivec3(probeX + 1, probeY, probeZ + 1), alpha, ivec3(1, 0, 1));
+  probePos = baseProbePos + vec3(1.0, 0.0, 1.0);
+  res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY, probeZ + 1), alpha, ivec3(1, 0, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 

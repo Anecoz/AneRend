@@ -4,14 +4,17 @@
 
 namespace render {
 
-class IrradianceProbeConvolvePass : public RenderPass
+class IrradianceProbeTranslationPass : public RenderPass
 {
 public:
-  IrradianceProbeConvolvePass();
-  ~IrradianceProbeConvolvePass();
+  IrradianceProbeTranslationPass();
+  ~IrradianceProbeTranslationPass();
 
   // Register how the render pass will actually render
   void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
+
+private:
+  glm::ivec2 _lastCamPos = {};
 };
 
 }

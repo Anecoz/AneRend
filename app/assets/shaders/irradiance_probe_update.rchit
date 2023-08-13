@@ -73,8 +73,8 @@ void main()
   vec3 color = v0.color.xyz * barycentrics.x + v1.color.xyz * barycentrics.y + v2.color.xyz * barycentrics.z;
   vec3 tangent = v0.tangent.xyz * barycentrics.x + v1.tangent.xyz * barycentrics.y + v2.tangent.xyz * barycentrics.z;
 
-  float metallic = 0.3;
-  float roughness = 0.5;
+  float metallic = 0.1;
+  float roughness = 0.8;
 
   if (matInfo.metallicTexIndex != -1) {
     metallic = texture(textures[nonuniformEXT(matInfo.metallicTexIndex)], uv).r;

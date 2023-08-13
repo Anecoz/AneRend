@@ -92,6 +92,7 @@ struct GPUSceneData {
   glm::mat4 directionalShadowMatrixView;
   glm::mat4 shadowMatrix[24];
   glm::vec4 cameraPos;
+  glm::ivec4 cameraGridPos;
   glm::vec4 lightDir;
   glm::vec4 viewVector;
   float time;

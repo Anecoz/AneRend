@@ -74,6 +74,8 @@ enum class Type
   SSBO,
   Irrelevant,
   ImageStorage,
+  ImageTransferSrc,
+  ImageTransferDst,
   Count
 };
 

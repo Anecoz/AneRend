@@ -11,6 +11,7 @@
 #include "GpuBuffers.h"
 #include "RenderDebugOptions.h"
 #include "RenderOptions.h"
+#include "Camera.h"
 
 #include <unordered_map>
 
@@ -86,6 +87,12 @@ public:
   virtual std::vector<gpu::GPUIrradianceProbe>& getIrradianceProbes() = 0;
 
   virtual double getElapsedTime() = 0;
+
+  virtual const Camera& getCamera() = 0;
+
+  // TODO: A proper blackboard
+  virtual bool blackboardValueSet(const std::string& key) = 0;
+  virtual void setBlackboardValue(const std::string& key, bool val) = 0;
 };
 
 }

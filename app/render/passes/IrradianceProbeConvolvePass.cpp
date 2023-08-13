@@ -68,8 +68,7 @@ void IrradianceProbeConvolvePass::registerToGraph(FrameGraphBuilder& fgb, Render
       if (!exeParams.rc->getRenderOptions().raytracingEnabled) return;
       if (!exeParams.rc->getRenderOptions().ddgiEnabled) return;
 
-      double elapsedTime = exeParams.rc->getElapsedTime();
-      if (elapsedTime - _lastRayTraceTime < (1.0 / _traceRate)) {
+      if (!exeParams.rc->blackboardValueSet("ProbesRayTraced")) {
         return;
       }
 
@@ -91,8 +90,6 @@ void IrradianceProbeConvolvePass::registerToGraph(FrameGraphBuilder& fgb, Render
       numY = numY / 8;
 
       vkCmdDispatch(*exeParams.cmdBuffer, numX, numY + 1, 1);
-
-      _lastRayTraceTime = elapsedTime;
     });
 }
 

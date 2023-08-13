@@ -8,6 +8,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 directionalShadowMatrixView;
   mat4 shadowMatrix[24];
   vec4 cameraPos;
+  ivec4 cameraGridPos;
   vec4 lightDir;
   vec4 viewVector;
   float time;

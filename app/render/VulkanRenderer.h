@@ -170,6 +170,11 @@ public:
 
   std::vector<MeshId> getMeshIds(ModelId model);
 
+  const Camera& getCamera() override final;
+
+  bool blackboardValueSet(const std::string& key) override final;
+  void setBlackboardValue(const std::string& key, bool val) override final;
+
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
@@ -182,8 +187,10 @@ private:
   static const std::size_t MAX_NUM_LIGHTS = 32*32;
   static const std::size_t MAX_BINDLESS_RESOURCES = 16536;
   static const std::size_t MAX_TIMESTAMP_QUERIES = 100;
-  static const std::size_t NUM_IRRADIANCE_PROBES_XZ = 32;
+  static const std::size_t NUM_IRRADIANCE_PROBES_XZ = 64;
   static const std::size_t NUM_IRRADIANCE_PROBES_Y = 8;
+
+  std::unordered_map<std::string, bool> _blackboard;
 
   MeshId _debugCubeMesh;
   ModelId _debugSphereModelId;

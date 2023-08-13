@@ -21,6 +21,7 @@
 #include "passes/HiZRenderPass.h"
 #include "passes/ShadowRayTracingPass.h"
 #include "passes/DebugBSRenderPass.h"
+#include "passes/IrradianceProbeTranslationPass.h"
 #include "passes/IrradianceProbeRayTracingPass.h"
 //#include "passes/SurfelUpdateRayTracingPass.h"
 //#include "passes/SSGlobalIlluminationRayTracingPass.h"
@@ -779,6 +780,7 @@ void VulkanRenderer::update(
 
   gpu::GPUSceneData ubo{};
   ubo.cameraPos = glm::vec4(camera.getPosition(), 1.0);
+  ubo.cameraGridPos = glm::ivec4((int)floor(ubo.cameraPos.x), (int)floor(ubo.cameraPos.y), (int)floor(ubo.cameraPos.z), 1);
   ubo.invView = invView;
   ubo.invViewProj = invView * invProj;
   ubo.invProj = invProj;
@@ -1893,6 +1895,27 @@ std::vector<MeshId> VulkanRenderer::getMeshIds(ModelId model)
   return out;
 }
 
+const Camera& VulkanRenderer::getCamera()
+{
+  return _latestCamera;
+}
+
+bool VulkanRenderer::blackboardValueSet(const std::string& key)
+{
+  auto exist = _blackboard.find(key) != _blackboard.end();
+  
+  if (exist) {
+    return _blackboard[key];
+  }
+
+  return exist;
+}
+
+void VulkanRenderer::setBlackboardValue(const std::string& key, bool val)
+{
+  _blackboard[key] = val;
+}
+
 bool VulkanRenderer::createDescriptorPool()
 {
   VkDescriptorPoolSize poolSizes[] =
@@ -2685,6 +2708,7 @@ bool VulkanRenderer::initRenderPasses()
 {
   _renderPasses.emplace_back(new HiZRenderPass());
   _renderPasses.emplace_back(new CullRenderPass());
+  _renderPasses.emplace_back(new IrradianceProbeTranslationPass());
   _renderPasses.emplace_back(new IrradianceProbeRayTracingPass());
   _renderPasses.emplace_back(new IrradianceProbeConvolvePass());
   _renderPasses.emplace_back(new ShadowRenderPass());

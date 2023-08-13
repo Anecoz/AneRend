@@ -4,6 +4,7 @@
 
 #include "scene_ubo.glsl"
 #include "octahedron_helpers.glsl"
+#include "probe_helpers.glsl"
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
@@ -13,12 +14,8 @@ layout(set = 1, binding = 2, rgba16f) uniform image2D outputIm;
 
 void main()
 {
-  const int octPixelSize = 8;
-  const int numProbesPerPlane = 32;
-  const int numProbePlanes = 8;
-  const int inputPixSize = 16;
-  const int xs = numProbesPerPlane * octPixelSize;
-  const int ys = numProbesPerPlane * numProbePlanes * octPixelSize;
+  const int xs = NUM_PROBES_PER_PLANE * PROBE_CONV_PIX_SIZE;
+  const int ys = NUM_PROBES_PER_PLANE * NUM_PROBE_PLANES * PROBE_CONV_PIX_SIZE;
 
   if (gl_GlobalInvocationID.x > xs || gl_GlobalInvocationID.y > ys) {
     return;
@@ -26,15 +23,15 @@ void main()
   
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
 
-  ivec2 probeIdx = pixel / octPixelSize;
-  ivec2 probeStartPixel = probeIdx * inputPixSize; // in input image pixels
-  ivec2 pixelWithinProbe = pixel - probeIdx * octPixelSize;
+  ivec2 probeIdx = pixel / PROBE_CONV_PIX_SIZE;
+  ivec2 probeStartPixel = probeIdx * PROBE_IRR_DIR_PIX_SIZE; // in input image pixels
+  ivec2 pixelWithinProbe = pixel - probeIdx * PROBE_CONV_PIX_SIZE;
 
   // 16x16 kernel
-  int kernelSize = inputPixSize;
+  int kernelSize = PROBE_IRR_DIR_PIX_SIZE;
 
   ivec2 pixOffset = 2 * probeIdx + 1;
-  vec2 octUv = vec2(float(pixelWithinProbe.x) + 0.5, float(pixelWithinProbe.y) + 0.5) / float(octPixelSize);
+  vec2 octUv = vec2(float(pixelWithinProbe.x) + 0.5, float(pixelWithinProbe.y) + 0.5) / float(PROBE_CONV_PIX_SIZE);
   octUv = octUv * 2.0 - 1.0;
   vec3 octDir = octDecode(octUv);
 

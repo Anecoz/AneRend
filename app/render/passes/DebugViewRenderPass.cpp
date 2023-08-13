@@ -219,6 +219,15 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._type = Type::SampledTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "TempProbeTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
   /* {
     ResourceUsage usage{};
     usage._resourceName = "SurfelTex";

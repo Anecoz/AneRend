@@ -38,10 +38,10 @@ bool StageApplication::init()
 
   render::Model testModel;
   render::Model testModel2;
-  render::Model testModel3;
+  //render::Model testModel3;
   render::Model testModel4;
   render::Model testModel5;
-  render::Model testModel6;
+  //render::Model testModel6;
   render::Model testModel7;
 
   if (!_vkRenderer.init()) {
@@ -58,10 +58,10 @@ bool StageApplication::init()
     return false;
   }
 
-  if (!testModel3.loadFromObj(std::string(ASSET_PATH) + "models/sponza.obj",
+  /*if (!testModel3.loadFromObj(std::string(ASSET_PATH) + "models/sponza.obj",
     std::string(ASSET_PATH) + "models/")) {
     return false;
-  }
+  }*/
 
   if (!testModel4.loadFromObj(std::string(ASSET_PATH) + "models/old_lantern_pbr/lantern_obj.obj",
     std::string(ASSET_PATH) + "models/old_lantern_pbr/",
@@ -81,14 +81,14 @@ bool StageApplication::init()
     return false;
   }
 
-  if (!testModel6.loadFromObj(std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/sphere-bot-with-hydraulics.obj",
+  /*if (!testModel6.loadFromObj(std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/sphere-bot-with-hydraulics.obj",
     std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/",
     std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_metalness.jpg",
     std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_rough.jpg",
     std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_nmap.jpg",
     std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_color_2.jpg")) {
     return false;
-  }
+  }*/
 
   if (!testModel7.loadFromGLTF(std::string(ASSET_PATH) + "models/sponza-gltf-pbr/sponza.glb")) {
     return false;
@@ -99,10 +99,10 @@ bool StageApplication::init()
 
   _meshId = _vkRenderer.registerModel(std::move(testModel));
   _meshId2 = _vkRenderer.registerModel(std::move(testModel2));
-  _meshId3 = _vkRenderer.registerModel(std::move(testModel3));
+  //_meshId3 = _vkRenderer.registerModel(std::move(testModel3));
   _meshId4 = _vkRenderer.registerModel(std::move(testModel4));
   _meshId5 = _vkRenderer.registerModel(std::move(testModel5));
-  _meshId6 = _vkRenderer.registerModel(std::move(testModel6));
+  //_meshId6 = _vkRenderer.registerModel(std::move(testModel6));
   _meshId7 = _vkRenderer.registerModel(std::move(testModel7));
 
   // Create a bunch of test matrices
@@ -142,7 +142,7 @@ bool StageApplication::init()
   }
 
   // Do a couple of the big models
-  {
+  /* {
     std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
@@ -151,9 +151,9 @@ bool StageApplication::init()
         auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
         _vkRenderer.registerRenderable(_meshId3, mat*scale, glm::vec3(1.0f), 500.0f);
       }
-  }
+  }*/
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 20;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -164,7 +164,7 @@ bool StageApplication::init()
       }
   }
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 20;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -174,7 +174,7 @@ bool StageApplication::init()
         _vkRenderer.registerRenderable(_meshId5, mat * rot * scale, glm::vec3(0.0f), 5.0f);
       }
   }
-  {
+  /* {
     std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
@@ -184,9 +184,9 @@ bool StageApplication::init()
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
         _vkRenderer.registerRenderable(_meshId6, mat * rot * scale, glm::vec3(0.0f), 5.0f);
       }
-  }
+  }*/
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 1;
 
     glm::vec3 sphereCenter{ 0.0f };
     float radius = std::max(std::abs(testMax.z - testMin.z), std::max(std::abs(testMax.x - testMin.x), std::abs(testMax.y - testMin.y)));

@@ -23,7 +23,7 @@ bool isTypeBuffer(Type type)
 bool isTypeImage(Type type)
 {
   return type == Type::ColorAttachment || type == Type::DepthAttachment || type == Type::SampledDepthTexture ||
-    type == Type::Present || type == Type::SampledTexture || type == Type::ImageStorage;
+    type == Type::Present || type == Type::SampledTexture || type == Type::ImageStorage || type == Type::ImageTransferDst || type == Type::ImageTransferSrc;
 }
 
 bool isDepth(Type type)
@@ -65,6 +65,12 @@ VkAccessFlags findWriteAccessMask(Type type)
   }
   else if (type == Type::Present) {
     return VK_ACCESS_TRANSFER_READ_BIT;
+  }
+  else if (type == Type::ImageTransferSrc) {
+    return VK_ACCESS_TRANSFER_READ_BIT;
+  }
+  else if (type == Type::ImageTransferDst) {
+    return VK_ACCESS_TRANSFER_WRITE_BIT;
   }
 
   return VK_ACCESS_SHADER_READ_BIT;
@@ -110,7 +116,9 @@ bool shouldBeDescriptor(Type type)
 {
   if (type == Type::DepthAttachment ||
     type == Type::ColorAttachment ||
-    type == Type::Present) {
+    type == Type::Present ||
+    type == Type::ImageTransferDst ||
+    type == Type::ImageTransferSrc) {
     return false;
   }
 
@@ -244,6 +252,14 @@ void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* 
           exeParams.images.emplace_back(image);
         }
         else if (us._type == Type::SampledDepthTexture) {
+          auto image = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_image._image;
+          exeParams.images.emplace_back(image);
+        }
+        else if (us._type == Type::ImageTransferSrc) {
+          auto image = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_image._image;
+          exeParams.images.emplace_back(image);
+        }
+        else if (us._type == Type::ImageTransferDst) {
           auto image = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_image._image;
           exeParams.images.emplace_back(image);
         }
@@ -479,6 +495,10 @@ std::vector<VkImageUsageFlagBits> FrameGraphBuilder::findImageCreateFlags(const 
           output.emplace_back(VK_IMAGE_USAGE_STORAGE_BIT);
         }
         if (us._type == Type::Present) {
+          output.emplace_back(VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+        }
+        if (us._type == Type::ImageTransferDst || us._type == Type::ImageTransferSrc) {
+          output.emplace_back(VK_IMAGE_USAGE_TRANSFER_DST_BIT);
           output.emplace_back(VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         }
       }
@@ -1125,6 +1145,9 @@ VkImageLayout FrameGraphBuilder::findInitialImageLayout(AccessBits access, Type 
     else if (type == Type::Present) {
       return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     }
+    else if (type == Type::ImageTransferDst) {
+      return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    }
   }
   else if (access.test(std::size_t(Access::Read))) {
     if (type == Type::SampledDepthTexture) {
@@ -1137,6 +1160,9 @@ VkImageLayout FrameGraphBuilder::findInitialImageLayout(AccessBits access, Type 
       return VK_IMAGE_LAYOUT_GENERAL;
     }
     else if (type == Type::Present) {
+      return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    }
+    else if (type == Type::ImageTransferSrc) {
       return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     }
   }
@@ -1167,6 +1193,12 @@ std::string FrameGraphBuilder::debugConstructImageBarrierName(VkImageLayout old,
   else if (old == VK_IMAGE_LAYOUT_GENERAL) {
     from = "GENERAL";
   }
+  else if (old == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+    from = "TRANSFER_DST_OPTIMAL";
+  }
+  else if (old == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+    from = "TRANSFER_SRC_OPTIMAL";
+  }
 
   if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL) {
     to = "DEPTH_STENCIL_READ_ONLY_OPTIMAL";
@@ -1188,6 +1220,9 @@ std::string FrameGraphBuilder::debugConstructImageBarrierName(VkImageLayout old,
   }
   else if (newLayout == VK_IMAGE_LAYOUT_GENERAL) {
     to = "GENERAL";
+  }
+  else if (newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+    to = "TRANSFER_DST_OPTIMAL";
   }
 
   output.append("Barrier: FROM ");

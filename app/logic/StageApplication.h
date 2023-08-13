@@ -43,9 +43,9 @@ private:
 
   render::ModelId _meshId;
   render::ModelId _meshId2;
-  render::ModelId _meshId3;
+  //render::ModelId _meshId3;
   render::ModelId _meshId4;
   render::ModelId _meshId5;
-  render::ModelId _meshId6;
+  //render::ModelId _meshId6;
   render::ModelId _meshId7;
 };

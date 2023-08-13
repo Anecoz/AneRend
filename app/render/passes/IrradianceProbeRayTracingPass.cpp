@@ -140,10 +140,14 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
       if (!exeParams.rc->getRenderOptions().raytracingEnabled) return;
       if (!exeParams.rc->getRenderOptions().ddgiEnabled) return;
 
+      exeParams.rc->setBlackboardValue("ProbesRayTraced", false);
+
       double elapsedTime = exeParams.rc->getElapsedTime();
       if (elapsedTime - _lastRayTraceTime < (1.0 / _traceRate)) {
         return;
       }
+
+      exeParams.rc->setBlackboardValue("ProbesRayTraced", true);
 
       // Bind pipeline
       vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, *exeParams.pipeline);
