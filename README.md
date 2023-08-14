@@ -42,6 +42,14 @@ In order to allow the GI to work for large scenes, the probes will move with the
 world space coordinate. A probe "translation" pass makes sure that probe data is appropriately copied when this happens, to 
 ensure that probe data does not have to be recalculated.
 
+|![Image](screenshots/ddgi/flat_ambient.png)|
+|:--:|
+|_Using flat ambient term for indirect lighting_|
+
+|![Image](screenshots/ddgi/single_bounce_ddgi.png)|
+|:--:|
+|_Using flat ambient term for indirect lighting_|
+
 There is an excellent talk by one of the paper authors here: [DDGI talk](https://www.youtube.com/watch?v=KufJBCTdn_o).
 
 See the individual render passes below for more information, or feel free to ask about any details!
