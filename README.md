@@ -333,7 +333,7 @@ the list.
 
 Once all local warps have finished their culling, the same compute shader does the actual shading. The shared memory list
 is used to only traverse the lights that may affect the current pixel. The lighting calculations themselves are a straight-forward
-PBR implementation, that also calculates GI.
+PBR implementation, that also calculates GI using the methods described in earlier passes.
 
 This method ensures an excellent cache-friendly and fast way to support many lights.
 
