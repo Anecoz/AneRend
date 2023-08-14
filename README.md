@@ -87,17 +87,24 @@ The trick is to use a special sampler for sampling the depth buffer when generat
 the region it is sampling from. This way a conservative depth mip is achieved.
 
 Here is an example of how this mip may look like (rendered scene, 64x64, 32x32 and 4x4 mips shown):
-![Image](screenshots/hiz/hiz_source.png)
-_Source for the hiz mips_
 
-![Image](screenshots/hiz/hiz64.png)
-_64x64 'max-sampled' mip_
+| ![Image](screenshots/hiz/hiz_source.png) |
+|:--:|
+| _Source for the hiz mips_ |
 
-![Image](screenshots/hiz/hiz32.png)
-_32x32 'max-sampled' mip_
+| ![Image](screenshots/hiz/hiz64.png) |
+|:--:|
+| _64x64 'max-sampled' mip_ |
 
-![Image](screenshots/hiz/hiz4.png)
-_4x4 'max-sampled' mip_
+|![Image](screenshots/hiz/hiz32.png)|
+|:--:|
+|_32x32 'max-sampled' mip_|
+
+|![Image](screenshots/hiz/hiz4.png)|
+|:--:|
+|_4x4 'max-sampled' mip_|
+
+References: https://interplayoflight.wordpress.com/2017/11/15/experiments-in-gpu-based-occlusion-culling/
 
 ## Cull
 
