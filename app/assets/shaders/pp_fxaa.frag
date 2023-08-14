@@ -19,6 +19,8 @@ layout(location = 0) out vec4 outColor;
     #define FXAA_SPAN_MAX     8.0
 #endif
 
+// From here: https://github.com/mattdesl/glsl-fxaa/blob/master/fxaa.glsl
+
 //optimized version for mobile, where dependent 
 //texture reads can be a bottleneck
 vec4 fxaa(sampler2D tex, vec2 fragCoord, vec2 resolution,

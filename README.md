@@ -193,6 +193,10 @@ The reason that this pass runs on a fixed time basis is because it can be expens
 either light changes, or geometry changes. Therefore, it is generally not noticable that this pass runs on a subset of frames,
 and the performance gain is substantial.
 
+References: 
+https://www.youtube.com/watch?v=KufJBCTdn_o
+https://www.jcgt.org/published/0008/02/01/paper-lowres.pdf
+
 ## IrradianceProbeConvolve
 This pass relates to the diffuse global illumination.
 
@@ -200,6 +204,10 @@ Once radiance and ray directions has been gathered for N rays for each probe, th
 that depends on the incoming angles. This happens by convoluting the octahedral sample directions with the gathered
 radiance. A compute shader runs this in a brute-force fashion, where each invocation of the shader corresponds to
 one octahedral sample direction.
+
+References: 
+https://www.youtube.com/watch?v=KufJBCTdn_o
+https://www.jcgt.org/published/0008/02/01/paper-lowres.pdf
 
 ## Geometry
 To render geometry, this pass issues a single indirect draw command, referencing the buffer that was filled in by the
@@ -225,22 +233,80 @@ This generation results in a vast amount of individually animated grass blades a
 |:--:|
 |_Individually animated, procedurally generated grass blades_|
 
+References:
+https://www.youtube.com/watch?v=Ibe1JBF5i5Y
+
 ## ShadowRT
 To generate ray-traced hard shadows, this pass launches one shadow ray per pixel at full resolution. The depth buffer is used
 to determine from what world position to launch the rays from. If the depth buffer is at 'clear-value', no ray is launched.
+Currently only the main directional light source is supported in this pass.
 
 The result of this pass is essentially a screen-space shadow _mask_, as opposed to a shadow _map_.
 
+|![Image](screenshots/shadow/shadow_source.png)|
+|:--:|
+|_The finished frame (pre-gamma correction) showing the hard shadows_|
+
+|![Image](screenshots/shadow/shadow.png)|
+|:--:|
+|_The shadow mask used for shading the above image_|
+
 ## SpecularGIRT
+The specular part of the indirect lighting, or GI, is accomplished by first ray-tracing perfect mirror reflections around the 
+surface normals of what currently is on screen. Since this is quite an expensive operation (in contrast to the shadow pass
+this pass needs to shade each hit point) it is done at quarter resolution, half in each axis. The shading for the reflected
+hit points takes the diffuse indirect lighting into account aswell, meaning infinite bounce indirect specular reflections 
+are possible.
+
+|![Image](screenshots/specular_gi/specular.png)|
+|:--:|
+|_The quarter resolution perfect reflections outputted by this render pass_|
 
 ## SpecularGIMipGen
+The perfect reflections from the previous pass are only usable on perfect mirror surfaces, since the specular lobe
+distribution gets bigger the rougher a material is. In order to allow specular reflections on rougher materials, the
+perfect reflections are crunched down to a mip chain. While downsampling, a [bilateral filter](https://en.wikipedia.org/wiki/Bilateral_filter)
+is used, to preserve edges. The bilateral filter uses the depth buffer as an edge-preserving weight.
+
+|![Image](screenshots/specular_gi/specular_mip.png)|
+|:--:|
+|_Mip chain of the perfect reflection image, blurred using a bilateral filter_|
+
+When shading specular indirect light later on, a mip level is chosen based on the roughness of the material. This approximately
+corresponds to 'tracing' a wider specular lobe the rougher the material is.
 
 ## SSAO and SSAOBlur
+This is a naive SSAO pass. Some care has been taken to choose an appropriate radius when randomly sampling the depth buffer,
+in order to improve cache coherency.
+
+|![Image](screenshots/pp/no_ssao.png)|
+|:--:|
+|_Without SSAO_|
+
+|![Image](screenshots/pp/with_ssao.png)|
+|:--:|
+|_With SSAO_|
+
+References: https://learnopengl.com/Advanced-Lighting/SSAO
 
 ## FXAA
+A simple FXAA implementation.
+
+|![Image](screenshots/pp/no_fxaa.png)|
+|:--:|
+|_Without FXAA_|
+
+|![Image](screenshots/pp/with_fxaa.png)|
+|:--:|
+|_With FXAA_|
+
+References: https://github.com/mattdesl/glsl-fxaa/blob/master/fxaa.glsl
 
 ## DebugBoundingSpheres and DebugView
+These are debug passes that allow inspection of bounding volumes and textures.
 
 ## UI
+ImGUI is drawn on top of the last frame.
 
 ## Present
+The last "render" pass blits the finished image to the current swap chain image, managing sRGB conversion automatically.
