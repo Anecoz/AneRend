@@ -143,10 +143,15 @@ https://interplayoflight.wordpress.com/2017/11/15/experiments-in-gpu-based-occlu
 The culling pass actually generates draw calls directly on the GPU. For rendering the geometry (non-procedurally generated meshes)
 , the CPU only issues a single indirect draw call, referencing a buffer filled in by this render pass.
 
-A single compute shader is run, receiving a list of all potential renderables in the scene. In addition to this, metadata
+A single compute shader is run, receiving a list of all potential renderables in the scene. Each invocation corresponds to
+one renderable.
+In addition to this, metadata
 for the renderables is accessible, most notably bounding volumes. The metadata in combination with the HiZ mip and camera parameters
 allows the shader to do both frustum culling and occlusion culling. Since each renderable culling calculation is independent,
 this quickly yields near-optimal draw calls only for meshes that are currently visible.
+
+In addition to geometry, procedural grass blade data is also generated in each invocation. See the 
+grass render pass further down for details on that.
 
 References: 
 https://vkguide.dev/docs/gpudriven/gpu_driven_engines/
@@ -180,17 +185,51 @@ in artifacts. This can be solved by making the probe grid bigger than the far pl
 ## IrradianceProbeRT
 This pass relates to the diffuse global illumination. 
 
-On a fixed time basis this pass does the actual ray-tracing of the irradiance probes. It simply launches N rays for each probe
-and gathers radiance data. The radiance data as well as the direction vectors used for each ray are put into an image that
+On a fixed time basis this pass does the actual ray-tracing of the irradiance probes. It launches N rays for each probe
+and gathers radiance data. The radiance data as well as the direction vectors used for each ray are put into HDR images that
 will be used by the next pass to generate the final probe data.
 
+The reason that this pass runs on a fixed time basis is because it can be expensive. The probes need only to be updated if 
+either light changes, or geometry changes. Therefore, it is generally not noticable that this pass runs on a subset of frames,
+and the performance gain is substantial.
+
 ## IrradianceProbeConvolve
+This pass relates to the diffuse global illumination.
+
+Once radiance and ray directions has been gathered for N rays for each probe, this pass approximates the part of the rendering equation
+that depends on the incoming angles. This happens by convoluting the octahedral sample directions with the gathered
+radiance. A compute shader runs this in a brute-force fashion, where each invocation of the shader corresponds to
+one octahedral sample direction.
 
 ## Geometry
+To render geometry, this pass issues a single indirect draw command, referencing the buffer that was filled in by the
+cull render pass. The result is a gbuffer containing normals, albedo, depth and PBR material parameters.
 
 ## Grass
+The grass generation is an implementation of Ghost of Tsushima's grass, explained in great detail in [this talk](https://www.youtube.com/watch?v=Ibe1JBF5i5Y).
+
+The culling pass happening near the beginning of the frame not only culls geometry, but also potential grass blades.
+If a grass blade position is determined to be visible in the culling, a set of parameters such as bend, tilt
+height and facing are procedurally generated, using deterministic noise for variance. These parameters are then
+used to generate cubic bezier curve control points, which are placed in a buffer accessible in this pass. The 
+control points are additionally procedurally animated using a supplied wind texture for help.
+
+The render pass itself is 'vertex-less', meaning the vertices are generated on the fly in the vertex shader
+using the control points generated in the culling stage. There is a trick used in the vertex shader, that
+turns the vertices of the grass blade towards the camera if viewed from the side. This helps with 'filling out'
+the grass. The fragment stage generates material parameters that are aditionally jittered using a per-blade hash.
+
+This generation results in a vast amount of individually animated grass blades at a relatively low performance cost.
+
+|![Image](screenshots/grass/grass.png)|
+|:--:|
+|_Individually animated, procedurally generated grass blades_|
 
 ## ShadowRT
+To generate ray-traced hard shadows, this pass launches one shadow ray per pixel at full resolution. The depth buffer is used
+to determine from what world position to launch the rays from. If the depth buffer is at 'clear-value', no ray is launched.
+
+The result of this pass is essentially a screen-space shadow _mask_, as opposed to a shadow _map_.
 
 ## SpecularGIRT
 
