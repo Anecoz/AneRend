@@ -124,9 +124,11 @@ the engine uses a "bindless" approach, a single buffer for geometry vertices and
 render passes execute. Additional bindless descriptors include a material buffer, a scene UBO, a mesh buffer amongst others. This way
 only the specific descriptors (and the pipeline) used by the render pass are bound, reducing overhead.
 
-Below is a list of the (current) render passes and some discussions on key parts.
+Below is a list of the (current) render passes and some discussions on key parts. A table of average frame times is presented at the end.
 
-## HiZ
+## Render passes
+
+### HiZ
 Since the engine utilises a completely GPU-driven draw call generation, some form of culling of renderables is required. This pass generates
 the hierarchical depth mips used for occlusion culling.
 
@@ -157,7 +159,7 @@ Here is an example of how this mip may look like (rendered scene, 64x64, 32x32 a
 References: 
 https://interplayoflight.wordpress.com/2017/11/15/experiments-in-gpu-based-occlusion-culling/
 
-## Cull
+### Cull
 The culling pass actually generates draw calls directly on the GPU. For rendering the geometry (non-procedurally generated meshes)
 , the CPU only issues a single indirect draw call, referencing a buffer filled in by this render pass.
 
@@ -175,7 +177,7 @@ References:
 https://vkguide.dev/docs/gpudriven/gpu_driven_engines/
 https://vkguide.dev/docs/gpudriven/compute_culling/
 
-## IrradianceProbeTrans
+### IrradianceProbeTrans
 This pass relates to the diffuse global illumination. 
 
 Each frame, the camera is checked for world coordinate integer crossings. I.e. moving from 0 to 1 or 54 to 53 etc. in any axis.
@@ -200,7 +202,7 @@ This pass achieves this by issuing a single `vkCmdCopyImage` with appropriate re
 This translation allows the multi-bounce GI to still work. The edges where new probes will be filled in may flicker and result
 in artifacts. This can be solved by making the probe grid bigger than the far plane or simply fading GI out over distance.
 
-## IrradianceProbeRT
+### IrradianceProbeRT
 This pass relates to the diffuse global illumination. 
 
 On a fixed time basis this pass does the actual ray-tracing of the irradiance probes. It launches N rays for each probe
@@ -215,7 +217,7 @@ References:
 https://www.youtube.com/watch?v=KufJBCTdn_o
 https://www.jcgt.org/published/0008/02/01/paper-lowres.pdf
 
-## IrradianceProbeConvolve
+### IrradianceProbeConvolve
 This pass relates to the diffuse global illumination.
 
 Once radiance and ray directions has been gathered for N rays for each probe, this pass approximates the part of the rendering equation
@@ -227,11 +229,11 @@ References:
 https://www.youtube.com/watch?v=KufJBCTdn_o
 https://www.jcgt.org/published/0008/02/01/paper-lowres.pdf
 
-## Geometry
+### Geometry
 To render geometry, this pass issues a single indirect draw command, referencing the buffer that was filled in by the
 cull render pass. The result is a gbuffer containing normals, albedo, depth and PBR material parameters.
 
-## Grass
+### Grass
 The grass generation is an implementation of Ghost of Tsushima's grass, explained in great detail in [this talk](https://www.youtube.com/watch?v=Ibe1JBF5i5Y).
 
 The culling pass happening near the beginning of the frame not only culls geometry, but also potential grass blades.
@@ -254,7 +256,7 @@ This generation results in a vast amount of individually animated grass blades a
 References:
 https://www.youtube.com/watch?v=Ibe1JBF5i5Y
 
-## ShadowRT
+### ShadowRT
 To generate ray-traced hard shadows, this pass launches one shadow ray per pixel at full resolution. The depth buffer is used
 to determine from what world position to launch the rays from. If the depth buffer is at 'clear-value', no ray is launched.
 Currently only the main directional light source is supported in this pass.
@@ -269,7 +271,7 @@ The result of this pass is essentially a screen-space shadow _mask_, as opposed 
 |:--:|
 |_The shadow mask used for shading the above image_|
 
-## SpecularGIRT
+### SpecularGIRT
 The specular part of the indirect lighting, or GI, is accomplished by first ray-tracing perfect mirror reflections around the 
 surface normals of what currently is on screen. Since this is quite an expensive operation (in contrast to the shadow pass
 this pass needs to shade each hit point) it is done at quarter resolution, half in each axis. The shading for the reflected
@@ -280,7 +282,7 @@ are possible.
 |:--:|
 |_The quarter resolution perfect reflections outputted by this render pass_|
 
-## SpecularGIMipGen
+### SpecularGIMipGen
 The perfect reflections from the previous pass are only usable on perfect mirror surfaces, since the specular lobe
 distribution gets bigger the rougher a material is. In order to allow specular reflections on rougher materials, the
 perfect reflections are crunched down to a mip chain. While downsampling, a [bilateral filter](https://en.wikipedia.org/wiki/Bilateral_filter)
@@ -293,7 +295,7 @@ is used, to preserve edges. The bilateral filter uses the depth buffer as an edg
 When shading specular indirect light later on, a mip level is chosen based on the roughness of the material. This approximately
 corresponds to 'tracing' a wider specular lobe the rougher the material is.
 
-## SSAO and SSAOBlur
+### SSAO and SSAOBlur
 This is a naive SSAO pass. Some care has been taken to choose an appropriate radius when randomly sampling the depth buffer,
 in order to improve cache coherency.
 
@@ -307,7 +309,7 @@ in order to improve cache coherency.
 
 References: https://learnopengl.com/Advanced-Lighting/SSAO
 
-## FXAA
+### FXAA
 A simple FXAA implementation.
 
 |![Image](screenshots/pp/no_fxaa.png)|
@@ -320,11 +322,69 @@ A simple FXAA implementation.
 
 References: https://github.com/mattdesl/glsl-fxaa/blob/master/fxaa.glsl
 
-## DebugBoundingSpheres and DebugView
+### DeferredLighting
+This pass implements a cache-optimised tiled deferred lighting pass, to deal with many dynamic lights.
+
+A compute shader is launched where each workgroup has the same size as the maximum allowed amount of lights. Currently
+this is 32x32 = 1024 lights. The screen is split into 32x32 pixel tiles. Each warp in the workgroup uses its index within 
+the group to check if a light corresponding to
+that index is within the current 32x32 screen tile. If so, a (workgroup-)shared list is incremented, adding the light index to
+the list.
+
+Once all local warps have finished their culling, the same compute shader does the actual shading. The shared memory list
+is used to only traverse the lights that may affect the current pixel. The lighting calculations themselves are a straight-forward
+PBR implementation, that also calculates GI.
+
+This method ensures an excellent cache-friendly and fast way to support many lights.
+
+|![Image](screenshots/deferred/many_dynamic_lights.png)|
+|:--:|
+|_1024 dynamic point lights_|
+
+### DebugBoundingSpheres and DebugView
 These are debug passes that allow inspection of bounding volumes and textures.
 
-## UI
+### UI
 ImGUI is drawn on top of the last frame.
 
-## Present
+### Present
 The last "render" pass blits the finished image to the current swap chain image, managing sRGB conversion automatically.
+
+## Performance
+A goal of this prototyping engine has been to ensure good performance. The general GPU-driven and bindless
+architecture, along with the GPU-side occlusion and frustum culling, have proved to be an efficient way of dealing with
+many objects, while also freeing up the CPU for other work.
+
+The passes related to global illumination remain expensive, but it is a worthwhile tradeoff for the visual quality they yield.
+
+Below is a table of the average frame times for each render pass. The test scene can be seen in the first screenshot. 
+The following hardware was used:
+
+CPU: AMD Ryzen 5900X
+GPU: Nvidia RTX 3080
+Resolution: 1920x1080
+
+Note that the engine is heavily GPU-bound, by design.
+
+|![Image](screenshot1.png)|
+|:--:|
+|_Test render for frame times_|
+
+| Pass      | Avg. frame time (ms)|
+| ----------- | ----------- |
+| HiZ      | 0.018       |
+| Cull   | 0.055        |
+| IrradianceProbeRT   | 0.29 |
+| IrradianceProbeConvolve   | 0.036 |
+| Geometry   | 1.09 |
+| Grass (no grass visible)   | 0.045 |
+| ShadowRT   | 0.35 |
+| SpecularGIRT   | 0.66 |
+| SpecularGIMipGen   | 0.24 |
+| SSAO   | 0.67 |
+| DeferredPBRLight   | 0.20 |
+| FXAA   | 0.06 |
+| UI   | 0.019 |
+| Present   | 0.016 |
+
+
