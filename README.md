@@ -35,7 +35,8 @@ global illumination is achieved.
 The probe data is then compressed into an 8x8 octahehdron map for each probe, and put into a texture atlas. A convolution pass
 takes the original N rays and sums the weighted radiances for each octahehdron direction to approximate the irradiance part of the
 (diffuse) rendering equation. This convoluted version of each probe is then used when shading, essentially by multiplying
-with the diffuse BRDF for each shade point.
+with the diffuse BRDF for each shade point. This seemingly harsh compression is generally acceptable since the diffuse
+part of indirect lighting usually is low frequency.
 
 In order to allow the GI to work for large scenes, the probes will move with the camera every time the camera crosses an integer
 world space coordinate. A probe "translation" pass makes sure that probe data is appropriately copied when this happens, to 
@@ -178,6 +179,10 @@ in artifacts. This can be solved by making the probe grid bigger than the far pl
 
 ## IrradianceProbeRT
 This pass relates to the diffuse global illumination. 
+
+On a fixed time basis this pass does the actual ray-tracing of the irradiance probes. It simply launches N rays for each probe
+and gathers radiance data. The radiance data as well as the direction vectors used for each ray are put into an image that
+will be used by the next pass to generate the final probe data.
 
 ## IrradianceProbeConvolve
 
