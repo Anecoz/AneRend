@@ -5,9 +5,16 @@
 #include "../BufferHelpers.h"
 #include "../VulkanExtensions.h"
 
+#include <random>
+
 namespace render {
 
 namespace {
+
+struct PushConstant {
+  glm::mat4 rot;
+  uint32_t layer;
+};
 
 void fillProbeSSBO(RenderContext* rc, AllocatedBuffer& ssbo)
 {
@@ -74,7 +81,7 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
 
     ImageInitialCreateInfo createInfo{};
     createInfo._initialWidth = sqrtNumRays * numProbesPlane;
-    createInfo._initialHeight = sqrtNumRays * numProbesPlane * numProbesHeight;
+    createInfo._initialHeight = sqrtNumRays * numProbesPlane;// * numProbesHeight;
     createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
     usage._imageCreateInfo = createInfo;
@@ -91,8 +98,8 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
 
     ImageInitialCreateInfo createInfo{};
     createInfo._initialWidth = sqrtNumRays * numProbesPlane;
-    createInfo._initialHeight = sqrtNumRays * numProbesPlane * numProbesHeight;
-    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    createInfo._initialHeight = sqrtNumRays * numProbesPlane;// *numProbesHeight;
+    createInfo._intialFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
     usage._imageCreateInfo = createInfo;
 
@@ -140,15 +147,6 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
       if (!exeParams.rc->getRenderOptions().raytracingEnabled) return;
       if (!exeParams.rc->getRenderOptions().ddgiEnabled) return;
 
-      exeParams.rc->setBlackboardValue("ProbesRayTraced", false);
-
-      double elapsedTime = exeParams.rc->getElapsedTime();
-      if (elapsedTime - _lastRayTraceTime < (1.0 / _traceRate)) {
-        return;
-      }
-
-      exeParams.rc->setBlackboardValue("ProbesRayTraced", true);
-
       // Bind pipeline
       vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, *exeParams.pipeline);
 
@@ -160,6 +158,40 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
         1, 1, &(*exeParams.descriptorSets)[0],
         0, nullptr);
 
+      // Choose a layer
+      uint32_t probeLayer = _currentLayer;
+
+      // Random orientation matrix
+      std::random_device dev;
+      std::mt19937 rng(dev());
+      std::uniform_real_distribution<> angle(0.0, 360.0);
+      std::uniform_int_distribution<> axis(0, 2);
+
+      int ax = axis(rng);
+      glm::vec3 rotAx{0.0f};
+
+      if (ax == 0) {
+        rotAx = glm::vec3(1.0f, 0.0f, 0.0f);
+      }
+      else if (ax == 1) {
+        rotAx = glm::vec3(0.0f, 1.0f, 0.0f);
+      }
+      else {
+        rotAx = glm::vec3(0.0f, 0.0f, 1.0f);
+      }
+
+      glm::mat4 randomRot = glm::rotate(glm::mat4(1.0f), glm::radians(float(angle(rng))), rotAx);
+
+      PushConstant pc{ randomRot, probeLayer };
+
+      vkCmdPushConstants(
+        *exeParams.cmdBuffer,
+        *exeParams.pipelineLayout,
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+        0,
+        sizeof(PushConstant),
+        &pc);
+
       VkStridedDeviceAddressRegionKHR emptyRegion{};
 
       // Trace some rays
@@ -170,10 +202,16 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
         &exeParams.sbt->_chitRegion,
         &emptyRegion,
         sqrtNumRays * numProbesPlane,
-        sqrtNumRays * numProbesPlane * numProbesHeight,
+        sqrtNumRays * numProbesPlane,
         1);
 
-      _lastRayTraceTime = elapsedTime;
+      exeParams.rc->setBlackboardValueInt("ProbeLayer", (int)_currentLayer);
+
+      _currentLayer++;
+
+      if (_currentLayer >= numProbesHeight) {
+        _currentLayer = 0;
+      }
     });
 }
 

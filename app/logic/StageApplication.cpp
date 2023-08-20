@@ -38,11 +38,12 @@ bool StageApplication::init()
 
   render::Model testModel;
   render::Model testModel2;
-  //render::Model testModel3;
+  render::Model testModel3;
   render::Model testModel4;
   render::Model testModel5;
-  //render::Model testModel6;
+  render::Model testModel6;
   render::Model testModel7;
+  render::Model testModel8;
 
   if (!_vkRenderer.init()) {
     return false;
@@ -58,10 +59,9 @@ bool StageApplication::init()
     return false;
   }
 
-  /*if (!testModel3.loadFromObj(std::string(ASSET_PATH) + "models/sponza.obj",
-    std::string(ASSET_PATH) + "models/")) {
+  if (!testModel3.loadFromGLTF(std::string(ASSET_PATH) + "models/lantern_gltf/Lantern.glb")) {
     return false;
-  }*/
+  }
 
   if (!testModel4.loadFromObj(std::string(ASSET_PATH) + "models/old_lantern_pbr/lantern_obj.obj",
     std::string(ASSET_PATH) + "models/old_lantern_pbr/",
@@ -81,16 +81,15 @@ bool StageApplication::init()
     return false;
   }
 
-  /*if (!testModel6.loadFromObj(std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/sphere-bot-with-hydraulics.obj",
-    std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/",
-    std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_metalness.jpg",
-    std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_rough.jpg",
-    std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_nmap.jpg",
-    std::string(ASSET_PATH) + "models/sphere-bot-with-hydraulics/Texture/Sphere_Bot_color_2.jpg")) {
+  if (!testModel6.loadFromGLTF(std::string(ASSET_PATH) + "models/damaged_helmet_gltf/DamagedHelmet.glb")) {
     return false;
-  }*/
+  }
 
   if (!testModel7.loadFromGLTF(std::string(ASSET_PATH) + "models/sponza-gltf-pbr/sponza.glb")) {
+    return false;
+  }
+
+  if (!testModel8.loadFromGLTF(std::string(ASSET_PATH) + "models/metal_rough_spheres_gltf/MetalRoughSpheres.glb")) {
     return false;
   }
 
@@ -99,13 +98,15 @@ bool StageApplication::init()
 
   _meshId = _vkRenderer.registerModel(std::move(testModel));
   _meshId2 = _vkRenderer.registerModel(std::move(testModel2));
-  //_meshId3 = _vkRenderer.registerModel(std::move(testModel3));
+  _meshId3 = _vkRenderer.registerModel(std::move(testModel3));
   _meshId4 = _vkRenderer.registerModel(std::move(testModel4));
   _meshId5 = _vkRenderer.registerModel(std::move(testModel5));
-  //_meshId6 = _vkRenderer.registerModel(std::move(testModel6));
+  _meshId6 = _vkRenderer.registerModel(std::move(testModel6));
   _meshId7 = _vkRenderer.registerModel(std::move(testModel7));
+  _meshId8 = _vkRenderer.registerModel(std::move(testModel8));
 
   // Create a bunch of test matrices
+  // Trees
   {
     std::size_t numInstances = 0;
     for (std::size_t x = 0; x < numInstances; ++x)
@@ -131,6 +132,7 @@ bool StageApplication::init()
   }
 
   // Do a couple of the big models
+  // Ground level
   {
     std::size_t numInstances = 0;
 
@@ -141,17 +143,17 @@ bool StageApplication::init()
     }
   }
 
-  // Do a couple of the big models
-  /* {
+  // Lantern GLTF
+  {
     std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
-        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f + 500.0f * x, 0.0f, 500.0f * y));
-        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
-        _vkRenderer.registerRenderable(_meshId3, mat*scale, glm::vec3(1.0f), 500.0f);
+        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f * x, 0.0f, 5.0f * y));
+        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.2f));
+        _vkRenderer.registerRenderable(_meshId3, mat * scale, glm::vec3(1.0f), 10.0f);
       }
-  }*/
+  }
   {
     std::size_t numInstances = 0;
 
@@ -174,19 +176,24 @@ bool StageApplication::init()
         _vkRenderer.registerRenderable(_meshId5, mat * rot * scale, glm::vec3(0.0f), 5.0f);
       }
   }
-  /* {
+  // Damaged helmet
+  {
     std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
-        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(12.0f * x, 1.0f, 17.0f * y));
-        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(2.0f));
+        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(12.0f * x, 4.0f, 17.0f * y));
+        //auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(2.0f));
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
-        _vkRenderer.registerRenderable(_meshId6, mat * rot * scale, glm::vec3(0.0f), 5.0f);
+        rot = rot * glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        _vkRenderer.registerRenderable(_meshId6, mat * rot, glm::vec3(0.0f), 5.0f);
       }
-  }*/
+  }
+  // Sponza GLTF
   {
     std::size_t numInstances = 1;
+
+    _sponzaPos = glm::vec3(16.0f, -1.0f, 16.0f);
 
     glm::vec3 sphereCenter{ 0.0f };
     float radius = std::max(std::abs(testMax.z - testMin.z), std::max(std::abs(testMax.x - testMin.x), std::abs(testMax.y - testMin.y)));
@@ -197,9 +204,22 @@ bool StageApplication::init()
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
-        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(16.0f + 12.0f * x, -1.0f, 16.0f + 17.0f * y));
-        auto scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
-        _vkRenderer.registerRenderable(_meshId7, mat * scaleMat, sphereCenter, radius);
+        auto mat = glm::translate(glm::mat4(1.0f), _sponzaPos + glm::vec3(12.0f * x, 0.0f, 17.0f * y));
+        _sponzaScale = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
+        _sponzaId = _vkRenderer.registerRenderable(_meshId7, mat * _sponzaScale, sphereCenter, radius);
+      }
+  }
+  // Metal rough spheres
+  {
+    std::size_t numInstances = 1;
+
+    for (int x = 0; x < numInstances; ++x)
+      for (int y = 0; y < numInstances; ++y) {
+        auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(12.0f * x, 10.0f, 17.0f * y));
+        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(.4f));
+        auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        //rot = rot * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        _vkRenderer.registerRenderable(_meshId8, trans * rot * scale, glm::vec3(0.0f), 50.0f);
       }
   }
 
@@ -223,6 +243,12 @@ void StageApplication::update(double delta)
 
   //_windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));
+
+  if (_sponzaMoved) {
+    auto trans = glm::translate(glm::mat4(1.0f), _sponzaPos);
+    _vkRenderer.updateRenderableTransform(_sponzaId, trans * _sponzaScale);
+    _sponzaMoved = false;
+  }
 
   _vkRenderer.update(
     _camera,
@@ -260,11 +286,15 @@ void StageApplication::render()
       _sunDir.x = dir[0];
       _sunDir.z = dir[1];
     }
+    if (ImGui::SliderFloat("Sponza X", &_sponzaPos.x, -100.0f, 100.0f)) {
+      _sponzaMoved = true;
+    }
 
-    static char debugResStr[128] = "ShadowMap";
+    static char debugResStr[128] = "ReflectTex";
     if (ImGui::InputText("Debug view resource", debugResStr, IM_ARRAYSIZE(debugResStr), ImGuiInputTextFlags_EnterReturnsTrue)) {
       _renderDebugOptions.debugViewResource = std::string(debugResStr);
     }
+    ImGui::InputInt("Debug view mip", &_renderDebugOptions.debugMip);
     /*ImGui::Slider2DFloat("Sun dir", &_sunDir.x, &_sunDir.z, -1.0f, 1.0f, -1.0f, 1.0f);
     ImGui::Slider2DFloat("Wind dir", &_windDir.x, &_windDir.y, -1.0f, 1.0f, -1.0f, 1.0f);*/
     ImGui::Checkbox("Texture Debug View", &_renderDebugOptions.debugView);
@@ -283,6 +313,8 @@ void StageApplication::render()
     ImGui::Checkbox("Visualize bounding spheres", &_renderOptions.visualizeBoundingSpheres);
     ImGui::Checkbox("Debug probes", &_renderOptions.probesDebug);
     ImGui::Checkbox("Hack", &_renderOptions.hack);
+    ImGui::SliderFloat("Sun intensity", &_renderOptions.sunIntensity, 0.0f, 200.0f);
+    ImGui::SliderFloat("Sky intensity", &_renderOptions.skyIntensity, 0.0f, 20.0f);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
     ImGui::End();
   }

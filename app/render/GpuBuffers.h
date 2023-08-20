@@ -29,6 +29,13 @@ struct GPUMeshMaterialInfo {
   int32_t _normalTexIndex;
   int32_t _albedoTexIndex;
   int32_t _metallicRoughnessTexIndex;
+  int32_t _emissiveTexIndex;
+  float _baseColFacR;
+  float _baseColFacG;
+  float _baseColFacB;
+  float _emissiveFactorR;
+  float _emissiveFactorG;
+  float _emissiveFactorB;
 };
 
 struct GPUMeshInfo {
@@ -107,6 +114,8 @@ struct GPUSceneData {
   int32_t specularGiEnabled;
   int32_t visualizeBoundingSpheresEnabled;
   int32_t hack;
+  float sunIntensity;
+  float skyIntensity;
 };
 
 struct GPUSSAOSampleUbo {

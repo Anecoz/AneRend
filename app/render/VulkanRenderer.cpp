@@ -224,18 +224,21 @@ VulkanRenderer::~VulkanRenderer()
     if (mesh._normal._bindlessIndex != -1) vkDestroySampler(_device, mesh._normal._sampler, nullptr);
     if (mesh._albedo._bindlessIndex != -1) vkDestroySampler(_device, mesh._albedo._sampler, nullptr);
     if (mesh._metallicRoughness._bindlessIndex != -1) vkDestroySampler(_device, mesh._metallicRoughness._sampler, nullptr);
+    if (mesh._emissive._bindlessIndex != -1) vkDestroySampler(_device, mesh._emissive._sampler, nullptr);
 
     if (mesh._metallic._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._metallic._image._image, mesh._metallic._image._allocation);
     if (mesh._roughness._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._roughness._image._image, mesh._roughness._image._allocation);
     if (mesh._normal._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._normal._image._image, mesh._normal._image._allocation);
     if (mesh._albedo._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._albedo._image._image, mesh._albedo._image._allocation);
     if (mesh._metallicRoughness._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._metallicRoughness._image._image, mesh._metallicRoughness._image._allocation);
+    if (mesh._emissive._bindlessIndex != -1) vmaDestroyImage(_vmaAllocator, mesh._emissive._image._image, mesh._emissive._image._allocation);
 
     if (mesh._metallic._bindlessIndex != -1) vkDestroyImageView(_device, mesh._metallic._view, nullptr);
     if (mesh._roughness._bindlessIndex != -1) vkDestroyImageView(_device, mesh._roughness._view, nullptr);
     if (mesh._normal._bindlessIndex != -1) vkDestroyImageView(_device, mesh._normal._view, nullptr);
     if (mesh._albedo._bindlessIndex != -1) vkDestroyImageView(_device, mesh._albedo._view, nullptr);
     if (mesh._metallicRoughness._bindlessIndex != -1) vkDestroyImageView(_device, mesh._metallicRoughness._view, nullptr);
+    if (mesh._emissive._bindlessIndex != -1) vkDestroyImageView(_device, mesh._emissive._view, nullptr);
   }
 
   if (_enableRayTracing) {
@@ -525,8 +528,9 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh, bool buildBlas)
   mesh._normal._bindlessIndex = -1;
   mesh._albedo._bindlessIndex = -1;
   mesh._metallicRoughness._bindlessIndex = -1;
+  mesh._emissive._bindlessIndex = -1;
 
-  auto loadTexturesFunc = [&](PbrMaterialData& pbrData) {
+  auto loadTexturesFunc = [&](PbrMaterialData& pbrData, bool srgb = false) {
     std::vector<uint8_t>& data = pbrData._data;
     bool isColor = true;
     int width = pbrData._width;
@@ -540,7 +544,7 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh, bool buildBlas)
       isColor = loaded.isColor;
     }
     
-    VkFormat format = isColor ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8_UNORM;
+    VkFormat format = isColor ? (srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM ) : VK_FORMAT_R8_UNORM;
 
     createTexture(format, width, height, data, pbrData._sampler, pbrData._image, pbrData._view);
 
@@ -561,10 +565,13 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh, bool buildBlas)
     loadTexturesFunc(mesh._normal);
   }
   if (!mesh._albedo._texPath.empty()) {
-    loadTexturesFunc(mesh._albedo);
+    loadTexturesFunc(mesh._albedo, true);
   }
   if (!mesh._metallicRoughness._texPath.empty()) {
     loadTexturesFunc(mesh._metallicRoughness);
+  }
+  if (!mesh._emissive._texPath.empty()) {
+    loadTexturesFunc(mesh._emissive, true);
   }
 
   mesh._id = _nextMeshId++;
@@ -693,6 +700,9 @@ void VulkanRenderer::unregisterRenderable(RenderableId id)
     if (it->_id == id) {
       cleanupRenderable(*it);
       _currentRenderables.erase(it);
+      for (auto& v : _renderablesChanged) {
+        v = true;
+      }
       break;
     }
   }
@@ -725,6 +735,22 @@ void VulkanRenderer::setRenderableTint(RenderableId id, const glm::vec3& tint)
   for (auto& rend : _currentRenderables) {
     if (rend._id == id) {
       rend._tint = tint;
+      for (auto& v : _renderablesChanged) {
+        v = true;
+      }
+      return;
+    }
+  }
+}
+
+void VulkanRenderer::updateRenderableTransform(RenderableId id, const glm::mat4& newTransform)
+{
+  for (auto& rend : _currentRenderables) {
+    if (rend._id == id) {
+      rend._transform = newTransform;
+      for (auto& v : _renderablesChanged) {
+        v = true;
+      }
       return;
     }
   }
@@ -802,6 +828,8 @@ void VulkanRenderer::update(
   ubo.specularGiEnabled = _renderOptions.specularGiEnabled;
   ubo.visualizeBoundingSpheresEnabled = _renderOptions.visualizeBoundingSpheres;
   ubo.hack = _renderOptions.hack;
+  ubo.sunIntensity = _renderOptions.sunIntensity;
+  ubo.skyIntensity = _renderOptions.skyIntensity;
 
   for (int i = 0; i < _lights.size(); ++i) {
     _lights[i].debugUpdatePos(delta);
@@ -871,7 +899,7 @@ void VulkanRenderer::registerBottomLevelAS(MeshId meshId)
   triangles.vertexStride = sizeof(Vertex);
   triangles.indexType = VK_INDEX_TYPE_UINT32;
   triangles.indexData.deviceAddress = indexAddress;
-  triangles.maxVertex = mesh._numVertices / sizeof(Vertex);
+  triangles.maxVertex = mesh._numVertices - 1;
   triangles.transformData = { 0 }; // No transform
 
   // Point to the triangle data in the higher abstracted geometry structure (can contain other things than triangles)
@@ -1900,18 +1928,34 @@ const Camera& VulkanRenderer::getCamera()
   return _latestCamera;
 }
 
-bool VulkanRenderer::blackboardValueSet(const std::string& key)
+bool VulkanRenderer::blackboardValueBool(const std::string& key)
 {
   auto exist = _blackboard.find(key) != _blackboard.end();
   
   if (exist) {
-    return _blackboard[key];
+    return std::any_cast<bool>(_blackboard[key]);
   }
 
   return exist;
 }
 
-void VulkanRenderer::setBlackboardValue(const std::string& key, bool val)
+int VulkanRenderer::blackboardValueInt(const std::string& key)
+{
+  auto exist = _blackboard.find(key) != _blackboard.end();
+
+  if (exist) {
+    return std::any_cast<int>(_blackboard[key]);
+  }
+
+  return -1;
+}
+
+void VulkanRenderer::setBlackboardValueBool(const std::string& key, bool val)
+{
+  _blackboard[key] = val;
+}
+
+void VulkanRenderer::setBlackboardValueInt(const std::string& key, int val)
 {
   _blackboard[key] = val;
 }
@@ -2048,6 +2092,14 @@ void VulkanRenderer::prefillGPUMeshMaterialBuffer(VkCommandBuffer& commandBuffer
     mappedData[i]._normalTexIndex = mesh._normal._bindlessIndex;
     mappedData[i]._albedoTexIndex = mesh._albedo._bindlessIndex;
     mappedData[i]._metallicRoughnessTexIndex = mesh._metallicRoughness._bindlessIndex;
+    mappedData[i]._emissiveTexIndex = mesh._emissive._bindlessIndex;
+    mappedData[i]._baseColFacR = mesh._baseColFactor.r;
+    mappedData[i]._baseColFacG = mesh._baseColFactor.g;
+    mappedData[i]._baseColFacB = mesh._baseColFactor.b;
+    mappedData[i]._emissiveFactorR = mesh._emissiveFactor.r;
+    mappedData[i]._emissiveFactorG = mesh._emissiveFactor.g;
+    mappedData[i]._emissiveFactorB = mesh._emissiveFactor.b;
+    //mappedData[i]._baseColFactor = mesh._baseColFactor;
   }
 
   VkBufferCopy copyRegion{};
@@ -2344,7 +2396,7 @@ bool VulkanRenderer::initBindless()
     uboLayoutBinding.binding = uboBinding;
     uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     uboLayoutBinding.descriptorCount = 1;
-    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
     bindings.emplace_back(std::move(uboLayoutBinding));
 
     VkDescriptorSetLayoutBinding renderableLayoutBinding{};
@@ -2461,7 +2513,7 @@ bool VulkanRenderer::initBindless()
     VkPushConstantRange pushConstant;
     pushConstant.offset = 0;
     pushConstant.size = 256;// (uint32_t)pushConstantsSize;
-    pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+    pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2903,14 +2955,14 @@ bool VulkanRenderer::initIrradianceProbes()
     probe->pos = glm::vec4(pos.x, pos.y, pos.z, 1.0f);
 
     // Debug renderables
-    _debugIrradianceProbes.emplace_back(registerRenderable(
+    /*_debugIrradianceProbes.emplace_back(registerRenderable(
       modelId,
       glm::translate(glm::mat4(1.0f), pos),
       glm::vec3(0.0f),
       50000.0f,
       false,
       false));
-    setRenderableVisible(_debugIrradianceProbes.back(), false);
+    setRenderableVisible(_debugIrradianceProbes.back(), false);*/
   }
 
   return true;
@@ -3225,6 +3277,8 @@ void VulkanRenderer::createTexture(
   AllocatedImage& imageOut,
   VkImageView& viewOut)
 {
+  uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
+
   AllocatedImage image;
 
   imageutil::createImage(
@@ -3232,14 +3286,17 @@ void VulkanRenderer::createTexture(
     format,
     VK_IMAGE_TILING_OPTIMAL,
     _vmaAllocator,
-    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    image);
+    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    image,
+    mipLevels);
 
   auto view = imageutil::createImageView(
     _device,
     image._image,
     format,
-    VK_IMAGE_ASPECT_COLOR_BIT);
+    VK_IMAGE_ASPECT_COLOR_BIT,
+    0,
+    mipLevels);
 
   // Create a staging buffer on CPU side first
   AllocatedBuffer stagingBuffer;
@@ -3260,7 +3317,9 @@ void VulkanRenderer::createTexture(
     image._image,
     format,
     VK_IMAGE_LAYOUT_UNDEFINED,
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    0,
+    mipLevels);
 
   VkExtent3D extent{};
   extent.depth = 1;
@@ -3284,16 +3343,19 @@ void VulkanRenderer::createTexture(
     &imCopy);
 
   // Transition to shader read
-  imageutil::transitionImageLayout(
+  /*imageutil::transitionImageLayout(
     cmdBuffer,
     image._image,
     format,
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    0, mipLevels);*/
 
   endSingleTimeCommands(cmdBuffer);
 
   vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
+
+  generateMipmaps(image._image, format, width, height, mipLevels);
 
   SamplerCreateParams params{};
   params.renderContext = this;
@@ -3301,6 +3363,86 @@ void VulkanRenderer::createTexture(
   imageOut = image;
   viewOut = view;
   samplerOut = createSampler(params);
+}
+
+void VulkanRenderer::generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) 
+{
+  VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+  VkImageMemoryBarrier barrier{};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  barrier.image = image;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount = 1;
+  barrier.subresourceRange.levelCount = 1;
+
+  int32_t mipWidth = texWidth;
+  int32_t mipHeight = texHeight;
+
+  for (uint32_t i = 1; i < mipLevels; i++) {
+    barrier.subresourceRange.baseMipLevel = i - 1;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+    vkCmdPipelineBarrier(commandBuffer,
+      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+      0, nullptr,
+      0, nullptr,
+      1, &barrier);
+
+    VkImageBlit blit{};
+    blit.srcOffsets[0] = { 0, 0, 0 };
+    blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+    blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    blit.srcSubresource.mipLevel = i - 1;
+    blit.srcSubresource.baseArrayLayer = 0;
+    blit.srcSubresource.layerCount = 1;
+    blit.dstOffsets[0] = { 0, 0, 0 };
+    blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
+    blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    blit.dstSubresource.mipLevel = i;
+    blit.dstSubresource.baseArrayLayer = 0;
+    blit.dstSubresource.layerCount = 1;
+
+    vkCmdBlitImage(commandBuffer,
+      image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      1, &blit,
+      VK_FILTER_LINEAR);
+
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(commandBuffer,
+      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+      0, nullptr,
+      0, nullptr,
+      1, &barrier);
+
+    if (mipWidth > 1) mipWidth /= 2;
+    if (mipHeight > 1) mipHeight /= 2;
+  }
+
+  barrier.subresourceRange.baseMipLevel = mipLevels - 1;
+  barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+  vkCmdPipelineBarrier(commandBuffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+    0, nullptr,
+    0, nullptr,
+    1, &barrier);
+
+  endSingleTimeCommands(commandBuffer);
 }
 
 uint32_t VulkanRenderer::addTextureToBindless(VkImageLayout layout, VkImageView view, VkSampler sampler)

@@ -176,6 +176,7 @@ void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     usage._resourceName = "Geometry0Image";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Compute);
+    usage._noSamplerFiltering = true;
     usage._type = Type::SampledTexture;
     resourceUsages.emplace_back(std::move(usage));
   }

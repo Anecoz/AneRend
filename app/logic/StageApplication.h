@@ -29,6 +29,11 @@ private:
 
   glm::vec3 _lastCamPos;
 
+  render::RenderableId _sponzaId;
+  glm::mat4 _sponzaScale;
+  glm::vec3 _sponzaPos;
+  bool _sponzaMoved = false;
+
   glm::vec3 _sunDir;
 
   render::RenderDebugOptions _renderDebugOptions;
@@ -43,9 +48,10 @@ private:
 
   render::ModelId _meshId;
   render::ModelId _meshId2;
-  //render::ModelId _meshId3;
+  render::ModelId _meshId3;
   render::ModelId _meshId4;
   render::ModelId _meshId5;
-  //render::ModelId _meshId6;
+  render::ModelId _meshId6;
   render::ModelId _meshId7;
+  render::ModelId _meshId8;
 };

@@ -98,7 +98,7 @@ bool buildDescriptorSetLayout(DescriptorSetLayoutCreateParams params, VkDescript
   pipeLayoutParam.descriptorSetLayouts.emplace_back(params.renderContext->bindlessDescriptorSetLayout()); // set 0
   pipeLayoutParam.descriptorSetLayouts.emplace_back(outDescriptorSetLayout); // set 1
   pipeLayoutParam.pushConstantsSize = 256;
-  pipeLayoutParam.pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+  pipeLayoutParam.pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
   if (!buildPipelineLayout(pipeLayoutParam, outPipelineLayout)) {
     return false;
@@ -269,8 +269,8 @@ VkSampler createSampler(SamplerCreateParams params)
   sampler.minFilter = params.minFilter;
   sampler.mipmapMode = params.mipMapMode;
   sampler.addressModeU = params.addressMode;
-  sampler.addressModeV = sampler.addressModeU;
-  sampler.addressModeW = sampler.addressModeU;
+  sampler.addressModeV = params.addressMode;
+  sampler.addressModeW = params.addressMode;
   sampler.mipLodBias = params.mipLodBias;
   sampler.anisotropyEnable = VK_TRUE;
   sampler.maxAnisotropy = params.maxAnisotropy;

@@ -5,7 +5,7 @@ namespace render {
 struct RenderOptions
 {
   bool ssao = true;
-  bool fxaa = true;
+  bool fxaa = false;
   bool directionalShadows = false;
   bool raytracedShadows = true;
   bool visualizeBoundingSpheres = false;
@@ -15,6 +15,8 @@ struct RenderOptions
   bool specularGiEnabled = true;
   bool probesDebug = false;
   bool hack = false;
+  float sunIntensity = 5.0;
+  float skyIntensity = 1.0;
 };
 
 }

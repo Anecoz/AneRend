@@ -9,22 +9,30 @@
 layout (local_size_x = 8, local_size_y = 8) in;
 
 layout(set = 1, binding = 0, rgba16f) uniform readonly image2D irrIm;
-layout(set = 1, binding = 1, rgba16f) uniform readonly image2D dirIm;
+layout(set = 1, binding = 1, rgba8) uniform readonly image2D dirIm;
 layout(set = 1, binding = 2, rgba16f) uniform image2D outputIm;
+
+layout(push_constant) uniform constants {
+  uint probeLayer;
+} pc;
+
 
 void main()
 {
   const int xs = NUM_PROBES_PER_PLANE * PROBE_CONV_PIX_SIZE;
-  const int ys = NUM_PROBES_PER_PLANE * NUM_PROBE_PLANES * PROBE_CONV_PIX_SIZE;
+  const int ys = NUM_PROBES_PER_PLANE * PROBE_CONV_PIX_SIZE;//* NUM_PROBE_PLANES;
 
   if (gl_GlobalInvocationID.x > xs || gl_GlobalInvocationID.y > ys) {
     return;
   }
   
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 pixelPreLayer = pixel;
+
+  pixel.y += int(pc.probeLayer) * PROBE_CONV_PIX_SIZE * NUM_PROBES_PER_PLANE;
 
   ivec2 probeIdx = pixel / PROBE_CONV_PIX_SIZE;
-  ivec2 probeStartPixel = probeIdx * PROBE_IRR_DIR_PIX_SIZE; // in input image pixels
+  ivec2 probeStartPixel = (pixelPreLayer / PROBE_CONV_PIX_SIZE) * PROBE_IRR_DIR_PIX_SIZE; // in input image pixels
   ivec2 pixelWithinProbe = pixel - probeIdx * PROBE_CONV_PIX_SIZE;
 
   // 16x16 kernel
@@ -38,15 +46,12 @@ void main()
   vec4 result = vec4(0.0);
   for (int x = 0; x < kernelSize; ++x) {
     for (int y = 0; y < kernelSize; ++y) {
-      
-      if (x > xs - 1 || y > ys - 1) {
-        continue;
-      }
 
       ivec2 currPix = probeStartPixel + ivec2(x, y);
 
       vec3 irradiance = imageLoad(irrIm, currPix).rgb;
-      vec3 dir = imageLoad(dirIm, currPix).rgb;
+      vec3 packedDir = imageLoad(dirIm, currPix).rgb;
+      vec3 dir = (packedDir * 2.0) - 1.0;
       float weight = max(0.0, dot(dir, octDir));
       if (weight > 1e-6) {
         result += vec4(weight * irradiance, weight);
@@ -55,15 +60,15 @@ void main()
   }
 
   // Add old value
-  //vec4 oldVal = imageLoad(outputIm, pixOffset + pixel);
+  vec4 oldVal = imageLoad(outputIm, pixOffset + pixel);
 
   if (result.w > 1e-6) {
     result.rgb /= result.w;
   }
 
-  //float hysteresis = 0.0;
-  //vec4 outRes = result * (1.0 - hysteresis) + oldVal * hysteresis;
-  vec4 outRes = result;
+  float hysteresis = 0.95;
+  vec4 outRes = result * (1.0 - hysteresis) + oldVal * hysteresis;
+  //vec4 outRes = result;
 
   imageStore(outputIm, pixOffset + pixel, outRes);
 }

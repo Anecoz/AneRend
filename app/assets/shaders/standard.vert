@@ -37,7 +37,7 @@ void main() {
   mat4 model = renderableBuffer.renderables[renderableId].transform;
 
   gl_Position = ubo.proj * ubo.view * model * vec4(inPosition, 1.0);
-  fragColor = inColor * renderableBuffer.renderables[renderableId].tint.rgb;
+  fragColor = toLinear(vec4(inColor, 1.0)).rgb * renderableBuffer.renderables[renderableId].tint.rgb;
   fragNormal =  mat3(model) * inNormal;
   fragPos = (model * vec4(inPosition, 1.0)).xyz;
   fragUV = inUV;

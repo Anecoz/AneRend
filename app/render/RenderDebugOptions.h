@@ -8,6 +8,7 @@ struct RenderDebugOptions
 {
   bool debugView = false;
   std::string debugViewResource;
+  int debugMip = 0;
 };
 
 }

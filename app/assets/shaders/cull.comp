@@ -314,7 +314,7 @@ void main()
   }
 
   // Grass
-  uint xPos = gl_GlobalInvocationID.x;
+  /*uint xPos = gl_GlobalInvocationID.x;
   uint yPos = gl_GlobalInvocationID.y;
 
   vec3 worldPos = vec3(xPos*0.08, .25, yPos*0.08);
@@ -380,5 +380,5 @@ void main()
     grassObjBuffer.blades[instanceIndex].cpData0 = vec4(p0, p1.x);
     grassObjBuffer.blades[instanceIndex].cpData1 = vec4(p1.yz, p2.xy);
     grassObjBuffer.blades[instanceIndex].cpData2 = vec4(p2.z, p3);
-  }
+  }*/
 }

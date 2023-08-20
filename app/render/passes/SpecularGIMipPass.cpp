@@ -14,8 +14,8 @@ SpecularGIMipPass::~SpecularGIMipPass()
 
 void SpecularGIMipPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
-  uint32_t width = rc->swapChainExtent().width / 2;
-  uint32_t height = rc->swapChainExtent().height / 2;
+  uint32_t width = rc->swapChainExtent().width;
+  uint32_t height = rc->swapChainExtent().height;
   uint32_t mipLevels = 4;// static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
   for (int i = 0; i < mipLevels - 1; ++i) {
@@ -30,6 +30,7 @@ void SpecularGIMipPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
       usage._allMips = false;
       usage._mip = i;
       usage._type = Type::SampledTexture;
+      usage._samplerClampToBorder = true;
       info._resourceUsages.emplace_back(std::move(usage));
     }
     {
@@ -74,8 +75,8 @@ void SpecularGIMipPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
           1, 1, &(*exeParams.descriptorSets)[0],
           0, nullptr);
 
-        uint32_t width = exeParams.rc->swapChainExtent().width / (2 + (i+1)*2);
-        uint32_t height = exeParams.rc->swapChainExtent().height / (2 + (i + 1) * 2);
+        uint32_t width = exeParams.rc->swapChainExtent().width / (0 + (i+1)*2);
+        uint32_t height = exeParams.rc->swapChainExtent().height / (0 + (i + 1) * 2);
 
         vkCmdDispatch(*exeParams.cmdBuffer, width, height, 1);
       });

@@ -826,8 +826,16 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
         SamplerCreateParams samplerParam{};
         samplerParam.useMaxFilter = usage._useMaxSampler;
         samplerParam.renderContext = renderContext;
-        if (usage._samplerClamp) {
+        if (usage._samplerClampToBorder) {
           samplerParam.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        }
+        if (usage._samplerClampToEdge) {
+          samplerParam.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        }
+        if (usage._noSamplerFiltering) {
+          samplerParam.magFilter = VK_FILTER_NEAREST;
+          samplerParam.minFilter = VK_FILTER_NEAREST;
+          samplerParam.mipMapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
         }
         auto sampler = createSampler(samplerParam);
 

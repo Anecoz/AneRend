@@ -29,8 +29,11 @@ struct Mesh {
   PbrMaterialData _metallic;
   PbrMaterialData _roughness;
   PbrMaterialData _normal;
+  PbrMaterialData _emissive;
   PbrMaterialData _albedo;
   PbrMaterialData _metallicRoughness; // i.e. gltf-style, G is roughness and B is metalness
+  glm::vec4 _baseColFactor;
+  glm::vec3 _emissiveFactor;
 };
 
 } 

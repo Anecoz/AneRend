@@ -48,6 +48,18 @@ bool GLTFLoader::loadFromFile(
   modelOut._max = glm::vec3(std::numeric_limits<float>::min());
 
   for (int i = 0; i < model.meshes.size(); ++i) {
+    
+    // Find a potential transform
+    // TODO: All sorts of transforms, not just translation...
+    glm::vec3 trans = {};
+    for (auto& node : model.nodes) {
+      if (node.mesh == i) {
+        if (!node.translation.empty()) {
+          trans = glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+        }
+      }
+    }
+    
     for (int j = 0; j < model.meshes[i].primitives.size(); ++j) {
       auto& primitive = model.meshes[i].primitives[j];
       render::Mesh mesh{};
@@ -137,6 +149,8 @@ bool GLTFLoader::loadFromFile(
           positionBuffer[3 * v + 2]
         };
 
+        vert.pos = vert.pos + trans;
+
         if (normalsBuffer) {
           vert.normal = {
             normalsBuffer[3 * v + 0],
@@ -211,6 +225,25 @@ bool GLTFLoader::loadFromFile(
           mesh._normal._width = image.width;
           mesh._normal._height = image.height;
         }
+
+        int emissiveIdx = material.emissiveTexture.index;
+        if (emissiveIdx >= 0) {
+          int imageIdx = model.textures[emissiveIdx].source;
+          auto& image = model.images[emissiveIdx];
+
+          mesh._emissive._texPath = p.replace_filename(image.uri).string();
+          mesh._emissive._data = image.image;
+          mesh._emissive._width = image.width;
+          mesh._emissive._height = image.height;
+        }
+
+        mesh._emissiveFactor = glm::vec3(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]);
+
+        mesh._baseColFactor = glm::vec4(
+          material.pbrMetallicRoughness.baseColorFactor[0],
+          material.pbrMetallicRoughness.baseColorFactor[1],
+          material.pbrMetallicRoughness.baseColorFactor[2],
+          material.pbrMetallicRoughness.baseColorFactor[3]);
       }
 
       modelOut._meshes.emplace_back(std::move(mesh));

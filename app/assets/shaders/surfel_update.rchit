@@ -106,7 +106,9 @@ void main()
       metallic,
       roughness,
       pos,
+      gl_ObjectRayOriginEXT,
       dummyLight,
-      1);
+      1,
+      true);
   }
 }

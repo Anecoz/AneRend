@@ -51,8 +51,8 @@ void main()
     As the range parameter sigmaR increases, the bilateral filter gradually approaches Gaussian convolution more closely because the range Gaussian widens and flattens, which means that it becomes nearly constant over the intensity interval of the image.
     As the spatial parameter sigmaD increases, the larger features get smoothened.
   */
-  float sigmaD = 128.0;
-  float sigmaR = 16.0;
+  float sigmaD = 8.0;
+  float sigmaR = 2.0;
 
   float weights = 0.0;
   vec3 outCol = vec3(0.0);

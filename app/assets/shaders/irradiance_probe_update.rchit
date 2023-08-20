@@ -71,39 +71,10 @@ void main()
   vec3 normal = normalize(v0.normal.xyz * barycentrics.x + v1.normal.xyz * barycentrics.y + v2.normal.xyz * barycentrics.z);
   normal = normalize(vec3(normal.xyz * gl_WorldToObjectEXT));
   vec3 color = v0.color.xyz * barycentrics.x + v1.color.xyz * barycentrics.y + v2.color.xyz * barycentrics.z;
-  vec3 tangent = v0.tangent.xyz * barycentrics.x + v1.tangent.xyz * barycentrics.y + v2.tangent.xyz * barycentrics.z;
+  //vec3 tangent = v0.tangent.xyz * barycentrics.x + v1.tangent.xyz * barycentrics.y + v2.tangent.xyz * barycentrics.z;
+  color = toLinear(vec4(color, 1.0)).rgb;
 
-  float metallic = 0.1;
-  float roughness = 0.8;
-
-  if (matInfo.metallicTexIndex != -1) {
-    metallic = texture(textures[nonuniformEXT(matInfo.metallicTexIndex)], uv).r;
-  }
-  if (matInfo.roughnessTexIndex != -1) {
-    roughness = texture(textures[nonuniformEXT(matInfo.roughnessTexIndex)], uv).r;
-  }
-  if (matInfo.albedoTexIndex != -1) {
-    vec4 samp = texture(textures[nonuniformEXT(matInfo.albedoTexIndex)], uv);
-    /*if (samp.a < 0.1) {
-      discard;
-    }*/
-    color = samp.rgb;
-  }
-  if (matInfo.metallicRoughnessTexIndex != -1) {
-    vec4 samp = texture(textures[nonuniformEXT(matInfo.metallicRoughnessTexIndex)], uv);
-    metallic = samp.b;
-    roughness = samp.g;
-  }
-  /*if (matInfo.normalTexIndex != -1 && tangent != vec3(0.0f)) {
-    vec3 bitangentL = cross(normal, tangent);
-    vec3 T = normalize(mat3(gl_ObjectToWorldEXT) * tangent);
-    vec3 B = normalize(mat3(gl_ObjectToWorldEXT) * bitangentL);
-    //vec3 N = normalize(mat3(gl_ObjectToWorldEXT) * normal);
-    mat3 TBN = mat3(T, B, normal);
-
-    normal = normalize(texture(textures[nonuniformEXT(matInfo.normalTexIndex)], uv).rgb * 2.0 - 1.0);
-    normal = normalize(TBN * normal);
-  }*/
+  SurfaceData surfData = getSurfaceDataFromMat(matInfo, uv, normal, mat3(0.0), vec3(0.0), color);
 
   Light dummyLight;
 
@@ -112,25 +83,29 @@ void main()
   if (shadowPayload.shadow < 0.5) {
     // Only calculate direct lighting if we're not in shadow
     payload.irradiance = calcLight(
-      normal,
-      color,
-      metallic,
-      roughness,
+      surfData.normal,
+      surfData.color,
+      surfData.metallic,
+      surfData.roughness,
       pos,
+      gl_WorldRayOriginEXT,
       dummyLight,
-      1);
+      1,
+      true);
   }
 
   // Always calculate indirect light
   if (ubo.multiBounceDdgiEnabled == 1) {
     payload.irradiance += calcIndirectDiffuseLight(
-      normal,
-      color,
-      metallic,
-      roughness,
+      surfData.normal,
+      surfData.color,
+      surfData.metallic,
+      surfData.roughness,
       pos,
-      gl_ObjectRayOriginEXT,
+      gl_WorldRayOriginEXT,
       probeTex);
   }
+
+  payload.irradiance += surfData.emissive;
 
 }

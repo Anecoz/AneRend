@@ -21,8 +21,8 @@ void SpecularGIRTPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
   // This texture will contain perfect mirror reflections radiance values in a screen-space fashion.
   // the alpha channel will contain distance between the objects
   {
-    uint32_t width = rc->swapChainExtent().width / 2;
-    uint32_t height = rc->swapChainExtent().height / 2;
+    uint32_t width = rc->swapChainExtent().width;
+    uint32_t height = rc->swapChainExtent().height;
     uint32_t mipLevels = 4;// static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
     ResourceUsage usage{};
@@ -57,11 +57,28 @@ void SpecularGIRTPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::RayTrace);
     usage._type = Type::SampledTexture;
+    usage._noSamplerFiltering = true;
     info._resourceUsages.emplace_back(std::move(usage));
   }
   {
     ResourceUsage usage{};
     usage._resourceName = "ProbeRaysConvTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::RayTrace);
+    usage._type = Type::SampledTexture;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "Geometry1Image";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::RayTrace);
+    usage._type = Type::SampledTexture;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "SpecularBRDFLutTex";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::RayTrace);
     usage._type = Type::SampledTexture;
@@ -109,8 +126,8 @@ void SpecularGIRTPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
         &exeParams.sbt->_missRegion,
         &exeParams.sbt->_chitRegion,
         &emptyRegion,
-        exeParams.rc->swapChainExtent().width/2,
-        exeParams.rc->swapChainExtent().height/2,
+        exeParams.rc->swapChainExtent().width,
+        exeParams.rc->swapChainExtent().height,
         1);
 
       _lastRayTraceTime = elapsedTime;

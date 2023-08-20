@@ -114,7 +114,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
     ImageInitialCreateInfo createInfo{};
     createInfo._initialHeight = rc->swapChainExtent().height;
     createInfo._initialWidth = rc->swapChainExtent().width;
-    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_UNORM;
+    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
     usage._imageCreateInfo = createInfo;
     usage._type = Type::ColorAttachment;
@@ -136,14 +136,22 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
     usage._type = Type::ColorAttachment;
     resourceUsages.emplace_back(std::move(usage));
   }
-  /* {
+  {
     ResourceUsage usage{};
     usage._resourceName = "Geometry2Image";
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::Fragment);
+
+    ImageInitialCreateInfo createInfo{};
+    createInfo._initialHeight = rc->swapChainExtent().height;
+    createInfo._initialWidth = rc->swapChainExtent().width;
+    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+
+    usage._imageCreateInfo = createInfo;
+
     usage._type = Type::ColorAttachment;
     resourceUsages.emplace_back(std::move(usage));
-  }*/
+  }
   {
     ResourceUsage usage{};
     usage._resourceName = "GeometryDepthImage";
@@ -189,8 +197,8 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
   param.fragShader = "standard_frag.spv";
   param.uvLoc = 3;
   param.tangentLoc = 4;
-  param.colorAttachmentCount = 2;
-  param.colorFormats = { VK_FORMAT_R16G16B16A16_UNORM, VK_FORMAT_R8G8B8A8_UNORM };
+  param.colorAttachmentCount = 3;
+  param.colorFormats = { VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R16G16B16A16_SFLOAT };
   info._graphicsParams = param;
 
   fgb.registerRenderPass(std::move(info));
@@ -200,7 +208,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
 
       // Dynamic rendering begin
       std::array<VkClearValue, 2> clearValues{};
-      std::array<VkRenderingAttachmentInfoKHR, 2> colInfo{};
+      std::array<VkRenderingAttachmentInfoKHR, 3> colInfo{};
       clearValues[0].color = { {0.5f, 0.5f, 0.5f, 1.0f} };
       clearValues[1].depthStencil = { 1.0f, 0 };
       VkRenderingAttachmentInfoKHR color0AttachmentInfo{};
@@ -219,17 +227,17 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
       color1AttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
       color1AttachmentInfo.clearValue = clearValues[0];
 
-      /*VkRenderingAttachmentInfoKHR color2AttachmentInfo{};
+      VkRenderingAttachmentInfoKHR color2AttachmentInfo{};
       color2AttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-      color2AttachmentInfo.imageView = color2View->_view;
+      color2AttachmentInfo.imageView = exeParams.colorAttachmentViews[2];
       color2AttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
       color2AttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
       color2AttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-      color2AttachmentInfo.clearValue = clearValues[0];*/
+      color2AttachmentInfo.clearValue = clearValues[0];
 
       colInfo[0] = color0AttachmentInfo;
       colInfo[1] = color1AttachmentInfo;
-      //colInfo[2] = color2AttachmentInfo;
+      colInfo[2] = color2AttachmentInfo;
 
       VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
       depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;

@@ -14,8 +14,9 @@ public:
   void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
 
 private:
-  const double _traceRate = 30.0; // in hertz
-  double _lastRayTraceTime = 0;
+  //const double _traceRate = 30.0; // in hertz
+  //double _lastRayTraceTime = 0;
+  uint32_t _currentLayer = 0;
 };
 
 }

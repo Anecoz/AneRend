@@ -68,10 +68,6 @@ void IrradianceProbeConvolvePass::registerToGraph(FrameGraphBuilder& fgb, Render
       if (!exeParams.rc->getRenderOptions().raytracingEnabled) return;
       if (!exeParams.rc->getRenderOptions().ddgiEnabled) return;
 
-      if (!exeParams.rc->blackboardValueSet("ProbesRayTraced")) {
-        return;
-      }
-
       // Bind pipeline
       vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, *exeParams.pipeline);
 
@@ -82,11 +78,22 @@ void IrradianceProbeConvolvePass::registerToGraph(FrameGraphBuilder& fgb, Render
         1, 1, &(*exeParams.descriptorSets)[0],
         0, nullptr);
 
+      // Choose a layer
+      uint32_t probeLayer = (uint32_t)exeParams.rc->blackboardValueInt("ProbeLayer");
+
+      vkCmdPushConstants(
+        *exeParams.cmdBuffer,
+        *exeParams.pipelineLayout,
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+        0,
+        sizeof(uint32_t),
+        &probeLayer);
+
       auto extent = exeParams.rc->swapChainExtent();
 
       uint32_t numX = octPixelSize * numProbesPlane;
       numX = numX / 8;
-      uint32_t numY = octPixelSize * numProbesPlane * numProbesHeight;
+      uint32_t numY = octPixelSize * numProbesPlane;
       numY = numY / 8;
 
       vkCmdDispatch(*exeParams.cmdBuffer, numX, numY + 1, 1);

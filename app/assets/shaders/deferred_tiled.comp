@@ -13,22 +13,23 @@ layout (local_size_x = 32, local_size_y = 32) in;
 
 layout(set = 1, binding = 0) uniform sampler2D im0;
 layout(set = 1, binding = 1) uniform sampler2D im1;
-//layout(set = 1, binding = 2) uniform sampler2D im2;
-layout(set = 1, binding = 2) uniform sampler2D depth;
-layout(set = 1, binding = 3) uniform sampler2D shadowMap;
-layout(set = 1, binding = 4) uniform sampler2D ssao;
-layout(set = 1, binding = 5) uniform sampler2D rtShadowMask;
+layout(set = 1, binding = 2) uniform sampler2D im2;
+layout(set = 1, binding = 3) uniform sampler2D depth;
+layout(set = 1, binding = 4) uniform sampler2D shadowMap;
+layout(set = 1, binding = 5) uniform sampler2D ssao;
+layout(set = 1, binding = 6) uniform sampler2D rtShadowMask;
 
 /*layout(std430, set = 1, binding = 6) readonly buffer IrradianceProbeBuffer {
   IrradianceProbe probes[];
 } irradianceProbeBuffer;*/
 
-layout(set = 1, binding = 6, rgba16) uniform writeonly image2D outputIm;
+layout(set = 1, binding = 7, rgba16) uniform writeonly image2D outputIm;
 //layout(set = 1, binding = 7, rgba8) uniform readonly image2D surfelTex;
 //layout(set = 1, binding = 7) uniform sampler2D surfelTex;
 //layout(set = 1, binding = 7) uniform sampler2D ssgiBlurTex;
-layout(set = 1, binding = 7) uniform sampler2D probeTex;
-layout(set = 1, binding = 8) uniform sampler2D specularGiTex;
+layout(set = 1, binding = 8) uniform sampler2D probeTex;
+layout(set = 1, binding = 9) uniform sampler2D specularGiTex;
+layout(set = 1, binding = 10) uniform sampler2D specularLutTex;
 
 layout(push_constant) uniform constants {
   uint screenWidth;
@@ -395,7 +396,7 @@ void doLight(ivec2 pixel)
 
   vec4 im0Samp = texture(im0, texCoords);
   vec4 im1Samp = texture(im1, texCoords);
-  //vec4 im2Samp = texture(im2, texCoords);
+  vec4 im2Samp = texture(im2, texCoords);
   float depthSamp = texture(depth, texCoords).r;
 
   if (depthSamp == 1.0f) {
@@ -411,6 +412,7 @@ void doLight(ivec2 pixel)
   vec3 fragWorldPos = calcWorldPos(texCoords, depthSamp);//im2Samp.rgb;//calcWorldPos(texCoords, depthSamp);
   float shadow = 1.0f;
   float occlusion = 1.0f;
+  vec3 emissive = im2Samp.rgb;
   
   if (ubo.directionalShadowsEnabled == 1) {
     shadow = inShadow(fragWorldPos);
@@ -441,8 +443,10 @@ void doLight(ivec2 pixel)
           metallic,
           roughness,
           fragWorldPos,
+          ubo.cameraPos.xyz,
           dummyLight,
-          1);
+          1,
+          true);
       }
     }
     else {
@@ -453,8 +457,10 @@ void doLight(ivec2 pixel)
         metallic,
         roughness,
         fragWorldPos,
+        ubo.cameraPos.xyz,
         light,
-        0);
+        0,
+        true);
     }
   }
 
@@ -480,15 +486,20 @@ void doLight(ivec2 pixel)
       roughness,
       fragWorldPos,
       texCoords,
-      specularGiTex);
+      specularGiTex,
+      specularLutTex);
   }
 
   directionalLo *= shadow;
   vec3 color = (ambient + Lo + directionalLo) * occlusion;
+  color += emissive;
 
-  color = color / (color + vec3(1.0));
+  // Do tonemapping
+  //color = color / (color + vec3(1.0));
+  color = acesTonemap(color);
 
   //imageStore(outputIm, pixel, vec4(normal, 1.0));
+  //imageStore(outputIm, pixel, vec4(roughness, roughness, roughness, 1.0));
   imageStore(outputIm, pixel, vec4(color, 1.0));
 }
 

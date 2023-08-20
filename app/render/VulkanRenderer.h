@@ -29,6 +29,7 @@
 #include "../logic/WindSystem.h"
 
 #include <array>
+#include <any>
 #include <unordered_map>
 #include <optional>
 #include <vector>
@@ -90,6 +91,9 @@ public:
 
   // Tint
   void setRenderableTint(RenderableId id, const glm::vec3& tint);
+
+  // Updates transform of a renderable
+  void updateRenderableTransform(RenderableId id, const glm::mat4& newTransform);
 
   void update(
     const Camera& camera,
@@ -172,8 +176,10 @@ public:
 
   const Camera& getCamera() override final;
 
-  bool blackboardValueSet(const std::string& key) override final;
-  void setBlackboardValue(const std::string& key, bool val) override final;
+  bool blackboardValueBool(const std::string& key) override final;
+  int blackboardValueInt(const std::string& key) override final;
+  void setBlackboardValueBool(const std::string& key, bool val) override final;
+  void setBlackboardValueInt(const std::string& key, int val) override final;
 
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
@@ -190,7 +196,7 @@ private:
   static const std::size_t NUM_IRRADIANCE_PROBES_XZ = 64;
   static const std::size_t NUM_IRRADIANCE_PROBES_Y = 8;
 
-  std::unordered_map<std::string, bool> _blackboard;
+  std::unordered_map<std::string, std::any> _blackboard;
 
   MeshId _debugCubeMesh;
   ModelId _debugSphereModelId;
@@ -302,6 +308,13 @@ private:
     VkSampler& samplerOut,
     AllocatedImage& imageOut,
     VkImageView& viewOut);
+
+  void generateMipmaps(
+    VkImage image,
+    VkFormat imageFormat,
+    int32_t texWidth,
+    int32_t texHeight,
+    uint32_t mipLevels);
 
   uint32_t addTextureToBindless(VkImageLayout layout, VkImageView view, VkSampler sampler);
 

@@ -8,6 +8,11 @@
 
 namespace render {
 
+struct Push {
+  int32_t samplerId;
+  float mip;
+};
+
 DebugViewRenderPass::DebugViewRenderPass()
   : RenderPass()
 {}
@@ -76,6 +81,15 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
   {
     ResourceUsage usage{};
     usage._resourceName = "Geometry1Image";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._bindless = true;
+    usage._type = Type::SampledTexture;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "Geometry2Image";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
     usage._bindless = true;
@@ -228,6 +242,15 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._type = Type::SampledTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "SpecularBRDFLutTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    usage._bindless = true;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
   /* {
     ResourceUsage usage{};
     usage._resourceName = "SurfelTex";
@@ -299,7 +322,8 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
 
       // If view is updated, descriptor (sampler) has to be recreated
       std::string debugResource = exeParams.rc->getDebugOptions().debugViewResource;
-      uint32_t push = translateNameToBinding(debugResource);
+      uint32_t samplerId = translateNameToBinding(debugResource);
+      float mip = (float)exeParams.rc->getDebugOptions().debugMip;
 
       VkClearValue clearValue{};
       clearValue.color = { {0.0f, 0.0f, 0.0f, 1.0f} };
@@ -350,12 +374,16 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
       vkCmdSetViewport(*exeParams.cmdBuffer, 0, 1, &viewport);
       vkCmdSetScissor(*exeParams.cmdBuffer, 0, 1, &scissor);
 
+      Push push{};
+      push.samplerId = samplerId;
+      push.mip = mip;
+
       vkCmdPushConstants(
         *exeParams.cmdBuffer,
         *exeParams.pipelineLayout,
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR,
         0,
-        sizeof(uint32_t),
+        sizeof(Push),
         &push);
 
       exeParams.rc->drawMeshId(exeParams.cmdBuffer, _meshId, 6, 1);

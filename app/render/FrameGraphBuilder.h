@@ -117,7 +117,11 @@ struct ResourceUsage
 
   bool _imageAlwaysGeneral = false; // Override logic about image layout and force to be general.
 
-  bool _samplerClamp = false; // Use clamping for samplers.
+  bool _samplerClampToBorder = false; // Use clamping for samplers.
+
+  bool _samplerClampToEdge = false; // Use clamping for samplers.
+
+  bool _noSamplerFiltering = false;
 
   bool _allMips = true;
   uint32_t _mip = 0; // if _allMips is false, this specifies which mip level to use.

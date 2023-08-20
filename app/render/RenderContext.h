@@ -91,8 +91,10 @@ public:
   virtual const Camera& getCamera() = 0;
 
   // TODO: A proper blackboard
-  virtual bool blackboardValueSet(const std::string& key) = 0;
-  virtual void setBlackboardValue(const std::string& key, bool val) = 0;
+  virtual bool blackboardValueBool(const std::string& key) = 0;
+  virtual int blackboardValueInt(const std::string& key) = 0;
+  virtual void setBlackboardValueBool(const std::string& key, bool val) = 0;
+  virtual void setBlackboardValueInt(const std::string& key, int val) = 0;
 };
 
 }
