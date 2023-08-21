@@ -1,0 +1,32 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+#include "sampling.glsl"
+#include "helpers.glsl"
+
+// Output image and inputImHiRes are same resolution
+
+layout(set = 1, binding = 0, rgba16f) uniform writeonly image2D outputIm;
+layout(set = 1, binding = 1) uniform sampler2D inputImHiRes;
+layout(set = 1, binding = 2) uniform sampler2D inputImLoRes;
+
+void main() {
+  ivec2 imSize = imageSize(outputIm);
+
+  if (gl_GlobalInvocationID.x > imSize.x || gl_GlobalInvocationID.y > imSize.y) {
+    return;
+  }
+
+  ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  vec2 texCoords = pixelToUv(pixel, imSize);
+
+  vec4 color = UpsampleTent(inputImLoRes, texCoords, vec2(1.0 / vec2(imSize)), vec4(1.0));
+
+  // Combine upsampled result with same resolution input im (the raw downsampled image)
+  color = texture(inputImHiRes, texCoords) + color;
+
+  imageStore(outputIm, pixel, color);
+}

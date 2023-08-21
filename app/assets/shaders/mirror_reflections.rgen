@@ -38,7 +38,8 @@ void main()
   ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
 
   //vec2 texCoords = (vec2(pixel) + 0.5) / vec2(ubo.screenWidth/2, ubo.screenHeight/2);
-  vec2 texCoords = (vec2(pixel) + 0.5) / vec2(ubo.screenWidth, ubo.screenHeight);
+  //vec2 texCoords = (vec2(pixel) + 0.5) / vec2(ubo.screenWidth, ubo.screenHeight);
+  vec2 texCoords = pixelToUv(pixel, ivec2(ubo.screenWidth, ubo.screenHeight));
 
   // Retrieve normal and depth from gbuffer textures
   vec4 im0Samp = texture(geom0Im, texCoords);

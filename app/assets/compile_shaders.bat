@@ -54,3 +54,10 @@ C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/probe_conv.comp -o %
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/mirror_reflections.rgen -o %2/mirror_reflections_rgen.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/mirror_reflections.rmiss -o %2/mirror_reflections_rmiss.spv
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/mirror_reflections.rchit -o %2/mirror_reflections_rchit.spv
+
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/bloom_prefilter.comp -o %2/bloom_prefilter_comp.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/bloom_downsample.comp -o %2/bloom_downsample_comp.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/bloom_upsample.comp -o %2/bloom_upsample_comp.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/bloom_composite.comp -o %2/bloom_composite_comp.spv
+
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/tonemap.comp -o %2/tonemap_comp.spv

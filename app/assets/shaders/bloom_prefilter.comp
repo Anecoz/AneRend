@@ -1,0 +1,58 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+#include "scene_ubo.glsl"
+#include "sampling.glsl"
+#include "helpers.glsl"
+
+layout(set = 1, binding = 0, rgba16f) uniform writeonly image2D outputIm;
+layout(set = 1, binding = 1) uniform sampler2D inputIm;
+
+#define EPSILON         1.0e-4
+
+float Max3(float a, float b, float c)
+{
+  return max(max(a, b), c);
+}
+
+//
+// Quadratic color thresholding
+// curve = (threshold - knee, knee * 2, 0.25 / knee)
+//
+vec4 QuadraticThreshold(vec4 color, float threshold, vec3 curve)
+{
+  // Pixel brightness
+  float br = Max3(color.r, color.g, color.b);
+
+  // Under-threshold part: quadratic curve
+  float rq = clamp(br - curve.x, 0.0, curve.y);
+  rq = curve.z * rq * rq;
+
+  // Combine and apply the brightness response curve.
+  color *= max(rq, br - threshold) / max(br, EPSILON);
+
+  return color;
+}
+
+void main() {
+  if (gl_GlobalInvocationID.x > ubo.screenWidth/2 || gl_GlobalInvocationID.y > ubo.screenHeight/2) {
+    return;
+  }
+
+  const float threshold = 1.0;
+  const float knee = 0.1;
+
+  ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  //vec2 texCoords = (vec2(pixel) + 0.5) / vec2(ubo.screenWidth/2, ubo.screenHeight/2);
+  vec2 texCoords = pixelToUv(pixel, ivec2(ubo.screenWidth/2, ubo.screenHeight/2));
+
+  vec3 curve = vec3(threshold - knee, knee * 2.0, 0.25 / knee);
+
+  vec4 color = DownsampleBox13Tap(inputIm, texCoords, vec2(textureSize(inputIm, 0)));
+  color = QuadraticThreshold(color, threshold, curve);
+
+  imageStore(outputIm, pixel, color);
+}

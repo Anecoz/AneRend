@@ -5,6 +5,7 @@
 layout (local_size_x = 16, local_size_y = 16) in;
 
 #include "scene_ubo.glsl"
+#include "helpers.glsl"
 
 layout(set = 1, binding = 0) uniform sampler2D gbuffer0Tex;
 layout(set = 1, binding = 1) uniform sampler2D depthTex;
@@ -32,7 +33,8 @@ void main() {
   }
 
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-  vec2 texCoords = (vec2(pixel) + 0.5) / vec2(ubo.screenWidth, ubo.screenHeight);
+  //vec2 texCoords = (vec2(pixel) + 0.5) / vec2(ubo.screenWidth, ubo.screenHeight);
+  vec2 texCoords = pixelToUv(pixel, ivec2(ubo.screenWidth, ubo.screenHeight));
 
   float depthSamp = texture(depthTex, texCoords).r;
 

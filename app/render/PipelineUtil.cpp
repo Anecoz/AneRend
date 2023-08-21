@@ -272,7 +272,7 @@ VkSampler createSampler(SamplerCreateParams params)
   sampler.addressModeV = params.addressMode;
   sampler.addressModeW = params.addressMode;
   sampler.mipLodBias = params.mipLodBias;
-  sampler.anisotropyEnable = VK_TRUE;
+  sampler.anisotropyEnable = VK_FALSE;
   sampler.maxAnisotropy = params.maxAnisotropy;
   sampler.minLod = params.minLod;
   sampler.maxLod = params.maxLod;

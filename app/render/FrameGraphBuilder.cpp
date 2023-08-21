@@ -826,6 +826,8 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
         SamplerCreateParams samplerParam{};
         samplerParam.useMaxFilter = usage._useMaxSampler;
         samplerParam.renderContext = renderContext;
+        samplerParam.minLod = usage._minLod;
+        samplerParam.maxLod = usage._maxLod;
         if (usage._samplerClampToBorder) {
           samplerParam.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
         }

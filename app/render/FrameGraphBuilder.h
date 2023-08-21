@@ -126,6 +126,9 @@ struct ResourceUsage
   bool _allMips = true;
   uint32_t _mip = 0; // if _allMips is false, this specifies which mip level to use.
 
+  float _minLod = 0.0f;
+  float _maxLod = 10.0f;
+
   bool _useMaxSampler = false; // Special case for Hi-Z generation...
 
   bool _bindless = false; // Currently only supported by combined image/samplers.

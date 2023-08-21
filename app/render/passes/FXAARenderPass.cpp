@@ -27,7 +27,7 @@ void FXAARenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
   std::vector<ResourceUsage> resourceUsages;
   {
     ResourceUsage usage{};
-    usage._resourceName = "FinalImage";
+    usage._resourceName = "FinalImageBloom";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Fragment);
     usage._type = Type::SampledTexture;

@@ -1,0 +1,28 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+#include "scene_ubo.glsl"
+#include "bindless.glsl"
+#include "octahedron_helpers.glsl"
+#include "pbr_light.glsl"
+
+layout(set = 1, binding = 0) uniform sampler2D inputIm;
+layout(set = 1, binding = 1, rgba8) uniform writeonly image2D outputIm;
+
+void main()
+{
+  if (gl_GlobalInvocationID.x > ubo.screenWidth || gl_GlobalInvocationID.y > ubo.screenHeight) {
+    return;
+  }
+
+  ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  vec2 texCoords = pixelToUv(pixel, ivec2(ubo.screenWidth, ubo.screenHeight));
+
+  vec4 color = texture(inputIm, texCoords);
+  color = vec4(acesTonemap(color.rgb), color.a);
+
+  imageStore(outputIm, pixel, color);
+}

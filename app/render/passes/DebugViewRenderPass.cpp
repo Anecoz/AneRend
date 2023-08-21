@@ -251,6 +251,28 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._bindless = true;
     _resourceUsages.emplace_back(std::move(usage));
   }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "BloomDsTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    usage._samplerClampToEdge = true;
+    //usage._noSamplerFiltering = true;
+    usage._bindless = true;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "BloomUsTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    usage._samplerClampToEdge = true;
+    //usage._noSamplerFiltering = true;
+    usage._bindless = true;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
   /* {
     ResourceUsage usage{};
     usage._resourceName = "SurfelTex";

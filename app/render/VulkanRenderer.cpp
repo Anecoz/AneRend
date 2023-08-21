@@ -30,6 +30,7 @@
 #include "passes/IrradianceProbeConvolvePass.h"
 #include "passes/SpecularGIRTPass.h"
 #include "passes/SpecularGIMipPass.h"
+#include "passes/BloomRenderPass.h"
 
 #include "../util/Utils.h"
 #include "../util/GraphicsUtils.h"
@@ -2777,6 +2778,7 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new SSAORenderPass());
   _renderPasses.emplace_back(new SSAOBlurRenderPass());
   _renderPasses.emplace_back(new DeferredLightingRenderPass());
+  _renderPasses.emplace_back(new BloomRenderPass());
   _renderPasses.emplace_back(new FXAARenderPass());
   _renderPasses.emplace_back(new DebugBSRenderPass());
   _renderPasses.emplace_back(new DebugViewRenderPass());

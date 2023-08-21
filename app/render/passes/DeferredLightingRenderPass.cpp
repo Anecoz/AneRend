@@ -156,14 +156,13 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
   {
     ResourceUsage usage{};
     usage._resourceName = "FinalImage";
-    usage._access.set((std::size_t)Access::Read);
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::Compute);
 
     ImageInitialCreateInfo createInfo{};
     createInfo._initialHeight = rc->swapChainExtent().height;
     createInfo._initialWidth = rc->swapChainExtent().width;
-    createInfo._intialFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
     usage._imageCreateInfo = createInfo;
 

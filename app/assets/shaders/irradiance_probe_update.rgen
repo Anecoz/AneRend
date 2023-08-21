@@ -64,28 +64,6 @@ void main()
   vec3 worldDir = worldDirFromFibonacciIndex(rayIndex);
   worldDir = mat3(pc.randomRot) * worldDir;
 
-  // Create a random rotation
-  /*float timeMod = mod(ubo.time, 2.0*acos(-1.0)); // To stop loss of precision when ubo.time gets big
-  float cosT = cos(timeMod);
-  float sinT = sin(timeMod);
-
-  mat3 rotX;
-  // below are columns, not rows...
-  rotX[0] = vec3(1.0, 0.0, 0.0); 
-  rotX[1] = vec3(0.0, cosT, sinT);
-  rotX[2] = vec3(0.0, -sinT, cosT);
-
-  worldDir = normalize(rotX * worldDir);*/
-
-  /*vec3 jitter = vec3(
-    rand(vec2(ubo.time, -ubo.time)) * 2.0 - 1.0,
-    rand(vec2(ubo.time, ubo.time)) * 2.0 - 1.0,
-    rand(vec2(-ubo.time, ubo.time)) * 2.0 - 1.0
-  );
-
-  worldDir += jitter;
-  worldDir = normalize(worldDir);*/
-
   uint  rayFlags =  gl_RayFlagsOpaqueEXT; // All geometry is considered opaque
   float tMin     = 0.1;
   float tMax     = 100.0;

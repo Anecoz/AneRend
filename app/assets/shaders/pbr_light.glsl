@@ -1,6 +1,7 @@
 #extension GL_GOOGLE_include_directive : enable
 
 #include "probe_helpers.glsl"
+#include "helpers.glsl"
 
 const float PI = 3.14159265359;
 
@@ -174,13 +175,17 @@ vec3 sampleSingleProbe(sampler2D probeTex, ivec3 probeIndex, vec3 normal)
 
   ivec2 probePixelEnd = probePixelStart + PROBE_CONV_PIX_SIZE - 1;
 
-  vec2 probeTexStart = vec2(
+  /*vec2 probeTexStart = vec2(
     (float(probePixelStart.x) + 0.5) / float(probeTexSize.x),
-    (float(probePixelStart.y) + 0.5) / float(probeTexSize.y));
+    (float(probePixelStart.y) + 0.5) / float(probeTexSize.y));*/
 
-  vec2 probeTexEnd = vec2(
+  vec2 probeTexStart = pixelToUv(probePixelStart, probeTexSize);
+
+  /*vec2 probeTexEnd = vec2(
     (float(probePixelEnd.x) + 0.5) / float(probeTexSize.x),
-    (float(probePixelEnd.y) + 0.5) / float(probeTexSize.y));
+    (float(probePixelEnd.y) + 0.5) / float(probeTexSize.y));*/
+
+  vec2 probeTexEnd = pixelToUv(probePixelEnd, probeTexSize);
 
   // This returns on -1 to 1, so change to 0 to 1
   vec2 oct = octEncode(normalize(normal));

@@ -5,6 +5,7 @@
 #include "scene_ubo.glsl"
 #include "bindless.glsl"
 #include "bindless_tlas.glsl"
+#include "helpers.glsl"
 
 struct hitPayload
 {
@@ -33,7 +34,8 @@ void main()
   }
 
   const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
-  vec2 texCoords = vec2(pixel) / vec2(ubo.screenWidth - 1, ubo.screenHeight - 1);
+  //vec2 texCoords = vec2(pixel) / vec2(ubo.screenWidth - 1, ubo.screenHeight - 1);
+  vec2 texCoords = pixelToUv(pixel, ivec2(ubo.screenWidth, ubo.screenHeight));
 
   // Early exit if we're in the sky
   float depthSamp = texture(depth, texCoords).r;
