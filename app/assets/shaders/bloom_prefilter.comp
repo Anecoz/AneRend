@@ -42,7 +42,7 @@ void main() {
     return;
   }
 
-  const float threshold = 1.0;
+  const float threshold = 1.2;
   const float knee = 0.1;
 
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);

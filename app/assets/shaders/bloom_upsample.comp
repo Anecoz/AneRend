@@ -23,7 +23,9 @@ void main() {
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
   vec2 texCoords = pixelToUv(pixel, imSize);
 
-  vec4 color = UpsampleTent(inputImLoRes, texCoords, vec2(1.0 / vec2(imSize)), vec4(1.0));
+  ivec2 lowResSize = textureSize(inputImLoRes, 0);
+
+  vec4 color = UpsampleTent(inputImLoRes, texCoords, vec2(1.0 / vec2(lowResSize)), vec4(1.0));
 
   // Combine upsampled result with same resolution input im (the raw downsampled image)
   color = texture(inputImHiRes, texCoords) + color;

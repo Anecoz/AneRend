@@ -21,8 +21,13 @@ void main() {
   vec2 texCoords = pixelToUv(pixel, imSize);
 
   ivec2 inputImSize = textureSize(inputIm, 0);
+  vec2 inputTexelSize = vec2(1.0 / vec2(inputImSize));
 
-  vec4 color = DownsampleBox13Tap(inputIm, texCoords, vec2(1.0 / vec2(inputImSize)));
+  //vec2 ratio = vec2(inputImSize) / vec2(imSize);
+  //ivec2 inputPixel = ivec2(ceil(vec2(pixel) * ratio + 1.0));
+  //vec2 texCoords = pixelToUv(inputPixel, inputImSize) + inputTexelSize * vec2(-0.5, -0.5);
+
+  vec4 color = DownsampleBox13Tap(inputIm, texCoords, inputTexelSize);
 
   imageStore(outputIm, pixel, color);
   //imageStore(outputIm, pixel, vec4(texCoords, 0.0, 1.0));
