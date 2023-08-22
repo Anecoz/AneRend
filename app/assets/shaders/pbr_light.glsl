@@ -230,10 +230,10 @@ vec4 weightProbe(sampler2D probeTex, vec3 worldPos, vec3 probePos, vec3 normal, 
   // A tiny bit of light is really visible due to log perception, so
   // crush tiny weights but keep the curve continuous. This must be done
   // before the trilinear weights, because those should be preserved.
-  const float crushThreshold = 0.2;
+  /*const float crushThreshold = 0.2;
   if (weight < crushThreshold) {
     weight *= weight * weight * (1.0 / pow(crushThreshold, 2));
-  }
+  }*/
 
   // Trilinear weights
   weight *= trilinear.x * trilinear.y * trilinear.z;
@@ -386,9 +386,9 @@ vec3 calcIndirectSpecularLight(
   vec3 refl = textureLod(specTex, texCoords, finalLod).rgb;
   //vec3 refl = textureLod(specTex, texCoords, 0).rgb;
   vec2 envBRDF = texture(lutTex, vec2(max(dot(normal, V), 0.0), 1.01 - roughness)).rg;
-  vec3 specular = refl * (kS * envBRDF.x + envBRDF.y);
+  vec3 specular = refl * (kS *envBRDF.x + envBRDF.y);
 
-  return specular * 0.5;
+  return specular;
 }
 
 // https://www.shadertoy.com/view/XsGfWV
@@ -408,4 +408,14 @@ vec3 acesTonemap(vec3 color)
   vec3 a = v * (v + 0.0245786) - 0.000090537;
   vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
   return pow(clamp(m2 * (a / b), 0.0, 1.0), vec3(1.0 / 2.2));
+}
+
+// Narkowicz 2015, "ACES Filmic Tone Mapping Curve"
+vec3 fastAcesTonemap(vec3 x) {
+  const float a = 2.51;
+  const float b = 0.03;
+  const float c = 2.43;
+  const float d = 0.59;
+  const float e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }

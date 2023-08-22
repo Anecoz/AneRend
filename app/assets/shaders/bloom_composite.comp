@@ -28,7 +28,8 @@ void main() {
   vec4 color = UpsampleTent(inputImBloom, texCoords, vec2(1.0 / vec2(bloomImSize)), vec4(1.0));
   //vec4 color = texture(inputImBloom, texCoords);
   color = texture(inputImScene, texCoords) + color;
-  color = vec4(acesTonemap(color.rgb), color.a);
+  //color = vec4(acesTonemap(color.rgb), color.a);
+  color = vec4(fastAcesTonemap(color.rgb), color.a);
 
   imageStore(outputIm, pixel, color);
 }

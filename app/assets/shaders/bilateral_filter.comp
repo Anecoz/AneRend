@@ -31,7 +31,6 @@ void main()
   }
   
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-  //vec2 texCoords = (vec2(pixel) + 0.5) / vec2(outputImSize.x, outputImSize.y);
   vec2 texCoords = pixelToUv(pixel, outputImSize);
 
   float depthSamp = texture(depth, texCoords).r;
