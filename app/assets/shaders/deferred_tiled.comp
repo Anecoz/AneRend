@@ -249,7 +249,8 @@ void doLight(ivec2 pixel)
       fragWorldPos,
       texCoords,
       specularGiTex,
-      specularLutTex);
+      specularLutTex,
+      probeTex);
   }
 
   directionalLo *= shadow;

@@ -63,7 +63,7 @@ void main()
   vec3 dir = reflect(v, normal);
 
   // If this surface isn't going to have a strong reflection, don't even shoot a ray.
-  if (metallic < 0.1 && roughness > 0.9) {
+  if (roughness > 0.7) {
     imageStore(outputIm, pixel, vec4(0.0));
     return;
   }

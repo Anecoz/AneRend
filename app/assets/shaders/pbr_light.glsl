@@ -348,7 +348,8 @@ vec3 calcIndirectSpecularLight(
   vec3 worldPos,
   vec2 texCoords,
   sampler2D specTex,
-  sampler2D lutTex)
+  sampler2D lutTex,
+  sampler2D probeTex)
 {
   // Should there be specular light here? (Attempt to minimize bleed from smaller mips)
   /*vec3 lod0Refl = textureLod(specTex, texCoords, 0).rgb;
@@ -364,7 +365,7 @@ vec3 calcIndirectSpecularLight(
   F0 = mix(F0, albedo, metallic);
 
   vec3 kS = fresnelSchlickRoughness(max(dot(normal, V), 0.0), F0, roughness);
-  const float MAX_REFLECTION_LOD = 3.0;
+  const float MAX_REFLECTION_LOD = 4.0;
 
   // Mip bias for camera
   float d = distance(ubo.cameraPos.xyz, worldPos);
@@ -382,9 +383,16 @@ vec3 calcIndirectSpecularLight(
 
   float finalLod = clamp(roughness * MAX_REFLECTION_LOD + mipBias, 0.0, MAX_REFLECTION_LOD);
 
-  //vec3 refl = textureLod(specTex, texCoords, finalLod).rgb * clamp(1.0 - roughness, 0.2, 1.0);
-  vec3 refl = textureLod(specTex, texCoords, finalLod).rgb;
-  //vec3 refl = textureLod(specTex, texCoords, 0).rgb;
+  vec3 refl = vec3(0.0);
+
+  if (roughness > 0.7) {
+    vec3 dir = reflect(-V, normal);
+    refl = sampleProbe(probeTex, worldPos, dir);
+  }
+  else {
+    refl = textureLod(specTex, texCoords, finalLod).rgb;
+  }
+  
   vec2 envBRDF = texture(lutTex, vec2(max(dot(normal, V), 0.0), 1.01 - roughness)).rg;
   vec3 specular = refl * (kS *envBRDF.x + envBRDF.y);
 
