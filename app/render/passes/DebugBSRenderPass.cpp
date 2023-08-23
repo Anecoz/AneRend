@@ -18,6 +18,7 @@ void DebugBSRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
 {
   RenderPassRegisterInfo info{};
   info._name = "DebugBoundingSpheres";
+  info._group = "Debug";
 
   {
     ResourceUsage usage{};

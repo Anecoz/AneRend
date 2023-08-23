@@ -6,6 +6,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <map>
+
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
 {
   auto app = reinterpret_cast<StageApplication*>(glfwGetWindowUserPointer(window));
@@ -108,7 +110,7 @@ bool StageApplication::init()
   // Create a bunch of test matrices
   // Trees
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 100;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -321,15 +323,42 @@ void StageApplication::render()
   {
     auto timers = _vkRenderer.getPerFrameTimers();
 
+    // Group them
+    std::vector<std::string> groups;
+    //std::map<std::string, std::vector<render::PerFrameTimer>> groups{};
+    for (auto& timer : timers) {
+      if (std::find(groups.begin(), groups.end(), timer._group) == groups.end()) {
+        groups.emplace_back(timer._group);
+      }
+    }
+
     ImGui::Begin("Per frame timers");
 
     float sum = 0.0f;
-    for (auto& timer : timers) {
+    if (ImGui::BeginTable("table3", 2)) {
+      for (auto& group : groups) {
+        float avg10 = 0.0f;
+        for (auto& timer : timers) {
+          if (timer._group == group) {
+            avg10 += timer._avg10;
+          }
+        }
+        sum += avg10;
+
+        ImGui::TableNextColumn();
+        ImGui::Text("%s", group.c_str());
+        ImGui::TableNextColumn();
+        ImGui::Text("%f", avg10);
+      }
+      ImGui::EndTable();
+    }
+
+    /*for (auto& timer : timers) {
       sum += timer._avg10;
       ImGui::Text("%s: %f", timer._name.c_str(), timer._avg10);
 
       ImGui::PlotLines("", timer._buf.data(), 1000);
-    }
+    }*/
     ImGui::Text("Sum: %f", sum);
 
     ImGui::End();

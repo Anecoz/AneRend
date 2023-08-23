@@ -40,6 +40,8 @@ namespace render {
 struct PerFrameTimer
 {
   std::string _name;
+  std::string _group;
+
   double _durationMs = 0.0f;
   double _avg10 = 0.0f;
   double _avg100 = 0.0f;
@@ -158,7 +160,7 @@ public:
 
   VkPhysicalDeviceRayTracingPipelinePropertiesKHR getRtPipeProps() override final;
 
-  void registerPerFrameTimer(const std::string& name) override final;
+  void registerPerFrameTimer(const std::string& name, const std::string& group) override final;
   void startTimer(const std::string& name, VkCommandBuffer cmdBuffer) override final;
   void stopTimer(const std::string& name, VkCommandBuffer cmdBuffer) override final;
 

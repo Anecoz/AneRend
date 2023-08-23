@@ -19,6 +19,7 @@ void SSAOBlurRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
 {
   RenderPassRegisterInfo info{};
   info._name = "SSAOBlur";
+  info._group = "SSAO";
 
   std::vector<ResourceUsage> resourceUsages;
   {

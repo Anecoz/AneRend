@@ -1,0 +1,71 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "bindless.glsl"
+#include "octahedron_helpers.glsl"
+#include "helpers.glsl"
+#include "light_shadow_helpers.glsl"
+
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
+
+layout(set = 1, binding = 0, r32f) uniform readonly image2D distIm;
+layout(set = 1, binding = 1, rgba8) uniform readonly image2D dirIm;
+layout(set = 1, binding = 2, rg32f) uniform image2D outputIm;
+
+void main()
+{
+  const int xs = LIGHT_SHADOW_OCT_SIZE - 1;
+  const int ys = LIGHT_SHADOW_OCT_SIZE - 1;
+  const int zs = MAX_NUM_LIGHTS;
+
+  if (gl_GlobalInvocationID.x > xs || gl_GlobalInvocationID.y > ys || gl_GlobalInvocationID.z > zs) {
+    return;
+  }
+  
+  ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 pixelPreLightOffset = pixel;
+  uint lightIndex = gl_GlobalInvocationID.z;
+  pixel.x += int(lightIndex) * LIGHT_SHADOW_OCT_SIZE;
+
+  ivec2 pixOffset = ivec2(2 * int(lightIndex) + 1, 0);
+
+  Light light = lightBuffer.lights[lightIndex];
+
+  if (light.color.w < 0.5) {
+    imageStore(outputIm, pixOffset + pixel, vec4(0.0));
+    return;
+  }
+
+  ivec2 lightStartPixel = ivec2(int(lightIndex) * LIGHT_DIR_DIST_PIX_SIZE, 0); // in input image pixels
+
+  // 16x16 kernel
+  int kernelSize = LIGHT_DIR_DIST_PIX_SIZE;
+
+  vec2 octUv = pixelToUv(pixelPreLightOffset, ivec2(LIGHT_SHADOW_OCT_SIZE));
+  octUv = octUv * 2.0 - 1.0;
+  vec3 octDir = octDecode(octUv);
+
+  vec4 result = vec4(0.0);
+  for (int x = 0; x < kernelSize; ++x) {
+    for (int y = 0; y < kernelSize; ++y) {
+
+      ivec2 currPix = lightStartPixel + ivec2(x, y);
+
+      float dist = imageLoad(distIm, currPix).r;
+      vec3 packedDir = imageLoad(dirIm, currPix).rgb;
+      vec3 dir = (packedDir * 2.0) - 1.0;
+      float weight = pow(max(0.0, dot(dir, octDir)), 50.0);
+      if (weight > 0.001) {
+        result += vec4(weight * dist, weight * dist * dist, 0.0, weight);
+      }
+    }
+  }
+
+  if (result.w > 1e-6) {
+    result.rgb /= result.w;
+  }
+
+  imageStore(outputIm, pixOffset + pixel, result);
+  //imageStore(outputIm, pixOffset + pixel, vec4(1.0));
+}

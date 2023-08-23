@@ -139,6 +139,7 @@ struct ResourceUsage
 struct RenderPassRegisterInfo
 {
   std::string _name;
+  std::string _group = "";
   std::vector<ResourceUsage> _resourceUsages;
   bool _present = false;
 
@@ -204,6 +205,7 @@ private:
     std::vector<ResourceUsage> _resourceUsages;
 
     std::string _debugName;
+    std::string _group;
 
     std::optional<ComputePipelineCreateParams> _computeParams;
     std::optional<GraphicsPipelineCreateParams> _graphicsParams;

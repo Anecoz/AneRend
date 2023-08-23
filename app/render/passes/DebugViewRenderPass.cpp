@@ -42,6 +42,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
 
   RenderPassRegisterInfo info{};
   info._name = "DebugView";
+  info._group = "Debug";
 
   {
     ResourceUsage usage{};
@@ -273,6 +274,36 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._bindless = true;
     _resourceUsages.emplace_back(std::move(usage));
   }
+  /* {
+    ResourceUsage usage{};
+    usage._resourceName = "LightShadowDistTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    usage._samplerClampToEdge = true;
+    usage._bindless = true;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "LightShadowDirTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    usage._samplerClampToEdge = true;
+    usage._bindless = true;
+    _resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "LightShadowMeanTex";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Fragment);
+    usage._type = Type::SampledTexture;
+    usage._samplerClampToBorder = true;
+    usage._bindless = true;
+    _resourceUsages.emplace_back(std::move(usage));
+  }*/
   /* {
     ResourceUsage usage{};
     usage._resourceName = "SurfelTex";

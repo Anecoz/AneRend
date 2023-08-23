@@ -17,6 +17,7 @@ void SpecularGIRTPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
 {
   RenderPassRegisterInfo info{};
   info._name = "SpecularGIRT";
+  info._group = "SpecularGI";
 
   // This texture will contain perfect mirror reflections radiance values in a screen-space fashion.
   // the alpha channel will contain distance between the objects

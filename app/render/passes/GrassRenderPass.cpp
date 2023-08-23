@@ -17,6 +17,7 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
   RenderPassRegisterInfo info{};
   info._name = "Grass";
+  info._group = "Geometry";
 
   std::vector<ResourceUsage> resourceUsages;
   {

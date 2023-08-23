@@ -8,6 +8,7 @@ layout (local_size_x = 32, local_size_y = 32) in;
 #include "bindless.glsl"
 #include "octahedron_helpers.glsl"
 #include "pbr_light.glsl"
+#include "light_shadow_helpers.glsl"
 //#include "compass_directions.glsl"
 //#include "probe_helpers.glsl"
 
@@ -60,15 +61,9 @@ void main()
 
   // Early exit if we're in the sky
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-  //vec2 texCoords = (vec2(pixel) + 0.5) / vec2(ubo.screenWidth, ubo.screenHeight);
   vec2 texCoords = pixelToUv(pixel, ivec2(ubo.screenWidth, ubo.screenHeight));
 
   float depthSamp = texture(depth, texCoords).r;
-
-  if (depthSamp == 1.0f) {
-    imageStore(outputIm, pixel, vec4(clearColor, 1.0));
-    return;
-  }
 
   barrier();
 
@@ -102,7 +97,7 @@ void main()
     vec4 lightView =  ubo.view * vec4(light.worldPos.xyz, 1.0f);
     bool inFrustum = true;//distance(ubo.cameraPos.xyz, light.worldPos.xyz) < 50.0;
     inFrustum = inFrustum && lightView.z > -50.0;
-    inFrustum = inFrustum && lightView.z < 1.0;
+    inFrustum = inFrustum && lightView.z < .1;
     if (inFrustum) {
       for (int j = 3; j >= 0 && inFrustum; --j) {
         float d = dot(frustumPlanes[j], lightView); // Distance of the point from the plane
@@ -117,6 +112,11 @@ void main()
   }
 
   barrier();
+
+  if (depthSamp == 1.0f) {
+    imageStore(outputIm, pixel, vec4(clearColor, 1.0));
+    return;
+  }
 
   doLight(pixel);
 }
@@ -212,8 +212,9 @@ void doLight(ivec2 pixel)
       }
     }
     else {
-      Light light = lightBuffer.lights[groupLocalIndexList[i-1]];
-      Lo += calcLight(
+      int lightIndex = int(groupLocalIndexList[i-1]);
+      Light light = lightBuffer.lights[lightIndex];
+      vec3 lightContrib = calcLight(
         normal,
         albedo,
         metallic,
@@ -223,6 +224,7 @@ void doLight(ivec2 pixel)
         light,
         0,
         true);
+      Lo += lightContrib;
     }
   }
 

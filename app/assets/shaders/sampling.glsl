@@ -40,8 +40,8 @@ vec4 UpsampleTent(sampler2D tex, vec2 uv, vec2 texelSize, vec4 sampleScale)
   sampleScale = vec4(1.0);
   vec4 d = texelSize.xyxy * vec4(1.0, 1.0, -1.0, 0.0) * sampleScale;
 
-  vec4 s;
-  s = texture(tex, uv - d.xy);
+  vec4 s = vec4(0.0);
+  s += texture(tex, uv - d.xy);
   s += texture(tex, uv - d.wy) * 2.0;
   s += texture(tex, uv - d.zy);
 

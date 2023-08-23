@@ -31,6 +31,8 @@
 #include "passes/SpecularGIRTPass.h"
 #include "passes/SpecularGIMipPass.h"
 #include "passes/BloomRenderPass.h"
+//#include "passes/LightShadowRayTracingPass.h"
+//#include "passes/LightShadowSumPass.h"
 
 #include "../util/Utils.h"
 #include "../util/GraphicsUtils.h"
@@ -205,7 +207,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _latestCamera(initialCamera)
   , _fgb(&_vault)
   , _window(window)
-  , _enableValidationLayers(true)
+  , _enableValidationLayers(false)
   , _enableRayTracing(true)
 {
   imageutil::init();
@@ -1842,9 +1844,9 @@ void VulkanRenderer::computePerFrameQueries()
   }
 }
 
-void VulkanRenderer::registerPerFrameTimer(const std::string& name)
+void VulkanRenderer::registerPerFrameTimer(const std::string& name, const std::string& group)
 {
-  PerFrameTimer timer{ name };
+  PerFrameTimer timer{ name, group };
   timer._buf.resize(1000);
   _perFrameTimers.emplace_back(std::move(timer));
 }
@@ -2326,14 +2328,14 @@ bool VulkanRenderer::createSyncObjects()
 
 bool VulkanRenderer::initLights()
 {
-  //_lights.resize(MAX_NUM_LIGHTS);
+  _lights.resize(MAX_NUM_LIGHTS);
 
   std::random_device dev;
   std::mt19937 rng(dev());
   std::uniform_real_distribution<> col(0.0, 1.0);
   std::uniform_real_distribution<> pos(0.0, 100.0);
   std::uniform_real_distribution<> rad(0.0, 10.0);
-  std::uniform_real_distribution<> speed(1.0, 2.0);
+  std::uniform_real_distribution<> speed(.1, .2);
 
   for (std::size_t i = 0; i < _lights.size(); ++i) {
     auto& light = _lights[i];
@@ -2344,7 +2346,7 @@ bool VulkanRenderer::initLights()
 
     glm::vec3 randomPos{
       pos(rng),
-      .5f,
+      2.0f,
       pos(rng)
     };
 
@@ -2419,7 +2421,7 @@ bool VulkanRenderer::initBindless()
     lightLayoutBinding.binding = lightBinding;
     lightLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     lightLayoutBinding.descriptorCount = 1;
-    lightLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    lightLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR;
     bindings.emplace_back(std::move(lightLayoutBinding));
 
     VkDescriptorSetLayoutBinding clusterLayoutBinding{};
@@ -2764,6 +2766,8 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new IrradianceProbeTranslationPass());
   _renderPasses.emplace_back(new IrradianceProbeRayTracingPass());
   _renderPasses.emplace_back(new IrradianceProbeConvolvePass());
+  //_renderPasses.emplace_back(new LightShadowRayTracingPass());
+  //_renderPasses.emplace_back(new LightShadowSumPass());
   _renderPasses.emplace_back(new ShadowRenderPass());
   _renderPasses.emplace_back(new GrassShadowRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());

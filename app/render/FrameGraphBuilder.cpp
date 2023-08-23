@@ -400,7 +400,7 @@ bool FrameGraphBuilder::build(RenderContext* renderContext, RenderResourceVault*
   // Insert timers
   for (auto& node : _builtGraph) {
     if (node._rpExe) {
-      renderContext->registerPerFrameTimer(node._debugName);
+      renderContext->registerPerFrameTimer(node._debugName, node._group);
     }
   }
 
@@ -951,6 +951,7 @@ void FrameGraphBuilder::findDependenciesRecurse(std::vector<GraphNode>& stack, S
       node._graphicsParams= producer->_regInfo._graphicsParams;
       node._rtParams = producer->_regInfo._rtParams;
       node._debugName = std::string(producer->_regInfo._name);
+      node._group = producer->_regInfo._group;
       node._resourceUsages = producer->_regInfo._resourceUsages;
 
       auto producersCopy = node._producedResources;
@@ -1093,6 +1094,7 @@ void FrameGraphBuilder::internalBuild3()
     node._graphicsParams = sub._regInfo._graphicsParams;
     node._rtParams = sub._regInfo._rtParams;
     node._debugName = std::string(sub._regInfo._name);
+    node._group = sub._regInfo._group.empty() ? node._debugName : sub._regInfo._group;
     node._resourceUsages = sub._regInfo._resourceUsages;
 
     _builtGraph.emplace_back(node);

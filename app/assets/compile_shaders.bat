@@ -61,3 +61,9 @@ C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/bloom_upsample.comp 
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/bloom_composite.comp -o %2/bloom_composite_comp.spv
 
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/tonemap.comp -o %2/tonemap_comp.spv
+
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/light_shadow.rgen -o %2/light_shadow_rgen.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/light_shadow.rmiss -o %2/light_shadow_rmiss.spv
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/light_shadow.rchit -o %2/light_shadow_rchit.spv
+
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/light_shadow_sum.comp -o %2/light_shadow_sum_comp.spv

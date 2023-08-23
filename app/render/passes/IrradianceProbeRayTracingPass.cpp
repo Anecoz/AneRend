@@ -66,6 +66,7 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
 {
   RenderPassRegisterInfo info{};
   info._name = "IrradianceProbeRT";
+  info._group = "IrradianceProbe";
 
   const int numRaysPerProbe = 256;
   const int sqrtNumRays = std::sqrt(numRaysPerProbe);

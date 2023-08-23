@@ -21,6 +21,7 @@ void SpecularGIMipPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
   for (int i = 0; i < mipLevels - 1; ++i) {
     RenderPassRegisterInfo info{};
     info._name = "SpecularGIMipGen" + std::to_string(i);
+    info._group = "SpecularGI";
 
     {
       ResourceUsage usage{};

@@ -169,6 +169,7 @@ void SSAORenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
   RenderPassRegisterInfo info{};
   info._name = "SSAO";
+  info._group = "SSAO";
 
   std::vector<ResourceUsage> resourceUsages;
   {

@@ -17,6 +17,7 @@ void IrradianceProbeTranslationPass::registerToGraph(FrameGraphBuilder& fgb, Ren
 {
   RenderPassRegisterInfo info{};
   info._name = "IrradianceProbeTrans";
+  info._group = "IrradianceProbe";
 
   const int octPixelSize = 8;
   const int numProbesPlane = rc->getNumIrradianceProbesXZ();

@@ -16,6 +16,7 @@ void IrradianceProbeConvolvePass::registerToGraph(FrameGraphBuilder& fgb, Render
 {
   RenderPassRegisterInfo info{};
   info._name = "IrradianceProbeConvolve";
+  info._group = "IrradianceProbe";
 
   const int octPixelSize = 8;
   const int numProbesPlane = rc->getNumIrradianceProbesXZ();

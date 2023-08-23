@@ -22,6 +22,7 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
 {
   RenderPassRegisterInfo info{};
   info._name = "Shadow";
+  info._group = "Shadow";
 
   {
     ResourceUsage usage{};

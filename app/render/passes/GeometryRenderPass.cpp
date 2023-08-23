@@ -103,6 +103,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
 {
   RenderPassRegisterInfo info{};
   info._name = "Geometry";
+  info._group = "Geometry";
 
   std::vector<ResourceUsage> resourceUsages;
   {

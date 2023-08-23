@@ -32,6 +32,7 @@ void BloomRenderPass::prefilterPass(FrameGraphBuilder& fgb, RenderContext* rc)
   // The first step just does a threshold filter + downsample
   RenderPassRegisterInfo info{};
   info._name = "BloomPreFilter";
+  info._group = "Bloom";
 
   {
     ResourceUsage usage{};
@@ -92,6 +93,7 @@ void BloomRenderPass::downsamplePass(FrameGraphBuilder& fgb, RenderContext* rc)
     RenderPassRegisterInfo info{};
     std::string name = "BloomDownsample" + std::to_string(mip);
     info._name = name;
+    info._group = "Bloom";
 
     {
       ResourceUsage usage{};
@@ -159,6 +161,7 @@ void BloomRenderPass::upsamplePass(FrameGraphBuilder& fgb, RenderContext* rc)
     RenderPassRegisterInfo info{};
     std::string name = "BloomUpsample5";
     info._name = name;
+    info._group = "Bloom";
 
     {
       ResourceUsage usage{};
@@ -239,6 +242,7 @@ void BloomRenderPass::upsamplePass(FrameGraphBuilder& fgb, RenderContext* rc)
     RenderPassRegisterInfo info{};
     std::string name = "BloomUpsample" + std::to_string(mip);
     info._name = name;
+    info._group = "Bloom";
 
     {
       ResourceUsage usage{};
@@ -311,6 +315,7 @@ void BloomRenderPass::compositePass(FrameGraphBuilder& fgb, RenderContext* rc)
 {
   RenderPassRegisterInfo info{};
   info._name = "BloomComposite";
+  info._group = "Bloom";
 
   {
     ResourceUsage usage{};

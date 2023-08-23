@@ -17,6 +17,7 @@ void GrassShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContex
 {
   RenderPassRegisterInfo info{};
   info._name = "GrassShadow";
+  info._group = "Shadow";
 
   {
     ResourceUsage shadowMapUsage{};
