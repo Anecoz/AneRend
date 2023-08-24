@@ -2102,7 +2102,6 @@ void VulkanRenderer::prefillGPUMeshMaterialBuffer(VkCommandBuffer& commandBuffer
     mappedData[i]._emissiveFactorR = mesh._emissiveFactor.r;
     mappedData[i]._emissiveFactorG = mesh._emissiveFactor.g;
     mappedData[i]._emissiveFactorB = mesh._emissiveFactor.b;
-    //mappedData[i]._baseColFactor = mesh._baseColFactor;
   }
 
   VkBufferCopy copyRegion{};

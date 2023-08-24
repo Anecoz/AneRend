@@ -51,7 +51,7 @@ void main() {
 
   vec3 curve = vec3(threshold - knee, knee * 2.0, 0.25 / knee);
 
-  vec4 color = DownsampleBox13Tap(inputIm, texCoords, vec2(textureSize(inputIm, 0)));
+  vec4 color = DownsampleBox13Tap(inputIm, texCoords, vec2(1.0 / textureSize(inputIm, 0)));
   color = QuadraticThreshold(color, threshold, curve);
 
   imageStore(outputIm, pixel, color);

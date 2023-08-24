@@ -101,14 +101,16 @@ void main()
   }
 
   // Always calculate indirect light
-  payload.irradiance += calcIndirectDiffuseLight(
-    surfData.normal,
-    surfData.color,
-    surfData.metallic,
-    surfData.roughness,
-    pos,
-    gl_ObjectRayOriginEXT,
-    probeTex);
+  if (ubo.ddgiEnabled == 1) {
+    payload.irradiance += calcIndirectDiffuseLight(
+      surfData.normal,
+      surfData.color,
+      surfData.metallic,
+      surfData.roughness,
+      pos,
+      gl_ObjectRayOriginEXT,
+      probeTex);
+  }
 
   payload.irradiance += surfData.emissive;
 

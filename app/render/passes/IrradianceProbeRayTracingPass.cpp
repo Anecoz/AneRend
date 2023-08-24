@@ -73,6 +73,8 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
   const int numProbesPlane = rc->getNumIrradianceProbesXZ();
   const int numProbesHeight = rc->getNumIrradianceProbesY();
 
+  _currentLayer = 0;
+
   // Texture to capture the rays irradiance information, which will later be integrated per probe oct direction
   {
     ResourceUsage usage{};

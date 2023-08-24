@@ -2,8 +2,49 @@
 
 #include "../FrameGraphBuilder.h"
 #include "../RenderContext.h"
+#include "../ImageHelpers.h"
 
 namespace render {
+
+void clearConvTex(RenderContext* renderContext, VkImage& image)
+{
+  auto cmdBuf = renderContext->beginSingleTimeCommands();
+
+  imageutil::transitionImageLayout(
+    cmdBuf,
+    image,
+    VK_FORMAT_R16G16B16A16_SFLOAT,
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+  VkClearColorValue clearVal{};
+  clearVal.float32[0] = 0.0;
+  clearVal.float32[1] = 0.0;
+  clearVal.float32[2] = 0.0;
+  clearVal.float32[3] = 1.0;
+
+  VkImageSubresourceRange subRange{};
+  subRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  subRange.layerCount = 1;
+  subRange.levelCount = 1;
+
+  vkCmdClearColorImage(
+    cmdBuf,
+    image,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    &clearVal,
+    1,
+    &subRange);
+
+  imageutil::transitionImageLayout(
+    cmdBuf,
+    image,
+    VK_FORMAT_R16G16B16A16_SFLOAT,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+  renderContext->endSingleTimeCommands(cmdBuf);
+}
 
 IrradianceProbeConvolvePass::IrradianceProbeConvolvePass()
   : RenderPass()
@@ -49,6 +90,7 @@ void IrradianceProbeConvolvePass::registerToGraph(FrameGraphBuilder& fgb, Render
     createInfo._initialHeight = (octPixelSize + 2) * numProbesPlane * numProbesHeight; // ditto
     createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
     createInfo._initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // hack since this is used in a pass before this one...
+    createInfo._initialDataCb = clearConvTex;
 
     usage._imageCreateInfo = createInfo;
 

@@ -385,7 +385,7 @@ vec3 calcIndirectSpecularLight(
 
   vec3 refl = vec3(0.0);
 
-  if (roughness > 0.7) {
+  if (roughness > 0.7 && ubo.ddgiEnabled == 1) {
     vec3 dir = reflect(-V, normal);
     refl = sampleProbe(probeTex, worldPos, dir);
   }

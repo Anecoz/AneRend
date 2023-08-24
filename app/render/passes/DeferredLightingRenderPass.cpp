@@ -263,7 +263,7 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
         2 * sizeof(uint32_t),
         pushData);
         
-      vkCmdDispatch(*exeParams.cmdBuffer, numX, numY + 1, 1);
+      vkCmdDispatch(*exeParams.cmdBuffer, numX + 1, numY + 1, 1);
     });
 }
 
