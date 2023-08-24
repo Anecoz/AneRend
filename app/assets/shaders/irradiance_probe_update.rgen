@@ -66,7 +66,7 @@ void main()
 
   uint  rayFlags =  gl_RayFlagsOpaqueEXT; // All geometry is considered opaque
   float tMin     = 0.1;
-  float tMax     = 100.0;
+  float tMax     = 50.0;
 
   payload.irradiance = vec3(0.0);
 

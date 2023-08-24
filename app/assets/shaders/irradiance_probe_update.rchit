@@ -48,7 +48,7 @@ void main()
     gl_RayFlagsTerminateOnFirstHitEXT | // We don't care about finding _closest_ hit, just if _something_ is hit
     gl_RayFlagsSkipClosestHitShaderEXT; // Skip running the closest hit shader at the end, since miss shader is enough
   float tMin     = 0.1;
-  float tMax     = 100.0;
+  float tMax     = 50.0;
 
   traceRayEXT(tlas, // acceleration structure
           rayFlags,       // rayFlags

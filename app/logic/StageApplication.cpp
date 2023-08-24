@@ -243,7 +243,7 @@ void StageApplication::update(double delta)
 
   _camera.update(delta);
 
-  //_windSystem.update(delta);
+  _windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));
 
   if (_sponzaMoved) {

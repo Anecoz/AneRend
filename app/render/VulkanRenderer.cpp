@@ -207,7 +207,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _latestCamera(initialCamera)
   , _fgb(&_vault)
   , _window(window)
-  , _enableValidationLayers(false)
+  , _enableValidationLayers(true)
   , _enableRayTracing(true)
 {
   imageutil::init();
@@ -1667,6 +1667,11 @@ void VulkanRenderer::recreateSwapChain()
     res->_image = _gpuWindForceImage[i];
     res->_views.emplace_back(_gpuWindForceView[i]);
     _vault.addResource("WindForceImage", std::unique_ptr<IRenderResource>(res), true, i, true);
+
+    // Add renderable buffer to vault, needed by particle system
+    auto bufRes = new BufferRenderResource();
+    bufRes->_buffer = _gpuRenderableBuffer[i];
+    _vault.addResource("RenderableBuffer", std::unique_ptr<IRenderResource>(bufRes), true, i, true);
   }
 
   initFrameGraphBuilder();
@@ -3098,6 +3103,11 @@ bool VulkanRenderer::initGpuBuffers()
     res->_image = _gpuWindForceImage[i];
     res->_views.emplace_back(_gpuWindForceView[i]);
     _vault.addResource("WindForceImage", std::unique_ptr<IRenderResource>(res), true, i, true);
+
+    // Add renderable buffer to vault, needed by particle system
+    auto bufRes = new BufferRenderResource();
+    bufRes->_buffer = _gpuRenderableBuffer[i];
+    _vault.addResource("RenderableBuffer", std::unique_ptr<IRenderResource>(bufRes), true, i, true);
   }
 
   return true;

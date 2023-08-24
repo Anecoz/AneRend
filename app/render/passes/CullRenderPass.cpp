@@ -238,6 +238,15 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
   drawCmdUsage._bufferCreateInfo = drawCreateInfo;
   regInfo._resourceUsages.emplace_back(std::move(drawCmdUsage));
 
+  ResourceUsage renderableBufUsage{};
+  renderableBufUsage._resourceName = "RenderableBuffer";
+  renderableBufUsage._access.set((std::size_t)Access::Read);
+  renderableBufUsage._stage.set((std::size_t)Stage::Compute);
+  renderableBufUsage._type = Type::SSBO;
+  renderableBufUsage._multiBuffered = true;
+  renderableBufUsage._ownedByEngine = true;
+  regInfo._resourceUsages.emplace_back(std::move(renderableBufUsage));
+
   ResourceUsage translationBufUsage{};
   translationBufUsage._resourceName = "CullTransBuf";
   translationBufUsage._access.set((std::size_t)Access::Write);

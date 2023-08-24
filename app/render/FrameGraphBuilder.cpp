@@ -540,6 +540,8 @@ bool FrameGraphBuilder::createResources(RenderContext* renderContext, RenderReso
 
   for (auto& sub : _submissions) {
     for (auto& usage : sub._regInfo._resourceUsages) {
+      if (usage._ownedByEngine) continue;
+
       foundResources.emplace_back(usage._resourceName);
 
       // If this resource is not created
@@ -764,6 +766,7 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
     bool bindlessAdded = false;
     for (int i = 0; i < node._resourceUsages.size(); ++i) {
       auto& usage = node._resourceUsages[i];
+      if (usage._ownedByEngine) continue;
 
       if ((isTypeBuffer(usage._type) && shouldBeDescriptor(usage._stage)) ||
         (isTypeImage(usage._type) && shouldBeDescriptor(usage._type)) && !bindlessAdded) {
@@ -802,6 +805,8 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
     currBinding = 0;
     for (int i = 0; i < node._resourceUsages.size(); ++i) {
       auto& usage = node._resourceUsages[i];
+      if (usage._ownedByEngine) continue;
+
       bool advanceBinding = false;
 
       DescriptorBindInfo bindInfo{};

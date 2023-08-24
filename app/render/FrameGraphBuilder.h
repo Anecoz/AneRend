@@ -110,6 +110,7 @@ struct ResourceUsage
   std::uint32_t _imageBaseLayer;
 
   bool _invalidateAfterRead = false;
+  bool _ownedByEngine = false; // If true, indicates that the renderer owns it, so no create info is needed
   std::string _resourceName;
 
   std::optional<BufferInitialCreateInfo> _bufferCreateInfo;
