@@ -552,6 +552,11 @@ bool FrameGraphBuilder::createResources(RenderContext* renderContext, RenderReso
             auto flags = findBufferCreateFlags(usage._resourceName);
 
             VkBufferUsageFlagBits flag{};
+
+            if (usage._bufferCreateInfo->_flags != 0) {
+              flag = VkBufferUsageFlagBits(usage._bufferCreateInfo->_flags);
+            }
+
             for (auto f : flags) {
               flag = VkBufferUsageFlagBits(flag | f);
             }

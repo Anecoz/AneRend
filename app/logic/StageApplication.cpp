@@ -193,7 +193,7 @@ bool StageApplication::init()
   }
   // Sponza GLTF
   {
-    std::size_t numInstances = 1;
+    std::size_t numInstances = 0;
 
     _sponzaPos = glm::vec3(16.0f, -1.0f, 16.0f);
 
@@ -213,7 +213,7 @@ bool StageApplication::init()
   }
   // Metal rough spheres
   {
-    std::size_t numInstances = 1;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -243,7 +243,7 @@ void StageApplication::update(double delta)
 
   _camera.update(delta);
 
-  _windSystem.update(delta);
+  //_windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));
 
   if (_sponzaMoved) {

@@ -1,4 +1,5 @@
 #extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
 
 struct Renderable
 {
@@ -43,6 +44,7 @@ struct MeshInfo
 {
   uint vertexOffset; // in "number" of vertices, not bytes
   uint indexOffset; // in "number" of indices, not bytes
+  uint64_t blasRef;
 };
 
 struct PackedVertex
@@ -94,7 +96,7 @@ Vertex unpackVertex(PackedVertex packedVertex)
 
 layout(set = 0, binding = 1) uniform sampler2D windForceTex;
 
-layout(std430, set = 0, binding = 2) readonly buffer RenderableBuffer {
+layout(std430, set = 0, binding = 2) buffer RenderableBuffer {
   Renderable renderables[];
 } renderableBuffer;
 
@@ -181,4 +183,26 @@ vec4 toLinear(vec4 sRGB)
   vec3 lower = sRGB.rgb / vec3(12.92);
 
   return vec4(mix(higher, lower, cutoff), sRGB.a);
+}
+
+bool cullBitSet(Renderable rend)
+{
+  return bitfieldExtract(rend.visible, 1, 1) > 0;
+}
+
+uint setCullBit(Renderable rend, bool val)
+{
+  uint insert = val ? 1 : 0;
+  return bitfieldInsert(rend.visible, insert, 1, 1);
+}
+
+bool visibleBitSet(Renderable rend)
+{
+  return bitfieldExtract(rend.visible, 0, 1) > 0;
+}
+
+uint setVisibleBit(Renderable rend, bool val)
+{
+  uint insert = val ? 1 : 0;
+  return bitfieldInsert(rend.visible, insert, 0, 1);
 }

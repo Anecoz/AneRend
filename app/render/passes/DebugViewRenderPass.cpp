@@ -234,7 +234,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._type = Type::SampledTexture;
     _resourceUsages.emplace_back(std::move(usage));
   }
-  /* {
+  {
     ResourceUsage usage{};
     usage._resourceName = "TempProbeTex";
     usage._access.set((std::size_t)Access::Read);
@@ -242,7 +242,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._bindless = true;
     usage._type = Type::SampledTexture;
     _resourceUsages.emplace_back(std::move(usage));
-  }*/
+  }
   {
     ResourceUsage usage{};
     usage._resourceName = "SpecularBRDFLutTex";

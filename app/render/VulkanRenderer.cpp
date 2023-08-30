@@ -33,6 +33,8 @@
 #include "passes/BloomRenderPass.h"
 //#include "passes/LightShadowRayTracingPass.h"
 //#include "passes/LightShadowSumPass.h"
+#include "passes/ParticleUpdatePass.h"
+#include "passes/UpdateTLASPass.h"
 
 #include "../util/Utils.h"
 #include "../util/GraphicsUtils.h"
@@ -150,22 +152,6 @@ VKAPI_ATTR void VKAPI_CALL DestroyAccelerationStructureKHR(
   }
 }
 
-VKAPI_ATTR void VKAPI_CALL CmdBuildAccelerationStructuresKHR(
-  VkDevice                                    device,
-  VkCommandBuffer                             commandBuffer,
-  uint32_t                                    infoCount,
-  const VkAccelerationStructureBuildGeometryInfoKHR* pInfos,
-  const VkAccelerationStructureBuildRangeInfoKHR* const* ppBuildRangeInfos)
-{
-  auto func = (PFN_vkCmdBuildAccelerationStructuresKHR)vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR");
-  if (func != nullptr) {
-    return func(commandBuffer, infoCount, pInfos, ppBuildRangeInfos);
-  }
-  else {
-    printf("vkCmdBuildAccelerationStructuresKHR not available!\n");
-  }
-}
-
 VKAPI_ATTR void VKAPI_CALL GetAccelerationStructureBuildSizesKHR(
   VkDevice                                    device,
   VkAccelerationStructureBuildTypeKHR         buildType,
@@ -251,6 +237,7 @@ VulkanRenderer::~VulkanRenderer()
     }
 
     vmaDestroyBuffer(_vmaAllocator, _tlas._buffer._buffer, _tlas._buffer._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _tlas._scratchBuffer._buffer, _tlas._scratchBuffer._allocation);
     DestroyAccelerationStructureKHR(_device, _tlas._as, nullptr);
   }
 
@@ -431,6 +418,8 @@ bool VulkanRenderer::init()
   vkext::vulkanExtensionInit(_device);
   _renderOptions.raytracingEnabled = _enableRayTracing;
 
+  createParticles();
+
   printf("Init frame graph builder...");
   res &= initFrameGraphBuilder();
   if (!res) return false;
@@ -458,6 +447,8 @@ bool VulkanRenderer::init()
   _debugCubeMesh = registerMesh(vert, inds);*/
 
   // TESTING
+  
+
   std::vector<Vertex> vert;
   std::vector<std::uint32_t> inds;
   graphicsutil::createSphere(1.0f, &vert, &inds, true);
@@ -591,12 +582,21 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh, bool buildBlas)
   _gigaVtxBuffer._freeSpacePointer += vertSize;
   _gigaIdxBuffer._freeSpacePointer += indSize;
 
-  vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
-
   // Build BLAS
   if (_enableRayTracing && buildBlas) {
     registerBottomLevelAS(idCopy);
+
+    // Get the address of the built BLAS
+    auto& blas = _blases[idCopy];
+    VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
+    addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+    addressInfo.accelerationStructure = blas._as;
+    VkDeviceAddress blasAddress = GetAccelerationStructureDeviceAddressKHR(_device, &addressInfo);
+
+    _currentMeshes.back()._blasRef = blasAddress;
   }
+
+  vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
 
   return _currentMeshes.size() - 1;
 }
@@ -820,6 +820,7 @@ void VulkanRenderer::update(
   ubo.view = camera.getCamMatrix();
   ubo.viewVector = glm::vec4(camera.getForward(), 1.0);
   ubo.time = time;
+  ubo.delta = delta;
   ubo.screenHeight = swapChainExtent().height;
   ubo.screenWidth = swapChainExtent().width;
   ubo.ssaoEnabled = _renderOptions.ssao;
@@ -990,8 +991,7 @@ void VulkanRenderer::registerBottomLevelAS(MeshId meshId)
   auto cmdBuffer = beginSingleTimeCommands();
 
   VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
-  CmdBuildAccelerationStructuresKHR(
-    _device,
+  vkext::vkCmdBuildAccelerationStructuresKHR(
     cmdBuffer, // The command buffer to record the command
     1, // Number of acceleration structures to build
     &buildInfo, // Array of ...BuildGeometryInfoKHR objects
@@ -1006,101 +1006,10 @@ void VulkanRenderer::registerBottomLevelAS(MeshId meshId)
 
 void VulkanRenderer::buildTopLevelAS()
 {
-  std::vector<VkAccelerationStructureInstanceKHR> instances;
-
-  for (auto& rend : _currentRenderables) {
-    if (!rend._buildTlas) continue;
-    for (uint32_t i = 0; i < rend._numMeshes; ++i) {
-      auto& blas = _blases[rend._firstMeshId + i];
-
-      // Get address of BLAS
-      VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
-      addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
-      addressInfo.accelerationStructure = blas._as;
-      VkDeviceAddress blasAddress = GetAccelerationStructureDeviceAddressKHR(_device, &addressInfo);
-
-      // Create the instance
-      VkAccelerationStructureInstanceKHR instance{};
-      VkTransformMatrixKHR matrix{
-        rend._transform[0][0], rend._transform[1][0], rend._transform[2][0], rend._transform[3][0],
-        rend._transform[0][1], rend._transform[1][1], rend._transform[2][1], rend._transform[3][1],
-        rend._transform[0][2], rend._transform[1][2], rend._transform[2][2], rend._transform[3][2]
-      };
-      instance.transform = matrix;
-      instance.mask = 0xFF;
-      instance.instanceShaderBindingTableRecordOffset = 0;
-      instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-      instance.instanceCustomIndex = _currentMeshes[rend._firstMeshId + i]._id;
-      instance.accelerationStructureReference = blasAddress;
-
-      instances.emplace_back(instance);
-    }
-  }
-
-  std::size_t dataSize = sizeof(VkAccelerationStructureInstanceKHR) * instances.size();
-
-  // Create a buffer for all instances
-  AllocatedBuffer instanceBuffer{};
-  bufferutil::createBuffer(
-    _vmaAllocator,
-    dataSize,
-    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
-    0,
-    instanceBuffer);
-
-  // Create a staging buffer to upload the data to the buffer
-  AllocatedBuffer stagingBuffer{};
-  bufferutil::createBuffer(
-    _vmaAllocator,
-    dataSize,
-    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-    stagingBuffer);
-
-  uint8_t* data;
-  vmaMapMemory(_vmaAllocator, stagingBuffer._allocation, (void**)&data);
-  memcpy(data, instances.data(), dataSize);
-  vmaUnmapMemory(_vmaAllocator, stagingBuffer._allocation);
-
   auto cmdBuffer = beginSingleTimeCommands();
-
-  VkBufferCopy copy{};
-  copy.size = dataSize;
-  vkCmdCopyBuffer(
-    cmdBuffer,
-    stagingBuffer._buffer,
-    instanceBuffer._buffer,
-    1, &copy);
-
-  // Add a memory barrier to ensure that createBuffer's upload command
-  // finishes before starting the TLAS build.
-  VkMemoryBarrier barrier{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
-  barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-  vkCmdPipelineBarrier(cmdBuffer,
-    VK_PIPELINE_STAGE_TRANSFER_BIT,
-    VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-    0,
-    1, &barrier,
-    0, nullptr,
-    0, nullptr);
-
-  VkAccelerationStructureBuildRangeInfoKHR rangeInfo{};
-  rangeInfo.primitiveOffset = 0;
-  rangeInfo.primitiveCount = (uint32_t)instances.size(); // Number of instances
-  rangeInfo.firstVertex = 0;
-  rangeInfo.transformOffset = 0;
-
-  VkBufferDeviceAddressInfo instanceAddrInfo{};
-  instanceAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-  instanceAddrInfo.buffer = instanceBuffer._buffer;
-
-  VkDeviceAddress instanceAddr = vkGetBufferDeviceAddress(_device, &instanceAddrInfo);
-
   VkAccelerationStructureGeometryInstancesDataKHR instancesVk{};
   instancesVk.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
   instancesVk.arrayOfPointers = VK_FALSE;
-  instancesVk.data.deviceAddress = instanceAddr;
 
   // Like creating the BLAS, point to the geometry (in this case, the
   // instances) in a polymorphic object.
@@ -1122,12 +1031,13 @@ void VulkanRenderer::buildTopLevelAS()
   
   // Query the worst-case AS size and scratch space size based on
   // the number of instances.
+  uint32_t maxPrimitiveCount = MAX_NUM_RENDERABLES;
   VkAccelerationStructureBuildSizesInfoKHR sizeInfo{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
   GetAccelerationStructureBuildSizesKHR(
     _device,
     VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
     &buildInfo,
-    &rangeInfo.primitiveCount,
+    &maxPrimitiveCount,
     &sizeInfo);
 
   // Allocate a buffer for the acceleration structure.
@@ -1151,39 +1061,20 @@ void VulkanRenderer::buildTopLevelAS()
     return;
   }
 
-  buildInfo.dstAccelerationStructure = _tlas._as;
-
   // Allocate the scratch buffer holding temporary build data.
-  AllocatedBuffer scratchBuffer{};
   bufferutil::createBuffer(
     _vmaAllocator,
     sizeInfo.buildScratchSize,
     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     0,
-    scratchBuffer);
+    _tlas._scratchBuffer);
 
   VkBufferDeviceAddressInfo scratchAddrInfo{};
   scratchAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-  scratchAddrInfo.buffer = scratchBuffer._buffer;
-  VkDeviceAddress scratchAddr = vkGetBufferDeviceAddress(_device, &scratchAddrInfo);
-
-  buildInfo.scratchData.deviceAddress = scratchAddr;
-
-  // Create a one-element array of pointers to range info objects.
-  VkAccelerationStructureBuildRangeInfoKHR * pRangeInfo = &rangeInfo;
-
-  // Build the TLAS.
-  CmdBuildAccelerationStructuresKHR(
-    _device,
-    cmdBuffer,
-    1, &buildInfo,
-    & pRangeInfo);
+  scratchAddrInfo.buffer = _tlas._scratchBuffer._buffer;
+  _tlas._scratchAddress = vkGetBufferDeviceAddress(_device, &scratchAddrInfo);
 
   endSingleTimeCommands(cmdBuffer);
-
-  vmaDestroyBuffer(_vmaAllocator, scratchBuffer._buffer, scratchBuffer._allocation);
-  vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
-  vmaDestroyBuffer(_vmaAllocator, instanceBuffer._buffer, instanceBuffer._allocation);
 }
 
 void VulkanRenderer::writeTLASDescriptor()
@@ -1512,6 +1403,7 @@ bool VulkanRenderer::createLogicalDevice()
   deviceFeatures.samplerAnisotropy = VK_TRUE;
   deviceFeatures.multiDrawIndirect = VK_TRUE;
   deviceFeatures.fillModeNonSolid = VK_TRUE;
+  deviceFeatures.shaderInt64 = VK_TRUE;
 
   VkDeviceCreateInfo createInfo{};
   createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1936,6 +1828,16 @@ const Camera& VulkanRenderer::getCamera()
   return _latestCamera;
 }
 
+AccelerationStructure& VulkanRenderer::getTLAS()
+{
+  return _tlas;
+}
+
+std::vector<Particle>& VulkanRenderer::getParticles()
+{
+  return _particles;
+}
+
 bool VulkanRenderer::blackboardValueBool(const std::string& key)
 {
   auto exist = _blackboard.find(key) != _blackboard.end();
@@ -2059,7 +1961,7 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
   VkBufferMemoryBarrier memBarr{};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
   memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
   memBarr.srcQueueFamilyIndex = _queueIndices.graphicsFamily.value();
   memBarr.dstQueueFamilyIndex = _queueIndices.graphicsFamily.value();
   memBarr.buffer = _gpuRenderableBuffer[_currentFrame]._buffer;
@@ -2156,6 +2058,7 @@ void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
 
     mappedData[i]._vertexOffset = mesh._vertexOffset;
     mappedData[i]._indexOffset = mesh._indexOffset;
+    mappedData[i]._blasRef = mesh._blasRef;
   }
 
   VkBufferCopy copyRegion{};
@@ -2332,7 +2235,7 @@ bool VulkanRenderer::createSyncObjects()
 
 bool VulkanRenderer::initLights()
 {
-  _lights.resize(MAX_NUM_LIGHTS);
+  //_lights.resize(MAX_NUM_LIGHTS);
 
   std::random_device dev;
   std::mt19937 rng(dev());
@@ -2460,7 +2363,7 @@ bool VulkanRenderer::initBindless()
     meshLayoutBinding.binding = _meshBinding;
     meshLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     meshLayoutBinding.descriptorCount = 1;
-    meshLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    meshLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_COMPUTE_BIT;
     bindings.emplace_back(std::move(meshLayoutBinding));
 
     /*VkDescriptorSetLayoutBinding probeLayoutBinding{};
@@ -2766,7 +2669,9 @@ bool VulkanRenderer::initFrameGraphBuilder()
 bool VulkanRenderer::initRenderPasses()
 {
   _renderPasses.emplace_back(new HiZRenderPass());
+  _renderPasses.emplace_back(new ParticleUpdatePass());
   _renderPasses.emplace_back(new CullRenderPass());
+  _renderPasses.emplace_back(new UpdateTLASPass());
   _renderPasses.emplace_back(new IrradianceProbeTranslationPass());
   _renderPasses.emplace_back(new IrradianceProbeRayTracingPass());
   _renderPasses.emplace_back(new IrradianceProbeConvolvePass());
@@ -3539,6 +3444,47 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
   if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
     printf("failed to record command buffer!\n");
+  }
+}
+
+void VulkanRenderer::createParticles()
+{
+  std::vector<Vertex> vert;
+  std::vector<std::uint32_t> inds;
+  graphicsutil::createUnitCube(&vert, &inds, false);
+
+  Mesh cubeMesh{};
+  Model cubeModel{};
+  cubeMesh._vertices = std::move(vert);
+  cubeMesh._indices = std::move(inds);
+
+  cubeModel._meshes.emplace_back(std::move(cubeMesh));
+
+  auto modelId = registerModel(std::move(cubeModel), true);
+
+  std::random_device dev;
+  std::mt19937 rng(dev());
+  std::uniform_real_distribution<> vel(-8.0, 8.0);
+  std::uniform_real_distribution<> scale(0.05, .5);
+  std::uniform_real_distribution<> delay(0.0, 10.0);
+
+  for (int i = 0; i < 50000; ++i) {
+    Particle particle{};
+    particle._initialPosition = glm::vec3(-7.0f, 7.0f, -12.0f);
+    particle._initialVelocity = glm::vec3(vel(rng), 10.0f, vel(rng));
+    particle._lifetime = 5.0f;
+    particle._scale = scale(rng);
+    particle._spawnDelay = delay(rng);
+
+    particle._renderableId = registerRenderable(
+      modelId,
+      glm::translate(glm::mat4(1.0f), particle._initialPosition) * glm::scale(glm::mat4(1.0f), glm::vec3(particle._scale)),
+      glm::vec3(0.0f),
+      1.5f);
+
+    setRenderableVisible(particle._renderableId, false);
+
+    _particles.emplace_back(std::move(particle));
   }
 }
 

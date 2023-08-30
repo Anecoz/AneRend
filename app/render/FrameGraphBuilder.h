@@ -88,6 +88,7 @@ struct BufferInitialCreateInfo
   std::function<void(RenderContext*, AllocatedBuffer&)> _initialDataCb = nullptr;
   bool _hostWritable = false;
   bool _multiBuffered = false;
+  VkBufferUsageFlags _flags = 0;
 };
 
 struct ImageInitialCreateInfo

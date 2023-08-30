@@ -12,6 +12,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   vec4 lightDir;
   vec4 viewVector;
   float time;
+  float delta;
   uint screenWidth;
   uint screenHeight;
   int ssaoEnabled;

@@ -1,0 +1,94 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "bindless.glsl"
+#include "scene_ubo.glsl"
+
+layout (local_size_x = 8) in;
+
+struct TransformMatrix
+{
+  float matrix [3][4]; // row major
+};
+
+struct AccelerationStructureBuildRangeInfo
+{
+  uint primitiveCount;
+  uint primitiveOffset;
+  uint firstVertex;
+  uint transformOffset;
+};
+
+struct AccelerationStructureInstance
+{
+  TransformMatrix matrix;
+  uint instanceCustomIndexAndMask; // 24 bits for instance index, 8 bits for mask
+  uint instanceSBTOffsetAndFlags; // 24 bits for SBT offset and 8 bits for flags
+  uint64_t blasRef;
+};
+
+// This is dynamic, max size is MAX_NUM_RENDERABLES
+layout(std430, set = 1, binding = 0) buffer InstanceBuffer {
+  AccelerationStructureInstance instances[];
+} instanceBuffer;
+
+// This buffer has size 1
+layout(std430, set = 1, binding = 1) buffer RangeInfoBuffer {
+  AccelerationStructureBuildRangeInfo rangeInfos[];
+} rangeInfoBuffer;
+
+layout(push_constant) uniform constants {
+  uint maxCount;
+} pushConstants;
+
+void main()
+{
+  uint idx = gl_GlobalInvocationID.x;
+
+  if (idx >= pushConstants.maxCount) {
+    return;
+  }
+
+  bool visible = visibleBitSet(renderableBuffer.renderables[idx]);
+  bool culled = cullBitSet(renderableBuffer.renderables[idx]);
+
+  if (!visible || culled) {
+    return;
+  }
+
+  // It's visible, so advance primitive count and create an instance
+  for (int i = 0; i < renderableBuffer.renderables[idx].numMeshIds; ++i) {
+    uint meshId = renderableBuffer.renderables[idx].firstMeshId + i;
+    mat4 t = renderableBuffer.renderables[idx].transform;
+
+    uint countBefore = atomicAdd(rangeInfoBuffer.rangeInfos[0].primitiveCount, 1);
+
+    TransformMatrix mtx;
+    mtx.matrix[0][0] = t[0][0];
+    mtx.matrix[0][1] = t[1][0];
+    mtx.matrix[0][2] = t[2][0];
+    mtx.matrix[0][3] = t[3][0];
+
+    mtx.matrix[1][0] = t[0][1];
+    mtx.matrix[1][1] = t[1][1];
+    mtx.matrix[1][2] = t[2][1];
+    mtx.matrix[1][3] = t[3][1];
+
+    mtx.matrix[2][0] = t[0][2];
+    mtx.matrix[2][1] = t[1][2];
+    mtx.matrix[2][2] = t[2][2];
+    mtx.matrix[2][3] = t[3][2];
+
+    uint sbtOffsetAndFlags = 0;
+    sbtOffsetAndFlags = bitfieldInsert(sbtOffsetAndFlags, 1, 24, 8);
+
+    uint instanceIdxAndMask = meshId;
+    instanceIdxAndMask = bitfieldInsert(instanceIdxAndMask, 0xFF, 24, 8);
+
+    instanceBuffer.instances[countBefore].matrix = mtx;
+    instanceBuffer.instances[countBefore].instanceSBTOffsetAndFlags = sbtOffsetAndFlags;
+    instanceBuffer.instances[countBefore].instanceCustomIndexAndMask = instanceIdxAndMask; 
+    instanceBuffer.instances[countBefore].blasRef = meshBuffer.meshes[meshId].blasRef;
+  }
+}

@@ -41,6 +41,7 @@ struct GPUMeshMaterialInfo {
 struct GPUMeshInfo {
   uint32_t _vertexOffset;
   uint32_t _indexOffset;
+  uint64_t _blasRef;
 };
 
 struct GPUTranslationId
@@ -103,6 +104,7 @@ struct GPUSceneData {
   glm::vec4 lightDir;
   glm::vec4 viewVector;
   float time;
+  float delta;
   uint32_t screenWidth;
   uint32_t screenHeight;
   int32_t ssaoEnabled;
@@ -139,6 +141,16 @@ struct GPUIrradianceProbe
   glm::vec4 irr3; //w.r, w.g, w.b, sum-of-weights
   glm::vec4 irr4; //u.r, u.g, u.b, sum-of-weights
   glm::vec4 irr5; //d.r, d.g, d.b, sum-of-weights
+};
+
+struct alignas(16) GPUParticle
+{
+  glm::vec4 initialVelocity; // w is scale
+  glm::vec4 initialPosition; // w is lifetime
+  glm::vec4 currentPosition; // w is spawnDelay
+  glm::vec4 currentVelocity; // w is elapsedTime
+  int alive;
+  uint32_t renderableId;
 };
 
 }

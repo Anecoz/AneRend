@@ -67,3 +67,7 @@ C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/light_shadow.rmiss -
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/light_shadow.rchit -o %2/light_shadow_rchit.spv
 
 C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/light_shadow_sum.comp -o %2/light_shadow_sum_comp.spv
+
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/particle_update.comp -o %2/particle_update_comp.spv
+
+C:/VulkanSDK/1.3.239.0/Bin/glslc.exe --target-spv=spv1.4 %1/tlas_update.comp -o %2/tlas_update_comp.spv

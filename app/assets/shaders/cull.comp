@@ -272,7 +272,11 @@ void main()
   if (gID < pushConstants.drawCount) {
 
     // Check visibility against frustum planes
-    bool visible = renderableBuffer.renderables[gID].visible == 1 ? true : false;
+    //bool visible = renderableBuffer.renderables[gID].visible == 1 ? true : false;
+    bool visible = visibleBitSet(renderableBuffer.renderables[gID]);
+
+    renderableBuffer.renderables[gID].visible = setCullBit(renderableBuffer.renderables[gID], true);
+
     if (visible) {
 
       mat4 model = renderableBuffer.renderables[gID].transform;
@@ -292,6 +296,8 @@ void main()
         visible = occlusionCull(sphereCenterView, radius);
 
         if (visible) {
+          renderableBuffer.renderables[gID].visible = setCullBit(renderableBuffer.renderables[gID], false);
+
           for (int i = 0; i < renderableBuffer.renderables[gID].numMeshIds; ++i) {
             uint meshId = renderableBuffer.renderables[gID].firstMeshId + i;
             uint countBefore = atomicAdd(drawBuffer.draws[meshId].instanceCount, 1);

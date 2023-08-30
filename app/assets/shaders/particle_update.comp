@@ -1,0 +1,79 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "bindless.glsl"
+#include "scene_ubo.glsl"
+
+layout (local_size_x = 8) in;
+
+struct Particle 
+{
+  vec4 initialVelocity; // w is scale
+  vec4 initialPosition; // w is lifetime
+  vec4 currentPosition; // w is spawnDelay
+  vec4 currentVelocity; // w is elapsedTime
+  int alive;
+  uint renderableId;
+};
+
+layout(std430, set = 1, binding = 0) buffer ParticleBuffer {
+  Particle particles[];
+} particleBuffer;
+
+mat4 buildTranslation(vec3 delta)
+{
+  return mat4(
+    vec4(1.0, 0.0, 0.0, 0.0),
+    vec4(0.0, 1.0, 0.0, 0.0),
+    vec4(0.0, 0.0, 1.0, 0.0),
+    vec4(delta, 1.0));
+}
+
+mat4 buildScale(float scale)
+{
+  mat4 m = mat4(0.0);
+    m[0][0] = scale;
+    m[1][1] = scale;
+    m[2][2] = scale;
+    m[3][3] = 1.0;
+  return m;
+}
+
+void main()
+{
+  uint idx = gl_GlobalInvocationID.x;
+  if (idx > 49999) {
+    return;
+  }
+  
+  Particle particle = particleBuffer.particles[idx];
+
+  if (particle.alive == 0 && (particle.currentVelocity.w >= particle.currentPosition.w)) {
+    particleBuffer.particles[idx].alive = 1;
+    particleBuffer.particles[idx].currentVelocity = particle.initialVelocity;
+    particleBuffer.particles[idx].currentPosition = particle.initialPosition;
+  }
+  else if (particle.alive == 1 && (particle.currentVelocity.w > (particle.initialPosition.w + particle.currentPosition.w))) {
+    particleBuffer.particles[idx].alive = 0;
+    particleBuffer.particles[idx].currentVelocity = particle.initialVelocity;
+    particleBuffer.particles[idx].currentPosition = particle.initialPosition;
+    particleBuffer.particles[idx].currentVelocity.w = particle.currentPosition.w;
+  }
+
+  particleBuffer.particles[idx].currentVelocity.w += ubo.delta;
+
+  particleBuffer.particles[idx].currentVelocity.xyz += vec3(0.0, -2.0, 0.0) * ubo.delta;
+  particleBuffer.particles[idx].currentPosition.xyz += particleBuffer.particles[idx].currentVelocity.xyz * ubo.delta;
+
+  // How far along lifetime is the particle
+  //float percent = (particle.initialPosition.w + particle.currentPosition.w) / particle.currentVelocity.w;
+
+  mat4 scale = buildScale(particle.initialVelocity.w);
+  mat4 trans = buildTranslation(particleBuffer.particles[idx].currentPosition.xyz);
+
+  renderableBuffer.renderables[particle.renderableId].transform = trans * scale;
+  renderableBuffer.renderables[particle.renderableId].visible = setVisibleBit(renderableBuffer.renderables[particle.renderableId], particleBuffer.particles[idx].alive == 1 ? true : false);
+  //renderableBuffer.renderables[particle.renderableId].visible = particleBuffer.particles[idx].alive;
+  //renderableBuffer.renderables[particle.renderableId].tint = vec4(1.0, 0.0, 0.0, 0.0);
+}

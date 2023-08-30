@@ -25,6 +25,8 @@
 #include "FrameGraphBuilder.h"
 #include "Mesh.h"
 #include "RenderableId.h"
+#include "Particle.h"
+#include "AccelerationStructure.h"
 
 #include "../logic/WindSystem.h"
 
@@ -178,6 +180,11 @@ public:
 
   const Camera& getCamera() override final;
 
+  AccelerationStructure& getTLAS() override final;
+
+  // Hack for testing
+  std::vector<Particle>& getParticles() override final;
+
   bool blackboardValueBool(const std::string& key) override final;
   int blackboardValueInt(const std::string& key) override final;
   void setBlackboardValueBool(const std::string& key, bool val) override final;
@@ -215,7 +222,7 @@ private:
   RenderOptions _renderOptions;
   logic::WindMap _currentWindMap;
 
-  RenderableId _nextRenderableId = 1;
+  RenderableId _nextRenderableId = 0;
   MeshId _nextMeshId = 0;
   ModelId _nextModelId = 0;
 
@@ -264,22 +271,11 @@ private:
     glm::vec3 _tint;
     glm::vec3 _boundingSphereCenter;
     float _boundingSphereRadius;
-
-    int _metallicTexIndex;
-    int _roughnessTexIndex;
-    int _normalTexIndex;
-    int _albedoTexIndex;
   };
 
   std::vector<Renderable> _currentRenderables;
   std::vector<bool> _renderablesChanged;
   void cleanupRenderable(const Renderable& renderable);
-
-  struct AccelerationStructure
-  {
-    AllocatedBuffer _buffer;
-    VkAccelerationStructureKHR _as;
-  };
 
   std::unordered_map<MeshId, AccelerationStructure> _blases;
   AccelerationStructure _tlas;
@@ -325,6 +321,10 @@ private:
   std::vector<RenderPass*> _renderPasses;
 
   void executeFrameGraph(VkCommandBuffer commandBuffer, int imageIndex);
+
+  // Testing
+  void createParticles();
+  std::vector<Particle> _particles;
 
   struct GigaMeshBuffer {
     AllocatedBuffer _buffer;

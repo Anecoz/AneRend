@@ -22,6 +22,9 @@ struct Mesh {
   std::size_t _vertexOffset;
   std::size_t _indexOffset;
 
+  // BLAS reference
+  std::uint64_t _blasRef;
+
   // These are relative to fat buffer, not necessarily corresponding to verts stored in here
   std::size_t _numVertices;
   std::size_t _numIndices;

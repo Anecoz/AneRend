@@ -12,6 +12,8 @@
 #include "RenderDebugOptions.h"
 #include "RenderOptions.h"
 #include "Camera.h"
+#include "Particle.h"
+#include "AccelerationStructure.h"
 
 #include <unordered_map>
 
@@ -89,6 +91,11 @@ public:
   virtual double getElapsedTime() = 0;
 
   virtual const Camera& getCamera() = 0;
+
+  virtual AccelerationStructure& getTLAS() = 0;
+
+  // Hack for testing
+  virtual std::vector<Particle>& getParticles() = 0;
 
   // TODO: A proper blackboard
   virtual bool blackboardValueBool(const std::string& key) = 0;
