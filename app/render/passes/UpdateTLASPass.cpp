@@ -181,7 +181,7 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       buildInfo.scratchData.deviceAddress = tlas._scratchAddress;
 
       VkAccelerationStructureBuildRangeInfoKHR rangeInfo{};
-      rangeInfo.primitiveCount = maxPrimitiveCount;
+      rangeInfo.primitiveCount = exeParams.rc->getMaxNumRenderables();
 
       auto rangeInfoPtr = &rangeInfo;
 

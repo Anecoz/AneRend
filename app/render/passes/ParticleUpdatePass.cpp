@@ -12,6 +12,7 @@ namespace {
 void prefillParticleBuffer(RenderContext* rc, AllocatedBuffer& buffer)
 {
   auto particles = rc->getParticles();
+  if (particles.empty()) return;
 
   // Create a staging buffer on CPU side first
   auto allocator = rc->vmaAllocator();
@@ -115,6 +116,9 @@ void ParticleUpdatePass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
   fgb.registerRenderPassExe("ParticleUpdate",
     [this](RenderExeParams exeParams) {
 
+      auto particleSize = exeParams.rc->getParticles().size();
+      if (particleSize == 0) return;
+
       // Bind pipeline
       vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, *exeParams.pipeline);
 
@@ -125,7 +129,7 @@ void ParticleUpdatePass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
         1, 1, &(*exeParams.descriptorSets)[0],
         0, nullptr);
 
-      uint32_t numX = 50000 / 8;
+      uint32_t numX = particleSize / 8;
 
       vkCmdDispatch(*exeParams.cmdBuffer, numX + 1, 1, 1);
     });
