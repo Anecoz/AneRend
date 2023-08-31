@@ -193,7 +193,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _latestCamera(initialCamera)
   , _fgb(&_vault)
   , _window(window)
-  , _enableValidationLayers(false)
+  , _enableValidationLayers(true)
   , _enableRayTracing(true)
 {
   imageutil::init();
@@ -1064,7 +1064,7 @@ void VulkanRenderer::buildTopLevelAS()
   // Allocate the scratch buffer holding temporary build data.
   bufferutil::createBuffer(
     _vmaAllocator,
-    sizeInfo.buildScratchSize,
+    sizeInfo.updateScratchSize + sizeInfo.buildScratchSize,
     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     0,
     _tlas._scratchBuffer);

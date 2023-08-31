@@ -188,6 +188,16 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
     usage._multiBuffered = true;
     resourceUsages.emplace_back(std::move(usage));
   }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "RenderableBuffer";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Vertex);
+    usage._type = Type::SSBO;
+    usage._multiBuffered = true;
+    usage._ownedByEngine = true;
+    resourceUsages.emplace_back(std::move(usage));
+  }
 
   info._resourceUsages = std::move(resourceUsages);
 

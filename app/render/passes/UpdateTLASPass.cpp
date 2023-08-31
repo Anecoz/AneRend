@@ -84,6 +84,16 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 
     info._resourceUsages.emplace_back(std::move(usage));
   }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "RenderableBuffer";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SSBO;
+    usage._multiBuffered = true;
+    usage._ownedByEngine = true;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
 
   ComputePipelineCreateParams param{};
   param.device = rc->device();
@@ -160,16 +170,17 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       auto& tlas = exeParams.rc->getTLAS();
 
       VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
-      buildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
-      buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-      if (_first) {
-        buildInfo.srcAccelerationStructure = tlas._as;
-        buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+      buildInfo.srcAccelerationStructure = tlas._as;
+      buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+      // Doing an update requires us not to change any instance index, or culling any instances...
+      //if (_first) {
+        buildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
+        buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
 
         _first = false;
-      }
+      //}
       buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-      buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+      buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
       buildInfo.geometryCount = 1;
       buildInfo.pGeometries = &geometry;
       buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
@@ -200,7 +211,7 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 
       vkCmdPipelineBarrier(*exeParams.cmdBuffer,
         VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-        VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+        VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR | VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
         0,
         0, nullptr,
         1, &postBarrier,

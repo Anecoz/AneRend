@@ -50,11 +50,14 @@ void main()
   }
 
   // It's visible, so advance primitive count and create an instance
+  mat4 t = renderableBuffer.renderables[idx].transform;
+
   for (int i = 0; i < renderableBuffer.renderables[idx].numMeshIds; ++i) {
     uint meshId = renderableBuffer.renderables[idx].firstMeshId + i;
-    mat4 t = renderableBuffer.renderables[idx].transform;
 
     uint countBefore = atomicAdd(counterBuffer.counter[0], 1);
+    //uint countBefore = idx * 128 + i;
+    //uint insertIdx = idx;
 
     TransformMatrix mtx;
     mtx.matrix[0][0] = t[0][0];

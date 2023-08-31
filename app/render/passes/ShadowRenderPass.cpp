@@ -55,6 +55,16 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
     usage._multiBuffered = true;
     info._resourceUsages.emplace_back(std::move(usage));
   }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "RenderableBuffer";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Vertex);
+    usage._type = Type::SSBO;
+    usage._multiBuffered = true;
+    usage._ownedByEngine = true;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
 
   GraphicsPipelineCreateParams params{};
   params.device = rc->device();

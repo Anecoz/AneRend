@@ -241,6 +241,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
   ResourceUsage renderableBufUsage{};
   renderableBufUsage._resourceName = "RenderableBuffer";
   renderableBufUsage._access.set((std::size_t)Access::Write);
+  renderableBufUsage._access.set((std::size_t)Access::Read);
   renderableBufUsage._stage.set((std::size_t)Stage::Compute);
   renderableBufUsage._type = Type::SSBO;
   renderableBufUsage._multiBuffered = true;
