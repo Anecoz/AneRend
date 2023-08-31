@@ -12,14 +12,6 @@ struct TransformMatrix
   float matrix [3][4]; // row major
 };
 
-struct AccelerationStructureBuildRangeInfo
-{
-  uint primitiveCount;
-  uint primitiveOffset;
-  uint firstVertex;
-  uint transformOffset;
-};
-
 struct AccelerationStructureInstance
 {
   TransformMatrix matrix;
@@ -34,9 +26,9 @@ layout(std430, set = 1, binding = 0) buffer InstanceBuffer {
 } instanceBuffer;
 
 // This buffer has size 1
-layout(std430, set = 1, binding = 1) buffer RangeInfoBuffer {
-  AccelerationStructureBuildRangeInfo rangeInfos[];
-} rangeInfoBuffer;
+layout(std430, set = 1, binding = 1) buffer CounterBuffer {
+  uint counter[];
+} counterBuffer;
 
 layout(push_constant) uniform constants {
   uint maxCount;
@@ -62,7 +54,7 @@ void main()
     uint meshId = renderableBuffer.renderables[idx].firstMeshId + i;
     mat4 t = renderableBuffer.renderables[idx].transform;
 
-    uint countBefore = atomicAdd(rangeInfoBuffer.rangeInfos[0].primitiveCount, 1);
+    uint countBefore = atomicAdd(counterBuffer.counter[0], 1);
 
     TransformMatrix mtx;
     mtx.matrix[0][0] = t[0][0];

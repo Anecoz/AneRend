@@ -43,7 +43,7 @@ mat4 buildScale(float scale)
 void main()
 {
   uint idx = gl_GlobalInvocationID.x;
-  if (idx > 49999) {
+  if (idx > 999) {
     return;
   }
   
@@ -63,7 +63,7 @@ void main()
 
   particleBuffer.particles[idx].currentVelocity.w += ubo.delta;
 
-  particleBuffer.particles[idx].currentVelocity.xyz += vec3(0.0, -2.0, 0.0) * ubo.delta;
+  particleBuffer.particles[idx].currentVelocity.xyz += vec3(0.0, -8.0, 0.0) * ubo.delta;
   particleBuffer.particles[idx].currentPosition.xyz += particleBuffer.particles[idx].currentVelocity.xyz * ubo.delta;
 
   // How far along lifetime is the particle

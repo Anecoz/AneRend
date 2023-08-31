@@ -264,6 +264,11 @@ mat4 buildTranslation(mat4 model)
         vec4(delta, 1.0));
 }
 
+bool withinRangeOfCamera(vec3 renderablePos, float range)
+{
+  return distance(ubo.cameraPos.xyz, renderablePos) <= range;
+}
+
 void main()
 {
   // Renderable culling
@@ -275,8 +280,6 @@ void main()
     //bool visible = renderableBuffer.renderables[gID].visible == 1 ? true : false;
     bool visible = visibleBitSet(renderableBuffer.renderables[gID]);
 
-    renderableBuffer.renderables[gID].visible = setCullBit(renderableBuffer.renderables[gID], true);
-
     if (visible) {
 
       mat4 model = renderableBuffer.renderables[gID].transform;
@@ -285,6 +288,10 @@ void main()
       float radius = sphereBounds.w;
       vec3 sphereCenterView = vec3(pushConstants.view * trans * vec4(sphereBounds.xyz, 1.0));
       vec3 sphereCenter = vec3(trans * vec4(sphereBounds.xyz, 1.0));
+
+      // For TLAS update, just see if renderable is within a circular range of camera
+      bool withinRange = withinRangeOfCamera(sphereCenter, 50.0);
+      renderableBuffer.renderables[gID].visible = setCullBit(renderableBuffer.renderables[gID], !withinRange);
 
       visible = visible && sphereCenterView.z + radius > -pushConstants.farDist;
       visible = visible && sphereCenterView.z - radius < pushConstants.nearDist;
@@ -296,7 +303,6 @@ void main()
         visible = occlusionCull(sphereCenterView, radius);
 
         if (visible) {
-          renderableBuffer.renderables[gID].visible = setCullBit(renderableBuffer.renderables[gID], false);
 
           for (int i = 0; i < renderableBuffer.renderables[gID].numMeshIds; ++i) {
             uint meshId = renderableBuffer.renderables[gID].firstMeshId + i;

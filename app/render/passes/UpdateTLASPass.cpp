@@ -41,7 +41,7 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     initUsage._access.set((std::size_t)Access::Write);
     initUsage._stage.set((std::size_t)Stage::Transfer);
 
-    fgb.registerResourceInitExe("TLASBuildRangeBuf", std::move(initUsage),
+    fgb.registerResourceInitExe("TLASCounterBuf", std::move(initUsage),
       [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
         auto buf = (BufferRenderResource*)resource;
 
@@ -73,13 +73,13 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
   }
   {
     ResourceUsage usage{};
-    usage._resourceName = "TLASBuildRangeBuf";
+    usage._resourceName = "TLASCounterBuf";
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SSBO;
 
     BufferInitialCreateInfo createInfo{};
-    createInfo._initialSize = sizeof(VkAccelerationStructureBuildRangeInfoKHR);
+    createInfo._initialSize = sizeof(uint32_t);
     usage._bufferCreateInfo = createInfo;
 
     info._resourceUsages.emplace_back(std::move(usage));
@@ -130,37 +130,27 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       instanceBarrier.offset = 0;
       instanceBarrier.size = VK_WHOLE_SIZE;
 
-      VkBufferMemoryBarrier buildRangeBarrier{};
-      buildRangeBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-      buildRangeBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-      buildRangeBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-      buildRangeBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      buildRangeBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      buildRangeBarrier.buffer = exeParams.buffers[1];
-      buildRangeBarrier.offset = 0;
-      buildRangeBarrier.size = VK_WHOLE_SIZE;
-
-      std::vector<VkBufferMemoryBarrier> barriers {instanceBarrier, buildRangeBarrier};
-
       vkCmdPipelineBarrier(*exeParams.cmdBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
         0,
         0, nullptr,
-        2, barriers.data(),
+        1, &instanceBarrier,
         0, nullptr);
 
       // Build the TLAS
-      VkBufferDeviceAddressInfo instanceAddrInfo{};
-      instanceAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-      instanceAddrInfo.buffer = exeParams.buffers[0];
+      if (_first) {
+        VkBufferDeviceAddressInfo instanceAddrInfo{};
+        instanceAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        instanceAddrInfo.buffer = exeParams.buffers[0];
 
-      VkDeviceAddress instanceAddr = vkGetBufferDeviceAddress(exeParams.rc->device(), &instanceAddrInfo);
+        _instanceAddress = vkGetBufferDeviceAddress(exeParams.rc->device(), &instanceAddrInfo);
+      }
 
       VkAccelerationStructureGeometryInstancesDataKHR instancesVk{};
       instancesVk.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
       instancesVk.arrayOfPointers = VK_FALSE;
-      instancesVk.data.deviceAddress = instanceAddr;
+      instancesVk.data.deviceAddress = _instanceAddress;
 
       VkAccelerationStructureGeometryKHR geometry{};
       geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
@@ -170,13 +160,19 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       auto& tlas = exeParams.rc->getTLAS();
 
       VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
+      buildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
+      buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+      if (_first) {
+        buildInfo.srcAccelerationStructure = tlas._as;
+        buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+
+        _first = false;
+      }
       buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
       buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
       buildInfo.geometryCount = 1;
       buildInfo.pGeometries = &geometry;
-      buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
       buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-      buildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
       buildInfo.dstAccelerationStructure = tlas._as;
       buildInfo.scratchData.deviceAddress = tlas._scratchAddress;
 

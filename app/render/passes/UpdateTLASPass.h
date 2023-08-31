@@ -12,6 +12,10 @@ public:
 
   // Register how the render pass will actually render
   void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
+
+private:
+  bool _first = true;
+  VkDeviceAddress _instanceAddress;
 };
 
 }

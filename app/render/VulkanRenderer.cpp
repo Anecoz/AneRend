@@ -193,7 +193,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _latestCamera(initialCamera)
   , _fgb(&_vault)
   , _window(window)
-  , _enableValidationLayers(true)
+  , _enableValidationLayers(false)
   , _enableRayTracing(true)
 {
   imageutil::init();
@@ -1022,7 +1022,7 @@ void VulkanRenderer::buildTopLevelAS()
   // geometry object.
   VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
   buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-  buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+  buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
   buildInfo.geometryCount = 1;
   buildInfo.pGeometries = &geometry;
   buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
@@ -3465,13 +3465,14 @@ void VulkanRenderer::createParticles()
   std::random_device dev;
   std::mt19937 rng(dev());
   std::uniform_real_distribution<> vel(-8.0, 8.0);
+  std::uniform_real_distribution<> velY(2.0, 12.0);
   std::uniform_real_distribution<> scale(0.05, .5);
   std::uniform_real_distribution<> delay(0.0, 10.0);
 
-  for (int i = 0; i < 50000; ++i) {
+  for (int i = 0; i < 1000; ++i) {
     Particle particle{};
     particle._initialPosition = glm::vec3(-7.0f, 7.0f, -12.0f);
-    particle._initialVelocity = glm::vec3(vel(rng), 10.0f, vel(rng));
+    particle._initialVelocity = glm::vec3(vel(rng), velY(rng), vel(rng));
     particle._lifetime = 5.0f;
     particle._scale = scale(rng);
     particle._spawnDelay = delay(rng);

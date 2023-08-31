@@ -193,7 +193,7 @@ bool StageApplication::init()
   }
   // Sponza GLTF
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 1;
 
     _sponzaPos = glm::vec3(16.0f, -1.0f, 16.0f);
 
