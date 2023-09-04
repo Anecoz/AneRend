@@ -160,7 +160,7 @@ namespace render
             0,
             0, nullptr,
             0, nullptr,
-            barriers.size(), barriers.data()
+            static_cast<uint32_t>(barriers.size()), barriers.data()
           );
 
           currSize = currSize >> 1;

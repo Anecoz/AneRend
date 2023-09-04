@@ -21,6 +21,7 @@
 #define NJ_CHROMA_FILTER 1
 #endif
 
+#pragma warning( disable : 5033 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // EXAMPLE PROGRAM                                                           //

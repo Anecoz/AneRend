@@ -20,7 +20,7 @@ void LightShadowRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, RenderCo
   info._name = "LightShadowRT";
 
   const int numRaysPerLight = 1024;
-  const int sqrtNumRays = std::sqrt(numRaysPerLight);
+  const int sqrtNumRays = static_cast<int>(std::sqrt(numRaysPerLight));
   const int maxNumLights = 32 * 32;
 
   // Texture to capture the rays irradiance information, which will later be integrated per probe oct direction

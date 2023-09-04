@@ -110,7 +110,7 @@ void DebugBSRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
       renderInfo.renderArea.extent = exeParams.rc->swapChainExtent();
       renderInfo.renderArea.offset = { 0, 0 };
       renderInfo.layerCount = 1;
-      renderInfo.colorAttachmentCount = colInfo.size();
+      renderInfo.colorAttachmentCount = static_cast<uint32_t>(colInfo.size());
       renderInfo.pColorAttachments = colInfo.data();
       renderInfo.pDepthAttachment = &depthAttachmentInfo;
 

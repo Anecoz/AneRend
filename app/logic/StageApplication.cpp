@@ -334,10 +334,10 @@ void StageApplication::render()
 
     ImGui::Begin("Per frame timers");
 
-    float sum = 0.0f;
+    double sum = 0.0;
     if (ImGui::BeginTable("table3", 2)) {
       for (auto& group : groups) {
-        float avg10 = 0.0f;
+        double avg10 = 0.0;
         for (auto& timer : timers) {
           if (timer._group == group) {
             avg10 += timer._avg10;
@@ -359,7 +359,7 @@ void StageApplication::render()
 
       ImGui::PlotLines("", timer._buf.data(), 1000);
     }*/
-    ImGui::Text("Sum: %f", sum);
+    ImGui::Text("Sum: %lf", sum);
 
     ImGui::End();
   }

@@ -2,6 +2,8 @@
 
 #include "compute_vector_relational.hpp"
 
+#pragma warning( disable : 4756 )
+
 namespace glm
 {
 	// -- Implicit basic constructors --

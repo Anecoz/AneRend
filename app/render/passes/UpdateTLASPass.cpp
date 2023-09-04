@@ -115,7 +115,7 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
         1, 1, &(*exeParams.descriptorSets)[0],
         0, nullptr);
 
-      uint32_t maxPrimitiveCount = exeParams.rc->getCurrentNumRenderables();
+      uint32_t maxPrimitiveCount = static_cast<uint32_t>(exeParams.rc->getCurrentNumRenderables());
       vkCmdPushConstants(
         *exeParams.cmdBuffer,
         *exeParams.pipelineLayout,
@@ -188,7 +188,7 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       buildInfo.scratchData.deviceAddress = tlas._scratchAddress;
 
       VkAccelerationStructureBuildRangeInfoKHR rangeInfo{};
-      rangeInfo.primitiveCount = exeParams.rc->getMaxNumRenderables();
+      rangeInfo.primitiveCount = static_cast<uint32_t>(exeParams.rc->getMaxNumRenderables());
 
       auto rangeInfoPtr = &rangeInfo;
 

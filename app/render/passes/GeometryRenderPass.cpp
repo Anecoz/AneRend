@@ -263,7 +263,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
       renderInfo.renderArea.extent = exeParams.rc->swapChainExtent();
       renderInfo.renderArea.offset = { 0, 0 };
       renderInfo.layerCount = 1;
-      renderInfo.colorAttachmentCount = colInfo.size();
+      renderInfo.colorAttachmentCount = static_cast<uint32_t>(colInfo.size());
       renderInfo.pColorAttachments = colInfo.data();
       renderInfo.pDepthAttachment = &depthAttachmentInfo;
 
@@ -298,7 +298,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
       vkCmdSetScissor(*exeParams.cmdBuffer, 0, 1, &scissor);
 
       // Ask render context to draw big giga buffer
-      exeParams.rc->drawGigaBufferIndirect(exeParams.cmdBuffer, exeParams.buffers[1], exeParams.rc->getCurrentMeshes().size());
+      exeParams.rc->drawGigaBufferIndirect(exeParams.cmdBuffer, exeParams.buffers[1], static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));
 
       // Stop dynamic rendering
       vkCmdEndRendering(*exeParams.cmdBuffer);

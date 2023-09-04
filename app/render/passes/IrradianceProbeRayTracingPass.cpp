@@ -69,9 +69,9 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
   info._group = "IrradianceProbe";
 
   const int numRaysPerProbe = 256;
-  const int sqrtNumRays = std::sqrt(numRaysPerProbe);
-  const int numProbesPlane = rc->getNumIrradianceProbesXZ();
-  const int numProbesHeight = rc->getNumIrradianceProbesY();
+  const int sqrtNumRays = static_cast<int>(std::sqrt(numRaysPerProbe));
+  const int numProbesPlane = static_cast<int>(rc->getNumIrradianceProbesXZ());
+  const int numProbesHeight = static_cast<int>(rc->getNumIrradianceProbesY());
 
   _currentLayer = 0;
 
@@ -212,7 +212,7 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
 
       _currentLayer++;
 
-      if (_currentLayer >= numProbesHeight) {
+      if (_currentLayer >= static_cast<uint32_t>(numProbesHeight)) {
         _currentLayer = 0;
       }
     });

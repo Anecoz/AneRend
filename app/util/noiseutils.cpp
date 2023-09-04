@@ -27,6 +27,8 @@
 
 #include "noiseutils.h"
 
+#pragma warning( disable : 4244 )
+
 using namespace noise;
 using namespace noise::model;
 using namespace noise::module;

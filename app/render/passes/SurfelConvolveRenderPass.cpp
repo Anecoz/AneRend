@@ -17,8 +17,8 @@ void SurfelConvolveRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderCon
   RenderPassRegisterInfo info{};
   info._name = "SurfelConvolve";
 
-  const int numSurfelsX = std::ceil(rc->swapChainExtent().width / 32.0);
-  const int numSurfelsY = std::ceil(rc->swapChainExtent().height / 32.0);
+  const int numSurfelsX = static_cast<int>(std::ceil(rc->swapChainExtent().width / 32.0));
+  const int numSurfelsY = static_cast<int>(std::ceil(rc->swapChainExtent().height / 32.0));
   const int octSize = 8;
 
   {

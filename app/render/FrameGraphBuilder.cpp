@@ -645,7 +645,7 @@ bool FrameGraphBuilder::createResources(RenderContext* renderContext, RenderReso
 
               // Create separate views for each mip (if there are any more)
               if (usage._imageCreateInfo->_mipLevels > 1) {
-                for (int j = 0; j < usage._imageCreateInfo->_mipLevels; ++j) {
+                for (uint32_t j = 0; j < usage._imageCreateInfo->_mipLevels; ++j) {
                   im->_views.emplace_back(imageutil::createImageView(
                     renderContext->device(),
                     im->_image._image,
@@ -1254,7 +1254,7 @@ std::string FrameGraphBuilder::debugConstructImageBarrierName(VkImageLayout old,
   return output;
 }
 
-std::vector<ResourceUsage*> FrameGraphBuilder::findPrevMipUsages(const ResourceUsage& usage, std::vector<GraphNode>& stack, int stackIdx)
+std::vector<ResourceUsage*> FrameGraphBuilder::findPrevMipUsages(const ResourceUsage& usage, std::vector<GraphNode>& stack, std::size_t stackIdx)
 {
   // Find how many mips there are for starters
   int numMips = 0;
@@ -1280,7 +1280,7 @@ std::vector<ResourceUsage*> FrameGraphBuilder::findPrevMipUsages(const ResourceU
   std::vector<ResourceUsage*> out;
 
   for (int mip = 0; mip < numMips; ++mip) {
-    for (int j = stackIdx - 1; j >= 0; --j) {
+    for (int j = static_cast<int>(stackIdx) - 1; j >= 0; --j) {
       auto& prevNode = stack[j];
       bool done = false;
       for (auto& prev : prevNode._resourceUsages) {
@@ -1515,7 +1515,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
       // Find (maybe) a previous usage
       ResourceUsage* prevUsage = nullptr;
       if (i > 0) {
-        for (int j = i-1; j >= 0; --j) {
+        for (int j = static_cast<int>(i-1); j >= 0; --j) {
           auto& prevNode = stack[j];
           for (auto& prev : prevNode._resourceUsages) {
             if (prev._resourceName == usage._resourceName) {
@@ -1666,7 +1666,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
               barrier.image = imageResource->_image._image;
               barrier.subresourceRange.aspectMask = depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
               barrier.subresourceRange.baseMipLevel = allMips ? 0 : mip;
-              barrier.subresourceRange.levelCount = allMips ? (imageResource->_views.size() == 1 ? 1 : imageResource->_views.size() - 1) : 1;
+              barrier.subresourceRange.levelCount = allMips ? (imageResource->_views.size() == 1 ? 1 : static_cast<uint32_t>(imageResource->_views.size()) - 1) : 1;
               barrier.subresourceRange.baseArrayLayer = baseLayer;
               barrier.subresourceRange.layerCount = 1;
               barrier.srcAccessMask = srcAccessMask;

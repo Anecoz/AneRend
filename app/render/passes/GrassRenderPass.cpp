@@ -128,7 +128,7 @@ void GrassRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       renderInfo.renderArea.extent = exeParams.rc->swapChainExtent();
       renderInfo.renderArea.offset = { 0, 0 };
       renderInfo.layerCount = 1;
-      renderInfo.colorAttachmentCount = colAttachInfos.size();
+      renderInfo.colorAttachmentCount = static_cast<uint32_t>(colAttachInfos.size());
       renderInfo.pColorAttachments = colAttachInfos.data();
       renderInfo.pDepthAttachment = &depthAttachmentInfo;
 

@@ -6,7 +6,7 @@
 #include <random>
 #include <vector>
 
-#define PI           3.14159265358979323846  /* pi */
+#define PI           3.14159265358979323846f  /* pi */
 
 namespace graphicsutil {
 

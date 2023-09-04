@@ -211,6 +211,8 @@ extern AAssetManager *asset_manager;
 #endif
 #endif
 
+#pragma warning( disable : 4018 )
+
 typedef enum {
   NULL_TYPE,
   REAL_TYPE,

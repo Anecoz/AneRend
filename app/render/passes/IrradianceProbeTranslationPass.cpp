@@ -20,8 +20,8 @@ void IrradianceProbeTranslationPass::registerToGraph(FrameGraphBuilder& fgb, Ren
   info._group = "IrradianceProbe";
 
   const int octPixelSize = 8;
-  const int numProbesPlane = rc->getNumIrradianceProbesXZ();
-  const int numProbesHeight = rc->getNumIrradianceProbesY();
+  const int numProbesPlane = static_cast<int>(rc->getNumIrradianceProbesXZ());
+  const int numProbesHeight = static_cast<int>(rc->getNumIrradianceProbesY());
 
   const int width = (octPixelSize + 2) * numProbesPlane; // 1 pix border around each probe
   const int height = (octPixelSize + 2) * numProbesPlane * numProbesHeight; // ditto
@@ -163,7 +163,7 @@ void IrradianceProbeTranslationPass::registerToGraph(FrameGraphBuilder& fgb, Ren
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         probeImage,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        imageCopies.size(), imageCopies.data());
+        static_cast<uint32_t>(imageCopies.size()), imageCopies.data());
 
       // Take the layouts back where the frame graph expects them
       imageutil::transitionImageLayout(

@@ -359,7 +359,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 
       // 32 is the local group size in the comp shader
       const uint32_t localSize = 32;
-      int sqr = std::ceil(std::sqrt((double)exeParams.rc->getCurrentNumRenderables() / (double)(localSize * localSize)));
+      int sqr = static_cast<int>(std::ceil(std::sqrt((double)exeParams.rc->getCurrentNumRenderables() / (double)(localSize * localSize))));
       vkCmdDispatch(*exeParams.cmdBuffer, sqr, sqr, 1);
     });
 }

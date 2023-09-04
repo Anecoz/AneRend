@@ -60,8 +60,8 @@ void IrradianceProbeConvolvePass::registerToGraph(FrameGraphBuilder& fgb, Render
   info._group = "IrradianceProbe";
 
   const int octPixelSize = 8;
-  const int numProbesPlane = rc->getNumIrradianceProbesXZ();
-  const int numProbesHeight = rc->getNumIrradianceProbesY();
+  const int numProbesPlane = static_cast<int>(rc->getNumIrradianceProbesXZ());
+  const int numProbesHeight = static_cast<int>(rc->getNumIrradianceProbesY());
 
   {
     ResourceUsage usage{};

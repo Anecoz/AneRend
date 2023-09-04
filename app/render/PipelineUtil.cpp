@@ -55,7 +55,7 @@ bool buildDescriptorSetLayout(DescriptorSetLayoutCreateParams params, VkDescript
     VkDescriptorSetLayoutBinding layoutBinding{};
     layoutBinding.binding = bindInfo.binding;
     layoutBinding.descriptorType = bindInfo.type;
-    layoutBinding.descriptorCount = bindInfo.bindless? params.renderContext->getMaxBindlessResources() : 1;
+    layoutBinding.descriptorCount = bindInfo.bindless? static_cast<uint32_t>(params.renderContext->getMaxBindlessResources()) : 1;
     layoutBinding.stageFlags = bindInfo.bindless? VK_SHADER_STAGE_ALL : bindInfo.stages;
     bindings.emplace_back(std::move(layoutBinding));
   }
@@ -156,7 +156,7 @@ std::vector<VkDescriptorSet> buildDescriptorSets(DescriptorSetsCreateParams para
   allocInfo.pSetLayouts = layouts.data();
 
   VkDescriptorSetVariableDescriptorCountAllocateInfo countInfo{};
-  uint32_t maxBinding = params.renderContext->getMaxBindlessResources() - 1;
+  uint32_t maxBinding = static_cast<uint32_t>(params.renderContext->getMaxBindlessResources() - 1);
   std::vector<uint32_t> counts(numMultiBuffer, maxBinding);
 
   if (containsBindless) {
@@ -172,7 +172,7 @@ std::vector<VkDescriptorSet> buildDescriptorSets(DescriptorSetsCreateParams para
     return {};
   }
 
-  int numDescriptors = params.bindInfos.size() / numMultiBuffer;
+  int numDescriptors = static_cast<int>(params.bindInfos.size()) / numMultiBuffer;
   int currIdx = 0;
   int currBindlessIdx = 0;
   for (size_t j = 0; j < params.bindInfos.size(); j++) {
@@ -485,7 +485,7 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
   std::vector<VkPipelineColorBlendAttachmentState> colBlendAttachments;
   if (param.colorAttachment) {
 
-    for (int i = 0; i < param.colorAttachmentCount; ++i) {
+    for (unsigned i = 0; i < param.colorAttachmentCount; ++i) {
       VkPipelineColorBlendAttachmentState colorBlendAttachment{};
       colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
       colorBlendAttachment.blendEnable = VK_FALSE;
@@ -580,9 +580,9 @@ bool buildRayTracingPipeline(RayTracingPipelineCreateParams param, VkPipelineLay
 
   std::array<VkPipelineShaderStageCreateInfo, 3 > pssci{};
   
-  std::size_t rayGenIndex = 0;
-  std::size_t missIndex = 1;
-  std::size_t chitIndex = 2;
+  std::uint32_t rayGenIndex = 0;
+  std::uint32_t missIndex = 1;
+  std::uint32_t chitIndex = 2;
 
   pssci[rayGenIndex].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   pssci[rayGenIndex].module = raygenModule;

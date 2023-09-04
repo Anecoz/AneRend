@@ -18,8 +18,8 @@ void SSGlobalIlluminationRayTracingPass::registerToGraph(FrameGraphBuilder& fgb,
   RenderPassRegisterInfo info{};
   info._name = "SSGI";
 
-  const int numSurfelsX = std::ceil(rc->swapChainExtent().width / 8.0);
-  const int numSurfelsY = std::ceil(rc->swapChainExtent().height / 8.0);
+  const int numSurfelsX = static_cast<int>(std::ceil(rc->swapChainExtent().width / 8.0));
+  const int numSurfelsY = static_cast<int>(std::ceil(rc->swapChainExtent().height / 8.0));
   const int octSize = 16;
 
   {

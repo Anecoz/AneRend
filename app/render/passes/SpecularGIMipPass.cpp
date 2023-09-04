@@ -18,7 +18,7 @@ void SpecularGIMipPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
   uint32_t height = rc->swapChainExtent().height;
   uint32_t mipLevels = 5;// static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
-  for (int i = 0; i < mipLevels - 1; ++i) {
+  for (uint32_t i = 0; i < mipLevels - 1; ++i) {
     RenderPassRegisterInfo info{};
     info._name = "SpecularGIMipGen" + std::to_string(i);
     info._group = "SpecularGI";
@@ -76,8 +76,8 @@ void SpecularGIMipPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
           1, 1, &(*exeParams.descriptorSets)[0],
           0, nullptr);
 
-        uint32_t width = exeParams.rc->swapChainExtent().width / std::pow(2, i + 1);
-        uint32_t height = exeParams.rc->swapChainExtent().height / std::pow(2, i + 1);
+        uint32_t width = exeParams.rc->swapChainExtent().width / static_cast<uint32_t>(std::pow(2, i + 1));
+        uint32_t height = exeParams.rc->swapChainExtent().height / static_cast<uint32_t>(std::pow(2, i + 1));
 
         vkCmdDispatch(*exeParams.cmdBuffer, width, height, 1);
       });

@@ -143,8 +143,8 @@ void BloomRenderPass::downsamplePass(FrameGraphBuilder& fgb, RenderContext* rc)
         uint32_t initialHeight = exeParams.rc->swapChainExtent().height / 2;
         uint32_t initialWidth = exeParams.rc->swapChainExtent().width / 2;
 
-        uint32_t height = initialHeight / std::pow(2, mip);
-        uint32_t width = initialWidth / std::pow(2, mip);
+        uint32_t height = initialHeight / static_cast<uint32_t>(std::pow(2, mip));
+        uint32_t width = initialWidth / static_cast<uint32_t>(std::pow(2, mip));
 
         uint32_t numY = height / localSize;
         uint32_t numX = width / localSize;
@@ -227,8 +227,8 @@ void BloomRenderPass::upsamplePass(FrameGraphBuilder& fgb, RenderContext* rc)
         uint32_t initialHeight = exeParams.rc->swapChainExtent().height / 2;
         uint32_t initialWidth = exeParams.rc->swapChainExtent().width / 2;
 
-        uint32_t height = initialHeight / std::pow(2, 5);
-        uint32_t width = initialWidth / std::pow(2, 5);
+        uint32_t height = initialHeight / static_cast<uint32_t>(std::pow(2, 5));
+        uint32_t width = initialWidth / static_cast<uint32_t>(std::pow(2, 5));
 
         uint32_t numY = height / localSize;
         uint32_t numX = width / localSize;
@@ -300,8 +300,8 @@ void BloomRenderPass::upsamplePass(FrameGraphBuilder& fgb, RenderContext* rc)
         uint32_t initialHeight = exeParams.rc->swapChainExtent().height / 2;
         uint32_t initialWidth = exeParams.rc->swapChainExtent().width / 2;
 
-        uint32_t height = initialHeight / std::pow(2, mip);
-        uint32_t width = initialWidth / std::pow(2, mip);
+        uint32_t height = initialHeight / static_cast<uint32_t>(std::pow(2, mip));
+        uint32_t width = initialWidth / static_cast<uint32_t>(std::pow(2, mip));
 
         uint32_t numY = height / localSize;
         uint32_t numX = width / localSize;

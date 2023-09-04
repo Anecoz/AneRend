@@ -598,7 +598,7 @@ MeshId VulkanRenderer::registerMesh(Mesh& mesh, bool buildBlas)
 
   vmaDestroyBuffer(_vmaAllocator, stagingBuffer._buffer, stagingBuffer._allocation);
 
-  return _currentMeshes.size() - 1;
+  return static_cast<MeshId>(_currentMeshes.size() - 1);
 }
 
 ModelId VulkanRenderer::registerModel(Model&& model, bool buildBlas)
@@ -612,7 +612,7 @@ ModelId VulkanRenderer::registerModel(Model&& model, bool buildBlas)
   _models.emplace_back(std::move(model));
 
   //printf("Mesh registered, id: %u\n", idOut);
-  return _models.size() - 1;
+  return static_cast<ModelId>(_models.size() - 1);
 }
 
 bool VulkanRenderer::modelIdExists(ModelId id)
@@ -651,7 +651,7 @@ RenderableId VulkanRenderer::registerRenderable(
 
   renderable._id = id;
   renderable._firstMeshId = model._meshes[0]._id;
-  renderable._numMeshes = model._meshes.size();
+  renderable._numMeshes = static_cast<uint32_t>(model._meshes.size());
   renderable._tint = glm::vec3(1.0f);
   renderable._transform = transform;
   renderable._boundingSphereCenter = sphereBoundCenter;
@@ -819,8 +819,8 @@ void VulkanRenderer::update(
   ubo.proj = proj;
   ubo.view = camera.getCamMatrix();
   ubo.viewVector = glm::vec4(camera.getForward(), 1.0);
-  ubo.time = time;
-  ubo.delta = delta;
+  ubo.time = static_cast<float>(time);
+  ubo.delta = static_cast<float>(delta);
   ubo.screenHeight = swapChainExtent().height;
   ubo.screenWidth = swapChainExtent().width;
   ubo.ssaoEnabled = _renderOptions.ssao;
@@ -903,7 +903,7 @@ void VulkanRenderer::registerBottomLevelAS(MeshId meshId)
   triangles.vertexStride = sizeof(Vertex);
   triangles.indexType = VK_INDEX_TYPE_UINT32;
   triangles.indexData.deviceAddress = indexAddress;
-  triangles.maxVertex = mesh._numVertices - 1;
+  triangles.maxVertex = static_cast<uint32_t>(mesh._numVertices) - 1;
   triangles.transformData = { 0 }; // No transform
 
   // Point to the triangle data in the higher abstracted geometry structure (can contain other things than triangles)
@@ -916,7 +916,7 @@ void VulkanRenderer::registerBottomLevelAS(MeshId meshId)
   // Range information for the build process
   VkAccelerationStructureBuildRangeInfoKHR rangeInfo{};
   rangeInfo.firstVertex = 0;
-  rangeInfo.primitiveCount = mesh._numIndices / 3; // Number of triangles
+  rangeInfo.primitiveCount = static_cast<uint32_t>(mesh._numIndices) / 3; // Number of triangles
   rangeInfo.primitiveOffset = 0;
   rangeInfo.transformOffset = 0;
 
@@ -1670,7 +1670,7 @@ int VulkanRenderer::findTimerIndex(const std::string& timer)
 {
   for (std::size_t i = 0; i < _perFrameTimers.size(); ++i) {
     if (_perFrameTimers[i]._name == timer) {
-      return i;
+      return static_cast<int>(i);
     }
   }
   
@@ -1735,7 +1735,7 @@ void VulkanRenderer::computePerFrameQueries()
         pfTimer._cumulative100 = 0.0f;
       }
 
-      pfTimer._buf.emplace_back(pfTimer._durationMs);
+      pfTimer._buf.emplace_back(static_cast<float>(pfTimer._durationMs));
       pfTimer._buf.erase(pfTimer._buf.begin());
     }
   }
@@ -1940,7 +1940,7 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 
     //if (!renderable._visible) continue;
 
-    for (int i = 0; i < renderable._numMeshes; ++i) {
+    for (uint32_t i = 0; i < renderable._numMeshes; ++i) {
       _currentMeshUsage[renderable._firstMeshId + i]++;
     }
     
@@ -2056,8 +2056,8 @@ void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
   for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
     auto& mesh = _currentMeshes[i];
 
-    mappedData[i]._vertexOffset = mesh._vertexOffset;
-    mappedData[i]._indexOffset = mesh._indexOffset;
+    mappedData[i]._vertexOffset = static_cast<uint32_t>(mesh._vertexOffset);
+    mappedData[i]._indexOffset = static_cast<uint32_t>(mesh._indexOffset);
     mappedData[i]._blasRef = mesh._blasRef;
   }
 
@@ -3007,12 +3007,12 @@ bool VulkanRenderer::initGpuBuffers()
     res->_format = VK_FORMAT_R32_SFLOAT;
     res->_image = _gpuWindForceImage[i];
     res->_views.emplace_back(_gpuWindForceView[i]);
-    _vault.addResource("WindForceImage", std::unique_ptr<IRenderResource>(res), true, i, true);
+    _vault.addResource("WindForceImage", std::unique_ptr<IRenderResource>(res), true, static_cast<int>(i), true);
 
     // Add renderable buffer to vault, needed by particle system
     auto bufRes = new BufferRenderResource();
     bufRes->_buffer = _gpuRenderableBuffer[i];
-    _vault.addResource("RenderableBuffer", std::unique_ptr<IRenderResource>(bufRes), true, i, true);
+    _vault.addResource("RenderableBuffer", std::unique_ptr<IRenderResource>(bufRes), true, static_cast<int>(i), true);
   }
 
   return true;
@@ -3464,10 +3464,10 @@ void VulkanRenderer::createParticles()
 
   std::random_device dev;
   std::mt19937 rng(dev());
-  std::uniform_real_distribution<> vel(-8.0, 8.0);
-  std::uniform_real_distribution<> velY(2.0, 12.0);
-  std::uniform_real_distribution<> scale(0.05, .5);
-  std::uniform_real_distribution<> delay(0.0, 10.0);
+  std::uniform_real_distribution<float> vel(-8.0f, 8.0f);
+  std::uniform_real_distribution<float> velY(2.0f, 12.0f);
+  std::uniform_real_distribution<float> scale(0.05f, .5f);
+  std::uniform_real_distribution<float> delay(0.0f, 10.0f);
 
   for (int i = 0; i < 1000; ++i) {
     Particle particle{};
