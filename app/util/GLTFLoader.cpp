@@ -174,7 +174,7 @@ bool GLTFLoader::loadFromFile(
           };
         }
         else {
-          vert.color = { 1.0f };
+          vert.color = { 1.0f, 1.0f, 1.0f };
         }
         if (tangentBuffer) {
           vert.tangent = {
