@@ -2950,7 +2950,7 @@ bool VulkanRenderer::initGpuBuffers()
       _vmaAllocator,
       sizeof(gpu::GPUSceneData),
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, // If this turns out to be a bottle neck we have to switch to a staging buffer
+      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT, // If this turns out to be a bottle neck we have to switch to a staging buffer
       _gpuSceneDataBuffer[i]);
 
     bufferutil::createBuffer(
