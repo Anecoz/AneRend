@@ -1,0 +1,110 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_atomic_float : enable
+
+#include "surfel_helpers.glsl"
+#include "helpers.glsl"
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 1, binding = 0, rgba8) uniform readonly image2D dirIm;
+layout(set = 1, binding = 1, rgba16f) uniform readonly image2D irrIm;
+layout(set = 1, binding = 2, rgba16f) uniform image2D outputIm;
+
+shared float groupR;
+shared float groupG;
+shared float groupB;
+
+layout(push_constant) uniform constants {
+  uint cascade;
+} pc;
+
+const float LM_CONST[9] = 
+  float[](
+    0.282095,
+    0.488603,
+    0.488603,
+    0.488603,
+    1.092548,
+    1.092548,
+    1.092548,
+    0.315392,
+    0.546274);
+
+float calcYlm(vec3 dir, int lm)
+{
+  //vec3 tmp = dir;
+  //dir.y = tmp.z;
+  //dir.z = tmp.y;
+  float y_lm = LM_CONST[lm];
+
+  if (lm == 1) {
+    y_lm *= dir.x;
+  }
+  else if (lm == 2) {
+    y_lm *= dir.z;
+  }
+  else if (lm == 3) {
+    y_lm *= dir.y;
+  }
+  else if (lm == 4) {
+    y_lm *= dir.x * dir.z;
+  }
+  else if (lm == 5) {
+    y_lm *= dir.y * dir.z;
+  }
+  else if (lm == 6) {
+    y_lm *= dir.x * dir.y;
+  }
+  else if (lm == 7) {
+    y_lm *= 3.0 * (dir.z * dir.z) - 1.0;
+  }
+  else if (lm == 8) {
+    y_lm *= (dir.x * dir.x) - (dir.y * dir.y);
+  }
+
+  return y_lm;
+}
+
+void main()
+{
+  ivec2 imSize = imageSize(outputIm);
+  const int lm = int(gl_GlobalInvocationID.z);
+
+  uint cascade = pc.cascade;
+  uint irrDirPixSize = SURFEL_DIR_IRR_PIX_SIZE[cascade];
+
+  ivec2 surfelIdx = ivec2(gl_GlobalInvocationID.xy);
+  int ySh = int(floor(lm / 3));
+  int xSh = lm - 3 * ySh;
+  ivec2 pixelWithinSh = ivec2(xSh, ySh);
+  ivec2 pixel = pixelWithinSh + surfelIdx * ivec2(3, 3);
+
+  if (pixel.x > imSize.x - 1 || pixel.y > imSize.y - 1) {
+    return;
+  }
+
+  // Go through each direction and radiance value and sum them up, using the SH constants.
+  int numRays = int(irrDirPixSize * irrDirPixSize);
+
+  vec3 result = vec3(0.0);
+  float weight = 4.0 * 3.1415926 / (irrDirPixSize * irrDirPixSize);
+  float weightSum = weight * irrDirPixSize * irrDirPixSize;
+  ivec2 inputPixOffset = surfelIdx * ivec2(int(irrDirPixSize));
+  for (int x = 0; x < irrDirPixSize; ++x) {
+    for (int y = 0; y < irrDirPixSize; ++y) {
+      ivec2 currPix = inputPixOffset + ivec2(x, y);
+
+      vec3 packedDir = imageLoad(dirIm, currPix).rgb;
+      vec3 dir = (packedDir * 2.0) - 1.0;
+      vec3 irr = imageLoad(irrIm, currPix).rgb;
+
+      result += irr * calcYlm(dir, lm) * weight;
+    }
+  }
+
+  result *= 4.0 * 3.1415926 / weightSum;
+
+  imageStore(outputIm, pixel, vec4(result, 1.0));
+}

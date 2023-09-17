@@ -14,7 +14,7 @@ public:
   void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
 
 private:
-  glm::ivec2 _lastCamPos = {};
+  glm::ivec2 _lastProbeIdx = {};
 };
 
 }

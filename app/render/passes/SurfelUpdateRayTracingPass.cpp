@@ -3,6 +3,9 @@
 #include "../FrameGraphBuilder.h"
 #include "../RenderContext.h"
 #include "../VulkanExtensions.h"
+#include "../RenderResource.h"
+
+#include "SurfelCascadeInfo.h"
 
 namespace render {
 
@@ -15,12 +18,26 @@ SurfelUpdateRayTracingPass::~SurfelUpdateRayTracingPass()
 
 void SurfelUpdateRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
-  RenderPassRegisterInfo info{};
-  info._name = "SurfelUpdateRT";
+  for (int i = 0; i < 4; ++i) {
+    Cascade casc{ surfel::surfPixSize[i], surfel::numRaysPerSurfel[i], surfel::sqrtNumRaysPerSurfel[i]};
+    _cascades.emplace_back(std::move(casc));
+    registerCascade(fgb, rc, i);
+  }
+}
 
-  const int numSurfelsX = static_cast<int>(std::ceil(rc->swapChainExtent().width / 32.0));
-  const int numSurfelsY = static_cast<int>(std::ceil(rc->swapChainExtent().height / 32.0));
-  const int octSize = 8;
+void SurfelUpdateRayTracingPass::registerCascade(FrameGraphBuilder& fgb, RenderContext* rc, int cascade)
+{
+  std::string rpName = "SurfelUpdateRT" + std::to_string(cascade);
+  RenderPassRegisterInfo info{};
+  info._name = rpName;
+  info._group = "SurfelUpdateRT";
+
+  const int surfelPixSize = _cascades[cascade].surfelPixSize;
+  //const int numRaysPerSurfel = _cascades[cascade].numRaysPerSurfel;
+  const int sqrtNumRaysPerSurfel = _cascades[cascade].sqrtNumRaysPerSurfel;
+
+  const int numSurfelsX = static_cast<int>(std::ceil(rc->swapChainExtent().width / surfelPixSize));
+  const int numSurfelsY = static_cast<int>(std::ceil(rc->swapChainExtent().height / surfelPixSize));
 
   {
     ResourceUsage usage{};
@@ -40,23 +57,13 @@ void SurfelUpdateRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
   }
   {
     ResourceUsage usage{};
-    usage._resourceName = "RTShadowImage";
-    usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::RayTrace);
-    usage._type = Type::SampledTexture;
-    info._resourceUsages.emplace_back(std::move(usage));
-  }
-  {
-    ResourceUsage usage{};
-    usage._resourceName = "SurfelTex";
-    usage._access.set((std::size_t)Access::Read);
+    usage._resourceName = "SurfelDirTex" + std::to_string(cascade);
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::RayTrace);
 
     ImageInitialCreateInfo createInfo{};
-    // 8x8 probe resolution
-    createInfo._initialWidth = numSurfelsX * octSize + numSurfelsX * 2; // 1 pix border around each cell
-    createInfo._initialHeight = numSurfelsY * octSize + numSurfelsY * 2; // ditto
+    createInfo._initialWidth = numSurfelsX * sqrtNumRaysPerSurfel;
+    createInfo._initialHeight = numSurfelsY * sqrtNumRaysPerSurfel;
     createInfo._intialFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
     usage._imageCreateInfo = createInfo;
@@ -64,44 +71,22 @@ void SurfelUpdateRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
     usage._type = Type::ImageStorage;
     info._resourceUsages.emplace_back(std::move(usage));
   }
-
-  /* {
+  {
     ResourceUsage usage{};
-    usage._resourceName = "SurfelOctBuf";
+    usage._resourceName = "SurfelIrrTex" + std::to_string(cascade);
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::RayTrace);
 
-    BufferInitialCreateInfo createInfo{};
-    createInfo._initialSize = 8 * 8 * numSurfelsX * numSurfelsY * sizeof(glm::vec4);
+    ImageInitialCreateInfo createInfo{};
+    createInfo._initialWidth = numSurfelsX * sqrtNumRaysPerSurfel;
+    createInfo._initialHeight = numSurfelsY * sqrtNumRaysPerSurfel;
+    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
-    usage._bufferCreateInfo = createInfo;
+    usage._imageCreateInfo = createInfo;
 
-    usage._type = Type::SSBO;
+    usage._type = Type::ImageStorage;
     info._resourceUsages.emplace_back(std::move(usage));
-  }*/
-
-  // Create a bunch of (one for each surfel) 8x8 oct images that will be put to a bindless array  
-  /*for (int x = 0; x < numSurfelsX; ++x) {
-    for (int y = 0; y < numSurfelsY; ++y) {
-      ResourceUsage usage{};
-      usage._resourceName = "SurfelTex_" + std::to_string(x) + "_" + std::to_string(y);
-      usage._access.set((std::size_t)Access::Read);
-      usage._access.set((std::size_t)Access::Write);
-      usage._stage.set((std::size_t)Stage::RayTrace);
-      usage._bindless = true;
-
-      ImageInitialCreateInfo createInfo{};
-      // 8x8 oct resolution
-      createInfo._initialHeight = 8;
-      createInfo._initialWidth = 8;
-      createInfo._intialFormat = VK_FORMAT_R8G8B8A8_UNORM;
-
-      usage._imageCreateInfo = createInfo;
-
-      usage._type = Type::ImageStorage;
-      info._resourceUsages.emplace_back(std::move(usage));
-    }
-  }*/
+  }
 
   RayTracingPipelineCreateParams param{};
   param.device = rc->device();
@@ -114,8 +99,11 @@ void SurfelUpdateRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
 
   fgb.registerRenderPass(std::move(info));
 
-  fgb.registerRenderPassExe("SurfelUpdateRT",
-    [this, numSurfelsX, numSurfelsY, octSize](RenderExeParams exeParams) {
+  fgb.registerRenderPassExe(rpName,
+    [this, numSurfelsX, numSurfelsY, sqrtNumRaysPerSurfel, cascade](RenderExeParams exeParams) {
+      if (!exeParams.rc->getRenderOptions().screenspaceProbes) return;
+      if (!exeParams.rc->getRenderOptions().raytracingEnabled) return;
+
       // Bind pipeline
       vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, *exeParams.pipeline);
 
@@ -127,9 +115,17 @@ void SurfelUpdateRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
         1, 1, &(*exeParams.descriptorSets)[0],
         0, nullptr);
 
-      VkStridedDeviceAddressRegionKHR emptyRegion{};
+      uint32_t cascadePc = (uint32_t)cascade;
 
-      uint32_t numRaysPerSurfel = octSize * octSize;
+      vkCmdPushConstants(
+        *exeParams.cmdBuffer,
+        *exeParams.pipelineLayout,
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+        0,
+        sizeof(uint32_t),
+        &cascadePc);
+
+      VkStridedDeviceAddressRegionKHR emptyRegion{};
 
       // Trace some rays
       vkext::vkCmdTraceRaysKHR(
@@ -138,10 +134,10 @@ void SurfelUpdateRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
         &exeParams.sbt->_missRegion,
         &exeParams.sbt->_chitRegion,
         &emptyRegion,
-        numSurfelsX,
-        numSurfelsY,
-        numRaysPerSurfel);
-      });
+        numSurfelsX * sqrtNumRaysPerSurfel,
+        numSurfelsY * sqrtNumRaysPerSurfel,
+        1);
+    });
 }
 
 }

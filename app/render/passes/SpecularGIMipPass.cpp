@@ -14,8 +14,8 @@ SpecularGIMipPass::~SpecularGIMipPass()
 
 void SpecularGIMipPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
-  uint32_t width = rc->swapChainExtent().width;
-  uint32_t height = rc->swapChainExtent().height;
+  //uint32_t width = rc->swapChainExtent().width;
+  //uint32_t height = rc->swapChainExtent().height;
   uint32_t mipLevels = 5;// static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
   for (uint32_t i = 0; i < mipLevels - 1; ++i) {
@@ -76,8 +76,8 @@ void SpecularGIMipPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
           1, 1, &(*exeParams.descriptorSets)[0],
           0, nullptr);
 
-        uint32_t width = exeParams.rc->swapChainExtent().width / static_cast<uint32_t>(std::pow(2, i + 1));
-        uint32_t height = exeParams.rc->swapChainExtent().height / static_cast<uint32_t>(std::pow(2, i + 1));
+        uint32_t width = (exeParams.rc->swapChainExtent().width / 2) / static_cast<uint32_t>(std::pow(2, i + 1));
+        uint32_t height = (exeParams.rc->swapChainExtent().height / 2) / static_cast<uint32_t>(std::pow(2, i + 1));
 
         vkCmdDispatch(*exeParams.cmdBuffer, width, height, 1);
       });

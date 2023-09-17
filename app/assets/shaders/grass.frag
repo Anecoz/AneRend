@@ -22,7 +22,7 @@ void main() {
   float metallic = 0.0;
   float roughness = 0.8;
 
-  outColor0 = vec4(normal * 0.5 + 0.5, diffuseColor.x);
+  outColor0 = vec4(normal, diffuseColor.x);
   outColor1 = vec4(diffuseColor.yz, metallic, roughness);
   outColor2 = vec4(0.0);
 

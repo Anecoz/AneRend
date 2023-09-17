@@ -46,6 +46,7 @@ bool StageApplication::init()
   render::Model testModel6;
   render::Model testModel7;
   render::Model testModel8;
+  render::Model testModel9;
 
   if (!_vkRenderer.init()) {
     return false;
@@ -95,6 +96,10 @@ bool StageApplication::init()
     return false;
   }
 
+  if (!testModel9.loadFromGLTF(std::string(ASSET_PATH) + "models/flight_helmet_gltf/FlightHelmet.gltf")) {
+    return false;
+  }
+
   auto testMin = testModel7._min;
   auto testMax = testModel7._max;
 
@@ -106,11 +111,12 @@ bool StageApplication::init()
   _meshId6 = _vkRenderer.registerModel(std::move(testModel6));
   _meshId7 = _vkRenderer.registerModel(std::move(testModel7));
   _meshId8 = _vkRenderer.registerModel(std::move(testModel8));
+  _meshId9 = _vkRenderer.registerModel(std::move(testModel9));
 
   // Create a bunch of test matrices
   // Trees
   {
-    std::size_t numInstances = 100;
+    std::size_t numInstances = 0;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -136,7 +142,7 @@ bool StageApplication::init()
   // Do a couple of the big models
   // Ground level
   {
-    std::size_t numInstances = 20;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
     for (int y = 0; y < numInstances; ++y) {
@@ -180,11 +186,11 @@ bool StageApplication::init()
   }
   // Damaged helmet
   {
-    std::size_t numInstances = 20;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
-        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(12.0f * x, 4.0f, 17.0f * y));
+        auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(4.0f * x, 4.0f, 5.0f * y));
         //auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(2.0f));
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(float(rand() % 360)), glm::vec3(0.0f, 1.0f, 0.0f));
         rot = rot * glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
@@ -213,7 +219,7 @@ bool StageApplication::init()
   }
   // Metal rough spheres
   {
-    std::size_t numInstances = 0;
+    std::size_t numInstances = 1;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -222,6 +228,19 @@ bool StageApplication::init()
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         //rot = rot * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         _vkRenderer.registerRenderable(_meshId8, trans * rot * scale, glm::vec3(0.0f), 50.0f);
+      }
+  }
+  // Flight helmet
+  {
+    std::size_t numInstances = 0;
+
+    for (int x = 0; x < numInstances; ++x)
+      for (int y = 0; y < numInstances; ++y) {
+        auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(12.0f * x, 2.0f, 17.0f * y));
+        //auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(.4f));
+        //auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        //rot = rot * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        _vkRenderer.registerRenderable(_meshId9, trans, glm::vec3(0.0f), 1.0f);
       }
   }
 
@@ -312,11 +331,13 @@ void StageApplication::render()
     ImGui::Checkbox("DDGI", &_renderOptions.ddgiEnabled);
     ImGui::Checkbox("Multi-bounce DDGI", &_renderOptions.multiBounceDdgiEnabled);
     ImGui::Checkbox("Specular GI", &_renderOptions.specularGiEnabled);
+    ImGui::Checkbox("SS Probes GI", &_renderOptions.screenspaceProbes);
     ImGui::Checkbox("Visualize bounding spheres", &_renderOptions.visualizeBoundingSpheres);
     ImGui::Checkbox("Debug probes", &_renderOptions.probesDebug);
     ImGui::Checkbox("Hack", &_renderOptions.hack);
     ImGui::SliderFloat("Sun intensity", &_renderOptions.sunIntensity, 0.0f, 200.0f);
     ImGui::SliderFloat("Sky intensity", &_renderOptions.skyIntensity, 0.0f, 20.0f);
+    ImGui::SliderFloat("Exposure", &_renderOptions.exposure, 0.0f, 5.0f);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
     ImGui::End();
   }

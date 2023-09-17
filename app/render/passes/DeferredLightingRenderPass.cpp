@@ -223,6 +223,16 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
 
     resourceUsages.emplace_back(std::move(usage));
   }
+  for (int i = 0; i < 4; ++i) {
+    ResourceUsage usage{};
+    usage._resourceName = "SurfelSH" + std::to_string(i);
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SampledTexture;
+    usage._samplerClampToEdge = true;
+    usage._noSamplerFiltering = true;
+    resourceUsages.emplace_back(std::move(usage));
+  }
 
   info._resourceUsages = std::move(resourceUsages);
 

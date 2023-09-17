@@ -22,8 +22,10 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   int ddgiEnabled;
   int multiBounceDdgiEnabled;
   int specularGiEnabled;
+  int screensapceProbesEnabled;
   int visualizeBoundingSpheresEnabled;
   int hack;
   float sunIntensity;
   float skyIntensity;
+  float exposure;
 } ubo;

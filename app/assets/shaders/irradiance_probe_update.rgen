@@ -57,8 +57,15 @@ void main()
   ivec2 pixelWithinProbe = ivec2(pixel.x - probeX * PROBE_IRR_DIR_PIX_SIZE, pixel.y - probeZ * PROBE_IRR_DIR_PIX_SIZE);
   int rayIndex = pixelWithinProbe.y * PROBE_IRR_DIR_PIX_SIZE + pixelWithinProbe.x;
 
-  vec3 camOffset = vec3(ubo.cameraGridPos.x - float(NUM_PROBES_PER_PLANE)/2.0, 0.0, ubo.cameraGridPos.z - float(NUM_PROBES_PER_PLANE)/2.0);
-  vec3 origin = vec3(float(probeX), float(probeY) * 2.0, float(probeZ)) + camOffset;
+  ivec2 camProbeIdx = 
+    ivec2(int(ubo.cameraPos.x / PROBE_STEP.x), int(ubo.cameraPos.z / PROBE_STEP.z));
+
+  vec3 camOffset = vec3(
+    float(camProbeIdx.x) * PROBE_STEP.x - PROBE_STEP.x * float(NUM_PROBES_PER_PLANE)/2.0,
+    0.0, 
+    float(camProbeIdx.y) * PROBE_STEP.z - PROBE_STEP.z * float(NUM_PROBES_PER_PLANE)/2.0);
+
+  vec3 origin = vec3(float(probeX), float(probeY), float(probeZ)) * PROBE_STEP + camOffset;
 
   // Create a directional vector from the "ray index"
   vec3 worldDir = worldDirFromFibonacciIndex(rayIndex);

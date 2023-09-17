@@ -5,7 +5,6 @@
 
 #include "bindless.glsl"
 #include "bindless_tlas.glsl"
-#include "scene_ubo.glsl"
 #include "octahedron_helpers.glsl"
 #include "pbr_light.glsl"
 

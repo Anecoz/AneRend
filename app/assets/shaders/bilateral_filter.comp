@@ -81,9 +81,5 @@ void main()
 
   outCol /= weights;
 
-  //vec3 currSamp = texture(inputIm, texCoords).rgb;
-
   imageStore(outputIm, pixel, vec4(outCol, 1.0));
-  //imageStore(outputIm, pixel, vec4(currSamp, 1.0));
-  //imageStore(outputIm, pixel, vec4(1.0));
 }

@@ -1,7 +1,9 @@
 #extension GL_GOOGLE_include_directive : enable
 
 #include "probe_helpers.glsl"
+#include "surfel_helpers.glsl"
 #include "helpers.glsl"
+#include "scene_ubo.glsl"
 
 const float PI = 3.14159265359;
 
@@ -230,10 +232,10 @@ vec4 weightProbe(sampler2D probeTex, vec3 worldPos, vec3 probePos, vec3 normal, 
   // A tiny bit of light is really visible due to log perception, so
   // crush tiny weights but keep the curve continuous. This must be done
   // before the trilinear weights, because those should be preserved.
-  /*const float crushThreshold = 0.2;
+  const float crushThreshold = 0.2;
   if (weight < crushThreshold) {
     weight *= weight * weight * (1.0 / pow(crushThreshold, 2));
-  }*/
+  }
 
   // Trilinear weights
   weight *= trilinear.x * trilinear.y * trilinear.z;
@@ -252,13 +254,23 @@ vec4 weightProbe(sampler2D probeTex, vec3 worldPos, vec3 probePos, vec3 normal, 
 vec3 sampleProbe(sampler2D probeTex, vec3 worldPos, vec3 normal)
 {
   // Find closest probe to worldPos
-  vec3 camOffset = vec3(floor(ubo.cameraPos.x) - float(NUM_PROBES_PER_PLANE) / 2.0, 0.0, floor(ubo.cameraPos.z) - float(NUM_PROBES_PER_PLANE) / 2.0);
+  ivec2 camProbeIdx =
+    ivec2(int(ubo.cameraPos.x / PROBE_STEP.x), int(ubo.cameraPos.z / PROBE_STEP.z));
 
-  int probeX = clamp(int(floor(worldPos.x - camOffset.x)), 0, NUM_PROBES_PER_PLANE - 1);
-  int probeY = clamp(int(floor(worldPos.y / 2.0)), 0, NUM_PROBE_PLANES - 1);
-  int probeZ = clamp(int(floor(worldPos.z - camOffset.z)), 0, NUM_PROBES_PER_PLANE - 1);
+  vec3 camOffset = vec3(
+    float(camProbeIdx.x) * PROBE_STEP.x - PROBE_STEP.x * float(NUM_PROBES_PER_PLANE) / 2.0,
+    0.0,
+    float(camProbeIdx.y) * PROBE_STEP.z - PROBE_STEP.z * float(NUM_PROBES_PER_PLANE) / 2.0);
+  //vec3 camOffset = vec3(ubo.cameraGridPos.x - PROBE_STEP.x * float(NUM_PROBES_PER_PLANE) / 2.0, 0.0, ubo.cameraGridPos.z - PROBE_STEP.z * float(NUM_PROBES_PER_PLANE) / 2.0);
+  //vec3 camOffset = vec3(0.0);
+  //vec3 camOffset = vec3(floor(ubo.cameraPos.x) - float(NUM_PROBES_PER_PLANE) / 2.0, 0.0, floor(ubo.cameraPos.z) - float(NUM_PROBES_PER_PLANE) / 2.0);
 
-  vec3 baseProbePos = vec3(probeX + camOffset.x, probeY * 2.0, probeZ + camOffset.z);
+  int probeX = clamp(int(floor((worldPos.x - camOffset.x) / PROBE_STEP.x)), 0, NUM_PROBES_PER_PLANE - 1);
+  int probeY = clamp(int(floor(worldPos.y / PROBE_STEP.y)), 0, NUM_PROBE_PLANES - 1);
+  int probeZ = clamp(int(floor((worldPos.z - camOffset.z) / PROBE_STEP.z)), 0, NUM_PROBES_PER_PLANE - 1);
+
+  //vec3 baseProbePos = vec3(probeX + camOffset.x, probeY * 2.0, probeZ + camOffset.z);
+  vec3 baseProbePos = vec3(probeX, probeY, probeZ) * PROBE_STEP + camOffset;
 
   float sumWeight = 0.0;
   vec3 sumIrradiance = vec3(0.0);
@@ -272,37 +284,37 @@ vec3 sampleProbe(sampler2D probeTex, vec3 worldPos, vec3 normal)
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(1.0, 1.0, 1.0);
+  probePos = baseProbePos + vec3(1.0, 1.0, 1.0) * PROBE_STEP;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY + 1, probeZ + 1), alpha, ivec3(1, 1, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(1.0, 1.0, 0.0);
+  probePos = baseProbePos + vec3(1.0, 1.0, 0.0) * PROBE_STEP;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY + 1, probeZ), alpha, ivec3(1, 1, 0));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(1.0, 0.0, 0.0);
+  probePos = baseProbePos + vec3(1.0, 0.0, 0.0) * PROBE_STEP;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY, probeZ), alpha, ivec3(1, 0, 0));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(0.0, 1.0, 1.0);
+  probePos = baseProbePos + vec3(0.0, 1.0, 1.0) * PROBE_STEP;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX, probeY + 1, probeZ + 1), alpha, ivec3(0, 1, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(0.0, 1.0, 0.0);
+  probePos = baseProbePos + vec3(0.0, 1.0, 0.0) * PROBE_STEP;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX, probeY + 1, probeZ), alpha, ivec3(0, 1, 0));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(0.0, 0.0, 1.0);
+  probePos = baseProbePos + vec3(0.0, 0.0, 1.0) * PROBE_STEP;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX, probeY, probeZ + 1), alpha, ivec3(0, 0, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(1.0, 0.0, 1.0);
+  probePos = baseProbePos + vec3(1.0, 0.0, 1.0) * PROBE_STEP;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY, probeZ + 1), alpha, ivec3(1, 0, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
@@ -334,6 +346,109 @@ vec3 calcIndirectDiffuseLight(
   vec3 kD = 1.0 - kS;
   kD *= 1.0 - metallic;
   vec3 irradiance = sampleProbe(probeTex, worldPos, normal);
+  vec3 diffuse = irradiance * albedo;
+  ambient = kD * diffuse;
+
+  return ambient;
+}
+
+vec3 irradianceFromCascade(int cascade, sampler2D tex, vec2 texCoord, vec3 normal)
+{
+  int pixSize = int(SURFEL_DIR_IRR_PIX_SIZE[0]);
+  ivec2 cascTexSize = ivec2(ubo.screenWidth / SURFEL_PIXEL_SIZE[cascade] * pixSize, ubo.screenHeight / SURFEL_PIXEL_SIZE[cascade] * pixSize);
+  ivec2 cascShTexSize = ivec2(ubo.screenWidth / SURFEL_PIXEL_SIZE[cascade] * 3, ubo.screenHeight / SURFEL_PIXEL_SIZE[cascade] * 3);
+
+  ivec2 pixel = uvToPixel(texCoord, cascTexSize);
+  ivec2 surfelIdx = pixel / pixSize;
+  ivec2 shStartPixel = surfelIdx * 3;
+  vec2 shStartUv = pixelToUv(shStartPixel, cascShTexSize);
+  vec2 texelSize = 1.0 / vec2(cascShTexSize.x, cascShTexSize.y);
+  vec2 stepX = vec2(texelSize.x, 0.0);
+  vec2 stepY = vec2(0.0, texelSize.y);
+
+  // Get the L_lm values from the tex, and construct the matrix M (one for each RGB-channel)
+  vec3 l00 = texture(tex, shStartUv).rgb;
+  vec3 l11 = texture(tex, shStartUv + stepX).rgb;
+  vec3 l10 = texture(tex, shStartUv + stepX * 2.0).rgb;
+  vec3 l1m1 = texture(tex, shStartUv + stepY).rgb;
+  vec3 l21 = texture(tex, shStartUv + stepY + stepX).rgb;
+  vec3 l2m1 = texture(tex, shStartUv + stepY + stepX * 2.0).rgb;
+  vec3 l2m2 = texture(tex, shStartUv + stepY * 2.0).rgb;
+  vec3 l20 = texture(tex, shStartUv + stepY * 2.0 + stepX).rgb;
+  vec3 l22 = texture(tex, shStartUv + stepY * 2.0 + stepX * 2.0).rgb;
+
+  const float c1 = 0.429043;
+  const float c2 = 0.511664;
+  const float c3 = 0.743125;
+  const float c4 = 0.886227;
+  const float c5 = 0.247708;
+
+  /*mat4 MR = mat4(
+    vec4(c1 * l22.r, c1 * l2m2.r, c1 * l21.r, c2 * l11.r),
+    vec4(c1 * l2m2.r, -c1 * l22.r, c1 * l2m1.r, c2 * l1m1.r),
+    vec4(c1 * l21.r, c1 * l2m1.r, c3 * l20.r, c2 * l10.r),
+    vec4(c2 * l11.r, c2 * l1m1.r, c2 * l10.r, c4 * l00.r - c5 * l20.r)
+  );
+
+  mat4 MG = mat4(
+    vec4(c1 * l22.g, c1 * l2m2.g, c1 * l21.g, c2 * l11.g),
+    vec4(c1 * l2m2.g, -c1 * l22.g, c1 * l2m1.g, c2 * l1m1.g),
+    vec4(c1 * l21.g, c1 * l2m1.g, c3 * l20.g, c2 * l10.g),
+    vec4(c2 * l11.g, c2 * l1m1.g, c2 * l10.g, c4 * l00.g - c5 * l20.g)
+  );
+
+  mat4 MB = mat4(
+    vec4(c1 * l22.b, c1 * l2m2.b, c1 * l21.b, c2 * l11.b),
+    vec4(c1 * l2m2.b, -c1 * l22.b, c1 * l2m1.b, c2 * l1m1.b),
+    vec4(c1 * l21.b, c1 * l2m1.b, c3 * l20.b, c2 * l10.b),
+    vec4(c2 * l11.b, c2 * l1m1.b, c2 * l10.b, c4 * l00.b - c5 * l20.b)
+  );*/
+
+  vec3 n = normal;
+  //n.z = normal.y;
+  //n.y = normal.z;
+  vec3 irradiance =
+    c1 * l22 * (n.x * n.x - n.y * n.y) +
+    c3 * l20 * n.z * n.z +
+    c4 * l00 - c5 * l20 +
+    2.0 * c1 * (l2m2 * n.x * n.y + l21 * n.x * n.z + l2m1 * n.y * n.z) +
+    2.0 * c2 * (l11 * n.x + l1m1 * n.y + l10 * n.z);
+
+  irradiance = max(irradiance, vec3(0.0));
+
+  return irradiance;
+}
+
+vec3 calcIndirectDiffuseLightSurfel(
+  vec3 normal,
+  vec3 albedo,
+  float metallic,
+  float roughness,
+  vec3 worldPos,
+  vec3 viewPos,
+  vec2 texCoord,
+  sampler2D cascade0Tex,
+  sampler2D cascade1Tex,
+  sampler2D cascade2Tex,
+  sampler2D cascade3Tex)
+{
+  vec3 ambient = vec3(0.0);
+
+  vec3 V = normalize(viewPos - worldPos);
+  vec3 F0 = vec3(0.04);
+  F0 = mix(F0, albedo, metallic);
+
+  vec3 kS = fresnelSchlickRoughness(max(dot(normal, V), 0.0), F0, roughness);
+  vec3 kD = 1.0 - kS;
+  kD *= 1.0 - metallic;
+
+  vec3 irradiance = irradianceFromCascade(0, cascade0Tex, texCoord, normal);
+  irradiance += irradianceFromCascade(1, cascade1Tex, texCoord, normal);
+  irradiance += irradianceFromCascade(2, cascade2Tex, texCoord, normal);
+  irradiance += irradianceFromCascade(3, cascade3Tex, texCoord, normal);
+
+  irradiance /= 4.0;
+
   vec3 diffuse = irradiance * albedo;
   ambient = kD * diffuse;
 
@@ -385,7 +500,7 @@ vec3 calcIndirectSpecularLight(
 
   vec3 refl = vec3(0.0);
 
-  if (roughness > 0.7 && ubo.ddgiEnabled == 1) {
+  if (roughness > 0.8 && ubo.ddgiEnabled == 1) {
     vec3 dir = reflect(-V, normal);
     refl = sampleProbe(probeTex, worldPos, dir);
   }

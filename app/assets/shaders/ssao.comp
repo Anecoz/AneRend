@@ -55,7 +55,7 @@ void main() {
     return;
   }
 
-  vec3 normal    = mat3(ubo.view) * (texture(gbuffer0Tex, texCoords).rgb * 2.0 - 1.0);
+  vec3 normal    = mat3(ubo.view) * normalize(texture(gbuffer0Tex, texCoords).rgb);
   vec3 randomVec = texture(noiseTex, texCoords * noiseScale).xyz;
 
   vec3 tangent   = normalize(randomVec - normal * dot(randomVec, normal));

@@ -2,56 +2,50 @@
 #extension GL_EXT_ray_tracing : enable
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_nonuniform_qualifier : enable
-#extension GL_EXT_shader_atomic_float : enable
 
 #include "bindless.glsl"
 #include "bindless_tlas.glsl"
 #include "scene_ubo.glsl"
 #include "octahedron_helpers.glsl"
-
-const float GOLDEN_RATIO = 1.6180339887;
-const uint NUM_RAYS = 64;
-const float PI = 3.14159265359;
-const float EPSILON = 1e-6;
+#include "surfel_helpers.glsl"
+#include "helpers.glsl"
 
 struct hitPayload
 {
   vec3 irradiance;
   vec3 hitPos;
   bool shadow;
+  bool lastCascade;
 };
-
-const vec3 clearColor = vec3(0.2, 0.5, 0.7);
 
 layout(location = 0) rayPayloadEXT hitPayload payload;
 
 layout(set = 1, binding = 0) uniform sampler2D depth;
 layout(set = 1, binding = 1) uniform sampler2D im0;
-layout(set = 1, binding = 2) uniform sampler2D shadowRT;
-layout(set = 1, binding = 3, rgba8) uniform writeonly image2D outputIm;
+layout(set = 1, binding = 2, rgba8) uniform writeonly image2D outputDirIm;
+layout(set = 1, binding = 3, rgba16f) uniform writeonly image2D outputIrrIm;
 
-/*layout(std430, set = 1, binding = 4) buffer SurfelOctBuffer {
-  vec4 octRadiances[];
-} surfelOctBuffer;*/
+layout(push_constant) uniform constants {
+  uint cascade;
+} pc;
 
-// Generate a random direction on the hemisphere oriented by normal
-vec3 worldDirFromFibonacciIndex(uint idx, vec3 normal)
+
+// Generate a uniform power cosine ray on a hemisphere
+// Input on 0,1 and output on -1,1 (z of output points up, and is on 0,1)
+vec3 uniformPowerCosine(float u, float v)
 {
-  // Generate a sphere point
-  float theta = 2.0 * PI * float(idx) / GOLDEN_RATIO;
-  float phi = acos(1.0 - 2.0 * (float(idx) + 0.5) / float(NUM_RAYS));
+  const float PI = 3.14159265359;
+  //float m = 0.0;
+  //float theta = acos(pow(1.0 - u, 1.0 / (1.0 + m)));
+  float theta = acos(1.0 - u);
+  float phi = 2.0 * PI * v;
 
-  vec3 outDir = vec3(
-    cos(theta) * sin(phi),
-    sin(theta) * sin(phi),
-    cos(phi));
+  vec3 ray;
+  ray.x = sin(theta) * cos(phi);
+  ray.y = sin(theta) * sin(phi);
+  ray.z = cos(theta);
 
-  // If on wrong hemisphere, simply flip vector up
-  if (dot(outDir, normal) < 0) {
-    outDir = -outDir;
-  }
-
-  return normalize(outDir);
+  return ray;
 }
 
 vec3 calcWorldPos(vec2 texCoord, float depthSamp)
@@ -65,170 +59,76 @@ vec3 calcWorldPos(vec2 texCoord, float depthSamp)
 
 void main()
 {
-  // Figure out our world position from the depth buffer
-  const uint surfelPixelSize = 32;
-  const int octSize = 8;
-  uvec2 surfelIdx = gl_LaunchIDEXT.xy;
+  // Pixel to write into of the output direction and irradiance images
+  ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
 
-  // Index into the oct array of images
-  //int octImageIdx = int(surfelIdx.y) * 60 + int(surfelIdx.x); // TODO: No hardcode
-  int octY = int(floor(gl_LaunchIDEXT.z / float(octSize)));
-  int octX = int(gl_LaunchIDEXT.z) - octY * octSize;
+  uint irrDirPixSize = SURFEL_DIR_IRR_PIX_SIZE[pc.cascade];
 
-  ivec2 pixel = ivec2(int(surfelIdx.x) * (octSize + 2) + (octX + 1), int(surfelIdx.y) * (octSize + 2) + (octY + 1));
+  // Figure out the center pixel of the surfel we belong to
+  ivec2 surfelIdx = pixel / int(irrDirPixSize);
+  ivec2 surfelCenterPixel = surfelIdx * int(irrDirPixSize) + int(irrDirPixSize) / 2;
 
-  vec2 texCoord = vec2(surfelIdx.x, surfelIdx.y) * float(surfelPixelSize) + float(surfelPixelSize)/2.0; // in pixels (middle of the 16x16 tile)
-  texCoord /= vec2(ubo.screenWidth, ubo.screenHeight); // 0 to 1
-
-  // Sanity check
-  if (texCoord.x > 1.0 || texCoord.y > 1.0) {
-    //imageStore(outputIm, outputPixel, vec4(0.0));
-    imageStore(outputIm, pixel, vec4(0.0));
-    return;
-  }
-
-  // Check if we're on a lit surface, early exit in that case
-  /*float shadowRTSamp = texture(shadowRT, texCoord).r;
-  if (shadowRTSamp > 0.5) {
-    //imageStore(outputIm, outputPixel, vec4(0.0));
-    imageStore(outputIm, pixel, vec4(0.0));
-    return;
-  }*/
+  // Gather world position and normal from the depth buffer and gbuffer
+  vec2 texCoord = pixelToUv(surfelCenterPixel, imageSize(outputDirIm));
 
   float depthSamp = texture(depth, texCoord).r;
 
   // If we're in the sky, early exit
   if (depthSamp == 1.0f) {
-    //imageStore(outputIm, outputPixel, vec4(0.0));
-    imageStore(outputIm, pixel, vec4(0.0));
+    imageStore(outputDirIm, pixel, vec4(0.0));
+    imageStore(outputIrrIm, pixel, vec4(0.0));
     return;
   }
 
   vec3 worldPos = calcWorldPos(texCoord, depthSamp);
+  vec4 im0Samp = texture(im0, texCoord);
+  vec3 normal = normalize(im0Samp.rgb);
+
+  // Calculate a "ray index", a number for the current ray within the current surfel
+  ivec2 pixelWithinSurfel = pixel - surfelIdx * int(irrDirPixSize);
+  float rayIndexX = (float(pixelWithinSurfel.x) + 0.5) / float(irrDirPixSize);
+  float rayIndexY = (float(pixelWithinSurfel.y) + 0.5) / float(irrDirPixSize);
+
+  // Find a direction for this ray
+  // Note that z of dir points "up" in the local hemisphere cs!
+  vec3 dir = uniformPowerCosine(rayIndexX, rayIndexY);
+
+  // Change basis of dir. Normal will be new "up" and we need to find new "x" and "y"
+  vec3 b1 = normal;
+  vec3 different = (abs(b1.x) < 0.5) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+  vec3 b2 = normalize(cross(b1, different));
+  vec3 b3 = cross(b2, b1);
+
+  dir = normalize(dir.x * b3 + dir.y * b2 + dir.z * b1);
+
   uint  rayFlags =  gl_RayFlagsOpaqueEXT; // All geometry is considered opaque
   float tMin     = 0.1;
-  float tMax     = 100.0;
-  vec4 im0Samp = texture(im0, texCoord);
-  vec3 normal = im0Samp.rgb * 2.0 - 1.0;
+  float tMax     = SURFEL_T_MAX[pc.cascade];
 
-  // Trace all the rays for this surfel
-  //vec3 tempIrradiance[256];
-  //vec3 tempDirs[256];
+  payload.irradiance = vec3(0.0);
+  payload.hitPos.x = SURFEL_T_MIN[pc.cascade];
+  payload.lastCascade = pc.cascade == 3;
 
-  vec2 octUv = vec2((float(octX) + 0.5)/float(octSize), (float(octY) + 0.5)/float(octSize));
-  octUv = octUv * 2.0 - 1.0; // to -1 to 1
-  vec3 octDir = octDecode(octUv);
+  traceRayEXT(tlas,     // acceleration structure
+        rayFlags,       // rayFlags
+        0xFF,           // cullMask
+        0,              // sbtRecordOffset
+        0,              // sbtRecordStride
+        0,              // missIndex
+        worldPos,       // ray origin
+        tMin,           // ray min range
+        dir,            // ray direction
+        tMax,           // ray max range
+        0);             // payload (location = 0)
 
-  vec4 result = vec4(0.0);
-  for (int i = 0; i < 1; ++i) {
-    payload.irradiance = vec3(0.0);
+  vec3 packedDir = (dir + 1.0) * 0.5;
+  imageStore(outputDirIm, pixel, vec4(packedDir, 1.0));
+  imageStore(outputIrrIm, pixel, vec4(payload.irradiance.rgb, 1.0));
 
-    //vec3 worldDir = worldDirFromFibonacciIndex(gl_LaunchIDEXT.z + i, normal);
-    vec3 worldDir = octDir;
+  // Calculate the oct UV and then pixel of this particular dir.
+  /*vec2 octUv = octEncode(dir) * 0.5 + 0.5;
+  ivec2 octPixel = uvToPixel(octUv, ivec2(SURFEL_OCT_PIX_SIZE[pc.cascade]));
 
-    traceRayEXT(tlas,     // acceleration structure
-          rayFlags,       // rayFlags
-          0xFF,           // cullMask
-          0,              // sbtRecordOffset
-          0,              // sbtRecordStride
-          0,              // missIndex
-          worldPos,       // ray origin
-          tMin,           // ray min range
-          worldDir,       // ray direction
-          tMax,           // ray max range
-          0);             // payload (location = 0)
-
-    float weight = max(0.0, dot(octDir, worldDir));
-    //float weight = 1.0;
-    if (weight > EPSILON) {
-      result += vec4(payload.irradiance * weight, weight);
-    }
-  }
-
-  if (result.w > EPSILON) {
-    result.rgb /= result.w;
-  }
-
-  imageStore(outputIm, pixel, result);
-
-  // All rays have been traced, now loop through each oct dir 
-  /*for (int x = 0; x < 8; ++x) {
-    for (int y = 0; y < 8; ++y) {
-      if (length(payload.irradiance) > EPSILON) {
-        vec2 octUv = vec2((float(x) + 0.5)/8.0, (float(y) + 0.5)/8.0);
-        octUv = octUv * 2.0 - 1.0; // to -1 to 1
-        vec3 octDir = octDecode(octUv);
-
-        vec4 result = vec4(0.0);
-
-        float weight = max(0.0, dot(octDir, worldDir));
-        if (weight > EPSILON) {
-          result = vec4(payload.irradiance * weight, weight);
-        }
-
-        int idx = 64 * (int(surfelIdx.y) * 120 + int(surfelIdx.x)) + y * 8 + x;
-        atomicAdd(surfelOctBuffer.octRadiances[idx].r, result.r);
-        atomicAdd(surfelOctBuffer.octRadiances[idx].g, result.g);
-        atomicAdd(surfelOctBuffer.octRadiances[idx].b, result.b);
-        atomicAdd(surfelOctBuffer.octRadiances[idx].w, result.w);
-
-        // Store 
-        if (result.w > EPSILON) {
-          result.xyz /= result.w;
-        }
-
-        //ivec2 pixel = ivec2(8 * int(surfelIdx.x) + x, 8 * int(surfelIdx.y) + y);
-
-        //imageStore(outputIm, pixel, result);
-      }
-    }
-  }
-
-  if (gl_LaunchIDEXT.z > 63) {
-    return;
-  }
-
-  memoryBarrier();*/
-
-  // Write completed data to output pixel
-  /*int pY = int(floor(gl_LaunchIDEXT.z / 8.0));
-  int pX = int(gl_LaunchIDEXT.z) - pY * 8;
-  ivec2 pixel = ivec2(surfelIdx.x * 8 + pX, surfelIdx.y * 8 + pY);
-
-  int octIdx = 64 * (int(surfelIdx.y) * 120 + int(surfelIdx.x)) + pY * 8 + pX;
-  vec4 octRadiance = surfelOctBuffer.octRadiances[octIdx];
-
-  if (octRadiance.w > EPSILON) {
-    octRadiance.xyz /= octRadiance.w;
-  }
-
-  imageStore(outputIm, pixel, octRadiance);*/
-
-  // The current oct dir
-  //vec3 octDir = octDecode(vec2(float(pX)/7.0, float(pY)/7.0) * 2.0 - 1.0); // -1 to 1
-
-  // Loop through each oct direction and atomically add this current invocation's ray's contribution
-  
-  /*for (int x = 0; x < 8; ++x) {
-    for (int y = 0; y < 8; ++y) {
-      vec2 octUv = vec2((float(x) + 0.5)/8.0, (float(y) + 0.5)/8.0);
-      octUv = octUv * 2.0 - 1.0; // to -1 to 1
-      vec3 octDir = octDecode(octUv);      
-
-      if (length(payload.irradiance) > EPSILON) {
-        float weight = max(0.0, dot(octDir, worldDir));
-        if (weight > EPSILON) {
-          result = vec4(payload.irradiance * weight, weight);
-          imageAtomicAdd(outputIm[nonuniformEXT(octImageIdx)], ivec2(x, y), result);
-        }
-      }
-    }
-  }*/
-
-  /*if (result.w > EPSILON) {
-    result.xyz /= result.w;
-  }*/
-
-  //imageStore(outputIm, outputPixel, vec4(result.xyz, 1.0));
-  //imageStore(outputIm, outputPixel, vec4(octDir.xyz, 1.0));
+  ivec2 imagePixel = surfelIdx * int(irrDirPixSize) + octPixel;
+  imageStore(outputIrrIm, imagePixel, vec4(payload.irradiance.rgb, 1.0));*/
 }

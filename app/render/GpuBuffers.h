@@ -114,10 +114,12 @@ struct GPUSceneData {
   int32_t ddgiEnabled;
   int32_t multiBounceDdgiEnabled;
   int32_t specularGiEnabled;
+  int32_t screenspaceProbesEnabled;
   int32_t visualizeBoundingSpheresEnabled;
   int32_t hack;
   float sunIntensity;
   float skyIntensity;
+  float exposure;
 };
 
 struct GPUSSAOSampleUbo {

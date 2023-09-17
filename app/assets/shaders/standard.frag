@@ -25,7 +25,7 @@ void main() {
 
   SurfaceData surfData = getSurfaceDataFromMat(matInfo, fragUV, normal, fragTBN, fragTangent, fragColor);
 
-  outCol0 = vec4(surfData.normal * 0.5 + 0.5, surfData.color.x);
+  outCol0 = vec4(surfData.normal, surfData.color.x);
   outCol1 = vec4(surfData.color.yz, surfData.metallic, surfData.roughness);
   outCol2 = vec4(surfData.emissive, 0.0);
 }

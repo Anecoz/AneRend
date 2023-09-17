@@ -23,7 +23,7 @@
 #include "passes/DebugBSRenderPass.h"
 #include "passes/IrradianceProbeTranslationPass.h"
 #include "passes/IrradianceProbeRayTracingPass.h"
-//#include "passes/SurfelUpdateRayTracingPass.h"
+#include "passes/SurfelUpdateRayTracingPass.h"
 //#include "passes/SSGlobalIlluminationRayTracingPass.h"
 //#include "passes/SSGIBlurRenderPass.h"
 //#include "passes/SurfelConvolveRenderPass.h"
@@ -35,6 +35,7 @@
 //#include "passes/LightShadowSumPass.h"
 #include "passes/ParticleUpdatePass.h"
 #include "passes/UpdateTLASPass.h"
+#include "passes/SurfelSHPass.h"
 
 #include "../util/Utils.h"
 #include "../util/GraphicsUtils.h"
@@ -193,7 +194,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _latestCamera(initialCamera)
   , _fgb(&_vault)
   , _window(window)
-  , _enableValidationLayers(true)
+  , _enableValidationLayers(false)
   , _enableRayTracing(true)
 {
   imageutil::init();
@@ -830,10 +831,12 @@ void VulkanRenderer::update(
   ubo.ddgiEnabled = _renderOptions.ddgiEnabled;
   ubo.multiBounceDdgiEnabled = _renderOptions.multiBounceDdgiEnabled;
   ubo.specularGiEnabled = _renderOptions.specularGiEnabled;
+  ubo.screenspaceProbesEnabled = _renderOptions.screenspaceProbes;
   ubo.visualizeBoundingSpheresEnabled = _renderOptions.visualizeBoundingSpheres;
   ubo.hack = _renderOptions.hack;
   ubo.sunIntensity = _renderOptions.sunIntensity;
   ubo.skyIntensity = _renderOptions.skyIntensity;
+  ubo.exposure = _renderOptions.exposure;
 
   for (int i = 0; i < _lights.size(); ++i) {
     _lights[i].debugUpdatePos(delta);
@@ -1301,7 +1304,7 @@ bool VulkanRenderer::isDeviceSuitable(VkPhysicalDevice device)
   return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
            indexingFeatures.descriptorBindingPartiallyBound && indexingFeatures.runtimeDescriptorArray &&
            deviceFeatures.geometryShader && rtFeatures.rayTracingPipeline && queueFamIndices.isComplete() && 
-           atomicFloatFeatures.shaderBufferFloat32AtomicAdd &&
+           atomicFloatFeatures.shaderBufferFloat32AtomicAdd && atomicFloatFeatures.shaderSharedFloat32AtomicAdd &&
            extensionsSupported && swapChainAdequate && deviceFeatures.samplerAnisotropy;
 }
 
@@ -1439,6 +1442,7 @@ bool VulkanRenderer::createLogicalDevice()
   VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFloatFeature{};
   atomicFloatFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
   atomicFloatFeature.shaderBufferFloat32AtomicAdd = VK_TRUE;
+  atomicFloatFeature.shaderSharedFloat32AtomicAdd = VK_TRUE;
 
   dynamicRenderingFeature.pNext = &atomicFloatFeature;
 
@@ -2686,7 +2690,8 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new SpecularGIMipPass());
   //_renderPasses.emplace_back(new SSGlobalIlluminationRayTracingPass());
   //_renderPasses.emplace_back(new SSGIBlurRenderPass());
-  //_renderPasses.emplace_back(new SurfelUpdateRayTracingPass());
+  _renderPasses.emplace_back(new SurfelUpdateRayTracingPass());
+  _renderPasses.emplace_back(new SurfelSHPass());
   //_renderPasses.emplace_back(new SurfelConvolveRenderPass());
   _renderPasses.emplace_back(new SSAORenderPass());
   _renderPasses.emplace_back(new SSAOBlurRenderPass());

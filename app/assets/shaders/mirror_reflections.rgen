@@ -4,7 +4,6 @@
 
 #include "bindless.glsl"
 #include "bindless_tlas.glsl"
-#include "scene_ubo.glsl"
 #include "octahedron_helpers.glsl"
 #include "pbr_light.glsl"
 
@@ -36,10 +35,7 @@ vec3 calcWorldPos(vec2 texCoord, float depthSamp)
 void main()
 {
   ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
-
-  //vec2 texCoords = (vec2(pixel) + 0.5) / vec2(ubo.screenWidth/2, ubo.screenHeight/2);
-  //vec2 texCoords = (vec2(pixel) + 0.5) / vec2(ubo.screenWidth, ubo.screenHeight);
-  vec2 texCoords = pixelToUv(pixel, ivec2(ubo.screenWidth, ubo.screenHeight));
+  vec2 texCoords = pixelToUv(pixel, ivec2(ubo.screenWidth/2, ubo.screenHeight/2));
 
   // Retrieve normal and depth from gbuffer textures
   vec4 im0Samp = texture(geom0Im, texCoords);
@@ -52,7 +48,7 @@ void main()
     return;
   }
 
-  vec3 normal = im0Samp.rgb * 2.0 - 1.0;
+  vec3 normal = normalize(im0Samp.rgb);
   float roughness = im1Samp.a;
   vec3 albedo = vec3(im0Samp.a, im1Samp.r, im1Samp.g);
   float metallic = im1Samp.b;
@@ -61,50 +57,6 @@ void main()
   // Reflect camera view vector around the normal
   vec3 v = normalize(pos - ubo.cameraPos.xyz);
   vec3 dir = reflect(v, normal);
-
-  // If this surface isn't going to have a strong reflection, don't even shoot a ray.
-  if (roughness > 0.7) {
-    imageStore(outputIm, pixel, vec4(0.0));
-    return;
-  }
-
-  /*vec3 V = normalize(ubo.cameraPos.xyz - pos);
-  vec3 L = dir;
-  vec3 F0 = vec3(0.04);
-  F0 = mix(F0, albedo, metallic);
-
-  vec3 H = normalize(V + L);
-
-  // Cook-torrance brdf
-  float NDF = DistributionGGX(normal, H, roughness);
-  float G   = GeometrySmith(normal, V, L, roughness);
-  vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
-
-  float NdotL = max(dot(normal, L), 0.0);
-  float NdotV = max(dot(normal, V), 0.0);
-
-  vec3 numerator    = NDF * G * F;
-  float denominator = 4.0 * NdotV * NdotL + 0.0001;
-  vec3 specular     = clamp(numerator / denominator, 0.0, 1.0);
-
-  if (length(specular) < 0.1) {
-    imageStore(outputIm, pixel, vec4(0.0));
-    return;
-  }*/
-
-  /*vec3 V = normalize(ubo.cameraPos.xyz - pos);
-  vec3 F0 = vec3(0.04);
-  F0 = mix(F0, albedo, metallic);
-
-  float NdotV = max(dot(normal, V), 0.0);
-
-  vec3 kS = fresnelSchlickRoughness(NdotV, F0, roughness);
-  vec2 envBRDF = texture(lutTex, vec2(NdotV, 1.01 - roughness)).rg;
-
-  if (length(kS * envBRDF.x + envBRDF.y) < 0.05) {
-    imageStore(outputIm, pixel, vec4(roughness));
-    return;
-  }*/
 
   uint  rayFlags =  gl_RayFlagsOpaqueEXT; // All geometry is considered opaque
   float tMin     = 0.1;
@@ -126,5 +78,5 @@ void main()
         tMax,           // ray max range
         0);             // payload (location = 0)
 
-  imageStore(outputIm, pixel, vec4(payload.irradiance, payload.dist));
+  imageStore(outputIm, pixel, vec4(payload.irradiance * 0.3, payload.dist));
 }

@@ -57,22 +57,23 @@ void IrradianceProbeTranslationPass::registerToGraph(FrameGraphBuilder& fgb, Ren
     [this, width, height, numProbesPlane, numProbesHeight, octPixelSize](RenderExeParams exeParams) {
       if (!exeParams.rc->getRenderOptions().ddgiEnabled) return;
 
+      const glm::vec3 probeStep = { 1.0, 2.0, 1.0 };
+
       // Find the delta in x and z (y is irrelevant)
       auto camPos = exeParams.rc->getCamera().getPosition();
-      glm::ivec2 flooredCamPos = glm::ivec2((int)floor(camPos.x), (int)floor(camPos.z));
-
-      glm::ivec2 diff = flooredCamPos - _lastCamPos;
+      glm::ivec2 probeIdx = { (int)(camPos.x / probeStep.x), (int)(camPos.z / probeStep.z) };
+      glm::ivec2 diff = probeIdx - _lastProbeIdx;
 
       // This should typically at most be +-1 in either direction (unless we can move really really fast)
-      int dx = (int)floor(diff.x);
-      int dz = (int)floor(diff.y);
+      int dx = (int)(diff.x);
+      int dz = (int)(diff.y);
 
       if (dx == 0 && dz == 0) {
         // Safely return
         return;
       }
 
-      _lastCamPos = flooredCamPos;
+      _lastProbeIdx = probeIdx;
 
       auto tmpImage = exeParams.images[0];
       auto probeImage = exeParams.images[1];

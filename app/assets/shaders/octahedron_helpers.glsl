@@ -8,6 +8,9 @@ vec2 signNotZero(in vec2 v) {
 
 /** Assumes that v is a unit vector. The result is an octahedral vector on the [-1, +1] square. */
 vec2 octEncode(in vec3 v) {
+    vec3 tmp = v;
+    v.y = tmp.z;
+    v.z = tmp.y;
     float l1norm = abs(v.x) + abs(v.y) + abs(v.z);
     vec2 result = v.xy * (1.0 / l1norm);
     if (v.z < 0.0) {
@@ -24,5 +27,8 @@ vec3 octDecode(vec2 o) {
     if (v.z < 0.0) {
         v.xy = (1.0 - abs(v.yx)) * signNotZero(v.xy);
     }
+    vec3 tmp = v;
+    v.y = tmp.z;
+    v.z = tmp.y;
     return normalize(v);
 }
