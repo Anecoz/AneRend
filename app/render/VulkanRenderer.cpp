@@ -36,6 +36,8 @@
 #include "passes/ParticleUpdatePass.h"
 #include "passes/UpdateTLASPass.h"
 #include "passes/SurfelSHPass.h"
+#include "passes/LuminanceHistogramPass.h"
+#include "passes/LuminanceAveragePass.h"
 
 #include "../util/Utils.h"
 #include "../util/GraphicsUtils.h"
@@ -2696,6 +2698,8 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new SSAORenderPass());
   _renderPasses.emplace_back(new SSAOBlurRenderPass());
   _renderPasses.emplace_back(new DeferredLightingRenderPass());
+  _renderPasses.emplace_back(new LuminanceHistogramPass());
+  _renderPasses.emplace_back(new LuminanceAveragePass());
   _renderPasses.emplace_back(new BloomRenderPass());
   _renderPasses.emplace_back(new FXAARenderPass());
   _renderPasses.emplace_back(new DebugBSRenderPass());

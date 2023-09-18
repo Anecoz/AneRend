@@ -1,0 +1,62 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "scene_ubo.glsl"
+
+layout (local_size_x = 256) in;
+
+const float minLogLum = -10.0;
+const float logLumRange = 12.0;
+const float timeCoeff = 1.1;
+
+layout(std430, set = 1, binding = 0) buffer HistogramBuffer {
+  uint bins[];
+} histogramBuffer;
+
+layout(std430, set = 1, binding = 1) buffer AverageBuffer {
+  float avgLum[];
+} averageBuffer;
+
+// Shared
+shared uint histogramShared[256];
+
+void main() {
+  uint localIndex = gl_LocalInvocationID.x;
+  const uint pixelCount = ubo.screenWidth * ubo.screenHeight;
+
+  // Get the count from the histogram buffer
+  uint countForThisBin = histogramBuffer.bins[localIndex];
+  histogramShared[localIndex] = countForThisBin * localIndex;
+
+  barrier();
+
+  // Reset the count stored in the buffer in anticipation of the next pass
+  //histogramBuffer.bins[localIndex] = 0;
+
+  // This loop will perform a weighted count of the luminance range
+  for (uint cutoff = (256 >> 1); cutoff > 0; cutoff >>= 1) {
+    if (uint(localIndex) < cutoff) {
+      histogramShared[localIndex] += histogramShared[localIndex + cutoff];
+    }
+
+    barrier();
+  }
+
+  // We only need to calculate this once, so only a single thread is needed.
+  if (gl_GlobalInvocationID.x == 0) {
+    // Here we take our weighted sum and divide it by the number of pixels
+    // that had luminance greater than zero (since the index == 0, we can
+    // use countForThisBin to find the number of black pixels)
+    float weightedLogAverage = (histogramShared[0] / max(float(pixelCount) - float(countForThisBin), 1.0)) - 1.0;
+
+    // Map from our histogram space to actual luminance
+    float weightedAvgLum = exp2(((weightedLogAverage / 254.0) * logLumRange) + minLogLum);
+
+    // The new stored value will be interpolated using the last frames value
+    // to prevent sudden shifts in the exposure.
+    float lumLastFrame = averageBuffer.avgLum[0];//imageLoad(s_target, ivec2(0, 0)).x;
+    float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * timeCoeff;
+    averageBuffer.avgLum[0] = adaptedLum;
+  }
+}

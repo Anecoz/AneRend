@@ -534,11 +534,41 @@ vec3 acesTonemap(vec3 color)
 }
 
 // Narkowicz 2015, "ACES Filmic Tone Mapping Curve"
-vec3 fastAcesTonemap(vec3 x) {
+vec3 fastAcesTonemap(vec3 x)
+{
   const float a = 2.51;
   const float b = 0.03;
   const float c = 2.43;
   const float d = 0.59;
   const float e = 0.14;
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+float fastAcesTonemapLum(float x)
+{
+  // Narkowicz 2015, "ACES Filmic Tone Mapping Curve"
+  const float a = 2.51;
+  const float b = 0.03;
+  const float c = 2.43;
+  const float d = 0.59;
+  const float e = 0.14;
+  return (x * (a * x + b)) / (x * (c * x + d) + e);
+}
+
+float binAvgLum(float avgLum)
+{
+  if (avgLum < 0.01) {
+    return 0.005;
+  }
+  else if (avgLum < 0.05) {
+    return 0.01;
+  }
+  else if (avgLum < .5) {
+    return 0.5;
+  }
+  else if (avgLum < 0.7) {
+    return 0.65;
+  }
+
+  return 0.8;
 }

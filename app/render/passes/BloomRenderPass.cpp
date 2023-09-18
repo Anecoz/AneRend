@@ -353,6 +353,14 @@ void BloomRenderPass::compositePass(FrameGraphBuilder& fgb, RenderContext* rc)
     usage._type = Type::SampledTexture;
     info._resourceUsages.emplace_back(std::move(usage));
   }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "AvgLumSSBO";
+    usage._access.set((std::size_t)Access::Write);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SSBO;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
 
   ComputePipelineCreateParams param{};
   param.device = rc->device();

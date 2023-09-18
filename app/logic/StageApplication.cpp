@@ -153,7 +153,7 @@ bool StageApplication::init()
 
   // Lantern GLTF
   {
-    std::size_t numInstances = 20;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {

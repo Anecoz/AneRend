@@ -1572,7 +1572,8 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
           if (usage._access.test((std::size_t)Access::Read) && prevUsage->_access.test((std::size_t)Access::Read) &&
               usage._stage == prevUsage->_stage &&
               usage._allMips == prevUsage->_allMips &&
-              !(usage._imageAlwaysGeneral || prevUsage->_imageAlwaysGeneral)) {
+              !(usage._imageAlwaysGeneral || prevUsage->_imageAlwaysGeneral) &&
+              usage._type == prevUsage->_type) {
             skipPreBarrier = true;
           }
 
