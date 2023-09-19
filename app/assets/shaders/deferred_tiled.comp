@@ -23,7 +23,7 @@ layout(set = 1, binding = 6) uniform sampler2D rtShadowMask;
   IrradianceProbe probes[];
 } irradianceProbeBuffer;*/
 
-layout(set = 1, binding = 7, rgba16) uniform writeonly image2D outputIm;
+layout(set = 1, binding = 7, rgba32f) uniform writeonly image2D outputIm;
 //layout(set = 1, binding = 7, rgba8) uniform readonly image2D surfelTex;
 //layout(set = 1, binding = 7) uniform sampler2D surfelTex;
 //layout(set = 1, binding = 7) uniform sampler2D ssgiBlurTex;

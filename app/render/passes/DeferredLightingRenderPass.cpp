@@ -162,7 +162,7 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
     ImageInitialCreateInfo createInfo{};
     createInfo._initialHeight = rc->swapChainExtent().height;
     createInfo._initialWidth = rc->swapChainExtent().width;
-    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    createInfo._intialFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 
     usage._imageCreateInfo = createInfo;
 

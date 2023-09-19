@@ -8,7 +8,7 @@ layout (local_size_x = 256) in;
 
 const float minLogLum = -10.0;
 const float logLumRange = 12.0;
-const float timeCoeff = 1.1;
+const float tau = 2.0;
 
 layout(std430, set = 1, binding = 0) buffer HistogramBuffer {
   uint bins[];
@@ -56,7 +56,8 @@ void main() {
     // The new stored value will be interpolated using the last frames value
     // to prevent sudden shifts in the exposure.
     float lumLastFrame = averageBuffer.avgLum[0];//imageLoad(s_target, ivec2(0, 0)).x;
-    float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * timeCoeff;
+    //float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * timeCoeff;
+    float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * (1.0 - exp(-ubo.delta * tau));
     averageBuffer.avgLum[0] = adaptedLum;
   }
 }

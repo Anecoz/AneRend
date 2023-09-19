@@ -42,7 +42,7 @@ void FXAARenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     ImageInitialCreateInfo createInfo{};
     createInfo._initialHeight = rc->swapChainExtent().height;
     createInfo._initialWidth = rc->swapChainExtent().width;
-    createInfo._intialFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    createInfo._intialFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 
     usage._imageCreateInfo = createInfo;
 
@@ -60,7 +60,7 @@ void FXAARenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
   param.normalLoc = -1;
   param.colorLoc = -1;
   param.uvLoc = 1;
-  param.colorFormats = { VK_FORMAT_R8G8B8A8_UNORM };
+  param.colorFormats = { VK_FORMAT_R32G32B32A32_SFLOAT };
   info._graphicsParams = param;
 
   fgb.registerRenderPass(std::move(info));

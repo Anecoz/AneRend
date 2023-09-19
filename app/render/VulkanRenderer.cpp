@@ -196,7 +196,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _latestCamera(initialCamera)
   , _fgb(&_vault)
   , _window(window)
-  , _enableValidationLayers(false)
+  , _enableValidationLayers(true)
   , _enableRayTracing(true)
 {
   imageutil::init();
@@ -3083,7 +3083,7 @@ bool VulkanRenderer::initImgui()
   init_info.ImageCount = 3;
   init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
   init_info.UseDynamicRendering = true;
-  init_info.ColorAttachmentFormat = VK_FORMAT_R8G8B8A8_UNORM;
+  init_info.ColorAttachmentFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 
   if (!ImGui_ImplVulkan_Init(&init_info, nullptr)) {
     printf("Could not init impl vulkan for imgui!\n");

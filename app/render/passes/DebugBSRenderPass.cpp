@@ -65,7 +65,7 @@ void DebugBSRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
     info._resourceUsages.emplace_back(std::move(usage));
   }
 
-  VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+  VkFormat format = VK_FORMAT_R32G32B32A32_SFLOAT;
   GraphicsPipelineCreateParams param{};
   param.device = rc->device();
   param.vertShader = "debug_spheres_vert.spv";
