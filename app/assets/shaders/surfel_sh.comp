@@ -3,24 +3,35 @@
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_shader_atomic_float : enable
 
+#include "scene_ubo.glsl"
 #include "surfel_helpers.glsl"
 #include "helpers.glsl"
 
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(set = 1, binding = 0, rgba8) uniform readonly image2D dirIm;
-layout(set = 1, binding = 1, rgba16f) uniform readonly image2D irrIm;
-layout(set = 1, binding = 2, rgba16f) uniform image2D outputIm;
+/*layout(set = 1, binding = 0, rgba8) uniform readonly image2D dirIm;
+layout(set = 1, binding = 1, rgba16f) uniform readonly image2D irrIm;*/
 
-shared float groupR;
-shared float groupG;
-shared float groupB;
+layout(std430, set = 1, binding = 0) buffer SHBuf {
+  SurfelSHParams params[];
+} shBuf;
+
+//layout(set = 1, binding = 1, rgba16f) uniform image2D outputIm;
+layout(set = 1, binding = 1, rgba16f) uniform image2D outputIm0;
+layout(set = 1, binding = 2, rgba16f) uniform image2D outputIm1;
+layout(set = 1, binding = 3, rgba16f) uniform image2D outputIm2;
+layout(set = 1, binding = 4, rgba16f) uniform image2D outputIm3;
+layout(set = 1, binding = 5, rgba16f) uniform image2D outputIm4;
+layout(set = 1, binding = 6, rgba16f) uniform image2D outputIm5;
+layout(set = 1, binding = 7, rgba16f) uniform image2D outputIm6;
+layout(set = 1, binding = 8, rgba16f) uniform image2D outputIm7;
+layout(set = 1, binding = 9, rgba16f) uniform image2D outputIm8;
 
 layout(push_constant) uniform constants {
   uint cascade;
 } pc;
 
-const float LM_CONST[9] = 
+/*const float LM_CONST[9] = 
   float[](
     0.282095,
     0.488603,
@@ -65,46 +76,54 @@ float calcYlm(vec3 dir, int lm)
   }
 
   return y_lm;
-}
+}*/
 
 void main()
 {
-  ivec2 imSize = imageSize(outputIm);
-  const int lm = int(gl_GlobalInvocationID.z);
+  ivec2 imSize = imageSize(outputIm0);
+  //const int lm = int(gl_GlobalInvocationID.z);
 
   uint cascade = pc.cascade;
   uint irrDirPixSize = SURFEL_DIR_IRR_PIX_SIZE[cascade];
 
-  ivec2 surfelIdx = ivec2(gl_GlobalInvocationID.xy);
-  int ySh = int(floor(lm / 3));
-  int xSh = lm - 3 * ySh;
-  ivec2 pixelWithinSh = ivec2(xSh, ySh);
-  ivec2 pixel = pixelWithinSh + surfelIdx * ivec2(3, 3);
+  ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 numSurfels = ivec2(ubo.screenWidth / SURFEL_PIXEL_SIZE[pc.cascade], ubo.screenHeight / SURFEL_PIXEL_SIZE[pc.cascade]);
+  /*ivec2 surfelIdx = pixel / 3;
+  ivec2 pixelWithinSh = pixel - surfelIdx * 3;
+  ivec2 numSurfels = ivec2(ubo.screenWidth / SURFEL_PIXEL_SIZE[pc.cascade], ubo.screenHeight / SURFEL_PIXEL_SIZE[pc.cascade]);*/
 
   if (pixel.x > imSize.x - 1 || pixel.y > imSize.y - 1) {
     return;
   }
 
-  // Go through each direction and radiance value and sum them up, using the SH constants.
-  int numRays = int(irrDirPixSize * irrDirPixSize);
-
   vec3 result = vec3(0.0);
   float weight = 4.0 * 3.1415926 / (irrDirPixSize * irrDirPixSize);
   float weightSum = weight * irrDirPixSize * irrDirPixSize;
-  ivec2 inputPixOffset = surfelIdx * ivec2(int(irrDirPixSize));
-  for (int x = 0; x < irrDirPixSize; ++x) {
-    for (int y = 0; y < irrDirPixSize; ++y) {
-      ivec2 currPix = inputPixOffset + ivec2(x, y);
 
-      vec3 packedDir = imageLoad(dirIm, currPix).rgb;
-      vec3 dir = (packedDir * 2.0) - 1.0;
-      vec3 irr = imageLoad(irrIm, currPix).rgb;
+  weight = 4.0 * 3.1415926 / weightSum;
 
-      result += irr * calcYlm(dir, lm) * weight;
-    }
-  }
+  uint bufIdx = pixel.x + pixel.y * numSurfels.x;
+  SurfelSHParams params = shBuf.params[bufIdx];
+
+  imageStore(outputIm0, pixel, vec4(params.L_lm_r[0] * weight, params.L_lm_g[0] * weight, params.L_lm_b[0] * weight, 1.0));
+  imageStore(outputIm1, pixel, vec4(params.L_lm_r[1] * weight, params.L_lm_g[1] * weight, params.L_lm_b[1] * weight, 1.0));
+  imageStore(outputIm2, pixel, vec4(params.L_lm_r[2] * weight, params.L_lm_g[2] * weight, params.L_lm_b[2] * weight, 1.0));
+  imageStore(outputIm3, pixel, vec4(params.L_lm_r[3] * weight, params.L_lm_g[3] * weight, params.L_lm_b[3] * weight, 1.0));
+  imageStore(outputIm4, pixel, vec4(params.L_lm_r[4] * weight, params.L_lm_g[4] * weight, params.L_lm_b[4] * weight, 1.0));
+  imageStore(outputIm5, pixel, vec4(params.L_lm_r[5] * weight, params.L_lm_g[5] * weight, params.L_lm_b[5] * weight, 1.0));
+  imageStore(outputIm6, pixel, vec4(params.L_lm_r[6] * weight, params.L_lm_g[6] * weight, params.L_lm_b[6] * weight, 1.0));
+  imageStore(outputIm7, pixel, vec4(params.L_lm_r[7] * weight, params.L_lm_g[7] * weight, params.L_lm_b[7] * weight, 1.0));
+  imageStore(outputIm8, pixel, vec4(params.L_lm_r[8] * weight, params.L_lm_g[8] * weight, params.L_lm_b[8] * weight, 1.0));
+
+  /*uint bufIdx = surfelIdx.x + surfelIdx.y * numSurfels.x;
+  SurfelSHParams params = shBuf.params[bufIdx];
+
+  result = vec3(
+    params.L_lm_r[pixelWithinSh.x + pixelWithinSh.y * 3],
+    params.L_lm_g[pixelWithinSh.x + pixelWithinSh.y * 3],
+    params.L_lm_b[pixelWithinSh.x + pixelWithinSh.y * 3]);
 
   result *= 4.0 * 3.1415926 / weightSum;
 
-  imageStore(outputIm, pixel, vec4(result, 1.0));
+  imageStore(outputIm, pixel, vec4(result, 1.0));*/
 }

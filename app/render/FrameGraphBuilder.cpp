@@ -1312,6 +1312,9 @@ std::pair<VkAccessFlagBits, VkAccessFlagBits> FrameGraphBuilder::findBufferAcces
         if (newStage.test((std::size_t)Stage::Compute)) {
           return { VK_ACCESS_TRANSFER_WRITE_BIT, (VkAccessFlagBits)(VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT) };
         }
+        else if (newStage.test((std::size_t)Stage::RayTrace)) {
+          return { VK_ACCESS_TRANSFER_WRITE_BIT, (VkAccessFlagBits)(VK_ACCESS_SHADER_WRITE_BIT) };
+        }
       }
       else if (newAccess.test((std::size_t)Access::Read)) {
         if (newStage.test((std::size_t)Stage::Compute)) {
@@ -1341,6 +1344,13 @@ std::pair<VkAccessFlagBits, VkAccessFlagBits> FrameGraphBuilder::findBufferAcces
           return { VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT };
         }
         if (newStage.test((std::size_t)Stage::RayTrace)) {
+          return { VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT };
+        }
+      }
+    }
+    else if (prevStage.test((std::size_t)Stage::RayTrace)) {
+      if (newAccess.test((std::size_t)Access::Read)) {
+        if (newStage.test((std::size_t)Stage::Compute)) {
           return { VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT };
         }
       }

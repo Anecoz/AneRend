@@ -1,7 +1,7 @@
 #version 460
 #extension GL_EXT_ray_tracing : enable
 #extension GL_GOOGLE_include_directive : enable
-#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_shader_atomic_float : enable
 
 #include "bindless.glsl"
 #include "bindless_tlas.glsl"
@@ -22,8 +22,13 @@ layout(location = 0) rayPayloadEXT hitPayload payload;
 
 layout(set = 1, binding = 0) uniform sampler2D depth;
 layout(set = 1, binding = 1) uniform sampler2D im0;
-layout(set = 1, binding = 2, rgba8) uniform writeonly image2D outputDirIm;
-layout(set = 1, binding = 3, rgba16f) uniform writeonly image2D outputIrrIm;
+
+layout(std430, set = 1, binding = 2) buffer SHBuf {
+  SurfelSHParams params[];
+} shBuf;
+
+//layout(set = 1, binding = 2, rgba8) uniform writeonly image2D outputDirIm;
+//layout(set = 1, binding = 3, rgba16f) uniform writeonly image2D outputIrrIm;
 
 layout(push_constant) uniform constants {
   uint cascade;
@@ -69,14 +74,16 @@ void main()
   ivec2 surfelCenterPixel = surfelIdx * int(irrDirPixSize) + int(irrDirPixSize) / 2;
 
   // Gather world position and normal from the depth buffer and gbuffer
-  vec2 texCoord = pixelToUv(surfelCenterPixel, imageSize(outputDirIm));
+  ivec2 numSurfels = ivec2(ubo.screenWidth / SURFEL_PIXEL_SIZE[pc.cascade], ubo.screenHeight / SURFEL_PIXEL_SIZE[pc.cascade]);
+  ivec2 surfelImSize = numSurfels * int(irrDirPixSize);
+  vec2 texCoord = pixelToUv(surfelCenterPixel, surfelImSize);
 
   float depthSamp = texture(depth, texCoord).r;
 
   // If we're in the sky, early exit
   if (depthSamp == 1.0f) {
-    imageStore(outputDirIm, pixel, vec4(0.0));
-    imageStore(outputIrrIm, pixel, vec4(0.0));
+    //imageStore(outputDirIm, pixel, vec4(0.0));
+    //imageStore(outputIrrIm, pixel, vec4(0.0));
     return;
   }
 
@@ -121,9 +128,21 @@ void main()
         tMax,           // ray max range
         0);             // payload (location = 0)
 
-  vec3 packedDir = (dir + 1.0) * 0.5;
+  // Add the contribution of this direction + radiance for all 9 SH params simultaneously
+  uint bufIdx = surfelIdx.x + surfelIdx.y * numSurfels.x;
+
+  float weight = 4.0 * 3.1415926 / (irrDirPixSize * irrDirPixSize);
+  SurfelSHParams params = calcShForDir(dir, payload.irradiance.rgb);
+
+  for (int i = 0; i < 9; ++i) {
+    atomicAdd(shBuf.params[bufIdx].L_lm_r[i], params.L_lm_r[i] * weight);
+    atomicAdd(shBuf.params[bufIdx].L_lm_g[i], params.L_lm_g[i] * weight);
+    atomicAdd(shBuf.params[bufIdx].L_lm_b[i], params.L_lm_b[i] * weight);
+  }
+
+  /*vec3 packedDir = (dir + 1.0) * 0.5;
   imageStore(outputDirIm, pixel, vec4(packedDir, 1.0));
-  imageStore(outputIrrIm, pixel, vec4(payload.irradiance.rgb, 1.0));
+  imageStore(outputIrrIm, pixel, vec4(payload.irradiance.rgb, 1.0));*/
 
   // Calculate the oct UV and then pixel of this particular dir.
   /*vec2 octUv = octEncode(dir) * 0.5 + 0.5;

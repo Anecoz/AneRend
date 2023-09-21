@@ -18,7 +18,7 @@ SurfelUpdateRayTracingPass::~SurfelUpdateRayTracingPass()
 
 void SurfelUpdateRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
-  for (int i = 0; i < 4; ++i) {
+  for (int i = 0; i < 1; ++i) {
     Cascade casc{ surfel::surfPixSize[i], surfel::numRaysPerSurfel[i], surfel::sqrtNumRaysPerSurfel[i]};
     _cascades.emplace_back(std::move(casc));
     registerCascade(fgb, rc, i);
@@ -57,6 +57,39 @@ void SurfelUpdateRayTracingPass::registerCascade(FrameGraphBuilder& fgb, RenderC
   }
   {
     ResourceUsage usage{};
+    usage._resourceName = "SurfelSHSSBO" + std::to_string(cascade);
+    usage._access.set((std::size_t)Access::Write);
+    usage._stage.set((std::size_t)Stage::RayTrace);
+    usage._type = Type::SSBO;
+
+    BufferInitialCreateInfo createInfo{};
+    createInfo._initialSize = 9 * 3 * numSurfelsX * numSurfelsY * sizeof(float); // 9 params, 3 channels
+
+    usage._bufferCreateInfo = createInfo;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    // Add an initializer for the buffer
+    ResourceUsage initUsage{};
+    initUsage._type = Type::SSBO;
+    initUsage._access.set((std::size_t)Access::Write);
+    initUsage._stage.set((std::size_t)Stage::Transfer);
+
+    fgb.registerResourceInitExe("SurfelSHSSBO" + std::to_string(cascade), std::move(initUsage),
+      [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
+        // Just fill buffer with 0's
+        auto buf = (BufferRenderResource*)resource;
+
+        vkCmdFillBuffer(
+          cmdBuffer,
+          buf->_buffer._buffer,
+          0,
+          VK_WHOLE_SIZE,
+          0);
+      });
+  }
+  /* {
+    ResourceUsage usage{};
     usage._resourceName = "SurfelDirTex" + std::to_string(cascade);
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::RayTrace);
@@ -86,7 +119,7 @@ void SurfelUpdateRayTracingPass::registerCascade(FrameGraphBuilder& fgb, RenderC
 
     usage._type = Type::ImageStorage;
     info._resourceUsages.emplace_back(std::move(usage));
-  }
+  }*/
 
   RayTracingPipelineCreateParams param{};
   param.device = rc->device();

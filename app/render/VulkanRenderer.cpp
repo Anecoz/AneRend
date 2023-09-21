@@ -2697,8 +2697,8 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new SpecularGIMipPass());
   //_renderPasses.emplace_back(new SSGlobalIlluminationRayTracingPass());
   //_renderPasses.emplace_back(new SSGIBlurRenderPass());
-  _renderPasses.emplace_back(new SurfelUpdateRayTracingPass());
-  _renderPasses.emplace_back(new SurfelSHPass());
+  //_renderPasses.emplace_back(new SurfelUpdateRayTracingPass());
+  //_renderPasses.emplace_back(new SurfelSHPass());
   //_renderPasses.emplace_back(new SurfelConvolveRenderPass());
   _renderPasses.emplace_back(new SSAORenderPass());
   _renderPasses.emplace_back(new SSAOBlurRenderPass());

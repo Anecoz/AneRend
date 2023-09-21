@@ -352,14 +352,8 @@ vec3 calcIndirectDiffuseLight(
   return ambient;
 }
 
-vec3 irradianceFromCascade(int cascade, sampler2D tex, vec2 texCoord, vec3 normal)
+vec3 irradianceSingleSurfelProbe(ivec2 surfelIdx, ivec2 cascShTexSize, sampler2D tex, vec3 normal)
 {
-  int pixSize = int(SURFEL_DIR_IRR_PIX_SIZE[0]);
-  ivec2 cascTexSize = ivec2(ubo.screenWidth / SURFEL_PIXEL_SIZE[cascade] * pixSize, ubo.screenHeight / SURFEL_PIXEL_SIZE[cascade] * pixSize);
-  ivec2 cascShTexSize = ivec2(ubo.screenWidth / SURFEL_PIXEL_SIZE[cascade] * 3, ubo.screenHeight / SURFEL_PIXEL_SIZE[cascade] * 3);
-
-  ivec2 pixel = uvToPixel(texCoord, cascTexSize);
-  ivec2 surfelIdx = pixel / pixSize;
   ivec2 shStartPixel = surfelIdx * 3;
   vec2 shStartUv = pixelToUv(shStartPixel, cascShTexSize);
   vec2 texelSize = 1.0 / vec2(cascShTexSize.x, cascShTexSize.y);
@@ -383,30 +377,7 @@ vec3 irradianceFromCascade(int cascade, sampler2D tex, vec2 texCoord, vec3 norma
   const float c4 = 0.886227;
   const float c5 = 0.247708;
 
-  /*mat4 MR = mat4(
-    vec4(c1 * l22.r, c1 * l2m2.r, c1 * l21.r, c2 * l11.r),
-    vec4(c1 * l2m2.r, -c1 * l22.r, c1 * l2m1.r, c2 * l1m1.r),
-    vec4(c1 * l21.r, c1 * l2m1.r, c3 * l20.r, c2 * l10.r),
-    vec4(c2 * l11.r, c2 * l1m1.r, c2 * l10.r, c4 * l00.r - c5 * l20.r)
-  );
-
-  mat4 MG = mat4(
-    vec4(c1 * l22.g, c1 * l2m2.g, c1 * l21.g, c2 * l11.g),
-    vec4(c1 * l2m2.g, -c1 * l22.g, c1 * l2m1.g, c2 * l1m1.g),
-    vec4(c1 * l21.g, c1 * l2m1.g, c3 * l20.g, c2 * l10.g),
-    vec4(c2 * l11.g, c2 * l1m1.g, c2 * l10.g, c4 * l00.g - c5 * l20.g)
-  );
-
-  mat4 MB = mat4(
-    vec4(c1 * l22.b, c1 * l2m2.b, c1 * l21.b, c2 * l11.b),
-    vec4(c1 * l2m2.b, -c1 * l22.b, c1 * l2m1.b, c2 * l1m1.b),
-    vec4(c1 * l21.b, c1 * l2m1.b, c3 * l20.b, c2 * l10.b),
-    vec4(c2 * l11.b, c2 * l1m1.b, c2 * l10.b, c4 * l00.b - c5 * l20.b)
-  );*/
-
   vec3 n = normal;
-  //n.z = normal.y;
-  //n.y = normal.z;
   vec3 irradiance =
     c1 * l22 * (n.x * n.x - n.y * n.y) +
     c3 * l20 * n.z * n.z +
@@ -414,9 +385,31 @@ vec3 irradianceFromCascade(int cascade, sampler2D tex, vec2 texCoord, vec3 norma
     2.0 * c1 * (l2m2 * n.x * n.y + l21 * n.x * n.z + l2m1 * n.y * n.z) +
     2.0 * c2 * (l11 * n.x + l1m1 * n.y + l10 * n.z);
 
-  irradiance = max(irradiance, vec3(0.0));
+  return max(irradiance, vec3(0.0));
+}
 
-  return irradiance;
+vec3 irradianceFromCascade(int cascade, sampler2D tex, vec2 texCoord, vec3 normal)
+{
+  int pixSize = int(SURFEL_DIR_IRR_PIX_SIZE[cascade]);
+  ivec2 cascTexSize = ivec2(ubo.screenWidth / SURFEL_PIXEL_SIZE[cascade] * pixSize, ubo.screenHeight / SURFEL_PIXEL_SIZE[cascade] * pixSize);
+  ivec2 cascShTexSize = ivec2(ubo.screenWidth / SURFEL_PIXEL_SIZE[cascade] * 3, ubo.screenHeight / SURFEL_PIXEL_SIZE[cascade] * 3);
+
+  ivec2 pixel = uvToPixel(texCoord, cascTexSize);
+  ivec2 surfelIdx = pixel / pixSize;
+  ivec2 surfelCenterPixel = surfelIdx * int(SURFEL_PIXEL_SIZE[cascade]) + int(SURFEL_PIXEL_SIZE[cascade]) / 2;
+
+  vec3 irradiance = vec3(0.0);
+
+  irradiance += irradianceSingleSurfelProbe(surfelIdx + ivec2(1, 1), cascShTexSize, tex, normal);
+  irradiance += irradianceSingleSurfelProbe(surfelIdx + ivec2(-1, -1), cascShTexSize, tex, normal);
+  irradiance += irradianceSingleSurfelProbe(surfelIdx + ivec2(-1, 1), cascShTexSize, tex, normal);
+  irradiance += irradianceSingleSurfelProbe(surfelIdx + ivec2(1, -1), cascShTexSize, tex, normal);
+  irradiance += irradianceSingleSurfelProbe(surfelIdx + ivec2(1, 0), cascShTexSize, tex, normal);
+  irradiance += irradianceSingleSurfelProbe(surfelIdx + ivec2(0, 1), cascShTexSize, tex, normal);
+  irradiance += irradianceSingleSurfelProbe(surfelIdx + ivec2(0, -1), cascShTexSize, tex, normal);
+  irradiance += irradianceSingleSurfelProbe(surfelIdx + ivec2(-1, 0), cascShTexSize, tex, normal);
+
+  return irradiance / 8.0;
 }
 
 vec3 calcIndirectDiffuseLightSurfel(
@@ -427,10 +420,42 @@ vec3 calcIndirectDiffuseLightSurfel(
   vec3 worldPos,
   vec3 viewPos,
   vec2 texCoord,
-  sampler2D cascade0Tex,
-  sampler2D cascade1Tex,
-  sampler2D cascade2Tex,
-  sampler2D cascade3Tex)
+  sampler2D cascade0Tex0,
+  sampler2D cascade0Tex1, 
+  sampler2D cascade0Tex2, 
+  sampler2D cascade0Tex3, 
+  sampler2D cascade0Tex4, 
+  sampler2D cascade0Tex5, 
+  sampler2D cascade0Tex6, 
+  sampler2D cascade0Tex7, 
+  sampler2D cascade0Tex8,
+  sampler2D cascade1Tex0,
+  sampler2D cascade1Tex1,
+  sampler2D cascade1Tex2,
+  sampler2D cascade1Tex3,
+  sampler2D cascade1Tex4,
+  sampler2D cascade1Tex5,
+  sampler2D cascade1Tex6,
+  sampler2D cascade1Tex7,
+  sampler2D cascade1Tex8,
+  sampler2D cascade2Tex0,
+  sampler2D cascade2Tex1,
+  sampler2D cascade2Tex2,
+  sampler2D cascade2Tex3,
+  sampler2D cascade2Tex4,
+  sampler2D cascade2Tex5,
+  sampler2D cascade2Tex6,
+  sampler2D cascade2Tex7,
+  sampler2D cascade2Tex8,
+  sampler2D cascade3Tex0,
+  sampler2D cascade3Tex1,
+  sampler2D cascade3Tex2,
+  sampler2D cascade3Tex3,
+  sampler2D cascade3Tex4,
+  sampler2D cascade3Tex5,
+  sampler2D cascade3Tex6,
+  sampler2D cascade3Tex7,
+  sampler2D cascade3Tex8)
 {
   vec3 ambient = vec3(0.0);
 
@@ -442,12 +467,78 @@ vec3 calcIndirectDiffuseLightSurfel(
   vec3 kD = 1.0 - kS;
   kD *= 1.0 - metallic;
 
-  vec3 irradiance = irradianceFromCascade(0, cascade0Tex, texCoord, normal);
+  /*vec3 irradiance = irradianceFromCascade(0, cascade0Tex, texCoord, normal);
   irradiance += irradianceFromCascade(1, cascade1Tex, texCoord, normal);
   irradiance += irradianceFromCascade(2, cascade2Tex, texCoord, normal);
   irradiance += irradianceFromCascade(3, cascade3Tex, texCoord, normal);
 
-  irradiance /= 4.0;
+  irradiance /= 4.0;*/
+
+  vec3 l00 = texture(cascade0Tex0, texCoord).rgb;
+  vec3 l11 = texture(cascade0Tex1, texCoord).rgb;
+  vec3 l10 = texture(cascade0Tex2, texCoord).rgb;
+  vec3 l1m1 = texture(cascade0Tex3, texCoord).rgb;
+  vec3 l21 = texture(cascade0Tex4, texCoord).rgb;
+  vec3 l2m1 = texture(cascade0Tex5, texCoord).rgb;
+  vec3 l2m2 = texture(cascade0Tex6, texCoord).rgb;
+  vec3 l20 = texture(cascade0Tex7, texCoord).rgb;
+  vec3 l22 = texture(cascade0Tex8, texCoord).rgb;
+
+  /*l00 += texture(cascade1Tex0, texCoord).rgb;
+  l11   += texture(cascade1Tex1, texCoord).rgb;
+  l10   += texture(cascade1Tex2, texCoord).rgb;
+  l1m1  += texture(cascade1Tex3, texCoord).rgb;
+  l21   += texture(cascade1Tex4, texCoord).rgb;
+  l2m1  += texture(cascade1Tex5, texCoord).rgb;
+  l2m2  += texture(cascade1Tex6, texCoord).rgb;
+  l20   += texture(cascade1Tex7, texCoord).rgb;
+  l22   += texture(cascade1Tex8, texCoord).rgb;
+
+  l00   += texture(cascade2Tex0, texCoord).rgb;
+  l11   += texture(cascade2Tex1, texCoord).rgb;
+  l10   += texture(cascade2Tex2, texCoord).rgb;
+  l1m1  += texture(cascade2Tex3, texCoord).rgb;
+  l21   += texture(cascade2Tex4, texCoord).rgb;
+  l2m1  += texture(cascade2Tex5, texCoord).rgb;
+  l2m2  += texture(cascade2Tex6, texCoord).rgb;
+  l20   += texture(cascade2Tex7, texCoord).rgb;
+  l22   += texture(cascade2Tex8, texCoord).rgb;
+
+  l00   += texture(cascade3Tex0, texCoord).rgb;
+  l11   += texture(cascade3Tex1, texCoord).rgb;
+  l10   += texture(cascade3Tex2, texCoord).rgb;
+  l1m1  += texture(cascade3Tex3, texCoord).rgb;
+  l21   += texture(cascade3Tex4, texCoord).rgb;
+  l2m1  += texture(cascade3Tex5, texCoord).rgb;
+  l2m2  += texture(cascade3Tex6, texCoord).rgb;
+  l20   += texture(cascade3Tex7, texCoord).rgb;
+  l22   += texture(cascade3Tex8, texCoord).rgb;
+
+  l00   /= 4.0;
+  l11   /= 4.0;
+  l10   /= 4.0;
+  l1m1  /= 4.0;
+  l21   /= 4.0;
+  l2m1  /= 4.0;
+  l2m2  /= 4.0;
+  l20   /= 4.0;
+  l22   /= 4.0;*/
+
+  const float c1 = 0.429043;
+  const float c2 = 0.511664;
+  const float c3 = 0.743125;
+  const float c4 = 0.886227;
+  const float c5 = 0.247708;
+
+  vec3 n = normal;
+  vec3 irradiance =
+    c1 * l22 * (n.x * n.x - n.y * n.y) +
+    c3 * l20 * n.z * n.z +
+    c4 * l00 - c5 * l20 +
+    2.0 * c1 * (l2m2 * n.x * n.y + l21 * n.x * n.z + l2m1 * n.y * n.z) +
+    2.0 * c2 * (l11 * n.x + l1m1 * n.y + l10 * n.z);
+
+  irradiance = max(irradiance, vec3(0.0));
 
   vec3 diffuse = irradiance * albedo;
   ambient = kD * diffuse;

@@ -17,7 +17,7 @@ SurfelSHPass::~SurfelSHPass()
 
 void SurfelSHPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
-  for (int i = 0; i < 4; ++i) {
+  for (int i = 0; i < 1; ++i) {
     std::string rpName = "SurfelSH" + std::to_string(i);
     RenderPassRegisterInfo info{};
     info._name = rpName;
@@ -26,7 +26,7 @@ void SurfelSHPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     const int numSurfelsX = static_cast<int>(std::ceil(rc->swapChainExtent().width / surfel::surfPixSize[i]));
     const int numSurfelsY = static_cast<int>(std::ceil(rc->swapChainExtent().height / surfel::surfPixSize[i]));
 
-    {
+    /* {
       ResourceUsage usage{};
       usage._resourceName = "SurfelDirTex" + std::to_string(i);
       usage._access.set((std::size_t)Access::Read);
@@ -41,8 +41,17 @@ void SurfelSHPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::ImageStorage;
       info._resourceUsages.emplace_back(std::move(usage));
-    }
+    }*/
+
     {
+      ResourceUsage usage{};
+      usage._resourceName = "SurfelSHSSBO" + std::to_string(i);
+      usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Compute);
+      usage._type = Type::SSBO;
+      info._resourceUsages.emplace_back(std::move(usage));
+    }
+    /* {
       ResourceUsage usage{};
       usage._resourceName = "SurfelSH" + std::to_string(i);
       usage._access.set((std::size_t)Access::Write);
@@ -51,6 +60,23 @@ void SurfelSHPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       ImageInitialCreateInfo createInfo{};
       createInfo._initialWidth = 3 * numSurfelsX;
       createInfo._initialHeight = 3 * numSurfelsY;
+      createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+
+      usage._imageCreateInfo = createInfo;
+
+      usage._type = Type::ImageStorage;
+      info._resourceUsages.emplace_back(std::move(usage));
+    }*/
+    // Create one texture for each LM parameter (they each have 3 channels)
+    for (int j = 0; j < 9; ++j) {
+      ResourceUsage usage{};
+      usage._resourceName = "SurfelSHLM" + std::to_string(i) + "_" + std::to_string(j);
+      usage._access.set((std::size_t)Access::Write);
+      usage._stage.set((std::size_t)Stage::Compute);
+
+      ImageInitialCreateInfo createInfo{};
+      createInfo._initialWidth = numSurfelsX;
+      createInfo._initialHeight = numSurfelsY;
       createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
       usage._imageCreateInfo = createInfo;
@@ -94,11 +120,13 @@ void SurfelSHPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 
         const int localGroupSize = 16;
         //const int sqrtNumRaysPerSurfel = surfel::sqrtNumRaysPerSurfel[i];
+        //uint32_t numX = 3 * numSurfelsX / localGroupSize;
+        //uint32_t numY = 3 * numSurfelsY / localGroupSize;
         uint32_t numX = numSurfelsX / localGroupSize;
         uint32_t numY = numSurfelsY / localGroupSize;
 
         // Z group size is 9 in compute shader
-        vkCmdDispatch(*exeParams.cmdBuffer, numX + 1, numY + 1, 9);
+        vkCmdDispatch(*exeParams.cmdBuffer, numX + 1, numY + 1, 1);
       });
   }
 }

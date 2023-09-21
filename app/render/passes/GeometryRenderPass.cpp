@@ -201,7 +201,6 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
 
   info._resourceUsages = std::move(resourceUsages);
 
-  VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
   GraphicsPipelineCreateParams param{};
   param.device = rc->device();
   param.vertShader = "standard_vert.spv";

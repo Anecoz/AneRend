@@ -274,7 +274,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
     usage._bindless = true;
     _resourceUsages.emplace_back(std::move(usage));
   }
-  for (int i = 0; i < 4; ++i) {
+  /*for (int i = 0; i < 1; ++i) {
     {
       ResourceUsage usage{};
       usage._resourceName = "SurfelDirTex" + std::to_string(i);
@@ -295,7 +295,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
       usage._bindless = true;
       _resourceUsages.emplace_back(std::move(usage));
     }
-    {
+     {
       ResourceUsage usage{};
       usage._resourceName = "SurfelSH" + std::to_string(i);
       usage._access.set((std::size_t)Access::Read);
@@ -305,7 +305,17 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
       usage._bindless = true;
       _resourceUsages.emplace_back(std::move(usage));
     }
-  }
+    for (int j = 0; j < 9; ++j) {
+      ResourceUsage usage{};
+      usage._resourceName = "SurfelSHLM" + std::to_string(i) + "_" + std::to_string(j);
+      usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Fragment);
+      usage._type = Type::SampledTexture;
+      usage._samplerClampToEdge = true;
+      usage._bindless = true;
+      _resourceUsages.emplace_back(std::move(usage));
+    }
+  }*/
 
 
   /* {

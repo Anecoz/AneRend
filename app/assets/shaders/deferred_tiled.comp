@@ -8,8 +8,6 @@ layout (local_size_x = 32, local_size_y = 32) in;
 #include "octahedron_helpers.glsl"
 #include "pbr_light.glsl"
 #include "light_shadow_helpers.glsl"
-//#include "compass_directions.glsl"
-//#include "probe_helpers.glsl"
 
 layout(set = 1, binding = 0) uniform sampler2D im0;
 layout(set = 1, binding = 1) uniform sampler2D im1;
@@ -18,22 +16,10 @@ layout(set = 1, binding = 3) uniform sampler2D depth;
 layout(set = 1, binding = 4) uniform sampler2D shadowMap;
 layout(set = 1, binding = 5) uniform sampler2D ssao;
 layout(set = 1, binding = 6) uniform sampler2D rtShadowMask;
-
-/*layout(std430, set = 1, binding = 6) readonly buffer IrradianceProbeBuffer {
-  IrradianceProbe probes[];
-} irradianceProbeBuffer;*/
-
 layout(set = 1, binding = 7, rgba32f) uniform writeonly image2D outputIm;
-//layout(set = 1, binding = 7, rgba8) uniform readonly image2D surfelTex;
-//layout(set = 1, binding = 7) uniform sampler2D surfelTex;
-//layout(set = 1, binding = 7) uniform sampler2D ssgiBlurTex;
 layout(set = 1, binding = 8) uniform sampler2D probeTex;
 layout(set = 1, binding = 9) uniform sampler2D specularGiTex;
 layout(set = 1, binding = 10) uniform sampler2D specularLutTex;
-layout(set = 1, binding = 11) uniform sampler2D cascade0Tex;
-layout(set = 1, binding = 12) uniform sampler2D cascade1Tex;
-layout(set = 1, binding = 13) uniform sampler2D cascade2Tex;
-layout(set = 1, binding = 14) uniform sampler2D cascade3Tex;
 
 layout(push_constant) uniform constants {
   uint screenWidth;
@@ -246,20 +232,6 @@ void doLight(ivec2 pixel)
         probeTex);
     }
   }
-  else if (ubo.screensapceProbesEnabled == 1) {
-    ambient += calcIndirectDiffuseLightSurfel(
-      normal,
-      albedo,
-      metallic,
-      roughness,
-      fragWorldPos,
-      ubo.cameraPos.xyz, 
-      texCoords,
-      cascade0Tex,
-      cascade1Tex,
-      cascade2Tex,
-      cascade3Tex);
-  }
   else {
     ambient = vec3(0.3) * albedo * clamp(shadow, 0.3, 1.0);
   }
@@ -282,10 +254,6 @@ void doLight(ivec2 pixel)
   color += emissive;
 
   color *= ubo.exposure;
-
-  // Do tonemapping
-  //color = color / (color + vec3(1.0));
-  //color = acesTonemap(color);
 
   imageStore(outputIm, pixel, vec4(color, 1.0));
 }
