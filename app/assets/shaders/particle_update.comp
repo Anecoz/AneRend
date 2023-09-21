@@ -66,6 +66,14 @@ void main()
   particleBuffer.particles[idx].currentVelocity.xyz += vec3(0.0, -8.0, 0.0) * ubo.delta;
   particleBuffer.particles[idx].currentPosition.xyz += particleBuffer.particles[idx].currentVelocity.xyz * ubo.delta;
 
+  // Simple bounce
+  if (particleBuffer.particles[idx].currentPosition.y <= 0.5) {
+    const float energyLoss = 0.5;
+    particleBuffer.particles[idx].currentVelocity.y = -particleBuffer.particles[idx].currentVelocity.y * energyLoss;
+    particleBuffer.particles[idx].currentVelocity.x *= energyLoss;
+    particleBuffer.particles[idx].currentVelocity.z *= energyLoss;
+  }
+
   // How far along lifetime is the particle
   //float percent = (particle.initialPosition.w + particle.currentPosition.w) / particle.currentVelocity.w;
 

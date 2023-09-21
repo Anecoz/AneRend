@@ -7,6 +7,24 @@
 
 namespace render {
 
+namespace {
+
+void fillWithZeros(RenderContext* renderContext, AllocatedBuffer& buf)
+{
+  auto cmdBuf = renderContext->beginSingleTimeCommands();
+
+  vkCmdFillBuffer(
+    cmdBuf,
+    buf._buffer,
+    0,
+    VK_WHOLE_SIZE,
+    0);
+
+  renderContext->endSingleTimeCommands(cmdBuf);
+}
+
+}
+
 UpdateTLASPass::UpdateTLASPass()
   : RenderPass()
 {}
@@ -16,6 +34,8 @@ UpdateTLASPass::~UpdateTLASPass()
 
 void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
+  _first = true;
+
   // Add initializers for the buffers (fill with 0's)
   {
     ResourceUsage initUsage{};
@@ -66,7 +86,8 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 
     BufferInitialCreateInfo createInfo{};
     createInfo._initialSize = rc->getMaxNumRenderables() * sizeof(VkAccelerationStructureInstanceKHR);
-    createInfo._flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    createInfo._flags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    createInfo._initialDataCb = fillWithZeros;
     usage._bufferCreateInfo = createInfo;
 
     info._resourceUsages.emplace_back(std::move(usage));
@@ -80,6 +101,8 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 
     BufferInitialCreateInfo createInfo{};
     createInfo._initialSize = sizeof(uint32_t);
+    createInfo._initialDataCb = fillWithZeros;
+    createInfo._flags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     usage._bufferCreateInfo = createInfo;
 
     info._resourceUsages.emplace_back(std::move(usage));
