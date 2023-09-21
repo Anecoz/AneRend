@@ -10,7 +10,7 @@
 layout (local_size_x = 8, local_size_y = 8) in;
 
 layout(set = 1, binding = 0, rgba16f) uniform readonly image2D irrIm;
-layout(set = 1, binding = 1, rgba8) uniform readonly image2D dirIm;
+layout(set = 1, binding = 1, rgba16f) uniform readonly image2D dirIm;
 layout(set = 1, binding = 2, rgba16f) uniform image2D outputIm;
 
 layout(push_constant) uniform constants {
@@ -53,8 +53,9 @@ void main()
       ivec2 currPix = probeStartPixel + ivec2(x, y);
 
       vec3 irradiance = imageLoad(irrIm, currPix).rgb;
-      vec3 packedDir = imageLoad(dirIm, currPix).rgb;
-      vec3 dir = (packedDir * 2.0) - 1.0;
+      vec3 dir = imageLoad(dirIm, currPix).rgb;
+      /*vec3 packedDir = imageLoad(dirIm, currPix).rgb;
+      vec3 dir = (packedDir * 2.0) - 1.0;*/
       float weight = max(0.0, dot(dir, octDir));
       if (weight > 1e-6) {
         result += vec4(weight * irradiance, weight);

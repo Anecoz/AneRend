@@ -102,7 +102,7 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
     ImageInitialCreateInfo createInfo{};
     createInfo._initialWidth = sqrtNumRays * numProbesPlane;
     createInfo._initialHeight = sqrtNumRays * numProbesPlane;// *numProbesHeight;
-    createInfo._intialFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    createInfo._intialFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
     usage._imageCreateInfo = createInfo;
 

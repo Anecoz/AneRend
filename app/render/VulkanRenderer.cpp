@@ -2246,7 +2246,7 @@ bool VulkanRenderer::createSyncObjects()
 
 bool VulkanRenderer::initLights()
 {
-  //_lights.resize(MAX_NUM_LIGHTS);
+  _lights.resize(MAX_NUM_LIGHTS);
 
   std::random_device dev;
   std::mt19937 rng(dev());

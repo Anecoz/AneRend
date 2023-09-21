@@ -102,11 +102,6 @@ void SpecularGIRTPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
       if (!exeParams.rc->getRenderOptions().raytracingEnabled) return;
       if (!exeParams.rc->getRenderOptions().specularGiEnabled) return;
 
-      double elapsedTime = exeParams.rc->getElapsedTime();
-      if (elapsedTime - _lastRayTraceTime < (1.0 / _traceRate)) {
-        return;
-      }
-
       // Bind pipeline
       vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, *exeParams.pipeline);
 
@@ -130,8 +125,6 @@ void SpecularGIRTPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
         exeParams.rc->swapChainExtent().width / 2,
         exeParams.rc->swapChainExtent().height / 2,
         1);
-
-      _lastRayTraceTime = elapsedTime;
     });
 }
 

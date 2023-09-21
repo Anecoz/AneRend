@@ -48,11 +48,11 @@ void LuminanceAveragePass::registerToGraph(FrameGraphBuilder& fgb, RenderContext
     usage._resourceName = "AvgLumSSBO";
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::Compute);
-    //usage._stage.set((std::size_t)Stage::Transfer);
     usage._type = Type::SSBO;
 
     BufferInitialCreateInfo createInfo{};
     createInfo._initialSize = 1 * sizeof(float); // Just one average value
+    createInfo._flags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     createInfo._initialDataCb = initLumBuf;
 
     usage._bufferCreateInfo = createInfo;
