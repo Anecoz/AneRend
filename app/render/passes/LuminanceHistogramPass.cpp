@@ -30,6 +30,14 @@ void LuminanceHistogramPass::registerToGraph(FrameGraphBuilder& fgb, RenderConte
   }
   {
     ResourceUsage usage{};
+    usage._resourceName = "Geometry2Image";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::ImageStorage;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
     usage._resourceName = "HistogramSSBO";
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::Compute);

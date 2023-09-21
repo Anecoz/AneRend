@@ -1839,6 +1839,11 @@ AccelerationStructure& VulkanRenderer::getTLAS()
   return _tlas;
 }
 
+VkFormat VulkanRenderer::getHDRFormat()
+{
+  return VK_FORMAT_R16G16B16A16_SFLOAT;
+}
+
 std::vector<Particle>& VulkanRenderer::getParticles()
 {
   return _particles;
@@ -3083,7 +3088,7 @@ bool VulkanRenderer::initImgui()
   init_info.ImageCount = 3;
   init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
   init_info.UseDynamicRendering = true;
-  init_info.ColorAttachmentFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+  init_info.ColorAttachmentFormat = getHDRFormat();
 
   if (!ImGui_ImplVulkan_Init(&init_info, nullptr)) {
     printf("Could not init impl vulkan for imgui!\n");

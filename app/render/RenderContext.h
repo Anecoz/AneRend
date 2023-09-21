@@ -94,6 +94,8 @@ public:
 
   virtual AccelerationStructure& getTLAS() = 0;
 
+  virtual VkFormat getHDRFormat() = 0;
+
   // Hack for testing
   virtual std::vector<Particle>& getParticles() = 0;
 

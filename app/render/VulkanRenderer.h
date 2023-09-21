@@ -182,6 +182,8 @@ public:
 
   AccelerationStructure& getTLAS() override final;
 
+  VkFormat getHDRFormat() override final;
+
   // Hack for testing
   std::vector<Particle>& getParticles() override final;
 

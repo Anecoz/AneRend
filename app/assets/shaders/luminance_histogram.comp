@@ -1,5 +1,9 @@
 #version 450
 
+#extension GL_GOOGLE_include_directive : enable
+
+#include "scene_ubo.glsl"
+
 // References:
 // https://www.alextardif.com/HistogramLuminance.html
 // https://bruop.github.io/exposure/
@@ -14,10 +18,10 @@ layout (local_size_x = 16, local_size_y = 16) in;
 const float minLogLum = -10.0; // "min of -10 and max of 2, making range 12"
 const float inverseLogLumRange = 1.0 / 12.0;
 
-// Our two inputs, the read-only HDR color image, and the histogramBuffer
 layout(set = 1, binding = 0, rgba32f) uniform readonly image2D hdrInput;
+layout(set = 1, binding = 1, rgba16f) uniform readonly image2D geom2Im;
 
-layout(std430, set = 1, binding = 1) buffer HistogramBuffer {
+layout(std430, set = 1, binding = 2) buffer HistogramBuffer {
   uint bins[];
 } histogramBuffer;
 
@@ -51,7 +55,10 @@ void main() {
   uvec2 dim = imageSize(hdrInput).xy;
   // Ignore threads that map to areas beyond the bounds of our HDR image
   if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
+    float emissive = imageLoad(geom2Im, ivec2(gl_GlobalInvocationID.xy)).r;
+
     vec3 hdrColor = imageLoad(hdrInput, ivec2(gl_GlobalInvocationID.xy)).xyz;
+    hdrColor -= emissive * ubo.exposure;
     uint binIndex = colorToBin(hdrColor, minLogLum, inverseLogLumRange);
     // We use an atomic add to ensure we don't write to the same bin in our
     // histogram from two different threads at the same time.

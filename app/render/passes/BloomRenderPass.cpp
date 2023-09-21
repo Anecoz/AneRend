@@ -326,7 +326,7 @@ void BloomRenderPass::compositePass(FrameGraphBuilder& fgb, RenderContext* rc)
     ImageInitialCreateInfo createInfo{};
     createInfo._initialHeight = rc->swapChainExtent().height;
     createInfo._initialWidth = rc->swapChainExtent().width;
-    createInfo._intialFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+    createInfo._intialFormat = rc->getHDRFormat();
 
     usage._imageCreateInfo = createInfo;
 
