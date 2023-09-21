@@ -3465,7 +3465,7 @@ void VulkanRenderer::createParticles()
 {
   std::vector<Vertex> vert;
   std::vector<std::uint32_t> inds;
-  graphicsutil::createUnitCube(&vert, &inds, false);
+  graphicsutil::createUnitCube(&vert, &inds, true);
 
   Mesh cubeMesh{};
   Model cubeModel{};

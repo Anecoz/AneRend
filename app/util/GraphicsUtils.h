@@ -52,45 +52,65 @@ static void createUnitCube(std::vector<render::Vertex>* vertOut, std::vector<std
 
   glm::vec3 normal{ 0.0f, 1.0f, 0.0f};
   glm::vec2 tex{ 0.0f};
+  glm::vec4 tangent{ 0.0f, 0.0f, 0.0f, 0.0f };
+
+  glm::vec3 up{ 0.0, 1.0, 0.0 };
+  glm::vec3 down = -up;
+  glm::vec3 right{ 1.0, 0.0, 0.0 };
+  glm::vec3 left = -right;
+  glm::vec3 forward{ 0.0, 0.0, 1.0 };
+  glm::vec3 back = -forward;
+
+  std::vector<render::Vertex> verts{
+    // top
+    { { -0.5,  0.5, -0.5 }, color, up, tangent, tex },
+    { { -0.5,  0.5,  0.5 }, color, up, tangent, tex },
+    { {  0.5,  0.5, -0.5 }, color, up, tangent, tex },
+    { {  0.5,  0.5, -0.5 }, color, up, tangent, tex },
+    { { -0.5,  0.5,  0.5 }, color, up, tangent, tex },
+    { {  0.5,  0.5,  0.5 }, color, up, tangent, tex },
+    // right
+    { {  0.5,  0.5, -0.5 }, color, right, tangent, tex },
+    { {  0.5,  0.5,  0.5 }, color, right, tangent, tex },
+    { {  0.5, -0.5, -0.5 }, color, right, tangent, tex },
+    { {  0.5,  0.5,  0.5 }, color, right, tangent, tex },
+    { {  0.5, -0.5,  0.5 }, color, right, tangent, tex },
+    { {  0.5, -0.5, -0.5 }, color, right, tangent, tex },
+    //bottom
+    { {  0.5, -0.5, -0.5 }, color, down, tangent, tex },
+    { {  0.5, -0.5,  0.5 }, color, down, tangent, tex },
+    { { -0.5, -0.5,  0.5 }, color, down, tangent, tex },
+    { {  0.5, -0.5, -0.5 }, color, down, tangent, tex },
+    { { -0.5, -0.5,  0.5 }, color, down, tangent, tex },
+    { { -0.5, -0.5, -0.5 }, color, down, tangent, tex },
+    //left
+    { { -0.5,  0.5,  0.5 }, color, left, tangent, tex },
+    { { -0.5, -0.5, -0.5 }, color, left, tangent, tex },
+    { { -0.5, -0.5,  0.5 }, color, left, tangent, tex },
+    { { -0.5,  0.5,  0.5 }, color, left, tangent, tex },
+    { { -0.5,  0.5, -0.5 }, color, left, tangent, tex },
+    { { -0.5, -0.5, -0.5 }, color, left, tangent, tex },
+    //back
+    { { -0.5,  0.5, -0.5 }, color, back, tangent, tex },
+    { {  0.5, -0.5, -0.5 }, color, back, tangent, tex },
+    { { -0.5, -0.5, -0.5 }, color, back, tangent, tex },
+    { { -0.5,  0.5, -0.5 }, color, back, tangent, tex },
+    { {  0.5,  0.5, -0.5 }, color, back, tangent, tex },
+    { {  0.5, -0.5, -0.5 }, color, back, tangent, tex },
+    //front
+    { { -0.5,  0.5,  0.5 }, color, forward, tangent, tex },
+    { {  0.5, -0.5,  0.5 }, color, forward, tangent, tex },
+    { {  0.5,  0.5,  0.5 }, color, forward, tangent, tex },
+    { { -0.5,  0.5,  0.5 }, color, forward, tangent, tex },
+    { { -0.5, -0.5,  0.5 }, color, forward, tangent, tex },
+    { {  0.5, -0.5,  0.5 }, color, forward, tangent, tex },
+  };
 
   std::vector<std::uint32_t> indices{
-    //Top
-    2, 7, 6,
-    2, 3, 7,
-
-    //Bottom
-    0, 4, 5,
-    0, 5, 1,
-
-    //Left
-    0, 2, 6,
-    0, 6, 4,
-
-    //Right
-    1, 7, 3,
-    1, 5, 7,
-
-    //Front
-    0, 3, 2,
-    0, 1, 3,
-
-    //Back
-    4, 6, 7,
-    4, 7, 5
-  };
-
-  glm::vec4 tangent{ 0.0f, 0.0f, 0.0f, 0.0f };
-  // pos, color, normal, tangent, tex
-  std::vector<render::Vertex> verts{
-    {{-0.5, -0.5, 0.5}, color, normal, tangent, tex}, // 0
-    {{0.5, -0.5, 0.5}, color, normal, tangent, tex},//1
-    {{-0.5, 0.5, 0.5}, color, normal, tangent, tex},//2
-    {{0.5, 0.5, 0.5}, color, normal, tangent, tex},//3
-    {{-0.5, -0.5, -0.5}, color, normal, tangent, tex},//4
-    {{0.5, -0.5, -0.5}, color, normal, tangent, tex},//5
-    {{-0.5, 0.5, -0.5}, color, normal, tangent, tex},//6
-    {{0.5, 0.5, -0.5}, color, normal, tangent, tex}//7
-  };
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+    31, 32, 33, 34, 35 };
 
   *vertOut = verts;
   *indOut = indices;
