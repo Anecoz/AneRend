@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Mesh.h"
+#include "animation/Skeleton.h"
+#include "animation/Animation.h"
 
 #include <cstdint>
 #include <string>
@@ -43,5 +45,8 @@ public:
   std::string _roughnessPath;
   std::string _normalPath;
   std::string _albedoPath;
+
+  anim::Skeleton _skeleton;
+  std::vector<anim::Animation> _animations;
 };
 }

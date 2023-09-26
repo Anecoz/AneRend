@@ -27,6 +27,7 @@
 #include "RenderableId.h"
 #include "Particle.h"
 #include "AccelerationStructure.h"
+#include "animation/Animator.h"
 
 #include "../logic/WindSystem.h"
 
@@ -206,6 +207,10 @@ private:
   static const std::size_t MAX_TIMESTAMP_QUERIES = 100;
   static const std::size_t NUM_IRRADIANCE_PROBES_XZ = 64;
   static const std::size_t NUM_IRRADIANCE_PROBES_Y = 8;
+  static const std::size_t MAX_NUM_JOINTS = 50;
+  static const std::size_t MAX_NUM_SKINNED_MODELS = 1000;
+
+  std::vector<anim::Animator> _animators;
 
   std::unordered_map<std::string, std::any> _blackboard;
 
@@ -266,6 +271,8 @@ private:
     MeshId _firstMeshId;
     uint32_t _numMeshes;
 
+    uint32_t _skeletonOffset = 0;
+
     bool _buildTlas = true;
     bool _visible = true;
 
@@ -297,7 +304,8 @@ private:
   uint32_t _gigaVtxBinding = _gigaIdxBinding + 1;
   uint32_t _meshBinding = _gigaVtxBinding + 1;
   uint32_t _tlasBinding = _meshBinding + 1;
-  uint32_t _bindlessTextureBinding = _tlasBinding + 1;
+  uint32_t _skeletonBinding = _tlasBinding + 1;
+  uint32_t _bindlessTextureBinding = _skeletonBinding + 1;
   uint32_t _currentBindlessTextureIndex = 0;
 
   void createTexture(
@@ -353,11 +361,8 @@ private:
   // Contains mesh info
   std::vector<AllocatedBuffer> _gpuMeshInfoBuffer;
 
-  // Contains the index buffer for the scene
-  /*std::vector<AllocatedBuffer> _gpuIdxBuffer;
-
-  // Contains the vertex buffer for the scene
-  std::vector<AllocatedBuffer> _gpuVtxBuffer;*/
+  // Contains all joints for all skinned animated models
+  std::vector<AllocatedBuffer> _gpuSkeletonBuffer;
 
   // SSBO for light information.
   std::vector<AllocatedBuffer> _gpuLightBuffer;
@@ -385,6 +390,9 @@ private:
 
   // Fill gpu mesh info.
   void prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer);
+
+  // Fill gpu skeleton info.
+  void prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer);
 
   // Fills GPU light buffer with current light information.
   void prefilGPULightBuffer(VkCommandBuffer& commandBuffer);

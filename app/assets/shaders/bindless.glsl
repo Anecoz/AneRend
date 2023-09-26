@@ -8,6 +8,7 @@ struct Renderable
   vec4 tint;
   uint firstMeshId;
   uint numMeshIds;
+  uint skeletonOffset;
   uint visible;
 };
 
@@ -53,6 +54,8 @@ struct PackedVertex
   vec4 d1;
   vec4 d2;
   vec4 d3;
+  vec4 d4;
+  ivec4 d5;
 };
 
 struct Vertex
@@ -61,6 +64,8 @@ struct Vertex
   vec3 color;
   vec3 normal;
   vec4 tangent;
+  ivec4 jointIds;
+  vec4 jointWeights;
   vec2 uv;
 };
 
@@ -90,7 +95,9 @@ Vertex unpackVertex(PackedVertex packedVertex)
   outVtx.color = vec3(packedVertex.d0.w, packedVertex.d1.xy);
   outVtx.normal = vec3(packedVertex.d1.zw, packedVertex.d2.x);
   outVtx.tangent = vec4(packedVertex.d2.yzw, packedVertex.d3.x);
-  outVtx.uv = vec2(packedVertex.d3.yz);
+  outVtx.jointWeights = vec4(packedVertex.d3.yzw, packedVertex.d4.x);
+  outVtx.uv = vec2(packedVertex.d4.yz);
+  outVtx.jointIds = ivec4(packedVertex.d5.x);
   return outVtx;
 }
 
@@ -124,13 +131,13 @@ layout(std430, set = 0, binding = 8) readonly buffer MeshBuffer {
   MeshInfo meshes[];
 } meshBuffer;
 
-//layout(set = 0, binding = 9) uniform accelerationStructureEXT tlas;
+// Tlas is binding 9
 
-/*layout(std430, set = 0, binding = 10) buffer IrradianceProbeBuffer {
-  IrradianceProbe probes[];
-} irradianceProbeBuffer;*/
+layout(std430, set = 0, binding = 10) readonly buffer SkeletonBuffer {
+  mat4 joints[];
+} skeletonBuffer;
 
-layout(set = 0, binding = 10) uniform sampler2D textures[];
+layout(set = 0, binding = 11) uniform sampler2D textures[];
 
 SurfaceData getSurfaceDataFromMat(MeshMaterialInfo matInfo, vec2 uv, vec3 inNormal, mat3 inTBN, vec3 inTangent, vec3 inColor)
 {
@@ -155,6 +162,12 @@ SurfaceData getSurfaceDataFromMat(MeshMaterialInfo matInfo, vec2 uv, vec3 inNorm
     }*/
     outData.color = vec3(matInfo.baseColFacR * samp.r, matInfo.baseColFacG * samp.g, matInfo.baseColFacB * samp.b);
     //color = samp.rgb;
+  }
+  else {
+    // If no albedo texture, but baseColFactor is present, use the factor as linear RGB values
+    if (matInfo.baseColFacR + matInfo.baseColFacG + matInfo.baseColFacB > 0.1) {
+      outData.color = vec3(matInfo.baseColFacR, matInfo.baseColFacG, matInfo.baseColFacB);
+    }
   }
   if (matInfo.metallicRoughnessTexIndex != -1) {
     vec4 samp = texture(textures[nonuniformEXT(matInfo.metallicRoughnessTexIndex)], uv);

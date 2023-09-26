@@ -29,6 +29,8 @@ Model::~Model()
 Model::Model(Model&& rhs)
 {
   std::swap(_meshes, rhs._meshes);
+  std::swap(_skeleton, rhs._skeleton);
+  std::swap(_animations, rhs._animations);
 }
 
 /*Model& Model::operator=(const Model& rhs)
@@ -49,6 +51,8 @@ Model& Model::operator=(Model&& rhs)
 {
   if (this != &rhs) {
     std::swap(_meshes, rhs._meshes);
+    std::swap(_skeleton, rhs._skeleton);
+    std::swap(_animations, rhs._animations);
   }
   return *this;
 }

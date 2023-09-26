@@ -25,6 +25,8 @@ struct GraphicsPipelineCreateParams
   int normalLoc = 2;
   int uvLoc = -1;
   int tangentLoc = -1;
+  int jointLoc = -1;
+  int jointWeightLoc = -1;
   VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
   bool depthBiasEnable = false;
   float depthBiasConstant = 0.0f;

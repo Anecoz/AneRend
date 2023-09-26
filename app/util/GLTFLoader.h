@@ -3,6 +3,7 @@
 #pragma once
 
 #include "../render/Model.h"
+#include "../render/animation/Animation.h"
 
 #include <string>
 #include <vector>

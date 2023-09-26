@@ -19,18 +19,20 @@ static std::vector<render::Vertex> createScreenQuad(float widthPercent, float he
   float depth = 0.1f; // Vulkan NDC depth range is 0,1, be close to camera...
   glm::vec3 color {1.0f}; // don't care
   glm::vec3 normal {0.0f}; // don't care
+  glm::i16vec4 joints{ -1, -1, -1, -1 };
+  glm::vec4 weights{ 0.0f, 0.0f, 0.0f, 0.0f };
 
   float x = -1.0f + widthPercent * 2.0f;
   float y = -1.0f + heightPercent * 2.0f;
 
   return { 
-    {{-1.0f, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{-1.0f, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
-    {{x, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+    {{-1.0f, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, weights, {0.0f, 0.0f}, 0.0f, joints},
+    {{-1.0f, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, weights, {0.0f, 1.0f}, 0.0f, joints},
+    {{x, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, weights, {1.0f, 0.0f}, 0.0f, joints},
 
-    {{x, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-    {{-1.0f, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
-    {{x, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 1.0f}}
+    {{x, -1.0f, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, weights,  {1.0f, 0.0f}, 0.0f, joints},
+    {{-1.0f, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, weights, {0.0f, 1.0f}, 0.0f, joints},
+    {{x, y, depth}, color, normal, {0.0f, 0.0f, 0.0f, 0.0f}, weights, {1.0f, 1.0f}, 0.0f, joints}
   };
 }
 
@@ -53,6 +55,9 @@ static void createUnitCube(std::vector<render::Vertex>* vertOut, std::vector<std
   glm::vec3 normal{ 0.0f, 1.0f, 0.0f};
   glm::vec2 tex{ 0.0f};
   glm::vec4 tangent{ 0.0f, 0.0f, 0.0f, 0.0f };
+  glm::i16vec4 joints{ -1, -1, -1, -1 };
+  glm::vec4 weights{ 0.0f, 0.0f, 0.0f, 0.0f };
+  float pad = 0.0f;
 
   glm::vec3 up{ 0.0, 1.0, 0.0 };
   glm::vec3 down = -up;
@@ -63,47 +68,47 @@ static void createUnitCube(std::vector<render::Vertex>* vertOut, std::vector<std
 
   std::vector<render::Vertex> verts{
     // top
-    { { -0.5,  0.5, -0.5 }, color, up, tangent, tex },
-    { { -0.5,  0.5,  0.5 }, color, up, tangent, tex },
-    { {  0.5,  0.5, -0.5 }, color, up, tangent, tex },
-    { {  0.5,  0.5, -0.5 }, color, up, tangent, tex },
-    { { -0.5,  0.5,  0.5 }, color, up, tangent, tex },
-    { {  0.5,  0.5,  0.5 }, color, up, tangent, tex },
+    { { -0.5,  0.5, -0.5 }, color, up, tangent, weights, tex, pad, joints },
+    { { -0.5,  0.5,  0.5 }, color, up, tangent, weights, tex, pad, joints },
+    { {  0.5,  0.5, -0.5 }, color, up, tangent, weights, tex, pad, joints },
+    { {  0.5,  0.5, -0.5 }, color, up, tangent, weights, tex, pad, joints },
+    { { -0.5,  0.5,  0.5 }, color, up, tangent, weights, tex, pad, joints },
+    { {  0.5,  0.5,  0.5 }, color, up, tangent, weights, tex, pad, joints },
     // right
-    { {  0.5,  0.5, -0.5 }, color, right, tangent, tex },
-    { {  0.5,  0.5,  0.5 }, color, right, tangent, tex },
-    { {  0.5, -0.5, -0.5 }, color, right, tangent, tex },
-    { {  0.5,  0.5,  0.5 }, color, right, tangent, tex },
-    { {  0.5, -0.5,  0.5 }, color, right, tangent, tex },
-    { {  0.5, -0.5, -0.5 }, color, right, tangent, tex },
+    { {  0.5,  0.5, -0.5 }, color, right, tangent, weights, tex, pad, joints },
+    { {  0.5,  0.5,  0.5 }, color, right, tangent, weights, tex, pad, joints },
+    { {  0.5, -0.5, -0.5 }, color, right, tangent, weights, tex, pad, joints },
+    { {  0.5,  0.5,  0.5 }, color, right, tangent, weights, tex, pad, joints },
+    { {  0.5, -0.5,  0.5 }, color, right, tangent, weights, tex, pad, joints },
+    { {  0.5, -0.5, -0.5 }, color, right, tangent, weights, tex, pad, joints },
     //bottom
-    { {  0.5, -0.5, -0.5 }, color, down, tangent, tex },
-    { {  0.5, -0.5,  0.5 }, color, down, tangent, tex },
-    { { -0.5, -0.5,  0.5 }, color, down, tangent, tex },
-    { {  0.5, -0.5, -0.5 }, color, down, tangent, tex },
-    { { -0.5, -0.5,  0.5 }, color, down, tangent, tex },
-    { { -0.5, -0.5, -0.5 }, color, down, tangent, tex },
+    { {  0.5, -0.5, -0.5 }, color, down, tangent, weights, tex, pad, joints },
+    { {  0.5, -0.5,  0.5 }, color, down, tangent, weights, tex, pad, joints },
+    { { -0.5, -0.5,  0.5 }, color, down, tangent, weights, tex, pad, joints },
+    { {  0.5, -0.5, -0.5 }, color, down, tangent, weights, tex, pad, joints },
+    { { -0.5, -0.5,  0.5 }, color, down, tangent, weights, tex, pad, joints },
+    { { -0.5, -0.5, -0.5 }, color, down, tangent, weights, tex, pad, joints },
     //left
-    { { -0.5,  0.5,  0.5 }, color, left, tangent, tex },
-    { { -0.5, -0.5, -0.5 }, color, left, tangent, tex },
-    { { -0.5, -0.5,  0.5 }, color, left, tangent, tex },
-    { { -0.5,  0.5,  0.5 }, color, left, tangent, tex },
-    { { -0.5,  0.5, -0.5 }, color, left, tangent, tex },
-    { { -0.5, -0.5, -0.5 }, color, left, tangent, tex },
+    { { -0.5,  0.5,  0.5 }, color, left, tangent, weights, tex, pad, joints },
+    { { -0.5, -0.5, -0.5 }, color, left, tangent, weights, tex, pad, joints },
+    { { -0.5, -0.5,  0.5 }, color, left, tangent, weights, tex, pad, joints },
+    { { -0.5,  0.5,  0.5 }, color, left, tangent, weights, tex, pad, joints },
+    { { -0.5,  0.5, -0.5 }, color, left, tangent, weights, tex, pad, joints },
+    { { -0.5, -0.5, -0.5 }, color, left, tangent, weights, tex, pad, joints },
     //back
-    { { -0.5,  0.5, -0.5 }, color, back, tangent, tex },
-    { {  0.5, -0.5, -0.5 }, color, back, tangent, tex },
-    { { -0.5, -0.5, -0.5 }, color, back, tangent, tex },
-    { { -0.5,  0.5, -0.5 }, color, back, tangent, tex },
-    { {  0.5,  0.5, -0.5 }, color, back, tangent, tex },
-    { {  0.5, -0.5, -0.5 }, color, back, tangent, tex },
+    { { -0.5,  0.5, -0.5 }, color, back, tangent, weights, tex, pad, joints },
+    { {  0.5, -0.5, -0.5 }, color, back, tangent, weights, tex, pad, joints },
+    { { -0.5, -0.5, -0.5 }, color, back, tangent, weights, tex, pad, joints },
+    { { -0.5,  0.5, -0.5 }, color, back, tangent, weights, tex, pad, joints },
+    { {  0.5,  0.5, -0.5 }, color, back, tangent, weights, tex, pad, joints },
+    { {  0.5, -0.5, -0.5 }, color, back, tangent, weights, tex, pad, joints },
     //front
-    { { -0.5,  0.5,  0.5 }, color, forward, tangent, tex },
-    { {  0.5, -0.5,  0.5 }, color, forward, tangent, tex },
-    { {  0.5,  0.5,  0.5 }, color, forward, tangent, tex },
-    { { -0.5,  0.5,  0.5 }, color, forward, tangent, tex },
-    { { -0.5, -0.5,  0.5 }, color, forward, tangent, tex },
-    { {  0.5, -0.5,  0.5 }, color, forward, tangent, tex },
+    { { -0.5,  0.5,  0.5 }, color, forward, tangent, weights, tex, pad, joints },
+    { {  0.5, -0.5,  0.5 }, color, forward, tangent, weights, tex, pad, joints },
+    { {  0.5,  0.5,  0.5 }, color, forward, tangent, weights, tex, pad, joints },
+    { { -0.5,  0.5,  0.5 }, color, forward, tangent, weights, tex, pad, joints },
+    { { -0.5, -0.5,  0.5 }, color, forward, tangent, weights, tex, pad, joints },
+    { {  0.5, -0.5,  0.5 }, color, forward, tangent, weights, tex, pad, joints },
   };
 
   std::vector<std::uint32_t> indices{

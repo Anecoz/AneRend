@@ -47,6 +47,9 @@ bool StageApplication::init()
   render::Model testModel7;
   render::Model testModel8;
   render::Model testModel9;
+  render::Model testModel10;
+  render::Model testModel11;
+  render::Model testModel12;
 
   if (!_vkRenderer.init()) {
     return false;
@@ -100,6 +103,14 @@ bool StageApplication::init()
     return false;
   }
 
+  if (!testModel10.loadFromGLTF(std::string(ASSET_PATH) + "models/simple_skin_gltf/SimpleSkin.gltf")) {
+    return false;
+  }
+
+  if (!testModel11.loadFromGLTF(std::string(ASSET_PATH) + "models/brainstem_gltf/BrainStem.glb")) {
+    return false;
+  }
+
   auto testMin = testModel7._min;
   auto testMax = testModel7._max;
 
@@ -112,6 +123,8 @@ bool StageApplication::init()
   _meshId7 = _vkRenderer.registerModel(std::move(testModel7));
   _meshId8 = _vkRenderer.registerModel(std::move(testModel8));
   _meshId9 = _vkRenderer.registerModel(std::move(testModel9));
+  //_meshId10 = _vkRenderer.registerModel(std::move(testModel10));
+  _meshId11 = _vkRenderer.registerModel(std::move(testModel11));
 
   // Create a bunch of test matrices
   // Trees
@@ -241,6 +254,32 @@ bool StageApplication::init()
         //auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         //rot = rot * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         _vkRenderer.registerRenderable(_meshId9, trans, glm::vec3(0.0f), 1.0f);
+      }
+  }
+  // Simple skin
+  {
+    std::size_t numInstances = 0;
+
+    for (int x = 0; x < numInstances; ++x)
+      for (int y = 0; y < numInstances; ++y) {
+        auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(-13.0f, 10.0f, 12.0f));
+        //auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(.4f));
+        //auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        //rot = rot * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        _vkRenderer.registerRenderable(_meshId10, trans, glm::vec3(0.0f), 50.0f);
+      }
+  }
+  // Brainstem
+  {
+    std::size_t numInstances = 1;
+
+    for (int x = 0; x < numInstances; ++x)
+      for (int y = 0; y < numInstances; ++y) {
+        auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(54.0f, .3f, 21.0f));
+        //auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(.4f));
+        auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        //rot = rot * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        _vkRenderer.registerRenderable(_meshId11, trans * rot, glm::vec3(0.0f), 10.0f);
       }
   }
 

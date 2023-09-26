@@ -20,6 +20,7 @@ struct alignas(16) GPURenderable {
   glm::vec4 _tint;
   uint32_t _firstMeshId;
   uint32_t _numMeshIds;
+  uint32_t _skeletonOffset;
   uint32_t _visible;
 };
 

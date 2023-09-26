@@ -23,6 +23,8 @@ layout(location = 1) in vec3 inColor;
 layout(location = 2) in vec3 inNormal;
 layout(location = 3) in vec2 inUV;
 layout(location = 4) in vec4 inTangent;
+layout(location = 5) in ivec4 joints;
+layout(location = 6) in vec4 jointWeights;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec3 fragNormal;
@@ -36,17 +38,34 @@ void main() {
   uint renderableId = translationBuffer.ids[gl_InstanceIndex].renderableId;
   mat4 model = renderableBuffer.renderables[renderableId].transform;
 
-  gl_Position = ubo.proj * ubo.view * model * vec4(inPosition, 1.0);
+  vec3 pos = inPosition;
+  vec3 normal = inNormal;
+  if (joints[0] != -1) {
+    pos = vec3(
+      jointWeights[0] * skeletonBuffer.joints[joints[0]] * vec4(inPosition, 1.0) +
+      jointWeights[1] * skeletonBuffer.joints[joints[1]] * vec4(inPosition, 1.0) +
+      jointWeights[2] * skeletonBuffer.joints[joints[2]] * vec4(inPosition, 1.0) +
+      jointWeights[3] * skeletonBuffer.joints[joints[3]] * vec4(inPosition, 1.0));
+
+    normal = vec3(
+      jointWeights[0] * skeletonBuffer.joints[joints[0]] * vec4(inNormal, 0.0) +
+      jointWeights[1] * skeletonBuffer.joints[joints[1]] * vec4(inNormal, 0.0) +
+      jointWeights[2] * skeletonBuffer.joints[joints[2]] * vec4(inNormal, 0.0) +
+      jointWeights[3] * skeletonBuffer.joints[joints[3]] * vec4(inNormal, 0.0)
+    );
+  }
+
+  gl_Position = ubo.proj * ubo.view * model * vec4(pos, 1.0);
   fragColor = toLinear(vec4(inColor, 1.0)).rgb * renderableBuffer.renderables[renderableId].tint.rgb;
-  fragNormal =  mat3(model) * inNormal;
+  fragNormal =  mat3(model) * normal;
   fragPos = (model * vec4(inPosition, 1.0)).xyz;
   fragUV = inUV;
   fragMeshId = translationBuffer.ids[gl_InstanceIndex].meshId;
 
-  vec3 bitangentL = cross(inNormal, inTangent.xyz);
+  vec3 bitangentL = cross(normal, inTangent.xyz);
   vec3 T = normalize(mat3(model) * inTangent.xyz);
   vec3 B = normalize(mat3(model) * bitangentL);
-  vec3 N = normalize(mat3(model) * inNormal);
+  vec3 N = normalize(mat3(model) * normal);
   fragTBN = mat3(T, B, N);
   fragTangent = inTangent.xyz;
 }

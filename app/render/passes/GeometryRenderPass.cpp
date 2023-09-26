@@ -207,6 +207,8 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
   param.fragShader = "standard_frag.spv";
   param.uvLoc = 3;
   param.tangentLoc = 4;
+  param.jointLoc = 5;
+  param.jointWeightLoc = 6;
   param.colorAttachmentCount = 3;
   param.colorFormats = { VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R16G16B16A16_SFLOAT };
   info._graphicsParams = param;

@@ -80,6 +80,8 @@ bool OBJLoader::loadFromFile(
         };
       }
 
+      vert.jointIds = { -1, -1, -1, -1 };
+
       if (uniqueVertices.count(vert) == 0) {
         uniqueVertices[vert] = static_cast<uint32_t>(outVerts.size());
         outVerts.emplace_back(vert);

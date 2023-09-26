@@ -67,7 +67,8 @@ void main()
   particleBuffer.particles[idx].currentPosition.xyz += particleBuffer.particles[idx].currentVelocity.xyz * ubo.delta;
 
   // Simple bounce
-  if (particleBuffer.particles[idx].currentPosition.y <= 0.5) {
+  if (particleBuffer.particles[idx].currentPosition.y <= 0.3 &&
+      particleBuffer.particles[idx].currentVelocity.y < 0.0) {
     const float energyLoss = 0.5;
     particleBuffer.particles[idx].currentVelocity.y = -particleBuffer.particles[idx].currentVelocity.y * energyLoss;
     particleBuffer.particles[idx].currentVelocity.x *= energyLoss;

@@ -1,14 +1,198 @@
 #include "GLTFLoader.h"
 
 #include "../render/Mesh.h"
+#include "../render/animation/Skeleton.h"
 
 #include <limits>
 #include <filesystem>
+
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../tinygltf/tiny_gltf.h"
+
+namespace {
+
+glm::mat4 transformFromNode(const tinygltf::Node& node)
+{
+  glm::mat4 out{1.0f};
+
+  if (!node.matrix.empty()) {
+    out = glm::make_mat4(node.matrix.data());
+    return out;
+  }
+
+  glm::vec3 trans{0.0f, 0.0f, 0.0f};
+  glm::vec3 scale{1.0f, 1.0f, 1.0f};
+  glm::quat rotQuat{ 1.0f, 0.0f, 0.0f, 0.0f };
+
+  if (!node.translation.empty()) {
+    trans = glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+  }
+  if (!node.scale.empty()) {
+    scale = glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+  }
+  if (!node.rotation.empty()) {
+    rotQuat = glm::quat((float)node.rotation[3], (float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2]);
+  }
+
+  glm::mat4 rotMat = glm::toMat4(rotQuat);
+  glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), scale);
+  glm::mat4 transMat = glm::translate(glm::mat4(1.0f), trans);
+
+  out = transMat * rotMat * scaleMat;
+  return out;
+}
+
+render::anim::ChannelPath convertPath(const std::string& path)
+{
+  if (path == "rotation") {
+    return render::anim::ChannelPath::Rotation;
+  }
+  if (path == "translation") {
+    return render::anim::ChannelPath::Translation;
+  }
+  if (path == "scale") {
+    return render::anim::ChannelPath::Scale;
+  }
+
+  return render::anim::ChannelPath::Translation;
+}
+
+std::vector<render::anim::Animation> constructAnimations(const std::vector<tinygltf::Animation>& anims, const tinygltf::Model& model)
+{
+  std::vector<render::anim::Animation> out;
+  out.reserve(anims.size());
+
+  for (auto& gltfAnim : anims) {
+    render::anim::Animation animation{};
+
+    for (auto& gltfChannel : gltfAnim.channels) {
+      render::anim::Channel channel{};
+      channel._internalId = gltfChannel.target_node;
+      channel._path = convertPath(gltfChannel.target_path);
+
+      // Access input and output buffers
+      auto& sampler = gltfAnim.samplers[gltfChannel.sampler];
+
+      auto& iaccessor = model.accessors[sampler.input];
+      auto& ibufferView = model.bufferViews[iaccessor.bufferView];
+      auto times = reinterpret_cast<const float*>(&(model.buffers[ibufferView.buffer].data[iaccessor.byteOffset + ibufferView.byteOffset]));
+
+      auto& oaccessor = model.accessors[sampler.output];
+      auto& obufferView = model.bufferViews[oaccessor.bufferView];
+      auto poses = reinterpret_cast<const float*>(&(model.buffers[obufferView.buffer].data[oaccessor.byteOffset + obufferView.byteOffset]));
+
+      for (std::size_t i = 0; i < iaccessor.count; ++i) {
+        channel._inputTimes.emplace_back(times[i]);
+
+        glm::vec4 vec{ 0.0f };
+        if (channel._path == render::anim::ChannelPath::Rotation) {
+          vec = { poses[i * 4 + 3], poses[i * 4 + 0], poses[i * 4 + 1], poses[i * 4 + 2] };
+        }
+        else if(channel._path == render::anim::ChannelPath::Translation) {
+          vec = { poses[i * 3 + 0], poses[i * 3 + 1], poses[i * 3 + 2], 0.0f };
+        }
+        else if (channel._path == render::anim::ChannelPath::Scale) {
+          vec = { poses[i * 3 + 0], poses[i * 3 + 1], poses[i * 3 + 2], 0.0f };
+        }
+        
+        channel._outputs.emplace_back(std::move(vec));
+      }
+
+      animation._channels.emplace_back(std::move(channel));
+    }
+
+    out.emplace_back(std::move(animation));
+  }
+
+  return out;
+}
+
+render::anim::Skeleton constructSkeleton(const std::vector<tinygltf::Node>& nodes, const tinygltf::Skin& skin, const tinygltf::Model& model)
+{
+  // NOTE: We say that if there is a "skeleton" entry, this will be the root
+  //       transform of all joints, else the first joint is the root.
+  //       This may not hold at all, the skeleton might have a parent for instance.
+  render::anim::Skeleton skeleton{};
+
+  if (skin.skeleton != -1) {
+    // There is a root transform
+    render::anim::Joint rootJoint{};
+    rootJoint._internalId = skin.skeleton;
+    rootJoint._localTransform = transformFromNode(nodes[skin.skeleton]);
+    rootJoint._originalLocalTransform = rootJoint._localTransform;
+    rootJoint._childrenInternalIds = nodes[skin.skeleton].children;
+    skeleton._nonJointRoot = true;
+    skeleton._joints.emplace_back(std::move(rootJoint));
+  }
+
+  // Check if there is a inverseBindMatrices entry
+  const float* ibmBufferPtr = nullptr;
+  if (skin.inverseBindMatrices != -1) {
+    auto& ibmAccessor = model.accessors[skin.inverseBindMatrices];
+    auto& ibmBufferView = model.bufferViews[ibmAccessor.bufferView];
+
+    ibmBufferPtr = reinterpret_cast<const float*>(&(model.buffers[ibmBufferView.buffer].data[ibmAccessor.byteOffset + ibmBufferView.byteOffset]));
+  }
+
+  // The calculations/construction below are split up for readability...
+
+  // Start by populating joints
+  for (int i = 0; i < skin.joints.size(); ++i) {
+    auto& jointNode = nodes[skin.joints[i]];
+
+    render::anim::Joint joint{};
+    joint._internalId = skin.joints[i];
+    joint._localTransform = transformFromNode(jointNode);
+    joint._originalLocalTransform = joint._localTransform;
+    joint._childrenInternalIds = jointNode.children;
+
+    if (ibmBufferPtr != nullptr) {
+      joint._inverseBindMatrix = glm::make_mat4(ibmBufferPtr + 16 * i);
+    }
+
+    skeleton._joints.emplace_back(std::move(joint));
+  }
+
+  // Set children
+  for (auto& joint: skeleton._joints) {
+
+    for (auto childId : joint._childrenInternalIds) {
+      for (auto& child : skeleton._joints) {
+        if (child._internalId == childId) {
+          joint._children.emplace_back(&child);
+          break;
+        }
+      }
+    }
+  }
+
+  // Set parents
+  for (auto& joint : skeleton._joints) {
+    for (auto& parent : skeleton._joints) {
+      for (auto childIdInParent : parent._childrenInternalIds) {
+        if (childIdInParent == joint._internalId) {
+          joint._parent = &parent;
+          break;
+        }
+      }
+      if (joint._parent != nullptr) {
+        // We found a parent and broke inner loop, break
+        break;
+      }
+    }
+  }
+
+  skeleton.calcGlobalTransforms();
+  return skeleton;
+}
+
+}
 
 bool GLTFLoader::loadFromFile(
   const std::string& path,
@@ -47,6 +231,10 @@ bool GLTFLoader::loadFromFile(
   modelOut._min = glm::vec3(std::numeric_limits<float>::max());
   modelOut._max = glm::vec3(std::numeric_limits<float>::min());
 
+  if (!model.animations.empty()) {
+    modelOut._animations = constructAnimations(model.animations, model);
+  }
+
   for (int i = 0; i < model.meshes.size(); ++i) {
     
     // Find a potential transform
@@ -56,6 +244,11 @@ bool GLTFLoader::loadFromFile(
       if (node.mesh == i) {
         if (!node.translation.empty()) {
           trans = glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+        }
+        if (node.skin != -1) {
+          // Construct skeleton for this mesh
+          auto skeleton = constructSkeleton(model.nodes, model.skins[node.skin], model);
+          modelOut._skeleton = std::move(skeleton);
         }
       }
     }
@@ -102,6 +295,9 @@ bool GLTFLoader::loadFromFile(
       const float* texCoordsBuffer = nullptr;
       const float* tangentBuffer = nullptr;
       const float* colorBuffer = nullptr;
+      std::int16_t* jointsBuffer = nullptr;
+      const float* weightsBuffer = nullptr;
+      bool deleteJoints = false;
       size_t vertexCount = 0;
 
       if (primitive.attributes.count("POSITION") > 0) {
@@ -136,6 +332,47 @@ bool GLTFLoader::loadFromFile(
         const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("TANGENT")->second];
         const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
         tangentBuffer = reinterpret_cast<const float*>(&(model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+      }
+      if (primitive.attributes.find("JOINTS_0") != primitive.attributes.end()) {
+        const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("JOINTS_0")->second];
+        const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+        auto& buffer = model.buffers[view.buffer];
+        auto bufferStart = view.byteOffset + accessor.byteOffset;
+
+        if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
+          uint8_t* buf = new uint8_t[accessor.count];
+          memcpy(buf, &buffer.data[bufferStart], accessor.count * sizeof(uint8_t));
+
+          jointsBuffer = new std::int16_t[accessor.count];
+          for (int i = 0; i < accessor.count; ++i) {
+            jointsBuffer[i] = static_cast<int16_t>(buf[i]);
+          }
+
+          deleteJoints = true;
+          delete[] buf;
+        }
+        else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
+          if (view.byteStride == 2) {
+            jointsBuffer = reinterpret_cast<std::int16_t*>(&(model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+          }
+          else {
+            jointsBuffer = new std::int16_t[accessor.count * 4];
+            auto* bufDat = buffer.data.data() + accessor.byteOffset + view.byteOffset;
+            for (int i = 0; i < accessor.count; ++i) {
+              jointsBuffer[i * 4 + 0] = *reinterpret_cast<std::int16_t*>(bufDat + view.byteStride * i + 0 * sizeof(std::int16_t));
+              jointsBuffer[i * 4 + 1] = *reinterpret_cast<std::int16_t*>(bufDat + view.byteStride * i + 1 * sizeof(std::int16_t));
+              jointsBuffer[i * 4 + 2] = *reinterpret_cast<std::int16_t*>(bufDat + view.byteStride * i + 2 * sizeof(std::int16_t));
+              jointsBuffer[i * 4 + 3] = *reinterpret_cast<std::int16_t*>(bufDat + view.byteStride * i + 3 * sizeof(std::int16_t));
+            }
+
+            deleteJoints = true;
+          }
+        }
+      }
+      if (primitive.attributes.find("WEIGHTS_0") != primitive.attributes.end()) {
+        const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("WEIGHTS_0")->second];
+        const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+        weightsBuffer = reinterpret_cast<const float*>(&(model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
       }
 
       mesh._vertices.resize(vertexCount);
@@ -176,12 +413,36 @@ bool GLTFLoader::loadFromFile(
         else {
           vert.color = { 1.0f, 1.0f, 1.0f };
         }
+
         if (tangentBuffer) {
           vert.tangent = {
             tangentBuffer[4 * v + 0],
             tangentBuffer[4 * v + 1],
             tangentBuffer[4 * v + 2],
             tangentBuffer[4 * v + 3],
+          };
+        }
+
+        if (jointsBuffer) {
+          vert.jointIds = {
+            jointsBuffer[4 * v + 0],
+            jointsBuffer[4 * v + 1],
+            jointsBuffer[4 * v + 2],
+            jointsBuffer[4 * v + 3]
+          };
+        }
+        else {
+          vert.jointIds = {
+            -1, -1, -1, -1
+          };
+        }
+
+        if (weightsBuffer) {
+          vert.jointWeights = {
+            weightsBuffer[4 * v + 0],
+            weightsBuffer[4 * v + 1],
+            weightsBuffer[4 * v + 2],
+            weightsBuffer[4 * v + 3]
           };
         }
 
@@ -246,6 +507,7 @@ bool GLTFLoader::loadFromFile(
           material.pbrMetallicRoughness.baseColorFactor[3]);
       }
 
+      if (deleteJoints) delete[] jointsBuffer;
       modelOut._meshes.emplace_back(std::move(mesh));
     }
   }

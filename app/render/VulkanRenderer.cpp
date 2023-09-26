@@ -289,6 +289,7 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _gpuSceneDataBuffer[i]._buffer, _gpuSceneDataBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuLightBuffer[i]._buffer, _gpuLightBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuViewClusterBuffer[i]._buffer, _gpuViewClusterBuffer[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _gpuSkeletonBuffer[i]._buffer, _gpuSkeletonBuffer[i]._allocation);
 
     vkDestroyImageView(_device, _gpuWindForceView[i], nullptr);
     vmaDestroyImage(_vmaAllocator, _gpuWindForceImage[i]._image, _gpuWindForceImage[i]._allocation);
@@ -614,7 +615,14 @@ ModelId VulkanRenderer::registerModel(Model&& model, bool buildBlas)
 
   _models.emplace_back(std::move(model));
 
-  //printf("Mesh registered, id: %u\n", idOut);
+  if (!_models.back()._animations.empty()) {
+    for (auto& anim : _models.back()._animations) {
+      anim::Animator animator(anim, &_models.back()._skeleton);
+      animator.play();
+      _animators.emplace_back(std::move(animator));
+    }
+  }
+
   return static_cast<ModelId>(_models.size() - 1);
 }
 
@@ -778,6 +786,10 @@ void VulkanRenderer::update(
   // The ubo memory write _will_ be visible by the next queueSubmit, so that isn't the issue.
   // but we might be writing into memory that is currently accessed by the GPU.
   vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
+
+  for (auto& animator : _animators) {
+    animator.update(delta);
+  }
 
   // TODO: Fix
   if (_enableRayTracing && !_topLevelBuilt) {
@@ -1959,6 +1971,7 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     mappedData[i]._tint = glm::vec4(renderable._tint, 1.0f);
     mappedData[i]._firstMeshId = (uint32_t)renderable._firstMeshId;
     mappedData[i]._numMeshIds = (uint32_t)renderable._numMeshes;
+    mappedData[i]._skeletonOffset = (uint32_t)renderable._skeletonOffset;
     mappedData[i]._bounds = glm::vec4(renderable._boundingSphereCenter, renderable._boundingSphereRadius);
     mappedData[i]._visible = renderable._visible ? 1 : 0;
   }
@@ -2092,6 +2105,70 @@ void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
     commandBuffer,
     VK_PIPELINE_STAGE_TRANSFER_BIT,
     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+    0, 0, nullptr,
+    1, &memBarr,
+    0, nullptr);
+
+  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+
+  // Update staging offset
+  _currentStagingOffset += dataSize;
+}
+
+void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer)
+{
+  // Go through each model and check if there is a skeleton.
+  // NOTE: The order is important! Renderables rely on an index offset into the skeleton buffer on the GPU
+  std::vector<anim::Skeleton*> _skeletons;
+  std::size_t dataSize = 0;
+  for (auto& model : _models) {
+    if (model._skeleton) {
+      _skeletons.emplace_back(&model._skeleton);
+
+      dataSize += model._skeleton._joints.size() * sizeof(float) * 16; // one mat4 per joint
+    }
+  }
+
+  uint8_t* data;
+  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+
+  // Offset according to current staging buffer usage
+  data = data + _currentStagingOffset;
+
+  glm::mat4* mappedData = reinterpret_cast<glm::mat4*>(data);
+
+  std::size_t currentIndex = 0;
+  for (std::size_t i = 0; i < _skeletons.size(); ++i) {
+    std::size_t j = 0;
+    if (_skeletons[i]->_nonJointRoot) {
+      j = 1;
+    }
+    for (; j < _skeletons[i]->_joints.size(); ++j) {
+      mappedData[currentIndex] = _skeletons[i]->_joints[j]._globalTransform * _skeletons[i]->_joints[j]._inverseBindMatrix;
+      currentIndex++;
+    }
+  }
+
+  VkBufferCopy copyRegion{};
+  copyRegion.dstOffset = 0;
+  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.size = dataSize;
+  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuSkeletonBuffer[_currentFrame]._buffer, 1, &copyRegion);
+
+  VkBufferMemoryBarrier memBarr{};
+  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.buffer = _gpuSkeletonBuffer[_currentFrame]._buffer;
+  memBarr.offset = 0;
+  memBarr.size = VK_WHOLE_SIZE;
+
+  vkCmdPipelineBarrier(
+    commandBuffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
     0, 0, nullptr,
     1, &memBarr,
     0, nullptr);
@@ -2300,7 +2377,8 @@ bool VulkanRenderer::initBindless()
   * 7: Giga vertex buffer (SSBO)
   * 8: Mesh buffer (SSBO)
   * 9: TLAS for ray tracing (TLAS)
-  * 10: Bindless textures (sampler array)
+  * 10: Skeleton buffer (SSBO)
+  * 11: Bindless textures (sampler array)
   */
 
   uint32_t uboBinding = 0;
@@ -2390,6 +2468,13 @@ bool VulkanRenderer::initBindless()
     tlasLayoutBinding.descriptorCount = 1;
     tlasLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
     bindings.emplace_back(std::move(tlasLayoutBinding));
+
+    VkDescriptorSetLayoutBinding skeletonLayoutBinding{};
+    skeletonLayoutBinding.binding = _skeletonBinding;
+    skeletonLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    skeletonLayoutBinding.descriptorCount = 1;
+    skeletonLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    bindings.emplace_back(std::move(skeletonLayoutBinding));
 
     VkDescriptorSetLayoutBinding texLayoutBinding{};
     texLayoutBinding.binding = _bindlessTextureBinding;
@@ -2619,6 +2704,24 @@ bool VulkanRenderer::initBindless()
       meshBufWrite.pBufferInfo = &meshBufferInfo;
 
       descriptorWrites.emplace_back(std::move(meshBufWrite));
+
+      // Skeleton buffer
+      VkDescriptorBufferInfo skeletonBufferInfo{};
+      VkWriteDescriptorSet skeletonBufWrite{};
+
+      skeletonBufferInfo.buffer = _gpuSkeletonBuffer[i]._buffer;
+      skeletonBufferInfo.offset = 0;
+      skeletonBufferInfo.range = VK_WHOLE_SIZE;
+
+      skeletonBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      skeletonBufWrite.dstSet = _bindlessDescriptorSets[i];
+      skeletonBufWrite.dstBinding = _skeletonBinding;
+      skeletonBufWrite.dstArrayElement = 0;
+      skeletonBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      skeletonBufWrite.descriptorCount = 1;
+      skeletonBufWrite.pBufferInfo = &skeletonBufferInfo;
+
+      descriptorWrites.emplace_back(std::move(skeletonBufWrite));
 
       // Probe buffer
       /*VkDescriptorBufferInfo probeBufferInfo{};
@@ -2918,6 +3021,7 @@ bool VulkanRenderer::initGpuBuffers()
   _gpuWindForceView.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuLightBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuViewClusterBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuSkeletonBuffer.resize(MAX_FRAMES_IN_FLIGHT);
 
   for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     // Create a staging buffer that will be used to temporarily hold data that is to be copied to the gpu buffers.
@@ -2980,6 +3084,13 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuViewClusterBuffer[i]);
+
+    bufferutil::createBuffer(
+      _vmaAllocator,
+      sizeof(glm::mat4) * MAX_NUM_JOINTS * MAX_NUM_SKINNED_MODELS,
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+      0,
+      _gpuSkeletonBuffer[i]);
 
     // Wind force sampler
     VkSamplerCreateInfo samplerCreate{};
@@ -3434,6 +3545,8 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
     prefillGPUMeshBuffer(commandBuffer);
     _meshesChanged[_currentFrame] = false;
   }
+
+  prefillGPUSkeletonBuffer(commandBuffer);
 
   // Only do if lights have updated
   prefilGPULightBuffer(commandBuffer);
