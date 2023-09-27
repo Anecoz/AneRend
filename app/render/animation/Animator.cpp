@@ -82,6 +82,11 @@ void lerpPath(ChannelPath path, glm::mat4* inputMat, const glm::vec4& v0, const 
 
 std::size_t findIndexForTime(double time, Channel& channel)
 {
+  if (channel._inputTimes.size() == 1) {
+    // Save us some trouble
+    return 0;
+  }
+
   for (std::size_t i = 0; i < channel._inputTimes.size(); ++i) {
     float inputTime = channel._inputTimes[i];
     if (inputTime > time) {
@@ -153,12 +158,18 @@ void Animator::update(double delta)
     // Find the indices that encompass the current time
     auto idx = findIndexForTime(_animationTime, channel);
 
-    //printf("idx: %zu\n", idx);
+    double factor = 0.0;
+    glm::vec4& vec0 = channel._outputs[idx];
+    glm::vec4 vec1{ 0.0 };
 
-    auto& vec0 = channel._outputs[idx];
-    auto& vec1 = channel._outputs[idx + 1];
+    if (channel._outputs.size() == 1) {
+      vec1 = vec0;
+    }
+    else {
+      vec1 = channel._outputs[idx + 1];
 
-    double factor = (_animationTime - channel._inputTimes[idx]) / (channel._inputTimes[idx + 1] - channel._inputTimes[idx]);
+      factor = (_animationTime - channel._inputTimes[idx]) / (channel._inputTimes[idx + 1] - channel._inputTimes[idx]);
+    }
 
     // Find the joint
     Joint* joint = nullptr;

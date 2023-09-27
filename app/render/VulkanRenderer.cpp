@@ -197,7 +197,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _fgb(&_vault)
   , _window(window)
   , _enableValidationLayers(true)
-  , _enableRayTracing(true)
+  , _enableRayTracing(false)
 {
   imageutil::init();
 }
@@ -615,13 +615,13 @@ ModelId VulkanRenderer::registerModel(Model&& model, bool buildBlas)
 
   _models.emplace_back(std::move(model));
 
-  if (!_models.back()._animations.empty()) {
+  /*if (!_models.back()._animations.empty()) {
     for (auto& anim : _models.back()._animations) {
       anim::Animator animator(anim, &_models.back()._skeleton);
       animator.play();
       _animators.emplace_back(std::move(animator));
     }
-  }
+  }*/
 
   return static_cast<ModelId>(_models.size() - 1);
 }
@@ -660,6 +660,27 @@ RenderableId VulkanRenderer::registerRenderable(
 
   auto id = _nextRenderableId++;
 
+  uint32_t skeletonOffset = 0;
+  if (model._skeleton) {
+    // Calc the offset
+    for (auto* skel : _currentSkeletons) {
+      if (skel->_nonJointRoot) {
+        skeletonOffset += (uint32_t)(skel->_joints.size() - 1);
+      }
+      else {
+        skeletonOffset += (uint32_t)skel->_joints.size();
+      }
+    }
+    _currentSkeletons.emplace_back(&model._skeleton);
+
+    // Animation
+    for (auto& anim : model._animations) {
+      anim::Animator animator(anim, &model._skeleton);
+      animator.play();
+      _animators.emplace_back(std::move(animator));
+    }
+  }
+
   renderable._id = id;
   renderable._firstMeshId = model._meshes[0]._id;
   renderable._numMeshes = static_cast<uint32_t>(model._meshes.size());
@@ -667,6 +688,7 @@ RenderableId VulkanRenderer::registerRenderable(
   renderable._transform = transform;
   renderable._boundingSphereCenter = sphereBoundCenter;
   renderable._boundingSphereRadius = sphereBoundRadius;
+  renderable._skeletonOffset = skeletonOffset;
   renderable._buildTlas = buildTlas;
 
   if (debugDraw) {
@@ -810,6 +832,7 @@ void VulkanRenderer::update(
     _renderOptions.ddgiEnabled = false;
     _renderOptions.multiBounceDdgiEnabled = false;
     _renderOptions.specularGiEnabled = false;
+    _renderOptions.screenspaceProbes = false;
   }
 
   // Update bindless UBO
@@ -2117,16 +2140,10 @@ void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
 
 void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer)
 {
-  // Go through each model and check if there is a skeleton.
   // NOTE: The order is important! Renderables rely on an index offset into the skeleton buffer on the GPU
-  std::vector<anim::Skeleton*> _skeletons;
   std::size_t dataSize = 0;
-  for (auto& model : _models) {
-    if (model._skeleton) {
-      _skeletons.emplace_back(&model._skeleton);
-
-      dataSize += model._skeleton._joints.size() * sizeof(float) * 16; // one mat4 per joint
-    }
+  for (auto* skel : _currentSkeletons) {
+    dataSize += skel->_joints.size() * sizeof(float) * 16; // one mat4 per joint
   }
 
   uint8_t* data;
@@ -2138,13 +2155,13 @@ void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer)
   glm::mat4* mappedData = reinterpret_cast<glm::mat4*>(data);
 
   std::size_t currentIndex = 0;
-  for (std::size_t i = 0; i < _skeletons.size(); ++i) {
+  for (std::size_t i = 0; i < _currentSkeletons.size(); ++i) {
     std::size_t j = 0;
-    if (_skeletons[i]->_nonJointRoot) {
+    if (_currentSkeletons[i]->_nonJointRoot) {
       j = 1;
     }
-    for (; j < _skeletons[i]->_joints.size(); ++j) {
-      mappedData[currentIndex] = _skeletons[i]->_joints[j]._globalTransform * _skeletons[i]->_joints[j]._inverseBindMatrix;
+    for (; j < _currentSkeletons[i]->_joints.size(); ++j) {
+      mappedData[currentIndex] = _currentSkeletons[i]->_joints[j]._globalTransform * _currentSkeletons[i]->_joints[j]._inverseBindMatrix;
       currentIndex++;
     }
   }

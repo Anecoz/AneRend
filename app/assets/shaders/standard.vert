@@ -37,21 +37,22 @@ layout(location = 6) out mat3 fragTBN;
 void main() {
   uint renderableId = translationBuffer.ids[gl_InstanceIndex].renderableId;
   mat4 model = renderableBuffer.renderables[renderableId].transform;
+  uint skeletonOffset = renderableBuffer.renderables[renderableId].skeletonOffset;
 
   vec3 pos = inPosition;
   vec3 normal = inNormal;
   if (joints[0] != -1) {
     pos = vec3(
-      jointWeights[0] * skeletonBuffer.joints[joints[0]] * vec4(inPosition, 1.0) +
-      jointWeights[1] * skeletonBuffer.joints[joints[1]] * vec4(inPosition, 1.0) +
-      jointWeights[2] * skeletonBuffer.joints[joints[2]] * vec4(inPosition, 1.0) +
-      jointWeights[3] * skeletonBuffer.joints[joints[3]] * vec4(inPosition, 1.0));
+      jointWeights[0] * skeletonBuffer.joints[skeletonOffset + joints[0]] * vec4(inPosition, 1.0) +
+      jointWeights[1] * skeletonBuffer.joints[skeletonOffset + joints[1]] * vec4(inPosition, 1.0) +
+      jointWeights[2] * skeletonBuffer.joints[skeletonOffset + joints[2]] * vec4(inPosition, 1.0) +
+      jointWeights[3] * skeletonBuffer.joints[skeletonOffset + joints[3]] * vec4(inPosition, 1.0));
 
     normal = vec3(
-      jointWeights[0] * skeletonBuffer.joints[joints[0]] * vec4(inNormal, 0.0) +
-      jointWeights[1] * skeletonBuffer.joints[joints[1]] * vec4(inNormal, 0.0) +
-      jointWeights[2] * skeletonBuffer.joints[joints[2]] * vec4(inNormal, 0.0) +
-      jointWeights[3] * skeletonBuffer.joints[joints[3]] * vec4(inNormal, 0.0)
+      jointWeights[0] * skeletonBuffer.joints[skeletonOffset + joints[0]] * vec4(inNormal, 0.0) +
+      jointWeights[1] * skeletonBuffer.joints[skeletonOffset + joints[1]] * vec4(inNormal, 0.0) +
+      jointWeights[2] * skeletonBuffer.joints[skeletonOffset + joints[2]] * vec4(inNormal, 0.0) +
+      jointWeights[3] * skeletonBuffer.joints[skeletonOffset + joints[3]] * vec4(inNormal, 0.0)
     );
   }
 

@@ -211,6 +211,7 @@ private:
   static const std::size_t MAX_NUM_SKINNED_MODELS = 1000;
 
   std::vector<anim::Animator> _animators;
+  std::vector<anim::Skeleton*> _currentSkeletons;
 
   std::unordered_map<std::string, std::any> _blackboard;
 

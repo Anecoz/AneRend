@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <random>
 #include <map>
 
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
@@ -111,6 +112,10 @@ bool StageApplication::init()
     return false;
   }
 
+  if (!testModel12.loadFromGLTF(std::string(ASSET_PATH) + "models/shrek_dancing_gltf/shrek_dancing.glb")) {
+    return false;
+  }
+
   auto testMin = testModel7._min;
   auto testMax = testModel7._max;
 
@@ -125,11 +130,12 @@ bool StageApplication::init()
   _meshId9 = _vkRenderer.registerModel(std::move(testModel9));
   //_meshId10 = _vkRenderer.registerModel(std::move(testModel10));
   _meshId11 = _vkRenderer.registerModel(std::move(testModel11));
+  _meshId12 = _vkRenderer.registerModel(std::move(testModel12));
 
   // Create a bunch of test matrices
   // Trees
   {
-    std::size_t numInstances = 20;
+    std::size_t numInstances = 0;
     for (std::size_t x = 0; x < numInstances; ++x)
     for (std::size_t y = 0; y < numInstances; ++y) {
       auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f * x * 6, 0.0f, 1.0f * y * 6));
@@ -166,7 +172,7 @@ bool StageApplication::init()
 
   // Lantern GLTF
   {
-    std::size_t numInstances = 20;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -212,7 +218,7 @@ bool StageApplication::init()
   }
   // Sponza GLTF
   {
-    std::size_t numInstances = 1;
+    std::size_t numInstances = 0;
 
     _sponzaPos = glm::vec3(16.0f, -1.0f, 16.0f);
 
@@ -232,7 +238,7 @@ bool StageApplication::init()
   }
   // Metal rough spheres
   {
-    std::size_t numInstances = 1;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -245,7 +251,7 @@ bool StageApplication::init()
   }
   // Flight helmet
   {
-    std::size_t numInstances = 20;
+    std::size_t numInstances = 0;
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
@@ -271,15 +277,38 @@ bool StageApplication::init()
   }
   // Brainstem
   {
-    std::size_t numInstances = 1;
+    std::size_t numInstances = 5;
+    std::random_device dev;
+    std::mt19937 rng(dev());
+    std::uniform_real_distribution<> rotOff(-180.0, 180.0);
+    std::uniform_real_distribution<> scaleOff(0.2, 1.5);
+    std::uniform_real_distribution<> transOff(-2.0, 2.0);
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
-        auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(54.0f, .3f, 21.0f));
-        //auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(.4f));
+        auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(54.0f + 2.0f * x + transOff(rng), .3f, 21.0f + 2.0 * y + transOff(rng)));
+        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(scaleOff(rng)));
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        //rot = rot * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        _vkRenderer.registerRenderable(_meshId11, trans * rot, glm::vec3(0.0f), 10.0f);
+        rot = glm::rotate(glm::mat4(1.0f), glm::radians((float)rotOff(rng)), glm::vec3(0.0f, 1.0f, 0.0f)) * rot;
+        _vkRenderer.registerRenderable(_meshId11, trans * rot * scale, glm::vec3(0.0f), 10.0f);
+      }
+  }
+  // shrek is love
+  {
+    std::size_t numInstances = 10;
+    std::random_device dev;
+    std::mt19937 rng(dev());
+    std::uniform_real_distribution<> rotOff(-180.0, 180.0);
+    std::uniform_real_distribution<> scaleOff(0.0005, 0.001);
+    std::uniform_real_distribution<> transOff(-2.0, 2.0);
+
+    for (int x = 0; x < numInstances; ++x)
+      for (int y = 0; y < numInstances; ++y) {
+        auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(-13.0f + x * 3.0f + transOff(rng), .3f, 12.0f + y * 4.0f + transOff(rng)));
+        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(scaleOff(rng)));
+        //auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        auto rot = glm::rotate(glm::mat4(1.0f), glm::radians((float)rotOff(rng)), glm::vec3(0.0f, 1.0f, 0.0f));
+        _vkRenderer.registerRenderable(_meshId12, trans * rot * scale, glm::vec3(0.0f), 10.0f);
       }
   }
 
