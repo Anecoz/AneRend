@@ -286,8 +286,8 @@ bool StageApplication::init()
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
-        auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(54.0f + 2.0f * x + transOff(rng), .3f, 21.0f + 2.0 * y + transOff(rng)));
-        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(scaleOff(rng)));
+        auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(54.0f + 2.0f * x + (float)transOff(rng), .3f, 21.0f + 2.0 * y + (float)transOff(rng)));
+        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3((float)scaleOff(rng)));
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         rot = glm::rotate(glm::mat4(1.0f), glm::radians((float)rotOff(rng)), glm::vec3(0.0f, 1.0f, 0.0f)) * rot;
         _vkRenderer.registerRenderable(_meshId11, trans * rot * scale, glm::vec3(0.0f), 10.0f);
@@ -304,8 +304,8 @@ bool StageApplication::init()
 
     for (int x = 0; x < numInstances; ++x)
       for (int y = 0; y < numInstances; ++y) {
-        auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(-13.0f + x * 3.0f + transOff(rng), .3f, 12.0f + y * 4.0f + transOff(rng)));
-        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3(scaleOff(rng)));
+        auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(-13.0f + x * 3.0f + (float)transOff(rng), .3f, 12.0f + y * 4.0f + (float)transOff(rng)));
+        auto scale = glm::scale(glm::mat4(1.0f), glm::vec3((float)scaleOff(rng)));
         //auto rot = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians((float)rotOff(rng)), glm::vec3(0.0f, 1.0f, 0.0f));
         _vkRenderer.registerRenderable(_meshId12, trans * rot * scale, glm::vec3(0.0f), 10.0f);

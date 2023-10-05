@@ -121,6 +121,73 @@ Animator::Animator(Animation animation, Skeleton* skeleton)
   }
 }
 
+void Animator::precalculateAnimationFrames(unsigned framerate)
+{
+  printf("Calculating animation frames...\n");
+  // Use a skeleton copy and a temporary animator to calculate the frames
+  Skeleton tempSkele{};
+
+  tempSkele._joints = _skeleton->_joints;
+  tempSkele._nonJointRoot = _skeleton->_nonJointRoot;
+
+  // Set children
+  for (auto& joint : tempSkele._joints) {
+    joint._children.clear();
+    joint._parent = nullptr;
+
+    for (auto childId : joint._childrenInternalIds) {
+      for (auto& child : tempSkele._joints) {
+        if (child._internalId == childId) {
+          joint._children.emplace_back(&child);
+          break;
+        }
+      }
+    }
+  }
+
+  // Set parents
+  for (auto& joint : tempSkele._joints) {
+    for (auto& parent : tempSkele._joints) {
+      for (auto childIdInParent : parent._childrenInternalIds) {
+        if (childIdInParent == joint._internalId) {
+          joint._parent = &parent;
+          break;
+        }
+      }
+      if (joint._parent != nullptr) {
+        // We found a parent and broke inner loop, break
+        break;
+      }
+    }
+  }
+
+  tempSkele.calcGlobalTransforms();
+
+  Animator tempAnim(_animation, &tempSkele);
+  tempAnim.play();
+
+  double timeStep = 1.0 / framerate;
+  double time = 0.0;
+
+  while (time <= _maxTime) {
+    InterpolatedKeyframe kf{};
+
+    tempAnim.updateNoPreCalc(timeStep);
+    double animTime = tempAnim._animationTime;
+
+    // Now all joints in tempSkele should be udpated
+    for (auto& joint : tempSkele._joints) {
+      kf._joints.emplace_back(joint._internalId, joint._globalTransform);
+    }
+
+    _keyframes.emplace_back(animTime, std::move(kf));
+
+    time += timeStep;
+  }
+
+  printf("Done calculating animation frames!\n");
+}
+
 void Animator::play()
 {
   _state = State::Playing;
@@ -138,6 +205,49 @@ void Animator::stop()
 }
 
 void Animator::update(double delta)
+{
+  if (_state == State::Stopped || _state == State::Paused) {
+    return;
+  }
+
+  // We're playing
+  _animationTime += delta;
+
+  // Do we have to wrap time?
+  if (_animationTime >= _maxTime) {
+    _animationTime = 0.0;
+  }
+
+  _skeleton->reset();
+
+  // Find closest pre-calculated frame to current time
+  auto idx = findClosestPrecalcTime(_animationTime);
+  auto& kf = _keyframes[idx];
+
+  // Update skeleton with the joints in keyframe
+  for (auto& joint : kf.second._joints) {
+    for (auto& skeleJoint : _skeleton->_joints) {
+      if (skeleJoint._internalId == joint.first) {
+        skeleJoint._globalTransform = joint.second;
+        break;
+      }
+    }
+  }
+}
+
+std::size_t Animator::findClosestPrecalcTime(double time)
+{
+  for (std::size_t i = 0; i < _keyframes.size(); ++i) {
+    if (_keyframes[i].first >= time) {
+      return i;
+    }
+  }
+
+  //printf("Could not find precalc index!\n");
+  return 0;
+}
+
+void Animator::updateNoPreCalc(double delta)
 {
   if (_state == State::Stopped || _state == State::Paused) {
     return;
@@ -176,6 +286,7 @@ void Animator::update(double delta)
     for (auto& j : _skeleton->_joints) {
       if (j._internalId == channel._internalId) {
         joint = &j;
+        break;
       }
     }
 
@@ -186,4 +297,5 @@ void Animator::update(double delta)
   }
 
 }
+
 }

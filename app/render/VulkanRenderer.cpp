@@ -677,6 +677,7 @@ RenderableId VulkanRenderer::registerRenderable(
     for (auto& anim : model._animations) {
       anim::Animator animator(anim, &model._skeleton);
       animator.play();
+      animator.precalculateAnimationFrames();
       _animators.emplace_back(std::move(animator));
     }
   }
@@ -2804,7 +2805,7 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new CullRenderPass());
   _renderPasses.emplace_back(new UpdateTLASPass());
   _renderPasses.emplace_back(new IrradianceProbeTranslationPass());
-  _renderPasses.emplace_back(new IrradianceProbeRayTracingPass());
+  _renderPasses.emplace_back(new IrradianceProbeRayTracingPass()); // RT
   _renderPasses.emplace_back(new IrradianceProbeConvolvePass());
   //_renderPasses.emplace_back(new LightShadowRayTracingPass());
   //_renderPasses.emplace_back(new LightShadowSumPass());
@@ -2812,8 +2813,8 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new GrassShadowRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());
   _renderPasses.emplace_back(new GrassRenderPass());
-  _renderPasses.emplace_back(new ShadowRayTracingPass());
-  _renderPasses.emplace_back(new SpecularGIRTPass());
+  _renderPasses.emplace_back(new ShadowRayTracingPass()); // RT
+  _renderPasses.emplace_back(new SpecularGIRTPass()); //RT
   _renderPasses.emplace_back(new SpecularGIMipPass());
   //_renderPasses.emplace_back(new SSGlobalIlluminationRayTracingPass());
   //_renderPasses.emplace_back(new SSGIBlurRenderPass());
