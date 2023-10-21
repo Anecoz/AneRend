@@ -31,14 +31,14 @@ BufferMemoryInterface::Handle BufferMemoryInterface::addData(std::size_t dataSiz
     auto offset = it->_offset;
 
     if (size >= dataSize) {
-      Handle handle{ offset, dataSize };
+      Handle handle{ (int64_t)offset, dataSize };
 
       // Erase free block since it is now used.
       _freeBlocks.erase(it);
 
       // Do some de-fragmentation efforts. Create a new block with the remaining size.
       if (size > dataSize) {
-        FreeBlock splitBlock{ offset + dataSize, size - dataSize };
+        FreeBlock splitBlock{ offset + (int64_t)dataSize, size - dataSize };
 
         // Also check if we can merge this new block with an adjacent block.
         // TODO

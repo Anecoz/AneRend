@@ -174,7 +174,7 @@ private:
   static const std::size_t STAGING_BUFFER_SIZE_MB = 512;
   static const std::size_t MAX_NUM_RENDERABLES = std::size_t(1e5);
   static const std::size_t MAX_NUM_MESHES = std::size_t(1e3);
-  static const std::size_t MAX_NUM_MATERIALS = 100;
+  static const std::size_t MAX_NUM_MATERIALS = 10000;
   static const std::size_t NUM_PIXELS_CLUSTER_X = 16;
   static const std::size_t NUM_PIXELS_CLUSTER_Y = 9;
   static const std::size_t NUM_CLUSTER_DEPTH_SLIZES = 7;

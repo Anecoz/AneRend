@@ -55,6 +55,11 @@ private:
   render::AnimationId _brainstemAnimId;
   render::SkeletonId _brainstemSkelId;
 
+  render::ModelId _shrekModelId;
+  std::vector<render::MaterialId> _shrekMaterials;
+  render::AnimationId _shrekAnimId;
+  render::SkeletonId _shrekSkeleId;
+
   std::vector<render::RenderableId> _rends;
 
   std::vector<render::AnimationId> _dummyAnimations;

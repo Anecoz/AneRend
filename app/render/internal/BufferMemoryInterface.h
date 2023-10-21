@@ -17,7 +17,7 @@ class BufferMemoryInterface
 public:
   struct Handle
   {
-    std::size_t _offset;
+    std::int64_t _offset = -1;
     std::size_t _size = 0;
 
     explicit operator bool() const {
@@ -39,7 +39,7 @@ public:
 private:
   struct FreeBlock
   {
-    std::size_t _offset;
+    std::int64_t _offset;
     std::size_t _size;
   };
 

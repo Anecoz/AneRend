@@ -136,6 +136,7 @@ render::RenderableId addRenderableRandom(
   std::vector<render::MaterialId>& materials, 
   float scale,
   float boundingSphereRadius,
+  glm::mat4 rot = glm::mat4(1.0f),
   render::AnimationId animId = render::INVALID_ID,
   render::SkeletonId skeleId = render::INVALID_ID)
 {
@@ -153,10 +154,10 @@ render::RenderableId addRenderableRandom(
   renderable._model = modelId;
   renderable._visible = true;
   //auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f + (float)transOff(rng), 0.0f, 5.0f + (float)transOff(rng)));
-  auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f + xOff, 0.0f, 5.0f));
+  auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f + xOff, 0.0f, 5.0f));
   //auto rot = glm::rotate(glm::mat4(1.0f), glm::radians((float)rotOff(rng)), glm::vec3(0.0f, 1.0f, 0.0f));
   auto scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
-  renderable._transform = mat * scaleMat;
+  renderable._transform = trans * rot * scaleMat;
 
   if (animId != render::INVALID_ID) {
     renderable._animation = animId;
@@ -552,7 +553,26 @@ void StageApplication::render()
       _rends.emplace_back(addRenderableRandom(_vkRenderer, _sponzaModelId, _sponzaMaterialIds, 0.01f, 40.0f));
     }
     if (ImGui::Button("Spawn brainstem")) {
-      _rends.emplace_back(addRenderableRandom(_vkRenderer, _brainstemModelId, _brainstemMaterials, 1.0f, 2.0f, _brainstemAnimId, _brainstemSkelId));
+      _rends.emplace_back(addRenderableRandom(
+        _vkRenderer, 
+        _brainstemModelId, 
+        _brainstemMaterials, 
+        1.0f, 
+        2.0f,
+        glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+        _brainstemAnimId, 
+        _brainstemSkelId));
+    }
+    if (ImGui::Button("Spawn shrek")) {
+      _rends.emplace_back(addRenderableRandom(
+        _vkRenderer,
+        _shrekModelId,
+        _shrekMaterials,
+        0.001f,
+        2.0f,
+        glm::mat4(1.0f),
+        _shrekAnimId,
+        _shrekSkeleId));
     }
     if (ImGui::Button("Load sponza")) {
       if (_sponzaMaterials.empty()) {
@@ -565,9 +585,26 @@ void StageApplication::render()
     if (ImGui::Button("Load lantern")) {      
       loadGLTF(_vkRenderer, std::string(ASSET_PATH) + "models/lantern_gltf/Lantern.glb", _lanternModelId, _lanternMaterials, _dummySkele, _dummyAnimations);
     }
+    if (ImGui::Button("Load shrek")) {
+      std::vector<render::AnimationId> animIds;
+      loadGLTF(
+        _vkRenderer,
+        std::string(ASSET_PATH) + "models/shrek_dancing_gltf/shrek_dancing.glb",
+        _shrekModelId,
+        _shrekMaterials,
+        _shrekSkeleId,
+        animIds);
+      _shrekAnimId = animIds[0];
+    }
     if (ImGui::Button("Load brainstem")) {
       std::vector<render::AnimationId> animIds;
-      loadGLTF(_vkRenderer, std::string(ASSET_PATH) + "models/brainstem_gltf/BrainStem.glb", _brainstemModelId, _brainstemMaterials, _brainstemSkelId, animIds);
+      loadGLTF(
+        _vkRenderer, 
+        std::string(ASSET_PATH) + "models/brainstem_gltf/BrainStem.glb", 
+        _brainstemModelId,
+        _brainstemMaterials, 
+        _brainstemSkelId, 
+        animIds);
       _brainstemAnimId = animIds[0];
     }
     if (ImGui::Button("Remove sponza model")) {
