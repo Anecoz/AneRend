@@ -63,7 +63,7 @@ void main()
   if (!shadowPayload.shadow) {
 
     // We are in direct (sun) light, proceed to calculate our radiance
-    MeshMaterialInfo matInfo = materialBuffer.infos[gl_InstanceCustomIndexEXT];
+    /*MaterialInfo matInfo = materialBuffer.infos[gl_InstanceCustomIndexEXT];
     vec2 uv = v0.uv.xy * barycentrics.x + v1.uv.xy * barycentrics.y + v2.uv.xy * barycentrics.z;
     vec3 normal = normalize(v0.normal.xyz * barycentrics.x + v1.normal.xyz * barycentrics.y + v2.normal.xyz * barycentrics.z);
     normal = normalize(vec3(normal.xyz * gl_WorldToObjectEXT));
@@ -79,9 +79,6 @@ void main()
     }
     if (matInfo.albedoTexIndex != -1) {
       vec4 samp = texture(textures[nonuniformEXT(matInfo.albedoTexIndex)], uv);
-      /*if (samp.a < 0.1) {
-        discard;
-      }*/
       color = samp.rgb;
     }
     if (matInfo.metallicRoughnessTexIndex != -1) {
@@ -89,10 +86,6 @@ void main()
       metallic = samp.b;
       roughness = samp.g;
     }
-    /*if (matInfo.normalTexIndex != -1 && fragTangent.xyz != vec3(0.0f)) {
-      normal = normalize(texture(textures[nonuniformEXT(matInfo.normalTexIndex)], fragUV).rgb * 2.0 - 1.0);
-      normal = normalize(fragTBN * normal);
-    }*/
 
     Light dummyLight;
 
@@ -105,6 +98,6 @@ void main()
       gl_ObjectRayOriginEXT,
       dummyLight,
       1,
-      true);
+      true);*/
   }
 }

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RenderableId.h"
+#include "Identifiers.h"
 #include <glm/glm.hpp>
 
 namespace render {

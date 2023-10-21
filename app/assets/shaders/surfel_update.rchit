@@ -28,7 +28,10 @@ void main()
   }
 
   // Find the irradiance of this particular ray hit and load it in the payload.
-  MeshInfo meshInfo = meshBuffer.meshes[gl_InstanceCustomIndexEXT];
+  uint materialIndex = bitfieldExtract(gl_InstanceCustomIndexEXT, 0, 10);
+  uint meshIndex = bitfieldExtract(gl_InstanceCustomIndexEXT, 10, 14);
+
+  MeshInfo meshInfo = meshBuffer.meshes[meshIndex];
 
   uint i0 = indexBuffer.indices[meshInfo.indexOffset + 3 * gl_PrimitiveID + 0];
   uint i1 = indexBuffer.indices[meshInfo.indexOffset + 3 * gl_PrimitiveID + 1];
@@ -66,7 +69,7 @@ void main()
           1               // payload (location = 1)
   );
 
-  MeshMaterialInfo matInfo = materialBuffer.infos[gl_InstanceCustomIndexEXT];
+  MaterialInfo matInfo = materialBuffer.infos[materialIndex];
   vec2 uv = v0.uv.xy * barycentrics.x + v1.uv.xy * barycentrics.y + v2.uv.xy * barycentrics.z;
   vec3 normal = normalize(v0.normal.xyz * barycentrics.x + v1.normal.xyz * barycentrics.y + v2.normal.xyz * barycentrics.z);
   normal = normalize(vec3(normal.xyz * gl_WorldToObjectEXT));

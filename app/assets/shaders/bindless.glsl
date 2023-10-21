@@ -10,6 +10,15 @@ struct Renderable
   uint numMeshIds;
   uint skeletonOffset;
   uint visible;
+  uint firstMaterialIndex;
+};
+
+// Map from engine IDs to internal indices.
+struct IdMap
+{
+  uint meshIndex;
+  uint renderableIndex;
+  uint materialIndex;
 };
 
 struct Light 
@@ -24,21 +33,11 @@ struct Cluster
   vec4 maxVs;
 };
 
-struct MeshMaterialInfo
+struct MaterialInfo
 {
-  int metallicTexIndex;
-  int roughnessTexIndex;
-  int normalTexIndex;
-  int albedoTexIndex;
-  int metallicRoughnessTexIndex;
-  int emissiveTexIndex;
-  float baseColFacR;
-  float baseColFacG;
-  float baseColFacB;
-  float emissiveFactorR;
-  float emissiveFactorG;
-  float emissiveFactorB;
-  //vec4 baseColFactor;
+  vec4 baseColFac; // w unused
+  vec4 emissive; // factor or RGB depending on if emissive texture present
+  ivec4 bindlessIndices; // metallicRoughness, albedo, normal, emissive
 };
 
 struct MeshInfo
@@ -115,31 +114,39 @@ layout(std430, set = 0, binding = 4) readonly buffer ClusterBuffer {
   Cluster clusters[];
 } clusterBuffer;
 
-layout(std430, set = 0, binding = 5) readonly buffer MeshMaterialBuffer {
-  MeshMaterialInfo infos[];
+layout(std430, set = 0, binding = 5) readonly buffer MaterialBuffer {
+  MaterialInfo infos[];
 } materialBuffer;
 
-layout(std430, set = 0, binding = 6) readonly buffer IndexBuffer {
+layout(std430, set = 0, binding = 6) readonly buffer RenderableMatIndexBuffer {
+  uint indices[];
+} rendMatIndexBuffer;
+
+layout(std430, set = 0, binding = 7) readonly buffer IndexBuffer {
   uint indices[];
 } indexBuffer;
 
-layout(std430, set = 0, binding = 7) readonly buffer VertexBuffer {
+layout(std430, set = 0, binding = 8) readonly buffer VertexBuffer {
   PackedVertex vertices[];
 } vertexBuffer;
 
-layout(std430, set = 0, binding = 8) readonly buffer MeshBuffer {
+layout(std430, set = 0, binding = 9) readonly buffer MeshBuffer {
   MeshInfo meshes[];
 } meshBuffer;
 
-// Tlas is binding 9
+// Tlas is binding 10
 
-layout(std430, set = 0, binding = 10) readonly buffer SkeletonBuffer {
+layout(std430, set = 0, binding = 11) readonly buffer SkeletonBuffer {
   mat4 joints[];
 } skeletonBuffer;
 
-layout(set = 0, binding = 11) uniform sampler2D textures[];
+layout(std430, set = 0, binding = 12) readonly buffer IdMapBuffer {
+  IdMap idMaps[];
+} idMapBuffer;
 
-SurfaceData getSurfaceDataFromMat(MeshMaterialInfo matInfo, vec2 uv, vec3 inNormal, mat3 inTBN, vec3 inTangent, vec3 inColor)
+layout(set = 0, binding = 13) uniform sampler2D textures[];
+
+SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, mat3 inTBN, vec3 inTangent, vec3 inColor)
 {
   SurfaceData outData;
 
@@ -149,40 +156,42 @@ SurfaceData getSurfaceDataFromMat(MeshMaterialInfo matInfo, vec2 uv, vec3 inNorm
   outData.color = inColor;
   outData.emissive = vec3(0.0);
 
-  if (matInfo.metallicTexIndex != -1) {
-    outData.metallic = texture(textures[nonuniformEXT(matInfo.metallicTexIndex)], uv).r;
-  }
-  if (matInfo.roughnessTexIndex != -1) {
-    outData.roughness = texture(textures[nonuniformEXT(matInfo.roughnessTexIndex)], uv).r;
-  }
-  if (matInfo.albedoTexIndex != -1) {
-    vec4 samp = texture(textures[nonuniformEXT(matInfo.albedoTexIndex)], uv);
+  int metRoughIdx = matInfo.bindlessIndices[0];
+  int albedoIdx = matInfo.bindlessIndices[1];
+  int normalIdx = matInfo.bindlessIndices[2];
+  int emissiveIdx = matInfo.bindlessIndices[3];
+
+  if (albedoIdx != -1) {
+    vec4 samp = texture(textures[nonuniformEXT(albedoIdx)], uv);
     /*if (samp.a < 0.1) {
       discard;
     }*/
-    outData.color = vec3(matInfo.baseColFacR * samp.r, matInfo.baseColFacG * samp.g, matInfo.baseColFacB * samp.b);
+    outData.color = vec3(matInfo.baseColFac.r * samp.r, matInfo.baseColFac.g * samp.g, matInfo.baseColFac.b * samp.b);
     //color = samp.rgb;
   }
   else {
     // If no albedo texture, but baseColFactor is present, use the factor as linear RGB values
-    if (matInfo.baseColFacR + matInfo.baseColFacG + matInfo.baseColFacB > 0.1) {
-      outData.color = vec3(matInfo.baseColFacR, matInfo.baseColFacG, matInfo.baseColFacB);
+    if (matInfo.baseColFac.r + matInfo.baseColFac.g + matInfo.baseColFac.b > 0.1) {
+      outData.color = matInfo.baseColFac.rgb;
     }
   }
-  if (matInfo.metallicRoughnessTexIndex != -1) {
-    vec4 samp = texture(textures[nonuniformEXT(matInfo.metallicRoughnessTexIndex)], uv);
+  if (metRoughIdx != -1) {
+    vec4 samp = texture(textures[nonuniformEXT(metRoughIdx)], uv);
     outData.metallic = samp.b;
     outData.roughness = samp.g;
   }
-  if (matInfo.normalTexIndex != -1 && inTangent.xyz != vec3(0.0f)) {
-    outData.normal = normalize(texture(textures[nonuniformEXT(matInfo.normalTexIndex)], uv).rgb * 2.0 - 1.0);
+  if (normalIdx != -1 && inTangent.xyz != vec3(0.0f)) {
+    outData.normal = normalize(texture(textures[nonuniformEXT(normalIdx)], uv).rgb * 2.0 - 1.0);
     outData.normal = normalize(inTBN * outData.normal);
   }
-  if (matInfo.emissiveTexIndex != -1) {
-    outData.emissive = texture(textures[nonuniformEXT(matInfo.emissiveTexIndex)], uv).rgb;
-    outData.emissive.r *= matInfo.emissiveFactorR;
-    outData.emissive.g *= matInfo.emissiveFactorG;
-    outData.emissive.b *= matInfo.emissiveFactorB;
+  if (emissiveIdx != -1) {
+    outData.emissive = texture(textures[nonuniformEXT(emissiveIdx)], uv).rgb;
+    outData.emissive.r *= matInfo.emissive.r;
+    outData.emissive.g *= matInfo.emissive.g;
+    outData.emissive.b *= matInfo.emissive.b;
+  }
+  else {
+    outData.emissive = matInfo.emissive.rgb * matInfo.emissive.w;
   }
 
   return outData;
@@ -218,4 +227,31 @@ uint setVisibleBit(Renderable rend, bool val)
 {
   uint insert = val ? 1 : 0;
   return bitfieldInsert(rend.visible, insert, 0, 1);
+}
+
+uint renderableIndexFromId(uint id)
+{
+  return idMapBuffer.idMaps[id].renderableIndex;
+}
+
+Renderable renderableFromId(uint id)
+{
+  uint index = renderableIndexFromId(id);
+  return renderableBuffer.renderables[index];
+}
+
+uint meshIndexFromId(uint id)
+{
+  return idMapBuffer.idMaps[id].meshIndex;
+}
+
+uint materialIndexFromId(uint id)
+{
+  return idMapBuffer.idMaps[id].materialIndex;
+}
+
+MaterialInfo materialFromId(uint id)
+{
+  uint index = materialIndexFromId(id);
+  return materialBuffer.infos[index];
 }

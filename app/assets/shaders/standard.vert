@@ -6,7 +6,7 @@
 
 struct TranslationId
 {
-  uint renderableId;
+  uint renderableIndex;
   uint meshId;
 };
 
@@ -30,14 +30,14 @@ layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec3 fragPos;
 layout(location = 3) out vec2 fragUV;
-layout(location = 4) out flat uint fragMeshId;
+layout(location = 4) out flat uint fragMaterialIdx;
 layout(location = 5) out vec3 fragTangent;
 layout(location = 6) out mat3 fragTBN;
 
 void main() {
-  uint renderableId = translationBuffer.ids[gl_InstanceIndex].renderableId;
-  mat4 model = renderableBuffer.renderables[renderableId].transform;
-  uint skeletonOffset = renderableBuffer.renderables[renderableId].skeletonOffset;
+  uint renderableIndex = translationBuffer.ids[gl_InstanceIndex].renderableIndex;
+  mat4 model = renderableBuffer.renderables[renderableIndex].transform;
+  uint skeletonOffset = renderableBuffer.renderables[renderableIndex].skeletonOffset;
 
   vec3 pos = inPosition;
   vec3 normal = inNormal;
@@ -57,11 +57,14 @@ void main() {
   }
 
   gl_Position = ubo.proj * ubo.view * model * vec4(pos, 1.0);
-  fragColor = toLinear(vec4(inColor, 1.0)).rgb * renderableBuffer.renderables[renderableId].tint.rgb;
+  fragColor = toLinear(vec4(inColor, 1.0)).rgb * renderableBuffer.renderables[renderableIndex].tint.rgb;
   fragNormal =  mat3(model) * normal;
   fragPos = (model * vec4(inPosition, 1.0)).xyz;
   fragUV = inUV;
-  fragMeshId = translationBuffer.ids[gl_InstanceIndex].meshId;
+  uint meshId = translationBuffer.ids[gl_InstanceIndex].meshId;
+  uint materialOffset = meshId - renderableBuffer.renderables[renderableIndex].firstMeshId;
+
+  fragMaterialIdx = renderableBuffer.renderables[renderableIndex].firstMaterialIndex + materialOffset;
 
   vec3 bitangentL = cross(normal, inTangent.xyz);
   vec3 T = normalize(mat3(model) * inTangent.xyz);

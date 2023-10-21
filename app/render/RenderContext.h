@@ -4,10 +4,13 @@
 
 #include "vma/vk_mem_alloc.h"
 
-#include "Model.h"
-#include "MeshId.h"
+#include "asset/Model.h"
+#include "asset/Renderable.h"
+#include "asset/Material.h"
+#include "animation/Animation.h"
+#include "animation/Skeleton.h"
+#include "internal/InternalMesh.h"
 #include "Vertex.h"
-#include "RenderableId.h"
 #include "GpuBuffers.h"
 #include "RenderDebugOptions.h"
 #include "RenderOptions.h"
@@ -18,6 +21,25 @@
 #include <unordered_map>
 
 namespace render {
+
+struct AssetUpdate
+{
+  std::vector<asset::Model> _addedModels;
+  std::vector<ModelId> _removedModels;
+
+  std::vector<asset::Material> _addedMaterials;
+  std::vector<MaterialId> _removedMaterials;
+
+  std::vector<anim::Animation> _addedAnimations;
+  std::vector<AnimationId> _removedAnimations;
+
+  std::vector<anim::Skeleton> _addedSkeletons;
+  std::vector<SkeletonId> _removedSkeletons;
+
+  std::vector<asset::Renderable> _addedRenderables;
+  std::vector<asset::Renderable> _updatedRenderables;
+  std::vector<RenderableId> _removedRenderables;
+};
 
 class RenderContext
 {
@@ -32,8 +54,6 @@ public:
   virtual VkDescriptorSetLayout& bindlessDescriptorSetLayout() = 0;
   virtual VkExtent2D swapChainExtent() = 0;
 
-  //virtual void bindGigaBuffers(VkCommandBuffer*) = 0;
-  //virtual void drawGigaBuffer(VkCommandBuffer*) = 0;
   virtual void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount) = 0;
   virtual void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) = 0;
   virtual void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) = 0;
@@ -42,25 +62,14 @@ public:
   virtual int getCurrentMultiBufferIdx() = 0;
   virtual int getMultiBufferSize() = 0;
 
-  virtual ModelId registerModel(Model&& model, bool buildBlas = true) = 0;
-
-  virtual MeshId registerMesh(Mesh& mesh, bool buildBlas = true) = 0;
-
-  virtual RenderableId registerRenderable(
-    ModelId modelId,
-    const glm::mat4& transform,
-    const glm::vec3& sphereBoundCenter,
-    float sphereBoundRadius,
-    bool debugDraw = false,
-    bool buildTlas = true) = 0;
-  virtual void setRenderableVisible(RenderableId id, bool visible) = 0;
+  virtual void assetUpdate(AssetUpdate&& update) = 0;
 
   virtual size_t getMaxNumMeshes() = 0;
   virtual size_t getMaxNumRenderables() = 0;
 
   virtual size_t getMaxBindlessResources() = 0;
 
-  virtual std::vector<Mesh>& getCurrentMeshes() = 0;
+  virtual std::vector<internal::InternalMesh>& getCurrentMeshes() = 0;
   virtual std::unordered_map<MeshId, std::size_t>& getCurrentMeshUsage() = 0;
   virtual size_t getCurrentNumRenderables() = 0;
 
@@ -82,11 +91,10 @@ public:
   virtual void startTimer(const std::string& name, VkCommandBuffer cmdBuffer) = 0;
   virtual void stopTimer(const std::string& name, VkCommandBuffer cmdBuffer) = 0;
 
-  virtual Mesh& getSphereMesh() = 0;
+  virtual internal::InternalMesh& getSphereMesh() = 0;
 
   virtual size_t getNumIrradianceProbesXZ() = 0;
   virtual size_t getNumIrradianceProbesY() = 0;
-  virtual std::vector<gpu::GPUIrradianceProbe>& getIrradianceProbes() = 0;
 
   virtual double getElapsedTime() = 0;
 

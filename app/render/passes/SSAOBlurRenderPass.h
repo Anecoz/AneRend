@@ -2,7 +2,7 @@
 
 #include "RenderPass.h"
 #include "../AllocatedBuffer.h"
-#include "../Mesh.h"
+#include "../asset/Mesh.h"
 
 namespace render {
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Joint.h"
+#include "../Identifiers.h"
 
 #include <optional>
 #include <vector>
@@ -9,8 +10,9 @@ namespace render::anim {
 
 struct Skeleton
 {
-  void calcGlobalTransforms();
+  render::SkeletonId _id = INVALID_ID;
 
+  void calcGlobalTransforms();
   void reset();
 
   explicit operator bool() const

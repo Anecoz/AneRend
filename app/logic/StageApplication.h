@@ -5,10 +5,11 @@
 #include <glm/glm.hpp>
 
 #include "../render/VulkanRenderer.h"
-#include "../render/Model.h"
+#include "../render/asset/Model.h"
 #include "../render/Camera.h"
 #include "../render/RenderDebugOptions.h"
 #include "../render/RenderOptions.h"
+#include "../render/asset/Model.h"
 #include "WindSystem.h"
 
 class StageApplication : public Application
@@ -29,11 +30,6 @@ private:
 
   glm::vec3 _lastCamPos;
 
-  render::RenderableId _sponzaId;
-  glm::mat4 _sponzaScale;
-  glm::vec3 _sponzaPos;
-  bool _sponzaMoved = false;
-
   glm::vec3 _sunDir;
 
   render::RenderDebugOptions _renderDebugOptions;
@@ -46,16 +42,21 @@ private:
 
   render::VulkanRenderer _vkRenderer;
 
-  render::ModelId _meshId;
-  render::ModelId _meshId2;
-  render::ModelId _meshId3;
-  render::ModelId _meshId4;
-  render::ModelId _meshId5;
-  render::ModelId _meshId6;
-  render::ModelId _meshId7;
-  render::ModelId _meshId8;
-  render::ModelId _meshId9;
-  render::ModelId _meshId10;
-  render::ModelId _meshId11;
-  render::ModelId _meshId12;
+  render::ModelId _lanternModelId;
+  std::vector<render::MaterialId> _lanternMaterials;
+
+  render::asset::Model _sponzaModel;
+  std::vector<render::asset::Material> _sponzaMaterials;
+  render::ModelId _sponzaModelId;
+  std::vector<render::MaterialId> _sponzaMaterialIds;
+
+  render::ModelId _brainstemModelId;
+  std::vector<render::MaterialId> _brainstemMaterials;
+  render::AnimationId _brainstemAnimId;
+  render::SkeletonId _brainstemSkelId;
+
+  std::vector<render::RenderableId> _rends;
+
+  std::vector<render::AnimationId> _dummyAnimations;
+  render::SkeletonId _dummySkele;
 };

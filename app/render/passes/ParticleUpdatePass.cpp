@@ -115,6 +115,7 @@ void ParticleUpdatePass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
 
   fgb.registerRenderPassExe("ParticleUpdate",
     [this](RenderExeParams exeParams) {
+      return;
 
       auto particleSize = exeParams.rc->getParticles().size();
       if (particleSize == 0) return;

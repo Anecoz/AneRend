@@ -1,7 +1,6 @@
 #pragma once
 
 #include "RenderPass.h"
-#include "../Model.h"
 
 namespace render {
 

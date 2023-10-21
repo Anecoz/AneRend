@@ -4,7 +4,7 @@
 
 #include "../FrameGraphBuilder.h"
 
-#include "../Model.h"
+#include "../asset/Model.h"
 
 namespace render {
 
@@ -22,7 +22,6 @@ private:
 
   std::vector<ResourceUsage> _resourceUsages;
 
-  Mesh _screenQuad;
   MeshId _meshId;
 
   std::string _currResource;

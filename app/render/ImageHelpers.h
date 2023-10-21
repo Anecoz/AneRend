@@ -82,6 +82,8 @@ std::vector<uint8_t> uglyFixData(const std::vector<std::uint8_t>& rgb)
 
 struct TextureData
 {
+  explicit operator bool() const { return !data.empty(); }
+
   std::vector<uint8_t> data;
   int width;
   int height;

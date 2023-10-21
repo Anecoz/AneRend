@@ -10,7 +10,7 @@ layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec3 fragNormal;
 layout(location = 2) in vec3 fragPos;
 layout(location = 3) in vec2 fragUV;
-layout(location = 4) in flat uint fragMeshId;
+layout(location = 4) in flat uint fragMaterialIdx;
 layout(location = 5) in vec3 fragTangent;
 layout(location = 6) in mat3 fragTBN;
 
@@ -21,11 +21,17 @@ layout(location = 2) out vec4 outCol2;
 void main() {
   vec3 normal = normalize(fragNormal);
 
-  MeshMaterialInfo matInfo = materialBuffer.infos[fragMeshId];
+  uint matIndex = rendMatIndexBuffer.indices[fragMaterialIdx];
+  //MaterialInfo matInfo = materialFromId(fragMaterialIdx);
+  MaterialInfo matInfo = materialBuffer.infos[matIndex];
 
   SurfaceData surfData = getSurfaceDataFromMat(matInfo, fragUV, normal, fragTBN, fragTangent, fragColor);
 
   outCol0 = vec4(surfData.normal, surfData.color.x);
   outCol1 = vec4(surfData.color.yz, surfData.metallic, surfData.roughness);
   outCol2 = vec4(surfData.emissive, 0.0);
+
+  /*outCol0 = vec4(fragNormal, fragColor.x);
+  outCol1 = vec4(fragColor.yz, 0.5, 0.5);
+  outCol2 = vec4(0.0);*/
 }

@@ -14,7 +14,6 @@ if (WIN32)
   target_include_directories(libnoise INTERFACE ${CMAKE_CURRENT_LIST_DIR}/libnoise/include)
 
   #vulkan
-  set(ENV{VULKAN_SDK} "C:/VulkanSDK/1.3.239.0")
   find_package(Vulkan REQUIRED)
 
 else()  

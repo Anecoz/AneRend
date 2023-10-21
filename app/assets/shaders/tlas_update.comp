@@ -54,6 +54,11 @@ void main()
 
   for (int i = 0; i < renderableBuffer.renderables[idx].numMeshIds; ++i) {
     uint meshId = renderableBuffer.renderables[idx].firstMeshId + i;
+    uint meshIndex = meshIndexFromId(meshId);
+    uint materialOffset = meshId - renderableBuffer.renderables[idx].firstMeshId;
+
+    uint materialIndexAbstract = renderableBuffer.renderables[idx].firstMaterialIndex + materialOffset;
+    uint matIndex = rendMatIndexBuffer.indices[materialIndexAbstract];
 
     uint countBefore = atomicAdd(counterBuffer.counter[0], 1);
     //uint countBefore = idx * 128 + i;
@@ -78,12 +83,14 @@ void main()
     uint sbtOffsetAndFlags = 0;
     sbtOffsetAndFlags = bitfieldInsert(sbtOffsetAndFlags, 1, 24, 8);
 
-    uint instanceIdxAndMask = meshId;
+    // 10 bits for material index and 14 bits for mesh index
+    uint instanceIdxAndMask = matIndex;
+    instanceIdxAndMask = bitfieldInsert(instanceIdxAndMask, meshIndex, 10, 14);
     instanceIdxAndMask = bitfieldInsert(instanceIdxAndMask, 0xFF, 24, 8);
 
     instanceBuffer.instances[countBefore].matrix = mtx;
     instanceBuffer.instances[countBefore].instanceSBTOffsetAndFlags = sbtOffsetAndFlags;
     instanceBuffer.instances[countBefore].instanceCustomIndexAndMask = instanceIdxAndMask; 
-    instanceBuffer.instances[countBefore].blasRef = meshBuffer.meshes[meshId].blasRef;
+    instanceBuffer.instances[countBefore].blasRef = meshBuffer.meshes[meshIndex].blasRef;
   }
 }

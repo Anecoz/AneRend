@@ -1,6 +1,6 @@
 #include "GLTFLoader.h"
 
-#include "../render/Mesh.h"
+#include "../render/asset/Mesh.h"
 #include "../render/animation/Skeleton.h"
 
 #include <limits>
@@ -196,7 +196,11 @@ render::anim::Skeleton constructSkeleton(const std::vector<tinygltf::Node>& node
 
 bool GLTFLoader::loadFromFile(
   const std::string& path,
-  render::Model& modelOut)
+  render::asset::Model& modelOut,
+  std::vector<render::asset::Material>& materialsOut,
+  std::vector<int>& materialIndicesOut,
+  render::anim::Skeleton& skeletonOut,
+  std::vector<render::anim::Animation>& animationsOut)
 {
   std::filesystem::path p(path);
   auto extension = p.extension().string();
@@ -228,12 +232,14 @@ bool GLTFLoader::loadFromFile(
   }
 
   // Init min/max
-  modelOut._min = glm::vec3(std::numeric_limits<float>::max());
-  modelOut._max = glm::vec3(std::numeric_limits<float>::min());
+  /*modelOut._min = glm::vec3(std::numeric_limits<float>::max());
+  modelOut._max = glm::vec3(std::numeric_limits<float>::min());*/
 
   if (!model.animations.empty()) {
-    modelOut._animations = constructAnimations(model.animations, model);
+    animationsOut = constructAnimations(model.animations, model);
   }
+
+  std::vector<int> parsedMaterials;
 
   for (int i = 0; i < model.meshes.size(); ++i) {
     
@@ -248,14 +254,14 @@ bool GLTFLoader::loadFromFile(
         if (node.skin != -1) {
           // Construct skeleton for this mesh
           auto skeleton = constructSkeleton(model.nodes, model.skins[node.skin], model);
-          modelOut._skeleton = std::move(skeleton);
+          skeletonOut = std::move(skeleton);
         }
       }
     }
     
     for (int j = 0; j < model.meshes[i].primitives.size(); ++j) {
       auto& primitive = model.meshes[i].primitives[j];
-      render::Mesh mesh{};
+      render::asset::Mesh mesh{};
 
       // Do indices
       auto& idxAccessor = model.accessors[primitive.indices];
@@ -310,8 +316,8 @@ bool GLTFLoader::loadFromFile(
         glm::vec3 min{accessor.minValues[0], accessor.minValues[1], accessor.minValues[2]};
         glm::vec3 max{accessor.maxValues[0], accessor.maxValues[1], accessor.maxValues[2]};
 
-        modelOut._min = glm::min(min, modelOut._min);
-        modelOut._max = glm::max(max, modelOut._max);
+        //modelOut._min = glm::min(min, modelOut._min);
+        //modelOut._max = glm::max(max, modelOut._max);
       }
       if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
         const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("NORMAL")->second];
@@ -449,73 +455,91 @@ bool GLTFLoader::loadFromFile(
         mesh._vertices[v] = std::move(vert);
       }
 
+      modelOut._meshes.emplace_back(std::move(mesh));
+
       // PBR materials
       if (primitive.material >= 0) {
-        auto& material = model.materials[primitive.material];
-
-        // TODO: Copying image data down here is naive... the same texture can be reused multiple times, a cache would be good
-        int baseColIdx = material.pbrMetallicRoughness.baseColorTexture.index;
-        if (baseColIdx >= 0) {
-          int imageIdx = model.textures[baseColIdx].source;
-          auto& image = model.images[imageIdx];
-
-          mesh._albedo._texPath = p.replace_filename(image.uri).string();
-          mesh._albedo._data = image.image;
-          mesh._albedo._width = image.width;
-          mesh._albedo._height = image.height;
+        // Have we already parsed this material?
+        auto it = std::find(parsedMaterials.begin(), parsedMaterials.end(), primitive.material);
+        if (it != parsedMaterials.end()) {
+          materialIndicesOut.emplace_back(int(it - parsedMaterials.begin()));
         }
+        else {
+          auto& material = model.materials[primitive.material];
+          render::asset::Material mat{};
 
-        int metRoIdx = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
-        if (metRoIdx >= 0) {
-          int imageIdx = model.textures[metRoIdx].source;
-          auto& image = model.images[imageIdx];
+          // TODO: Copying image data down here is naive... the same texture can be reused multiple times, a cache would be good
+          int baseColIdx = material.pbrMetallicRoughness.baseColorTexture.index;
+          if (baseColIdx >= 0) {
+            int imageIdx = model.textures[baseColIdx].source;
+            auto& image = model.images[imageIdx];
 
-          mesh._metallicRoughness._texPath = p.replace_filename(image.uri).string();
-          mesh._metallicRoughness._data = image.image;
-          mesh._metallicRoughness._width = image.width;
-          mesh._metallicRoughness._height = image.height;
+            mat._albedoTex.data = image.image;
+            mat._albedoTex.isColor = true;
+            mat._albedoTex.width = image.width;
+            mat._albedoTex.height = image.height;
+          }
+
+          int metRoIdx = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
+          if (metRoIdx >= 0) {
+            int imageIdx = model.textures[metRoIdx].source;
+            auto& image = model.images[imageIdx];
+
+            mat._metallicRoughnessTex.data = image.image;
+            mat._metallicRoughnessTex.isColor = true;
+            mat._metallicRoughnessTex.width = image.width;
+            mat._metallicRoughnessTex.height = image.height;
+          }
+
+          int normalIdx = material.normalTexture.index;
+          if (normalIdx >= 0) {
+            int imageIdx = model.textures[normalIdx].source;
+            auto& image = model.images[normalIdx];
+
+            mat._normalTex.data = image.image;
+            mat._normalTex.isColor = true;
+            mat._normalTex.width = image.width;
+            mat._normalTex.height = image.height;
+          }
+
+          int emissiveIdx = material.emissiveTexture.index;
+          if (emissiveIdx >= 0) {
+            int imageIdx = model.textures[emissiveIdx].source;
+            auto& image = model.images[emissiveIdx];
+
+            mat._emissiveTex.data = image.image;
+            mat._emissiveTex.isColor = true;
+            mat._emissiveTex.width = image.width;
+            mat._emissiveTex.height = image.height;
+          }
+
+          mat._emissive = glm::vec4(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2], 1.0f);
+
+          mat._baseColFactor = glm::vec4(
+            material.pbrMetallicRoughness.baseColorFactor[0],
+            material.pbrMetallicRoughness.baseColorFactor[1],
+            material.pbrMetallicRoughness.baseColorFactor[2],
+            material.pbrMetallicRoughness.baseColorFactor[3]);
+
+          materialsOut.emplace_back(std::move(mat));
+          int materialIndex = (int)(materialsOut.size() - 1);
+          materialIndicesOut.emplace_back(materialIndex);
+
+          parsedMaterials.emplace_back(primitive.material);
         }
-
-        int normalIdx = material.normalTexture.index;
-        if (normalIdx >= 0) {
-          int imageIdx = model.textures[normalIdx].source;
-          auto& image = model.images[normalIdx];
-
-          mesh._normal._texPath = p.replace_filename(image.uri).string();
-          mesh._normal._data = image.image;
-          mesh._normal._width = image.width;
-          mesh._normal._height = image.height;
-        }
-
-        int emissiveIdx = material.emissiveTexture.index;
-        if (emissiveIdx >= 0) {
-          int imageIdx = model.textures[emissiveIdx].source;
-          auto& image = model.images[emissiveIdx];
-
-          mesh._emissive._texPath = p.replace_filename(image.uri).string();
-          mesh._emissive._data = image.image;
-          mesh._emissive._width = image.width;
-          mesh._emissive._height = image.height;
-        }
-
-        mesh._emissiveFactor = glm::vec3(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]);
-
-        mesh._baseColFactor = glm::vec4(
-          material.pbrMetallicRoughness.baseColorFactor[0],
-          material.pbrMetallicRoughness.baseColorFactor[1],
-          material.pbrMetallicRoughness.baseColorFactor[2],
-          material.pbrMetallicRoughness.baseColorFactor[3]);
       }
 
       if (deleteJoints) delete[] jointsBuffer;
-      modelOut._meshes.emplace_back(std::move(mesh));
+      //modelOut._meshes.emplace_back(std::move(mesh));
     }
   }
 
-  printf("Loaded model %s. %zu meshes (min %f %f %f, max %f %f %f)\n",
+  /*printf("Loaded model %s. %zu meshes (min %f %f %f, max %f %f %f)\n",
     path.c_str(), modelOut._meshes.size(),
     modelOut._min.x, modelOut._min.y, modelOut._min.z,
-    modelOut._max.x, modelOut._max.y, modelOut._max.z);
+    modelOut._max.x, modelOut._max.y, modelOut._max.z);*/
+
+  printf("Loaded model %s. %zu meshes, %zu materials\n", path.c_str(), modelOut._meshes.size(), materialsOut.size());
 
   return true;
 }

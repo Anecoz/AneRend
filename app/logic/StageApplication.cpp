@@ -2,6 +2,7 @@
 
 #include "../input/KeyInput.h"
 #include "../imgui/imgui.h"
+#include "../util/GLTFLoader.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -34,12 +35,181 @@ static bool g_DebugShadow = true;
 static bool g_LockFrustumCulling = false;
 static bool g_PP = true;
 
+namespace {
+
+bool loadGLTF(
+  render::VulkanRenderer& renderer, 
+  const std::string& path, 
+  render::ModelId& modelIdOut, 
+  std::vector<render::MaterialId>& materialIdsOut,
+  render::SkeletonId& skeletonIdOut,
+  std::vector<render::AnimationId>& animationIdsOut,
+  render::asset::Model* modelOut = nullptr,
+  std::vector<render::asset::Material>* materialsOut = nullptr)
+{
+  materialIdsOut.clear();
+  animationIdsOut.clear();
+
+  if (materialsOut != nullptr) {
+    materialsOut->clear();
+  }
+
+  render::asset::Model model{};
+  render::anim::Skeleton skeleton{};
+  std::vector<render::anim::Animation> animations{};
+  std::vector<render::asset::Material> materials;
+  std::vector<int> materialIndices;
+  if (!GLTFLoader::loadFromFile(path, model, materials, materialIndices, skeleton, animations)) {
+    printf("Could not load model!\n");
+    return false;
+  }
+
+  // Model and meshes
+  model._id = render::IDGenerator::genModelId();
+  modelIdOut = model._id;
+
+  for (auto& mesh : model._meshes) {
+    mesh._id = render::IDGenerator::genMeshId();
+  }
+
+  if (modelOut != nullptr) {
+    *modelOut = model;
+  }
+
+  // Materials
+  for (auto& mat : materials) {
+    mat._id = render::IDGenerator::genMaterialId();
+    if (materialsOut != nullptr) {
+      materialsOut->push_back(mat);
+    }
+  }
+
+  for (auto& idx : materialIndices) {
+    materialIdsOut.push_back(materials[idx]._id);
+  }
+
+  // Skeleton
+  if (skeleton) {
+    skeleton._id = render::IDGenerator::genSkeletonId();
+    skeletonIdOut = skeleton._id;
+  }
+
+  // Animations
+  if (!animations.empty()) {
+    for (auto& anim : animations) {
+      anim._id = render::IDGenerator::genAnimationId();
+      animationIdsOut.push_back(anim._id);
+    }
+  }
+
+  // Asset update 
+  render::AssetUpdate upd{};
+  upd._addedModels.emplace_back(std::move(model));
+  upd._addedMaterials = std::move(materials);
+  
+  if (!animations.empty()) {
+    upd._addedAnimations = std::move(animations);
+  }
+
+  if (skeleton) {
+    upd._addedSkeletons.emplace_back(std::move(skeleton));
+  }
+
+  renderer.assetUpdate(std::move(upd));
+  return true;
+}
+
+void loadModelAsset(
+  render::VulkanRenderer& renderer,
+  render::asset::Model& model,
+  std::vector<render::asset::Material>& materials)
+{
+  render::AssetUpdate upd{};
+  upd._addedModels.emplace_back(model);
+  upd._addedMaterials = materials;
+  renderer.assetUpdate(std::move(upd));
+}
+
+render::RenderableId addRenderableRandom(
+  render::VulkanRenderer& renderer, 
+  render::ModelId modelId, 
+  std::vector<render::MaterialId>& materials, 
+  float scale,
+  float boundingSphereRadius,
+  render::AnimationId animId = render::INVALID_ID,
+  render::SkeletonId skeleId = render::INVALID_ID)
+{
+  static float xOff = 0.0f;
+  std::random_device dev;
+  std::mt19937 rng(dev());
+  std::uniform_real_distribution<> transOff(-5.0, 5.0);
+  std::uniform_real_distribution<> rotOff(-180.0, 180.0);
+
+  render::asset::Renderable renderable{};
+
+  renderable._materials = materials;
+  renderable._id = render::IDGenerator::genRenderableId();
+  renderable._boundingSphere = glm::vec4(.0f, .0f, .0f, boundingSphereRadius);
+  renderable._model = modelId;
+  renderable._visible = true;
+  //auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f + (float)transOff(rng), 0.0f, 5.0f + (float)transOff(rng)));
+  auto mat = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f + xOff, 0.0f, 5.0f));
+  //auto rot = glm::rotate(glm::mat4(1.0f), glm::radians((float)rotOff(rng)), glm::vec3(0.0f, 1.0f, 0.0f));
+  auto scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
+  renderable._transform = mat * scaleMat;
+
+  if (animId != render::INVALID_ID) {
+    renderable._animation = animId;
+  }
+  if (skeleId != render::INVALID_ID) {
+    renderable._skeleton = skeleId;
+  }
+
+  xOff = xOff + 4.0f;
+
+  auto idCopy = renderable._id;
+
+  render::AssetUpdate upd{};
+  upd._addedRenderables.emplace_back(std::move(renderable));
+  renderer.assetUpdate(std::move(upd));
+
+  return idCopy;
+}
+
+void removeModel(render::VulkanRenderer& renderer, render::ModelId id, std::vector<render::MaterialId>& materials)
+{
+  render::AssetUpdate upd{};
+  upd._removedModels.emplace_back(id);
+  upd._removedMaterials = materials;
+  renderer.assetUpdate(std::move(upd));
+}
+
+void removeRenderable(render::VulkanRenderer& renderer, render::RenderableId id)
+{
+  render::AssetUpdate upd{};
+  upd._removedRenderables.emplace_back(id);
+  renderer.assetUpdate(std::move(upd));
+}
+
+}
+
 bool StageApplication::init()
 {
   glfwSetWindowUserPointer(_window, this);
   glfwSetFramebufferSizeCallback(_window, framebufferResizeCallback);
 
-  render::Model testModel;
+  if (!_vkRenderer.init()) {
+    return false;
+  }
+
+  // Debug, mimicking a scene object.
+  /*if (!loadGLTF(_vkRenderer, std::string(ASSET_PATH) + "models/lantern_gltf/Lantern.glb", _lanternModelId, _lanternMaterials)) {
+    return false;
+  }*/
+
+  //_lanternRends.emplace_back(addRenderableRandom(_vkRenderer, _lanternModelId, _lanternMaterials));
+
+  /*render::Model testModel;
   render::Model testModel2;
   render::Model testModel3;
   render::Model testModel4;
@@ -51,10 +221,6 @@ bool StageApplication::init()
   render::Model testModel10;
   render::Model testModel11;
   render::Model testModel12;
-
-  if (!_vkRenderer.init()) {
-    return false;
-  }
 
   if (!testModel.loadFromObj(std::string(ASSET_PATH) + "models/low_poly_tree.obj",
                               std::string(ASSET_PATH) + "models/")) {
@@ -310,7 +476,7 @@ bool StageApplication::init()
         auto rot = glm::rotate(glm::mat4(1.0f), glm::radians((float)rotOff(rng)), glm::vec3(0.0f, 1.0f, 0.0f));
         _vkRenderer.registerRenderable(_meshId12, trans * rot * scale, glm::vec3(0.0f), 10.0f);
       }
-  }
+  }*/
 
   // Set shadow cam somewhere
   _shadowCamera.setViewMatrix(glm::lookAt(glm::vec3(-16.0f, 10.0f, -18.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
@@ -332,12 +498,6 @@ void StageApplication::update(double delta)
 
   //_windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));
-
-  if (_sponzaMoved) {
-    auto trans = glm::translate(glm::mat4(1.0f), _sponzaPos);
-    _vkRenderer.updateRenderableTransform(_sponzaId, trans * _sponzaScale);
-    _sponzaMoved = false;
-  }
 
   _vkRenderer.update(
     _camera,
@@ -375,9 +535,6 @@ void StageApplication::render()
       _sunDir.x = dir[0];
       _sunDir.z = dir[1];
     }
-    if (ImGui::SliderFloat("Sponza X", &_sponzaPos.x, -100.0f, 100.0f)) {
-      _sponzaMoved = true;
-    }
 
     static char debugResStr[128] = "ReflectTex";
     if (ImGui::InputText("Debug view resource", debugResStr, IM_ARRAYSIZE(debugResStr), ImGuiInputTextFlags_EnterReturnsTrue)) {
@@ -388,6 +545,52 @@ void StageApplication::render()
     ImGui::Slider2DFloat("Wind dir", &_windDir.x, &_windDir.y, -1.0f, 1.0f, -1.0f, 1.0f);*/
     ImGui::Checkbox("Texture Debug View", &_renderDebugOptions.debugView);
     //ImGui::Checkbox("Apply post processing", &g_PP);
+    if (ImGui::Button("Spawn lantern")) {
+      _rends.emplace_back(addRenderableRandom(_vkRenderer, _lanternModelId, _lanternMaterials, 0.2f, 5.0f));
+    }
+    if (ImGui::Button("Spawn sponza")) {
+      _rends.emplace_back(addRenderableRandom(_vkRenderer, _sponzaModelId, _sponzaMaterialIds, 0.01f, 40.0f));
+    }
+    if (ImGui::Button("Spawn brainstem")) {
+      _rends.emplace_back(addRenderableRandom(_vkRenderer, _brainstemModelId, _brainstemMaterials, 1.0f, 2.0f, _brainstemAnimId, _brainstemSkelId));
+    }
+    if (ImGui::Button("Load sponza")) {
+      if (_sponzaMaterials.empty()) {
+        loadGLTF(_vkRenderer, std::string(ASSET_PATH) + "models/sponza-gltf-pbr/sponza.glb", _sponzaModelId, _sponzaMaterialIds, _dummySkele, _dummyAnimations, &_sponzaModel, &_sponzaMaterials);
+      }
+      else {
+        loadModelAsset(_vkRenderer, _sponzaModel, _sponzaMaterials);
+      }
+    }
+    if (ImGui::Button("Load lantern")) {      
+      loadGLTF(_vkRenderer, std::string(ASSET_PATH) + "models/lantern_gltf/Lantern.glb", _lanternModelId, _lanternMaterials, _dummySkele, _dummyAnimations);
+    }
+    if (ImGui::Button("Load brainstem")) {
+      std::vector<render::AnimationId> animIds;
+      loadGLTF(_vkRenderer, std::string(ASSET_PATH) + "models/brainstem_gltf/BrainStem.glb", _brainstemModelId, _brainstemMaterials, _brainstemSkelId, animIds);
+      _brainstemAnimId = animIds[0];
+    }
+    if (ImGui::Button("Remove sponza model")) {
+      removeModel(_vkRenderer, _sponzaModelId, _sponzaMaterialIds);
+    }
+    if (ImGui::Button("Remove lantern model")) {
+      removeModel(_vkRenderer, _lanternModelId, _lanternMaterials);
+      _lanternModelId = render::INVALID_ID;
+    }
+    if (ImGui::Button("Remove random renderable")) {
+      if (!_rends.empty()) {
+        std::random_device dev;
+        std::mt19937 rng(dev());
+        std::uniform_int_distribution<> idxRandomiser(0, (int)(_rends.size() - 1));
+
+        auto idx = idxRandomiser(rng);
+
+        auto id = _rends[idx];
+        removeRenderable(_vkRenderer, id);
+
+        _rends.erase(_rends.begin() + idx);
+      }
+    }
     ImGui::End();
   }
   {

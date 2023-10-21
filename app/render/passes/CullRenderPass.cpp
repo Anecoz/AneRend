@@ -71,7 +71,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
         mappedData[i]._command.vertexOffset = (uint32_t)mesh._vertexOffset;
         mappedData[i]._command.firstInstance = cumulativeMeshUsage;//i == 0 ? 0 : (uint32_t)renderContext->getCurrentMeshUsage()[(uint32_t)i - 1];
 
-        cumulativeMeshUsage += (uint32_t)renderContext->getCurrentMeshUsage()[(uint32_t)i];
+        cumulativeMeshUsage += (uint32_t)renderContext->getCurrentMeshUsage()[(uint32_t)mesh._id];
       }
 
       VkBufferCopy copyRegion{};

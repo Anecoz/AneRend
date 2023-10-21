@@ -3,8 +3,6 @@
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 
-#include "MeshId.h"
-
 namespace render {
 namespace gpu {
 
@@ -22,21 +20,14 @@ struct alignas(16) GPURenderable {
   uint32_t _numMeshIds;
   uint32_t _skeletonOffset;
   uint32_t _visible;
+  uint32_t _firstMaterialIndex;
 };
 
-struct GPUMeshMaterialInfo {
-  int32_t _metallicTexIndex;
-  int32_t _roughnessTexIndex;
-  int32_t _normalTexIndex;
-  int32_t _albedoTexIndex;
-  int32_t _metallicRoughnessTexIndex;
-  int32_t _emissiveTexIndex;
-  float _baseColFacR;
-  float _baseColFacG;
-  float _baseColFacB;
-  float _emissiveFactorR;
-  float _emissiveFactorG;
-  float _emissiveFactorB;
+// See render::asset::Material
+struct GPUMaterialInfo {
+  glm::vec4 _baseColFac; // w unused
+  glm::vec4 _emissive;
+  glm::ivec4 _bindlessIndices; // metRough, albedo, normal, emissive
 };
 
 struct GPUMeshInfo {
@@ -154,6 +145,15 @@ struct alignas(16) GPUParticle
   glm::vec4 currentVelocity; // w is elapsedTime
   int alive;
   uint32_t renderableId;
+};
+
+// Maps the internal ids (such as RenderableId) to an index in the GPU buffers
+// e.g. Renderable rend = renderableBuffer[idMapBuffer[renderableId]];
+struct GPUIdMap
+{
+  uint32_t _meshIndex;
+  uint32_t _renderableIndex;
+  uint32_t _materialIndex;
 };
 
 }

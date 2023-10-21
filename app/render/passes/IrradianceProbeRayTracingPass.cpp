@@ -16,43 +16,6 @@ struct PushConstant {
   uint32_t layer;
 };
 
-void fillProbeSSBO(RenderContext* rc, AllocatedBuffer& ssbo)
-{
-  auto& probes = rc->getIrradianceProbes();
-
-  // Create a staging buffer on CPU side first
-  auto allocator = rc->vmaAllocator();
-  AllocatedBuffer stagingBuffer;
-  std::size_t dataSize = probes.size() * sizeof(gpu::GPUIrradianceProbe);
-
-  bufferutil::createBuffer(allocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
-
-  gpu::GPUIrradianceProbe* mappedData;
-  vmaMapMemory(allocator, stagingBuffer._allocation, &(void*)mappedData);
-
-  const std::size_t width = rc->getNumIrradianceProbesXZ();
-  const std::size_t height = rc->getNumIrradianceProbesY();
-  const std::size_t depth = rc->getNumIrradianceProbesXZ();
-
-  for (std::size_t i = 0; i < probes.size(); ++i) {
-    auto& cpuProbe = probes[i];
-    gpu::GPUIrradianceProbe* probe = &mappedData[i];
-
-    *probe = cpuProbe;
-  }
-
-  vmaUnmapMemory(allocator, stagingBuffer._allocation);
-
-  auto cmdBuffer = rc->beginSingleTimeCommands();
-
-  VkBufferCopy copyRegion{};
-  copyRegion.size = dataSize;
-  vkCmdCopyBuffer(cmdBuffer, stagingBuffer._buffer, ssbo._buffer, 1, &copyRegion);
-
-  rc->endSingleTimeCommands(cmdBuffer);
-  vmaDestroyBuffer(allocator, stagingBuffer._buffer, stagingBuffer._allocation);
-}
-
 }
 
 IrradianceProbeRayTracingPass::IrradianceProbeRayTracingPass()
@@ -117,22 +80,6 @@ void IrradianceProbeRayTracingPass::registerToGraph(FrameGraphBuilder& fgb, Rend
     usage._type = Type::SampledTexture;
     info._resourceUsages.emplace_back(std::move(usage));
   }
-  /* {
-    ResourceUsage usage{};
-    usage._resourceName = "IrradianceProbeSSBO";
-    usage._stage.set((std::size_t)Stage::Transfer);
-    usage._access.set((std::size_t)Access::Read);
-    usage._access.set((std::size_t)Access::Write);
-    usage._stage.set((std::size_t)Stage::RayTrace);
-    usage._type = Type::SSBO;
-
-    BufferInitialCreateInfo createInfo{};
-    createInfo._initialSize = rc->getNumIrradianceProbesXZ() * rc->getNumIrradianceProbesXZ() * rc->getNumIrradianceProbesY() * sizeof(gpu::GPUIrradianceProbe); sizeof(gpu::GPUIrradianceProbe);
-    createInfo._initialDataCb = fillProbeSSBO;
-    usage._bufferCreateInfo = createInfo;
-
-    info._resourceUsages.emplace_back(std::move(usage));
-  }*/
 
   RayTracingPipelineCreateParams param{};
   param.device = rc->device();

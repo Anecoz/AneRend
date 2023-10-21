@@ -13,7 +13,6 @@
 #include "vk_mem_alloc.h"
 
 #include "Vertex.h"
-#include "MeshId.h"
 #include "Camera.h"
 #include "AllocatedBuffer.h"
 #include "AllocatedImage.h"
@@ -23,9 +22,13 @@
 #include "passes/RenderPass.h"
 #include "RenderResourceVault.h"
 #include "FrameGraphBuilder.h"
-#include "Mesh.h"
-#include "RenderableId.h"
 #include "Particle.h"
+#include "internal/InternalMesh.h"
+#include "internal/InternalModel.h"
+#include "internal/InternalMaterial.h"
+#include "internal/InternalRenderable.h"
+#include "internal/GigaBuffer.h"
+#include "internal/AnimationThread.h"
 #include "AccelerationStructure.h"
 #include "animation/Animator.h"
 
@@ -56,8 +59,6 @@ struct PerFrameTimer
   int _currNum100 = 0;
 
   std::vector<float> _buf;
-  //float _buf[1000]; // Last 1000 values
-  //int _currBufIdx = 0;
 };
 
 class VulkanRenderer : public RenderContext
@@ -74,31 +75,7 @@ public:
   // Initializes surface, device, all material pipelines etc.
   bool init();
 
-  // Registers a model that a renderable can reference.
-  virtual ModelId registerModel(Model&& model, bool buildBlas = true);
-
-  virtual MeshId registerMesh(Mesh& mesh, bool buildBlas = true);
-
-  // After doing this, the renderable will be rendered every frame with the given material, until unregistered.
-  RenderableId registerRenderable(
-    ModelId modelId,
-    const glm::mat4& transform,
-    const glm::vec3& sphereBoundCenter,
-    float sphereBoundRadius,
-    bool debugDraw = false,
-    bool buildTlas = true);
-
-  // Completely removes all data related to this id and will stop rendering it.
-  void unregisterRenderable(RenderableId id);
-
-  // Hide or show a renderable.
-  void setRenderableVisible(RenderableId id, bool visible);
-
-  // Tint
-  void setRenderableTint(RenderableId id, const glm::vec3& tint);
-
-  // Updates transform of a renderable
-  void updateRenderableTransform(RenderableId id, const glm::mat4& newTransform);
+  void assetUpdate(AssetUpdate&& update) override final;
 
   void update(
     const Camera& camera,
@@ -145,7 +122,7 @@ public:
 
   size_t getMaxBindlessResources() override final;
 
-  std::vector<Mesh>& getCurrentMeshes() override final;
+  std::vector<internal::InternalMesh>& getCurrentMeshes() override final;
   std::unordered_map<MeshId, std::size_t>& getCurrentMeshUsage() override final;
   size_t getCurrentNumRenderables() override final;
 
@@ -167,17 +144,14 @@ public:
   void startTimer(const std::string& name, VkCommandBuffer cmdBuffer) override final;
   void stopTimer(const std::string& name, VkCommandBuffer cmdBuffer) override final;
 
-  Mesh& getSphereMesh() override final;
+  internal::InternalMesh& getSphereMesh() override final;
 
   size_t getNumIrradianceProbesXZ() override final;
   size_t getNumIrradianceProbesY() override final;
-  std::vector<gpu::GPUIrradianceProbe>& getIrradianceProbes() override final;
 
   double getElapsedTime() override final;
 
   std::vector<PerFrameTimer> getPerFrameTimers();
-
-  std::vector<MeshId> getMeshIds(ModelId model);
 
   const Camera& getCamera() override final;
 
@@ -197,8 +171,10 @@ private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
   static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 128;
+  static const std::size_t STAGING_BUFFER_SIZE_MB = 512;
   static const std::size_t MAX_NUM_RENDERABLES = std::size_t(1e5);
   static const std::size_t MAX_NUM_MESHES = std::size_t(1e3);
+  static const std::size_t MAX_NUM_MATERIALS = 100;
   static const std::size_t NUM_PIXELS_CLUSTER_X = 16;
   static const std::size_t NUM_PIXELS_CLUSTER_Y = 9;
   static const std::size_t NUM_CLUSTER_DEPTH_SLIZES = 7;
@@ -210,32 +186,13 @@ private:
   static const std::size_t MAX_NUM_JOINTS = 50;
   static const std::size_t MAX_NUM_SKINNED_MODELS = 1000;
 
-  std::vector<anim::Animator> _animators;
-  std::vector<anim::Skeleton*> _currentSkeletons;
-
   std::unordered_map<std::string, std::any> _blackboard;
 
-  MeshId _debugCubeMesh;
-  ModelId _debugSphereModelId;
   MeshId _debugSphereMeshId;
-  RenderableId _debugSphereRenderable;
-
-  std::vector<RenderableId> _debugIrradianceProbes;
-
-  std::vector<gpu::GPUIrradianceProbe> _irradianceProbes;
-
-  void registerDebugRenderable(const glm::mat4& transform, const glm::vec3& center, float radius);
 
   RenderDebugOptions _debugOptions;
   RenderOptions _renderOptions;
   logic::WindMap _currentWindMap;
-
-  RenderableId _nextRenderableId = 0;
-  MeshId _nextMeshId = 0;
-  ModelId _nextModelId = 0;
-
-  std::vector<Model> _models;
-  bool modelIdExists(ModelId id);
 
   Camera _latestCamera;
 
@@ -255,37 +212,47 @@ private:
   // This is dangerous, but points to "current" image index in the swap chain
   uint32_t _currentSwapChainIndex;
 
-  bool meshIdExists(MeshId meshId) const;
-  std::vector<Mesh> _currentMeshes;
+  // Animation multithread runtime.
+  internal::AnimationThread _animThread;
+
+  // Single mem interface to place skeletons into GPU buffers.
+  internal::BufferMemoryInterface _skeletonMemIf;
+
+  // Keeps track of where skeletons should go in the related GPU buffer. Does not own skeleton data.
+  // NOTE: The offset given by each Handle is in terms of _NUMBER OF_ matrices, not bytes!
+  std::unordered_map<render::SkeletonId, internal::BufferMemoryInterface::Handle> _skeletonOffsets;
+
+  // Assets
+  std::vector<internal::InternalModel> _currentModels;
+  std::vector<internal::InternalMesh> _currentMeshes;
+  std::vector<internal::InternalMaterial> _currentMaterials;
+  std::vector<internal::InternalRenderable> _currentRenderables;
+
+  // Maps engine-wide IDs to internal buffer ids.
+  std::unordered_map<ModelId, std::size_t> _modelIdMap;
+  std::unordered_map<MeshId, std::size_t> _meshIdMap;
+  std::unordered_map<RenderableId, std::size_t> _renderableIdMap;
+  std::unordered_map<MaterialId, std::size_t> _materialIdMap;
+
+  // This is needed for generating draw calls, it records how many renderables use each mesh.
   std::unordered_map<MeshId, std::size_t> _currentMeshUsage;
-  std::vector<bool> _meshesChanged;
+
+  std::vector<bool> _modelsChanged;
+  std::vector<bool> _renderablesChanged;
+  std::vector<bool> _materialsChanged;
+
+  // Pending uploads
+  std::vector<asset::Model> _modelsToUpload;
+  std::vector<asset::Material> _materialsToUpload;
+
+  void uploadPendingModels(VkCommandBuffer cmdBuffer);
+  void uploadPendingMaterials(VkCommandBuffer cmdBuffer);
 
   // Ray tracing related
-  void registerBottomLevelAS(MeshId meshId);
+  void registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId meshId);
   void buildTopLevelAS();
   void writeTLASDescriptor();
   bool _topLevelBuilt = false;
-
-  struct Renderable {
-    RenderableId _id;
-
-    MeshId _firstMeshId;
-    uint32_t _numMeshes;
-
-    uint32_t _skeletonOffset = 0;
-
-    bool _buildTlas = true;
-    bool _visible = true;
-
-    glm::mat4 _transform;
-    glm::vec3 _tint;
-    glm::vec3 _boundingSphereCenter;
-    float _boundingSphereRadius;
-  };
-
-  std::vector<Renderable> _currentRenderables;
-  std::vector<bool> _renderablesChanged;
-  void cleanupRenderable(const Renderable& renderable);
 
   std::unordered_map<MeshId, AccelerationStructure> _blases;
   AccelerationStructure _tlas;
@@ -301,15 +268,21 @@ private:
   VkDescriptorSetLayout _bindlessDescSetLayout;
   std::vector<VkDescriptorSet> _bindlessDescriptorSets;
 
-  uint32_t _gigaIdxBinding = 6;
+  uint32_t _renderableMatIndexBinding = 6;
+  uint32_t _gigaIdxBinding = _renderableMatIndexBinding + 1;
   uint32_t _gigaVtxBinding = _gigaIdxBinding + 1;
   uint32_t _meshBinding = _gigaVtxBinding + 1;
   uint32_t _tlasBinding = _meshBinding + 1;
   uint32_t _skeletonBinding = _tlasBinding + 1;
-  uint32_t _bindlessTextureBinding = _skeletonBinding + 1;
-  uint32_t _currentBindlessTextureIndex = 0;
+  uint32_t _idMapBinding = _skeletonBinding + 1;
+  uint32_t _bindlessTextureBinding = _idMapBinding + 1;
+
+  // Use a mem interface to select empty bindless indices.
+  internal::BufferMemoryInterface _bindlessTextureMemIf;
+  //uint32_t _currentBindlessTextureIndex = 0;
 
   void createTexture(
+    VkCommandBuffer cmdBuffer,
     VkFormat format, 
     int width, 
     int height, 
@@ -319,13 +292,14 @@ private:
     VkImageView& viewOut);
 
   void generateMipmaps(
+    VkCommandBuffer cmdBuffer,
     VkImage image,
     VkFormat imageFormat,
     int32_t texWidth,
     int32_t texHeight,
     uint32_t mipLevels);
 
-  uint32_t addTextureToBindless(VkImageLayout layout, VkImageView view, VkSampler sampler);
+  internal::BufferMemoryInterface::Handle addTextureToBindless(VkImageLayout layout, VkImageView view, VkSampler sampler);
 
   RenderResourceVault _vault;
   FrameGraphBuilder _fgb;
@@ -337,17 +311,9 @@ private:
   void createParticles();
   std::vector<Particle> _particles;
 
-  struct GigaMeshBuffer {
-    AllocatedBuffer _buffer;
-
-    std::size_t _size = 1024 * 1024 * GIGA_MESH_BUFFER_SIZE_MB; // in bytes
-
-    std::size_t _freeSpacePointer = 0; // points to where we currently can insert things into the buffer
-  };
-
   // These buffers contain vertex and index data for all current meshes
-  GigaMeshBuffer _gigaVtxBuffer;
-  GigaMeshBuffer _gigaIdxBuffer;
+  internal::GigaBuffer _gigaVtxBuffer;
+  internal::GigaBuffer _gigaIdxBuffer;
 
   // Staging buffer for copying data to the gpu buffers.
   std::vector<AllocatedBuffer> _gpuStagingBuffer;
@@ -356,8 +322,14 @@ private:
   // Contains renderable info for compute culling shader.
   std::vector<AllocatedBuffer> _gpuRenderableBuffer;
 
-  // Contains material info for meshes.
-  std::vector<AllocatedBuffer> _gpuMeshMaterialInfoBuffer;
+  // Contains mappings from *Id to internal indices.
+  std::vector<AllocatedBuffer> _gpuIdMapBuffer;
+
+  // Contains material info.
+  std::vector<AllocatedBuffer> _gpuMaterialBuffer;
+
+  // Maps renderable material indices into the actual material buffer.
+  std::vector<AllocatedBuffer> _gpuRenderableMaterialIndexBuffer;
 
   // Contains mesh info
   std::vector<AllocatedBuffer> _gpuMeshInfoBuffer;
@@ -386,17 +358,20 @@ private:
   // Fills gpu renderable buffer with current renderable information (could be done async)
   void prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer);
 
-  // Fill gpu material info for the meshes.
-  void prefillGPUMeshMaterialBuffer(VkCommandBuffer& commandBuffer);
+  // Fill info about which material index each renderable references.
+  void prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer);
+
+  // Fills gpu id map buffer with the current renderable and mesh ids.
+  void prefillGPUIdMapBuffer(VkCommandBuffer& commandBuffer);
 
   // Fill gpu mesh info.
   void prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer);
 
   // Fill gpu skeleton info.
-  void prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer);
+  void prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, std::vector<anim::Skeleton>& skeletons);
 
   // Fills GPU light buffer with current light information.
-  void prefilGPULightBuffer(VkCommandBuffer& commandBuffer);
+  void prefillGPULightBuffer(VkCommandBuffer& commandBuffer);
 
   // Update wind force image
   void updateWindForceImage(VkCommandBuffer& commandBuffer);
@@ -434,8 +409,6 @@ private:
   bool initBindless();
   bool initFrameGraphBuilder();
   bool initRenderPasses();
-  bool initViewClusters();
-  bool initIrradianceProbes();
 
   bool checkValidationLayerSupport();
   bool checkDeviceExtensionSupport(VkPhysicalDevice device);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Identifiers.h"
+
 #include <glm/glm.hpp>
 #include <utility>
 #include <vector>
@@ -28,7 +30,18 @@ struct Channel
 
 struct Animation
 {
+  render::AnimationId _id = INVALID_ID;
   std::vector<Channel> _channels;
+
+  // Keyframes that are pre-calculated from the channels. Typically an Animator will set these.
+  struct InterpolatedKeyframe
+  {
+    // <internalId, globalTransform>
+    std::vector<std::pair<int, glm::mat4>> _joints;
+  };
+
+  // pair.first is timestamp when the interpolated keyframe is active
+  std::vector<std::pair<double, InterpolatedKeyframe>> _keyframes;
 };
 
 }

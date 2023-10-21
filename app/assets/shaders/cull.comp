@@ -34,7 +34,7 @@ struct GrassObj
 
 struct TranslationId
 {
-  uint renderableId;
+  uint renderableIndex;
   uint meshId;
 };
 
@@ -291,7 +291,8 @@ void main()
 
       // For TLAS update, just see if renderable is within a circular range of camera
       bool withinRange = withinRangeOfCamera(sphereCenter, 50.0);
-      renderableBuffer.renderables[gID].visible = setCullBit(renderableBuffer.renderables[gID], !withinRange);
+      uint rendIndex = gID;//renderableIndexFromId(gID);
+      renderableBuffer.renderables[rendIndex].visible = setCullBit(renderableBuffer.renderables[gID], !withinRange);
 
       visible = visible && sphereCenterView.z + radius > -pushConstants.farDist;
       visible = visible && sphereCenterView.z - radius < pushConstants.nearDist;
@@ -305,19 +306,19 @@ void main()
         if (visible) {
 
           for (int i = 0; i < renderableBuffer.renderables[gID].numMeshIds; ++i) {
-            uint meshId = renderableBuffer.renderables[gID].firstMeshId + i;
+            uint meshId = meshIndexFromId(renderableBuffer.renderables[gID].firstMeshId + i);
             uint countBefore = atomicAdd(drawBuffer.draws[meshId].instanceCount, 1);
 
             // Update translation buffer (from gl_InstanceIndex to renderableId and meshId)
             uint instanceIndex = drawBuffer.draws[meshId].firstInstance + countBefore;
-            translationBuffer.ids[instanceIndex].renderableId = gID;
-            translationBuffer.ids[instanceIndex].meshId = meshId;
+            translationBuffer.ids[instanceIndex].renderableIndex = gID;
+            translationBuffer.ids[instanceIndex].meshId = renderableBuffer.renderables[gID].firstMeshId + i;
 
             // Also add debug sphere instances if it is enabled
             if (ubo.visualizeBoundingSpheresEnabled == 1) {
               uint countBef = atomicAdd(debugSphereDrawBuffer.draw.instanceCount, 1);
-              debugSphereTransBuffer.ids[countBef].renderableId = gID;
-              debugSphereTransBuffer.ids[countBef].meshId = meshId;
+              debugSphereTransBuffer.ids[countBef].renderableIndex = gID;
+              debugSphereTransBuffer.ids[countBef].meshId = renderableBuffer.renderables[gID].firstMeshId + i;
             }
           }
         }
