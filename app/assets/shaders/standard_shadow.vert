@@ -18,8 +18,6 @@ layout(location = 0) in vec3 inPosition;
 layout(location = 1) in ivec4 joints;
 layout(location = 2) in vec4 jointWeights;
 
-layout(location = 0) out vec3 fragPositionWorld;
-
 void main() {
   uint renderableId = translationBuffer.ids[gl_InstanceIndex].renderableId;
   uint skeletonOffset = renderableBuffer.renderables[renderableId].skeletonOffset;
@@ -35,5 +33,4 @@ void main() {
 
   mat4 model = renderableBuffer.renderables[renderableId].transform;
   gl_Position = ubo.directionalShadowMatrixProj * ubo.directionalShadowMatrixView * model * vec4(pos, 1.0);
-  fragPositionWorld = vec3(model * vec4(pos, 1.0));
 }
