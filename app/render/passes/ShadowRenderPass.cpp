@@ -71,6 +71,8 @@ void ShadowRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
   params.vertShader = "standard_shadow_vert.spv";
   params.colorLoc = -1;
   params.normalLoc = -1;
+  params.jointLoc = 1;
+  params.jointWeightLoc = 2;
   params.colorAttachment = false;
   params.depthBiasEnable = true;
   params.depthBiasConstant = 4.0f;
