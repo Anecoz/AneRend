@@ -138,7 +138,8 @@ render::RenderableId addRenderableRandom(
   float boundingSphereRadius,
   glm::mat4 rot = glm::mat4(1.0f),
   render::AnimationId animId = render::INVALID_ID,
-  render::SkeletonId skeleId = render::INVALID_ID)
+  render::SkeletonId skeleId = render::INVALID_ID,
+  render::asset::Renderable* renderableOut = nullptr)
 {
   static float xOff = 0.0f;
   std::random_device dev;
@@ -169,6 +170,9 @@ render::RenderableId addRenderableRandom(
   xOff = xOff + 4.0f;
 
   auto idCopy = renderable._id;
+  if (renderableOut) {
+    *renderableOut = renderable;
+  }
 
   render::AssetUpdate upd{};
   upd._addedRenderables.emplace_back(std::move(renderable));
@@ -574,6 +578,26 @@ void StageApplication::render()
         _shrekAnimId,
         _shrekSkeleId));
     }
+    if (ImGui::Button("Spawn fox")) {
+      _rends.emplace_back(addRenderableRandom(
+        _vkRenderer,
+        _foxModelId,
+        _foxMaterials,
+        .02f,
+        2.0f,
+        glm::mat4(1.0f),
+        _foxAnims[0],
+        _foxSkeleId,
+        &_cachedFoxRenderable));
+    }
+    if (ImGui::Button("Change fox animation")) {
+      _foxAnim = (_foxAnim + 1) % (int)_foxAnims.size();
+      _cachedFoxRenderable._animation = _foxAnims[_foxAnim];
+
+      render::AssetUpdate upd{};
+      upd._updatedRenderables.emplace_back(_cachedFoxRenderable);
+      _vkRenderer.assetUpdate(std::move(upd));
+    }
     if (ImGui::Button("Load sponza")) {
       if (_sponzaMaterials.empty()) {
         loadGLTF(_vkRenderer, std::string(ASSET_PATH) + "models/sponza-gltf-pbr/sponza.glb", _sponzaModelId, _sponzaMaterialIds, _dummySkele, _dummyAnimations, &_sponzaModel, &_sponzaMaterials);
@@ -606,6 +630,15 @@ void StageApplication::render()
         _brainstemSkelId, 
         animIds);
       _brainstemAnimId = animIds[0];
+    }
+    if (ImGui::Button("Load fox")) {
+      loadGLTF(
+        _vkRenderer,
+        std::string(ASSET_PATH) + "models/fox_gltf/fox_indexed.gltf",
+        _foxModelId,
+        _foxMaterials,
+        _foxSkeleId,
+        _foxAnims);
     }
     if (ImGui::Button("Remove sponza model")) {
       removeModel(_vkRenderer, _sponzaModelId, _sponzaMaterialIds);
@@ -654,7 +687,6 @@ void StageApplication::render()
 
     // Group them
     std::vector<std::string> groups;
-    //std::map<std::string, std::vector<render::PerFrameTimer>> groups{};
     for (auto& timer : timers) {
       if (std::find(groups.begin(), groups.end(), timer._group) == groups.end()) {
         groups.emplace_back(timer._group);

@@ -510,6 +510,19 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     _currentModels.erase(_currentModels.begin() + it->second);
   }
 
+  // Model/mesh id map update
+  if (modelIdMapUpdate) {
+    _modelIdMap.clear();
+    _meshIdMap.clear();
+
+    for (std::size_t i = 0; i < _currentModels.size(); ++i) {
+      _modelIdMap[_currentModels[i]._id] = i;
+    }
+    for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
+      _meshIdMap[_currentMeshes[i]._id] = i;
+    }
+  }
+
   // Added models
   for (auto& model : update._addedModels) {
     if (model._id == INVALID_ID) {
@@ -598,12 +611,15 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     }
   }
 
+  // Mat id map update
   if (materialIdMapUpdate) {
     _materialIdMap.clear();
 
     for (std::size_t i = 0; i < _currentMaterials.size(); ++i) {
       _materialIdMap[_currentMaterials[i]._id] = i;
     }
+
+    materialIdMapUpdate = false;
   }
 
   // Added materials
@@ -732,6 +748,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     }
   }
 
+  // Rend id map update
   if (rendIdMapUpdate) {
     _renderableIdMap.clear();
 
@@ -812,21 +829,21 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     }
 
     if (rend._animation != _currentRenderables[it->second]._renderable._animation) {
-      // TODO! Change animation. Need a disconnect of the previous anim/skel couple in animthread.
+      auto skeleId = rend._skeleton;
+      auto oldAnimId = _currentRenderables[it->second]._renderable._animation;
+      _animThread.disconnect(oldAnimId, skeleId);
+      _animThread.connect(rend._animation, skeleId);
     }
 
     _currentRenderables[it->second]._renderable = rend;
   }
 
-  if (modelIdMapUpdate) {
-    _modelIdMap.clear();
-    _meshIdMap.clear();
+  // Mat id map update
+  if (materialIdMapUpdate) {
+    _materialIdMap.clear();
 
-    for (std::size_t i = 0; i < _currentModels.size(); ++i) {
-      _modelIdMap[_currentModels[i]._id] = i;
-    }
-    for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
-      _meshIdMap[_currentMeshes[i]._id] = i;
+    for (std::size_t i = 0; i < _currentMaterials.size(); ++i) {
+      _materialIdMap[_currentMaterials[i]._id] = i;
     }
   }
 
@@ -2363,6 +2380,8 @@ void VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
   // look at the renderable which will reference a "start point" in this buffer,
   // and then go to this buffer to actually find the material indices.
 
+  if (_currentRenderables.empty()) return;
+
   uint8_t* data;
   vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
 
@@ -2416,6 +2435,8 @@ void VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
 
 void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 {
+  if (_currentRenderables.empty()) return;
+
   // Each renderable that we currently have on the CPU needs to be udpated for the GPU buffer.
   std::size_t dataSize = _currentRenderables.size() * sizeof(gpu::GPURenderable);
   uint8_t* data;
@@ -3373,6 +3394,8 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
       VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
       _gpuStagingBuffer[i]);
+    std::string name = "gpuStagingBuffer_" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuStagingBuffer[i]._buffer, name.c_str());
 
     // Create a buffer that will contain renderable information for use by the frustum culling compute shader.
     bufferutil::createBuffer(
@@ -3381,6 +3404,8 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuRenderableBuffer[i]);
+    name = "gpuRenderableBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuRenderableBuffer[i]._buffer, name.c_str());
 
     // Create a buffer that will contain renderable information for use by the frustum culling compute shader.
     bufferutil::createBuffer(
@@ -3389,6 +3414,8 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuMaterialBuffer[i]);
+    name = "_gpuMaterialBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuMaterialBuffer[i]._buffer, name.c_str());
 
     bufferutil::createBuffer(
       _vmaAllocator,
@@ -3396,6 +3423,8 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuRenderableMaterialIndexBuffer[i]);
+    name = "_gpuRenderableMaterialIndexBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuRenderableMaterialIndexBuffer[i]._buffer, name.c_str());
 
     // Create a buffer that will contain renderable information for use by the frustum culling compute shader.
     bufferutil::createBuffer(
@@ -3404,6 +3433,8 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuMeshInfoBuffer[i]);
+    name = "_gpuMeshInfoBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuMeshInfoBuffer[i]._buffer, name.c_str());
 
     // Used as a UBO in most shaders for accessing scene data.
     bufferutil::createBuffer(
@@ -3412,6 +3443,8 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
       VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT, // If this turns out to be a bottle neck we have to switch to a staging buffer
       _gpuSceneDataBuffer[i]);
+    name = "_gpuSceneDataBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuSceneDataBuffer[i]._buffer, name.c_str());
 
     bufferutil::createBuffer(
       _vmaAllocator,
@@ -3419,6 +3452,8 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuLightBuffer[i]);
+    name = "_gpuLightBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuLightBuffer[i]._buffer, name.c_str());
 
     bufferutil::createBuffer(
       _vmaAllocator,
@@ -3426,6 +3461,8 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuViewClusterBuffer[i]);
+    name = "_gpuViewClusterBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuViewClusterBuffer[i]._buffer, name.c_str());
 
     bufferutil::createBuffer(
       _vmaAllocator,
@@ -3433,6 +3470,8 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuSkeletonBuffer[i]);
+    name = "_gpuSkeletonBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuSkeletonBuffer[i]._buffer, name.c_str());
 
     bufferutil::createBuffer(
       _vmaAllocator,
@@ -3440,6 +3479,8 @@ bool VulkanRenderer::initGpuBuffers()
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuIdMapBuffer[i]);
+    name = "_gpuIdMapBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuIdMapBuffer[i]._buffer, name.c_str());
 
     // Wind force sampler
     VkSamplerCreateInfo samplerCreate{};
@@ -3459,6 +3500,8 @@ bool VulkanRenderer::initGpuBuffers()
     if (vkCreateSampler(_device, &samplerCreate, nullptr, &_gpuWindForceSampler[i]) != VK_SUCCESS) {
       printf("Could not create bindless wind sampler!\n");
     }
+    name = "_gpuWindForceSampler" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_SAMPLER, (uint64_t)_gpuWindForceSampler[i], name.c_str());
 
     // Wind force image
     imageutil::createImage(

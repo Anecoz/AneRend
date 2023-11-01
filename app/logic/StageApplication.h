@@ -10,6 +10,7 @@
 #include "../render/RenderDebugOptions.h"
 #include "../render/RenderOptions.h"
 #include "../render/asset/Model.h"
+#include "../render/asset/Renderable.h"
 #include "WindSystem.h"
 
 class StageApplication : public Application
@@ -59,6 +60,13 @@ private:
   std::vector<render::MaterialId> _shrekMaterials;
   render::AnimationId _shrekAnimId;
   render::SkeletonId _shrekSkeleId;
+
+  render::ModelId _foxModelId;
+  std::vector<render::MaterialId> _foxMaterials;
+  std::vector<render::AnimationId> _foxAnims;
+  render::SkeletonId _foxSkeleId;
+  render::asset::Renderable _cachedFoxRenderable;
+  int _foxAnim = 0;
 
   std::vector<render::RenderableId> _rends;
 

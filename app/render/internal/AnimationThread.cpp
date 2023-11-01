@@ -172,6 +172,17 @@ void AnimationThread::connect(render::AnimationId animId, render::SkeletonId ske
   _pendingAnimators.emplace_back(std::move(fut));
 }
 
+void AnimationThread::disconnect(render::AnimationId animId, render::SkeletonId skeleId)
+{
+  std::unique_lock<std::mutex> lock(_mtx);
+  for (auto it = _currentAnimators.begin(); it != _currentAnimators.end(); ++it) {
+    if (it->_animId == animId && it->_skeleId == skeleId) {
+      _currentAnimators.erase(it);
+      return;
+    }
+  }
+}
+
 void AnimationThread::playAnimation(render::SkeletonId skeleId)
 {
   // TODO

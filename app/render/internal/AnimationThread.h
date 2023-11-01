@@ -38,6 +38,9 @@ public:
   // Apply animId to skeleId
   void connect(render::AnimationId animId, render::SkeletonId skeleId);
 
+  // Disconnect animId from skeleId
+  void disconnect(render::AnimationId animId, render::SkeletonId skeleId);
+
   // I think skeleton is enough...? A skeleton can only have 1 animation associated with it,
   // whereas a single animation can be used with multiple skeletons.
   void playAnimation(render::SkeletonId skeleId);

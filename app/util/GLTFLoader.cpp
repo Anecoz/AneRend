@@ -346,16 +346,21 @@ bool GLTFLoader::loadFromFile(
         auto bufferStart = view.byteOffset + accessor.byteOffset;
 
         if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
-          uint8_t* buf = new uint8_t[accessor.count];
-          memcpy(buf, &buffer.data[bufferStart], accessor.count * sizeof(uint8_t));
+          if (view.byteStride == 0) {
+            uint8_t* buf = new uint8_t[accessor.count * 4];
+            memcpy(buf, &buffer.data[bufferStart], accessor.count * 4 * sizeof(uint8_t));
 
-          jointsBuffer = new std::int16_t[accessor.count];
-          for (int i = 0; i < accessor.count; ++i) {
-            jointsBuffer[i] = static_cast<int16_t>(buf[i]);
+            jointsBuffer = new std::int16_t[accessor.count * 4];
+            for (int i = 0; i < accessor.count * 4; ++i) {
+              jointsBuffer[i] = static_cast<int16_t>(buf[i]);
+            }
+
+            deleteJoints = true;
+            delete[] buf;
           }
-
-          deleteJoints = true;
-          delete[] buf;
+          else {
+            printf("UNHANDLED JOINTS BYTE STRIDE!\n");
+          }
         }
         else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
           if (view.byteStride == 2) {
