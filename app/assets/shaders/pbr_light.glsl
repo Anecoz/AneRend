@@ -591,13 +591,13 @@ vec3 calcIndirectSpecularLight(
 
   vec3 refl = vec3(0.0);
 
-  if (roughness > 0.8 && ubo.ddgiEnabled == 1) {
+  /*if (roughness > 0.8 && ubo.ddgiEnabled == 1) {
     vec3 dir = reflect(-V, normal);
     refl = sampleProbe(probeTex, worldPos, dir);
   }
-  else {
+  else {*/
     refl = textureLod(specTex, texCoords, finalLod).rgb;
-  }
+  //}
   
   vec2 envBRDF = texture(lutTex, vec2(max(dot(normal, V), 0.0), 1.01 - roughness)).rg;
   vec3 specular = refl * (kS *envBRDF.x + envBRDF.y);

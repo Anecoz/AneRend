@@ -28,4 +28,5 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   float sunIntensity;
   float skyIntensity;
   float exposure;
+  int rtEnabled;
 } ubo;

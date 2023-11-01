@@ -21,6 +21,7 @@ struct alignas(16) GPURenderable {
   uint32_t _skeletonOffset;
   uint32_t _visible;
   uint32_t _firstMaterialIndex;
+  uint32_t _rtFirstDynamicMeshId;
 };
 
 // See render::asset::Material
@@ -112,6 +113,7 @@ struct GPUSceneData {
   float sunIntensity;
   float skyIntensity;
   float exposure;
+  int32_t rtEnabled;
 };
 
 struct GPUSSAOSampleUbo {

@@ -15,7 +15,7 @@ struct InternalMesh
   // Offsets into fat buffers.
   BufferMemoryInterface::Handle _vertexHandle;
   BufferMemoryInterface::Handle _indexHandle;
-  uint32_t _indexOffset;
+  int64_t _indexOffset;
   uint32_t _vertexOffset;
 
   // For ray-tracing

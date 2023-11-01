@@ -29,6 +29,7 @@
 #include "internal/InternalRenderable.h"
 #include "internal/GigaBuffer.h"
 #include "internal/AnimationThread.h"
+#include "internal/BufferMemoryInterface.h"
 #include "AccelerationStructure.h"
 #include "animation/Animator.h"
 
@@ -108,7 +109,11 @@ public:
   VkDescriptorSetLayout& bindlessDescriptorSetLayout() override final;
   VkExtent2D swapChainExtent() override final;
 
-  //void drawGigaBuffer(VkCommandBuffer* commandBuffer) override final;
+  std::size_t getGigaBufferSizeMB() override final;
+
+  VkDeviceAddress getGigaVtxBufferAddr() override final;
+  VkDeviceAddress getGigaIdxBufferAddr() override final;
+
   void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount) override final;
   void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) override final;
   void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) override final;
@@ -123,8 +128,13 @@ public:
   size_t getMaxBindlessResources() override final;
 
   std::vector<internal::InternalMesh>& getCurrentMeshes() override final;
+  std::vector<internal::InternalRenderable>& getCurrentRenderables() override final;
+  bool getRenderableById(RenderableId id, internal::InternalRenderable** out) override final;
+  bool getMeshById(MeshId id, internal::InternalMesh** out) override final;
   std::unordered_map<MeshId, std::size_t>& getCurrentMeshUsage() override final;
   size_t getCurrentNumRenderables() override final;
+
+  std::unordered_map<RenderableId, std::vector<AccelerationStructure>>& getDynamicBlases() override final;
 
   gpu::GPUCullPushConstants getCullParams() override final;
 
@@ -170,7 +180,7 @@ public:
 private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
-  static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 128;
+  static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 512;
   static const std::size_t STAGING_BUFFER_SIZE_MB = 512;
   static const std::size_t MAX_NUM_RENDERABLES = std::size_t(1e5);
   static const std::size_t MAX_NUM_MESHES = std::size_t(1e3);
@@ -249,12 +259,31 @@ private:
   void uploadPendingMaterials(VkCommandBuffer cmdBuffer);
 
   // Ray tracing related
-  void registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId meshId);
+  AccelerationStructure registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId meshId, bool dynamic = false);
   void buildTopLevelAS();
   void writeTLASDescriptor();
   bool _topLevelBuilt = false;
 
+  // Only for ray-tracing: These renderables need to have their models (all meshes)
+  // copied, aswell as their blases, since they are dynamic (per-renderable).
+  // Typically animated.
+  std::vector<RenderableId> _dynamicModelsToCopy;
+
+  void copyDynamicModels(VkCommandBuffer cmdBuffer);
+
+  // If ray tracing is enabled, this contains per-animated-renderable offsets where each renderable writes
+  // updated (animated) vertices.
+  //std::unordered_map<RenderableId, internal::BufferMemoryInterface::Handle> _dynamicMeshOffsets;
+  //internal::BufferMemoryInterface _dynamicMeshMemIf;
+
+  // Static BLAS for each mesh
   std::unordered_map<MeshId, AccelerationStructure> _blases;
+
+  // Dynamic BLASes for dynamically updated (animated) renderables
+  // Vector contains one BLAS per mesh in the renderable model
+  std::unordered_map<RenderableId, std::vector<AccelerationStructure>> _dynamicBlases;
+
+  // The single TLAS written to each frame.
   AccelerationStructure _tlas;
 
   VkPhysicalDeviceRayTracingPipelinePropertiesKHR _rtPipeProps;
@@ -314,6 +343,9 @@ private:
   // These buffers contain vertex and index data for all current meshes
   internal::GigaBuffer _gigaVtxBuffer;
   internal::GigaBuffer _gigaIdxBuffer;
+
+  VkDeviceAddress _gigaVtxAddr;
+  VkDeviceAddress _gigaIdxAddr;
 
   // Staging buffer for copying data to the gpu buffers.
   std::vector<AllocatedBuffer> _gpuStagingBuffer;

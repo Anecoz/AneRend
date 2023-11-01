@@ -55,10 +55,15 @@ void main()
   for (int i = 0; i < renderableBuffer.renderables[idx].numMeshIds; ++i) {
     uint meshId = renderableBuffer.renderables[idx].firstMeshId + i;
     uint meshIndex = meshIndexFromId(meshId);
+    uint dynamicMeshId = renderableBuffer.renderables[idx].rtFirstDynamicMeshId;
     uint materialOffset = meshId - renderableBuffer.renderables[idx].firstMeshId;
 
     uint materialIndexAbstract = renderableBuffer.renderables[idx].firstMaterialIndex + materialOffset;
     uint matIndex = rendMatIndexBuffer.indices[materialIndexAbstract];
+
+    if (dynamicMeshId > 0) {
+      meshIndex = meshIndexFromId(dynamicMeshId + i);
+    }
 
     uint countBefore = atomicAdd(counterBuffer.counter[0], 1);
     //uint countBefore = idx * 128 + i;

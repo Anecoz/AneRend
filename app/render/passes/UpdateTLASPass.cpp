@@ -211,6 +211,11 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       buildInfo.scratchData.deviceAddress = tlas._scratchAddress;
 
       VkAccelerationStructureBuildRangeInfoKHR rangeInfo{};
+
+      // NOTE: Primitive count is (probably) greater than the actual instances we have.
+      // This is ok, since we fill the instance buffer with 0's. And an accelerationStructureReference
+      // with value 0 indicates that this instance is "inactive" which is totally valid.
+      // Ref: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#acceleration-structure-inactive-prims
       rangeInfo.primitiveCount = static_cast<uint32_t>(exeParams.rc->getMaxNumRenderables());
 
       auto rangeInfoPtr = &rangeInfo;

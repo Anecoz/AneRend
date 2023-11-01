@@ -11,6 +11,7 @@ struct Renderable
   uint skeletonOffset;
   uint visible;
   uint firstMaterialIndex;
+  uint rtFirstDynamicMeshId; // Only for ray-tracing: First dynamic mesh id (numMeshId applies here aswell)
 };
 
 // Map from engine IDs to internal indices.
@@ -100,6 +101,18 @@ Vertex unpackVertex(PackedVertex packedVertex)
   return outVtx;
 }
 
+PackedVertex packVertex(Vertex v)
+{
+  PackedVertex outVtx;
+  outVtx.d0 = vec4(v.pos, v.color.r);
+  outVtx.d1 = vec4(v.color.gb, v.normal.xy);
+  outVtx.d2 = vec4(v.normal.z, v.tangent.xyz);
+  outVtx.d3 = vec4(v.tangent.w, v.jointWeights.xyz);
+  outVtx.d4 = vec4(v.jointWeights.w, v.uv.xy, 0.0);
+  outVtx.d5 = ivec4(v.jointIds);
+  return outVtx;
+}
+
 layout(set = 0, binding = 1) uniform sampler2D windForceTex;
 
 layout(std430, set = 0, binding = 2) buffer RenderableBuffer {
@@ -126,7 +139,7 @@ layout(std430, set = 0, binding = 7) readonly buffer IndexBuffer {
   uint indices[];
 } indexBuffer;
 
-layout(std430, set = 0, binding = 8) readonly buffer VertexBuffer {
+layout(std430, set = 0, binding = 8) buffer VertexBuffer {
   PackedVertex vertices[];
 } vertexBuffer;
 

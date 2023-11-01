@@ -46,7 +46,7 @@ BufferMemoryInterface::Handle BufferMemoryInterface::addData(std::size_t dataSiz
         _freeBlocks.emplace_back(std::move(splitBlock));
       }
 
-      printf("Adding data at offset %zu and size %zu\n", handle._offset, handle._size);
+      //printf("Adding data at offset %zu and size %zu\n", handle._offset, handle._size);
       return handle;
     }
   }
@@ -58,7 +58,7 @@ BufferMemoryInterface::Handle BufferMemoryInterface::addData(std::size_t dataSiz
 void BufferMemoryInterface::removeData(BufferMemoryInterface::Handle handle)
 {
   FreeBlock freeBlock{ handle._offset, handle._size };
-  printf("Removing data at offset %zu and size %zu\n", handle._offset, handle._size);
+  //printf("Removing data at offset %zu and size %zu\n", handle._offset, handle._size);
   _freeBlocks.emplace_back(std::move(freeBlock));
 }
 

@@ -78,5 +78,5 @@ void main()
         tMax,           // ray max range
         0);             // payload (location = 0)
 
-  imageStore(outputIm, pixel, vec4(payload.irradiance * 0.3, payload.dist));
+  imageStore(outputIm, pixel, vec4(payload.irradiance, payload.dist));
 }

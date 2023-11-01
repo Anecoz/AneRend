@@ -38,6 +38,7 @@
 #include "passes/SurfelSHPass.h"
 #include "passes/LuminanceHistogramPass.h"
 #include "passes/LuminanceAveragePass.h"
+#include "passes/UpdateBlasPass.h"
 
 #include "../util/Utils.h"
 #include "../util/GraphicsUtils.h"
@@ -181,7 +182,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _fgb(&_vault)
   , _window(window)
   , _enableValidationLayers(true)
-  , _enableRayTracing(false)
+  , _enableRayTracing(true)
 {
   imageutil::init();
 }
@@ -222,6 +223,14 @@ VulkanRenderer::~VulkanRenderer()
       vmaDestroyBuffer(_vmaAllocator, blas.second._buffer._buffer, blas.second._buffer._allocation);
       vmaDestroyBuffer(_vmaAllocator, blas.second._scratchBuffer._buffer, blas.second._scratchBuffer._allocation);
       DestroyAccelerationStructureKHR(_device, blas.second._as, nullptr);
+    }
+
+    for (auto& dynamicPair : _dynamicBlases) {
+      for (auto& blas : dynamicPair.second) {
+        vmaDestroyBuffer(_vmaAllocator, blas._buffer._buffer, blas._buffer._allocation);
+        vmaDestroyBuffer(_vmaAllocator, blas._scratchBuffer._buffer, blas._scratchBuffer._allocation);
+        DestroyAccelerationStructureKHR(_device, blas._as, nullptr);
+      }
     }
 
     vmaDestroyBuffer(_vmaAllocator, _tlas._buffer._buffer, _tlas._buffer._allocation);
@@ -451,6 +460,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   bool rendIdMapUpdate = !update._removedRenderables.empty();
   bool modelIdMapUpdate = !update._removedModels.empty();
   bool materialIdMapUpdate = !update._removedMaterials.empty();
+  bool forceModelChange = false;
 
   // Removed models (forces id map to update, could be expensive)
   for (auto& removedModel : update._removedModels) {
@@ -493,28 +503,22 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
         //_currentRenderables.erase(it);
         update._removedRenderables.emplace_back(it->_renderable._id);
         rendIdMapUpdate = true;
+        printf("Warning! Removing renderable that still uses removed model!\n");
       }
     }
 
     _currentModels.erase(_currentModels.begin() + it->second);
   }
 
-  if (modelIdMapUpdate) {
-    _modelIdMap.clear();
-    _meshIdMap.clear();
-
-    for (std::size_t i = 0; i < _currentModels.size(); ++i) {
-      _modelIdMap[_currentModels[i]._id] = i;
-    }
-    for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
-      _meshIdMap[_currentMeshes[i]._id] = i;
-    }
-  }
-
   // Added models
   for (auto& model : update._addedModels) {
     if (model._id == INVALID_ID) {
       printf("Asset update fail: cannot add model with invalid id\n");
+      continue;
+    }
+
+    if (_currentMeshes.size() == MAX_NUM_MESHES) {
+      printf("Cannot add model, max num meshes reached!\n");
       continue;
     }
 
@@ -609,6 +613,11 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
       continue;
     }
 
+    if (_currentMaterials.size() == MAX_NUM_MATERIALS) {
+      printf("Cannot add material, max size reached!\n");
+      continue;
+    }
+
     internal::InternalMaterial internalMat{};
     internalMat._emissive = mat._emissive;
     internalMat._baseColFactor = mat._baseColFactor;
@@ -684,6 +693,39 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   for (auto remId : update._removedRenderables) {
     for (auto it = _currentRenderables.begin(); it != _currentRenderables.end(); ++it) {
       if (it->_renderable._id == remId) {
+        if (_enableRayTracing && it->_rtFirstDynamicMeshId != INVALID_ID) {
+          // TODO: Delete dynamic blases related to this renderable (if it is dynamic!)
+          //       Delete the extra meshes that were copied (if it is dynamic!)
+
+          modelIdMapUpdate = true;
+          forceModelChange = true;
+          auto& dynamicBlas = _dynamicBlases[remId];
+
+          for (std::size_t i = 0; i < it->_meshes.size(); ++i) {
+            MeshId mesh = it->_rtFirstDynamicMeshId + (MeshId)i;
+
+            for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
+              if (meshIt->_id == mesh) {
+                // Destroy blas, probably want to do this off a critical path...
+                auto& blas = dynamicBlas[i];
+
+                vmaDestroyBuffer(_vmaAllocator, blas._buffer._buffer, blas._buffer._allocation);
+                vmaDestroyBuffer(_vmaAllocator, blas._scratchBuffer._buffer, blas._scratchBuffer._allocation);
+                DestroyAccelerationStructureKHR(_device, blas._as, nullptr);
+
+                _gigaVtxBuffer._memInterface.removeData(meshIt->_vertexHandle);
+                _gigaIdxBuffer._memInterface.removeData(meshIt->_indexHandle);
+                meshIt = _currentMeshes.erase(meshIt);
+                break;
+              }
+              else {
+                ++meshIt;
+              }
+            }
+          }
+
+          _dynamicBlases.erase(remId);
+        }
         _currentRenderables.erase(it);
         break;
       }
@@ -710,14 +752,39 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
       continue;
     }
 
+    if (_currentRenderables.size() == MAX_NUM_RENDERABLES) {
+      printf("Cannot add renderable, max size reached!\n");
+      continue;
+    }
+
     internal::InternalRenderable internalRend{};
     internalRend._renderable = rend;
+
+    // Fill in meshids
+    auto& model = _currentModels[_modelIdMap[rend._model]];
+    internalRend._meshes = model._meshes;
 
     if (rend._animation != INVALID_ID && rend._skeleton != INVALID_ID) {
       // TODO: This may fail because skeleton hasn't had the chance to register inside animthread yet... race.
       _animThread.connect(rend._animation, rend._skeleton);
 
       internalRend._skeletonOffset = (uint32_t)_skeletonOffsets[rend._skeleton]._offset;
+
+      // If ray tracing is enabled, we need to write individual BLAS:es for each renderable that is animated.
+      if (_enableRayTracing) {
+        if (_currentMeshes.size() == MAX_NUM_MESHES) {
+          printf("Cannot add dynamic BLAS for renderable, max num meshes reached!\n");
+          continue;
+        }
+
+        // TODO: Don't do this if we already have this skeleton + model combination copied
+        //       In that case, just point to the dynamic model already present
+        _dynamicModelsToCopy.emplace_back(internalRend._renderable._id);
+
+        for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+          _modelsChanged[i] = true;
+        }
+      }
     }
 
     _currentRenderables.push_back(internalRend);
@@ -751,8 +818,20 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     _currentRenderables[it->second]._renderable = rend;
   }
 
+  if (modelIdMapUpdate) {
+    _modelIdMap.clear();
+    _meshIdMap.clear();
+
+    for (std::size_t i = 0; i < _currentModels.size(); ++i) {
+      _modelIdMap[_currentModels[i]._id] = i;
+    }
+    for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
+      _meshIdMap[_currentMeshes[i]._id] = i;
+    }
+  }
+
   // Book-keeping
-  bool modelChange = !update._addedModels.empty() || !update._removedModels.empty();
+  bool modelChange = forceModelChange || !update._addedModels.empty() || !update._removedModels.empty();
   bool renderableChange = !update._addedRenderables.empty() || !update._removedRenderables.empty() || !update._updatedRenderables.empty();
   bool materialChange = !update._addedMaterials.empty() || !update._removedMaterials.empty();
 
@@ -875,19 +954,24 @@ void VulkanRenderer::uploadPendingModels(VkCommandBuffer cmdBuffer)
       internalMesh._vertexHandle = vertexHandle;
       internalMesh._indexHandle = indexHandle;
       internalMesh._vertexOffset = static_cast<uint32_t>(vertexHandle._offset / sizeof(Vertex));
-      internalMesh._indexOffset = static_cast<uint32_t>(indexHandle._offset / sizeof(uint32_t));
+      internalMesh._indexOffset = indexHandle._offset == -1 ? -1 : static_cast<int64_t>(indexHandle._offset / sizeof(uint32_t));
 
       if (_enableRayTracing) {
-        registerBottomLevelAS(cmdBuffer, mesh._id);
+        auto blas = registerBottomLevelAS(cmdBuffer, mesh._id);
+        if (blas) {
+          _blases[mesh._id] = std::move(blas);
+        }
 
         // Retrieve device address of BLAS for use in TLAS update pass.
-        auto& blas = _blases[mesh._id];
-        VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
-        addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
-        addressInfo.accelerationStructure = blas._as;
-        VkDeviceAddress blasAddress = GetAccelerationStructureDeviceAddressKHR(_device, &addressInfo);
+        if (_blases.find(mesh._id) != _blases.end()) {
+          auto& blas = _blases[mesh._id];
+          VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
+          addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+          addressInfo.accelerationStructure = blas._as;
+          VkDeviceAddress blasAddress = GetAccelerationStructureDeviceAddressKHR(_device, &addressInfo);
 
-        internalMesh._blasRef = blasAddress;
+          internalMesh._blasRef = blasAddress;
+        }
       }
 
       _currentStagingOffset += stagingBufSize;
@@ -1013,6 +1097,127 @@ void VulkanRenderer::uploadPendingMaterials(VkCommandBuffer cmdBuffer)
   _materialsToUpload.clear();
 }
 
+void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
+{
+  for (auto rend : _dynamicModelsToCopy) {
+    auto& internalRend = _currentRenderables[_renderableIdMap[rend]];
+
+    // Copy all meshes and BLASes
+    auto& model = _currentModels[_modelIdMap[internalRend._renderable._model]];
+
+    if (model._meshes.size() + _currentMeshes.size() >= MAX_NUM_MESHES) {
+      printf("Cannot add dynamic mesh, max size reached!\n");
+      continue;
+    }
+
+    bool firstDynamicMeshIdSet = false;
+    for (auto meshId : model._meshes) {
+      auto& internalMesh = _currentMeshes[_meshIdMap[meshId]];
+
+      // TODO: The ID ranges must all be sequential! Add a "genIdRange" to IDGenerator!
+      internal::InternalMesh meshCopy{};
+      meshCopy._id = IDGenerator::genMeshId();
+      meshCopy._numIndices = internalMesh._numIndices;
+      meshCopy._numVertices = internalMesh._numVertices;
+
+      if (!firstDynamicMeshIdSet) {
+        internalRend._rtFirstDynamicMeshId = meshCopy._id;
+        firstDynamicMeshIdSet = true;
+      }
+
+      auto vtxHandle = _gigaVtxBuffer._memInterface.addData(internalMesh._vertexHandle._size);
+      auto idxHandle = _gigaIdxBuffer._memInterface.addData(internalMesh._indexHandle._size);
+
+      if (!vtxHandle || !idxHandle) {
+        printf("Could not copy mesh!\n");
+        continue;
+      }
+
+      // Vertex
+      {
+        VkBufferCopy copyRegion{};
+        copyRegion.srcOffset = internalMesh._vertexHandle._offset;
+        copyRegion.dstOffset = vtxHandle._offset;
+        copyRegion.size = internalMesh._vertexHandle._size;
+        vkCmdCopyBuffer(cmdBuffer, _gigaVtxBuffer._buffer._buffer, _gigaVtxBuffer._buffer._buffer, 1, &copyRegion);
+
+        VkBufferMemoryBarrier memBarr{};
+        memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDEX_READ_BIT;
+        memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        memBarr.buffer = _gigaVtxBuffer._buffer._buffer;
+        memBarr.offset = vtxHandle._offset;
+        memBarr.size = internalMesh._vertexHandle._size;
+
+        vkCmdPipelineBarrier(
+          cmdBuffer,
+          VK_PIPELINE_STAGE_TRANSFER_BIT,
+          VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+          0, 0, nullptr,
+          1, &memBarr,
+          0, nullptr);
+      }
+
+      // Index
+      {
+        VkBufferCopy copyRegion{};
+        copyRegion.srcOffset = internalMesh._indexHandle._offset;
+        copyRegion.dstOffset = idxHandle._offset;
+        copyRegion.size = internalMesh._indexHandle._size;
+        vkCmdCopyBuffer(cmdBuffer, _gigaIdxBuffer._buffer._buffer, _gigaIdxBuffer._buffer._buffer, 1, &copyRegion);
+
+        VkBufferMemoryBarrier memBarr{};
+        memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDEX_READ_BIT;
+        memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        memBarr.buffer = _gigaIdxBuffer._buffer._buffer;
+        memBarr.offset = idxHandle._offset;
+        memBarr.size = internalMesh._indexHandle._size;
+
+        vkCmdPipelineBarrier(
+          cmdBuffer,
+          VK_PIPELINE_STAGE_TRANSFER_BIT,
+          VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+          0, 0, nullptr,
+          1, &memBarr,
+          0, nullptr);
+      }
+
+      meshCopy._vertexOffset = static_cast<uint32_t>(vtxHandle._offset / sizeof(Vertex));
+      meshCopy._indexOffset = idxHandle._offset == -1 ? -1 : static_cast<int64_t>(idxHandle._offset / sizeof(uint32_t));
+      meshCopy._vertexHandle = vtxHandle;
+      meshCopy._indexHandle = idxHandle;
+
+      std::size_t idx = _currentMeshes.size();
+      auto idCopy = meshCopy._id;
+      _meshIdMap[meshCopy._id] = idx;
+      _currentMeshes.emplace_back(std::move(meshCopy));
+
+      // Copy BLAS
+      auto blas = registerBottomLevelAS(cmdBuffer, idCopy, true);
+
+      if (!blas) {
+        printf("Something went horribly wrong!\n");
+        continue;
+      }
+
+      VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
+      addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+      addressInfo.accelerationStructure = blas._as;
+      VkDeviceAddress blasAddress = GetAccelerationStructureDeviceAddressKHR(_device, &addressInfo);
+      _currentMeshes.back()._blasRef = blasAddress;
+
+      _dynamicBlases[rend].emplace_back(std::move(blas));
+    }
+  }
+
+  _dynamicModelsToCopy.clear();
+}
+
 void VulkanRenderer::update(
   const Camera& camera,
   const Camera& shadowCamera,
@@ -1091,6 +1296,7 @@ void VulkanRenderer::update(
   ubo.sunIntensity = _renderOptions.sunIntensity;
   ubo.skyIntensity = _renderOptions.skyIntensity;
   ubo.exposure = _renderOptions.exposure;
+  ubo.rtEnabled = _enableRayTracing;
 
   for (int i = 0; i < _lights.size(); ++i) {
     _lights[i].debugUpdatePos(delta);
@@ -1108,33 +1314,26 @@ void VulkanRenderer::update(
   }
 }
 
-void VulkanRenderer::registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId meshId)
+AccelerationStructure VulkanRenderer::registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId meshId, bool dynamic)
 {
-  if (_blases.count(meshId) > 0) {
+  if (!dynamic && _blases.count(meshId) > 0) {
     printf("Cannot create BLAS for mesh id %u, it already exists!\n", meshId);
-    return;
+    return AccelerationStructure();
   }
-
-  //printf("Building BLAS for mesh id %u\n", meshId);
 
   auto& mesh = _currentMeshes[_meshIdMap[meshId]];
 
+  if (mesh._indexOffset == -1) {
+    printf("Skipping blas for non-indexed mesh\n");
+    return AccelerationStructure();
+  }
+
   // Retrieve gigabuffer device address
-  VkBufferDeviceAddressInfo vertAddrInfo{};
-  vertAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-  vertAddrInfo.buffer = _gigaVtxBuffer._buffer._buffer;
-
-  VkBufferDeviceAddressInfo indAddrInfo{};
-  indAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-  indAddrInfo.buffer = _gigaIdxBuffer._buffer._buffer;
-
-  VkDeviceAddress gigaVtxAddress = vkGetBufferDeviceAddress(_device, &vertAddrInfo);
-  VkDeviceAddress gigaIdxAddress = vkGetBufferDeviceAddress(_device, &indAddrInfo);
 
   // According to spec it is ok to get address of offset data using a simple uint64_t offset
   // Also note, the vertexoffset and indexoffset are not _bytes_ but "numbers"
-  VkDeviceAddress vertexAddress = gigaVtxAddress + mesh._vertexOffset * sizeof(Vertex);
-  VkDeviceAddress indexAddress = gigaIdxAddress + mesh._indexOffset * sizeof(uint32_t);
+  VkDeviceAddress vertexAddress = _gigaVtxAddr + mesh._vertexOffset * sizeof(Vertex);
+  VkDeviceAddress indexAddress = _gigaIdxAddr + (uint32_t)mesh._indexOffset * sizeof(uint32_t);
 
   // Now we create a structure for the triangle and index data for this mesh
   VkAccelerationStructureGeometryTrianglesDataKHR triangles{};
@@ -1163,7 +1362,7 @@ void VulkanRenderer::registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId mes
 
   VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
   buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-  buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+  buildInfo.flags = dynamic ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
   buildInfo.geometryCount = 1;
   buildInfo.pGeometries = &geometry;
   buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
@@ -1207,10 +1406,11 @@ void VulkanRenderer::registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId mes
   createInfo.offset = 0;
   if (CreateAccelerationStructureKHR(_device, &createInfo, nullptr, &blas._as) != VK_SUCCESS) {
     printf("Could not create BLAS!\n");
-    return;
+    return AccelerationStructure();
   }
   
   buildInfo.dstAccelerationStructure = blas._as;
+  blas._accelerationStructureSize = sizeInfo.accelerationStructureSize;
 
   // Create scratch buffer
   AllocatedBuffer scratchBuffer{};
@@ -1238,6 +1438,7 @@ void VulkanRenderer::registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId mes
 
   blas._scratchBuffer = scratchBuffer;
   blas._scratchAddress = scratchAddr;
+  blas._scratchBufferSize = sizeInfo.buildScratchSize;
 
   // Barrier
   VkBufferMemoryBarrier postBarrier{};
@@ -1258,7 +1459,7 @@ void VulkanRenderer::registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId mes
     1, &postBarrier,
     0, nullptr);
 
-  _blases[meshId] = std::move(blas);
+  return blas;
 }
 
 void VulkanRenderer::buildTopLevelAS()
@@ -1822,6 +2023,12 @@ void VulkanRenderer::recreateSwapChain()
     auto bufRes = new BufferRenderResource();
     bufRes->_buffer = _gpuRenderableBuffer[i];
     _vault.addResource("RenderableBuffer", std::unique_ptr<IRenderResource>(bufRes), true, i, true);
+
+    {
+      auto bufRes = new BufferRenderResource();
+      bufRes->_buffer = _gigaVtxBuffer._buffer;
+      _vault.addResource("GigaVtxBuffer", std::unique_ptr<IRenderResource>(bufRes), false, 0, true);
+    }
   }
 
   initFrameGraphBuilder();
@@ -2239,6 +2446,7 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     mappedData[i]._bounds = renderable._boundingSphere;
     mappedData[i]._visible = renderable._visible ? 1 : 0;
     mappedData[i]._firstMaterialIndex = _currentRenderables[i]._materialIndexBufferIndex;
+    mappedData[i]._rtFirstDynamicMeshId = _currentRenderables[i]._rtFirstDynamicMeshId;
   }
 
   VkBufferCopy copyRegion{};
@@ -2358,7 +2566,7 @@ void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
     auto& mesh = _currentMeshes[i];
 
     mappedData[i]._vertexOffset = mesh._vertexOffset;
-    mappedData[i]._indexOffset = mesh._indexOffset;
+    mappedData[i]._indexOffset = (uint32_t)mesh._indexOffset;
     mappedData[i]._blasRef = mesh._blasRef;
   }
 
@@ -2394,6 +2602,8 @@ void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
 
 void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, std::vector<anim::Skeleton>& skeletons)
 {
+  if (skeletons.empty()) return;
+
   std::size_t dataSize = 0;
   for (auto& skel : skeletons) {
     dataSize += skel._joints.size() * sizeof(float) * 16; // one mat4 per joint
@@ -3084,16 +3294,17 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new HiZRenderPass());
   _renderPasses.emplace_back(new ParticleUpdatePass());
   _renderPasses.emplace_back(new CullRenderPass());
+  _renderPasses.emplace_back(new ShadowRenderPass());
+  _renderPasses.emplace_back(new GrassShadowRenderPass());
+  _renderPasses.emplace_back(new GeometryRenderPass());
+  _renderPasses.emplace_back(new GrassRenderPass());
+  _renderPasses.emplace_back(new UpdateBlasPass());
   _renderPasses.emplace_back(new UpdateTLASPass());
   _renderPasses.emplace_back(new IrradianceProbeTranslationPass());
   _renderPasses.emplace_back(new IrradianceProbeRayTracingPass()); // RT
   _renderPasses.emplace_back(new IrradianceProbeConvolvePass());
   //_renderPasses.emplace_back(new LightShadowRayTracingPass());
   //_renderPasses.emplace_back(new LightShadowSumPass());
-  _renderPasses.emplace_back(new ShadowRenderPass());
-  _renderPasses.emplace_back(new GrassShadowRenderPass());
-  _renderPasses.emplace_back(new GeometryRenderPass());
-  _renderPasses.emplace_back(new GrassRenderPass());
   _renderPasses.emplace_back(new ShadowRayTracingPass()); // RT
   _renderPasses.emplace_back(new SpecularGIRTPass()); //RT
   _renderPasses.emplace_back(new SpecularGIMipPass());
@@ -3120,8 +3331,21 @@ bool VulkanRenderer::initRenderPasses()
 bool VulkanRenderer::initGigaMeshBuffer()
 {
   // Allocate "big enough" size... 
-  bufferutil::createBuffer(_vmaAllocator, _gigaVtxBuffer._memInterface.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 0, _gigaVtxBuffer._buffer);
-  bufferutil::createBuffer(_vmaAllocator, _gigaIdxBuffer._memInterface.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 0, _gigaIdxBuffer._buffer);
+  bufferutil::createBuffer(_vmaAllocator, _gigaVtxBuffer._memInterface.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 0, _gigaVtxBuffer._buffer);
+  bufferutil::createBuffer(_vmaAllocator, _gigaIdxBuffer._memInterface.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 0, _gigaIdxBuffer._buffer);
+
+  // Get addresses
+  VkBufferDeviceAddressInfo vertAddrInfo{};
+  vertAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+  vertAddrInfo.buffer = _gigaVtxBuffer._buffer._buffer;
+
+  VkBufferDeviceAddressInfo indAddrInfo{};
+  indAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+  indAddrInfo.buffer = _gigaIdxBuffer._buffer._buffer;
+
+  _gigaVtxAddr = vkGetBufferDeviceAddress(_device, &vertAddrInfo);
+  _gigaIdxAddr = vkGetBufferDeviceAddress(_device, &indAddrInfo);
+
   return true;
 }
 
@@ -3263,6 +3487,13 @@ bool VulkanRenderer::initGpuBuffers()
     auto bufRes = new BufferRenderResource();
     bufRes->_buffer = _gpuRenderableBuffer[i];
     _vault.addResource("RenderableBuffer", std::unique_ptr<IRenderResource>(bufRes), true, static_cast<int>(i), true);
+
+    // Add Vertex buffer to vault, needed to be able to write animated vertices
+    {
+      auto bufRes = new BufferRenderResource();
+      bufRes->_buffer = _gigaVtxBuffer._buffer;
+      _vault.addResource("GigaVtxBuffer", std::unique_ptr<IRenderResource>(bufRes), false, 0, true);
+    }
   }
 
   return true;
@@ -3647,6 +3878,11 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
   imageutil::transitionImageLayout(commandBuffer, _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
     VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
+  if (_enableRayTracing && !_dynamicModelsToCopy.empty()) {
+    copyDynamicModels(commandBuffer);
+    _modelsChanged[_currentFrame] = true;
+  }
+
   // Mapping buffer that maps the engine-wide *Id to the indices used internally in the GPU buffers
   if (_modelsChanged[_currentFrame] || _renderablesChanged[_currentFrame] || _materialsChanged[_currentFrame]) {
     prefillGPUIdMapBuffer(commandBuffer);    
@@ -3788,6 +4024,21 @@ VkExtent2D VulkanRenderer::swapChainExtent()
   return _swapChain._swapChainExtent;
 }
 
+std::size_t VulkanRenderer::getGigaBufferSizeMB()
+{
+  return GIGA_MESH_BUFFER_SIZE_MB;
+}
+
+VkDeviceAddress VulkanRenderer::getGigaVtxBufferAddr()
+{
+  return _gigaVtxAddr;
+}
+
+VkDeviceAddress VulkanRenderer::getGigaIdxBufferAddr()
+{
+  return _gigaIdxAddr;
+}
+
 void VulkanRenderer::drawGigaBufferIndirect(VkCommandBuffer* commandBuffer, VkBuffer drawCalls, uint32_t drawCount)
 {
   vkCmdDrawIndexedIndirect(*commandBuffer, drawCalls, 0, drawCount, sizeof(gpu::GPUDrawCallCmd));
@@ -3840,6 +4091,35 @@ std::vector<internal::InternalMesh>& VulkanRenderer::getCurrentMeshes()
   return _currentMeshes;
 }
 
+std::vector<internal::InternalRenderable>& VulkanRenderer::getCurrentRenderables()
+{
+  return _currentRenderables;
+}
+
+bool VulkanRenderer::getRenderableById(RenderableId id, internal::InternalRenderable** out)
+{
+  if (_renderableIdMap.find(id) == _renderableIdMap.end()) {
+    printf("Warning! Cannot get renderable with id %u, doesn't exist!\n", id);
+    return false;
+  }
+
+  *out = &_currentRenderables[_renderableIdMap[id]];
+
+  return true;
+}
+
+bool VulkanRenderer::getMeshById(MeshId id, internal::InternalMesh** out)
+{
+  if (_meshIdMap.find(id) == _meshIdMap.end()) {
+    printf("Warning! Cannot get renderable with id %u, doesn't exist!\n", id);
+    return false;
+  }
+
+  *out = &_currentMeshes[_meshIdMap[id]];
+
+  return true;
+}
+
 std::unordered_map<MeshId, std::size_t>& VulkanRenderer::getCurrentMeshUsage()
 {
   return _currentMeshUsage;
@@ -3848,6 +4128,11 @@ std::unordered_map<MeshId, std::size_t>& VulkanRenderer::getCurrentMeshUsage()
 size_t VulkanRenderer::getCurrentNumRenderables()
 {
   return _currentRenderables.size();
+}
+
+std::unordered_map<RenderableId, std::vector<AccelerationStructure>>& VulkanRenderer::getDynamicBlases()
+{
+  return _dynamicBlases;
 }
 
 gpu::GPUCullPushConstants VulkanRenderer::getCullParams()

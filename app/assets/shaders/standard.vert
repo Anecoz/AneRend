@@ -14,10 +14,6 @@ layout(std430, set = 1, binding = 0) buffer TranslationBuffer {
   TranslationId ids[];
 } translationBuffer;
 
-layout(push_constant) uniform constants {
-  mat4 model;
-} pushConstants;
-
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
 layout(location = 2) in vec3 inNormal;
@@ -58,7 +54,7 @@ void main() {
 
   gl_Position = ubo.proj * ubo.view * model * vec4(pos, 1.0);
   fragColor = toLinear(vec4(inColor, 1.0)).rgb * renderableBuffer.renderables[renderableIndex].tint.rgb;
-  fragNormal =  mat3(model) * normal;
+  fragNormal =  normalize(mat3(model) * normal);
   fragPos = (model * vec4(inPosition, 1.0)).xyz;
   fragUV = inUV;
   uint meshId = translationBuffer.ids[gl_InstanceIndex].meshId;
@@ -69,7 +65,32 @@ void main() {
   vec3 bitangentL = cross(normal, inTangent.xyz);
   vec3 T = normalize(mat3(model) * inTangent.xyz);
   vec3 B = normalize(mat3(model) * bitangentL);
-  vec3 N = normalize(mat3(model) * normal);
+  vec3 N = fragNormal;
   fragTBN = mat3(T, B, N);
   fragTangent = inTangent.xyz;
+
+  // If ray tracing is enabled, we need to write our verts to the dynamic mesh buffer (for creating BLASes)
+  // But only if we are animated!
+  uint firstDynamicMesh = renderableBuffer.renderables[renderableIndex].rtFirstDynamicMeshId;
+  if (ubo.rtEnabled == 1 && firstDynamicMesh != 0) {
+    uint firstMeshId = renderableBuffer.renderables[renderableIndex].firstMeshId;
+    uint dynamicMeshId = meshId - firstMeshId + firstDynamicMesh;
+
+    MeshInfo dynamicMeshInfo = meshBuffer.meshes[meshIndexFromId(dynamicMeshId)];
+    MeshInfo meshInfo = meshBuffer.meshes[meshIndexFromId(meshId)];
+
+    Vertex v;
+    v.pos = pos;
+    v.color = inColor;
+    v.normal = normal;
+    v.tangent = inTangent;
+    v.jointIds = joints;
+    v.jointWeights = jointWeights;
+    v.uv = inUV;
+    PackedVertex packedV = packVertex(v);
+
+    // Note: gl_VertexIndex includes any vertex offset specified when calling the draw cmd.
+    //       i.e., we need to subtract meshInfo.vertexOffset from the index.
+    vertexBuffer.vertices[dynamicMeshInfo.vertexOffset + gl_VertexIndex - meshInfo.vertexOffset] = packedV;
+  }
 }

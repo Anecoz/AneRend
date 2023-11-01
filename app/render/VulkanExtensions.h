@@ -8,6 +8,7 @@ namespace vkext {
   extern PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR;
   extern PFN_vkCmdBuildAccelerationStructuresIndirectKHR vkCmdBuildAccelerationStructuresIndirectKHR;
   extern PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
+  extern PFN_vkCmdCopyAccelerationStructureKHR vkCmdCopyAccelerationStructureKHR;
 
   void vulkanExtensionInit(VkDevice device);
 }

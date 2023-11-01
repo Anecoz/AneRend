@@ -1315,6 +1315,9 @@ std::pair<VkAccessFlagBits, VkAccessFlagBits> FrameGraphBuilder::findBufferAcces
         else if (newStage.test((std::size_t)Stage::RayTrace)) {
           return { VK_ACCESS_TRANSFER_WRITE_BIT, (VkAccessFlagBits)(VK_ACCESS_SHADER_WRITE_BIT) };
         }
+        else if (newStage.test((std::size_t)Stage::Vertex)) {
+          return { VK_ACCESS_TRANSFER_WRITE_BIT, (VkAccessFlagBits)(VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT) };
+        }
       }
       else if (newAccess.test((std::size_t)Access::Read)) {
         if (newStage.test((std::size_t)Stage::Compute)) {

@@ -198,6 +198,36 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
     usage._ownedByEngine = true;
     resourceUsages.emplace_back(std::move(usage));
   }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "GigaVtxBuffer";
+    usage._access.set((std::size_t)Access::Write);
+    usage._stage.set((std::size_t)Stage::Vertex);
+    usage._type = Type::SSBO;
+    usage._ownedByEngine = true;
+    usage._multiBuffered = true;
+    resourceUsages.emplace_back(std::move(usage));
+  }
+
+  // Init for dynamic mesh buffer
+  /* {
+    ResourceUsage initUsage{};
+    initUsage._type = Type::SSBO;
+    initUsage._access.set((std::size_t)Access::Write);
+    initUsage._stage.set((std::size_t)Stage::Transfer);
+
+    fgb.registerResourceInitExe("DynamicMeshBuffer", std::move(initUsage),
+      [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
+        auto buf = (BufferRenderResource*)resource;
+
+        vkCmdFillBuffer(
+          cmdBuffer,
+          buf->_buffer._buffer,
+          0,
+          VK_WHOLE_SIZE,
+          0);
+      });
+  }*/
 
   info._resourceUsages = std::move(resourceUsages);
 

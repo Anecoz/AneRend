@@ -10,6 +10,8 @@
 #include "animation/Animation.h"
 #include "animation/Skeleton.h"
 #include "internal/InternalMesh.h"
+#include "internal/InternalRenderable.h"
+#include "internal/BufferMemoryInterface.h"
 #include "Vertex.h"
 #include "GpuBuffers.h"
 #include "RenderDebugOptions.h"
@@ -54,6 +56,11 @@ public:
   virtual VkDescriptorSetLayout& bindlessDescriptorSetLayout() = 0;
   virtual VkExtent2D swapChainExtent() = 0;
 
+  virtual std::size_t getGigaBufferSizeMB() = 0;
+
+  virtual VkDeviceAddress getGigaVtxBufferAddr() = 0;
+  virtual VkDeviceAddress getGigaIdxBufferAddr() = 0;
+
   virtual void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount) = 0;
   virtual void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) = 0;
   virtual void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) = 0;
@@ -70,8 +77,13 @@ public:
   virtual size_t getMaxBindlessResources() = 0;
 
   virtual std::vector<internal::InternalMesh>& getCurrentMeshes() = 0;
+  virtual std::vector<internal::InternalRenderable>& getCurrentRenderables() = 0;
+  virtual bool getRenderableById(RenderableId id, internal::InternalRenderable** out) = 0;
+  virtual bool getMeshById(MeshId id, internal::InternalMesh** out) = 0;
   virtual std::unordered_map<MeshId, std::size_t>& getCurrentMeshUsage() = 0;
   virtual size_t getCurrentNumRenderables() = 0;
+
+  virtual std::unordered_map<RenderableId, std::vector<AccelerationStructure>>& getDynamicBlases() = 0;
 
   virtual gpu::GPUCullPushConstants getCullParams() = 0;
 
