@@ -2,7 +2,8 @@
 
 #include "../animation/Skeleton.h"
 #include "../animation/Animation.h"
-#include "../animation/Animator.h"
+#include "../asset/Animator.h"
+#include "Animator.h"
 
 #include <atomic>
 #include <future>
@@ -26,40 +27,34 @@ public:
 
   // Copy current state of skeleton
   // The state is guaranteed to be complete, i.e. a full keyframe is applied to all joints.
-  std::vector<anim::Skeleton> getCurrentSkeletons();
+  std::vector<render::anim::Skeleton> getCurrentSkeletons();
 
   // These take ownership. Caller has to keep the id to reference these later.
-  void addAnimation(anim::Animation&& anim);
-  void addSkeleton(anim::Skeleton&& skele);
+  void addAnimation(render::anim::Animation&& anim);
+  void addAnimator(render::asset::Animator&& animator);
+  void addSkeleton(render::anim::Skeleton&& skele);
+
+  void updateAnimator(render::asset::Animator&& animator);
 
   void removeAnimation(render::AnimationId animId);
+  void removeAnimator(render::AnimatorId animatorId);
   void removeSkeleton(render::SkeletonId skeleId);
-
-  // Apply animId to skeleId
-  void connect(render::AnimationId animId, render::SkeletonId skeleId);
-
-  // Disconnect animId from skeleId
-  void disconnect(render::AnimationId animId, render::SkeletonId skeleId);
-
-  // I think skeleton is enough...? A skeleton can only have 1 animation associated with it,
-  // whereas a single animation can be used with multiple skeletons.
-  void playAnimation(render::SkeletonId skeleId);
-  void pauseAnimation(render::SkeletonId skeleId);
-  void stopAnimation(render::SkeletonId skeleId);
 
 private:
   struct AnimatorData
   {
-    anim::Animator _animator;
+    render::internal::anim::Animator _animator;
     render::AnimationId _animId;
     render::SkeletonId _skeleId;
+    render::AnimatorId _animatorId;
   };
 
-  std::vector<anim::Skeleton> _currentSkeletons;
-  std::vector<anim::Animation> _currentAnimations;
-  std::vector<AnimatorData> _currentAnimators;
-  std::vector<std::future<std::pair<AnimatorData, anim::Animation>>> _pendingAnimators;
-  std::vector<anim::Skeleton> _pendingAddedSkeletons;
+  std::vector<render::anim::Skeleton> _currentSkeletons;
+  std::vector<render::anim::Animation> _currentAnimations;
+  std::vector<render::asset::Animator> _currentAnimators;
+  std::vector<AnimatorData> _currentInternalAnimators;
+  std::vector<std::future<std::pair<AnimatorData, render::anim::Animation>>> _pendingInternalAnimators;
+  std::vector<render::anim::Skeleton> _pendingAddedSkeletons;
 
   // This mutex protects all the _current* vectors above except the skeletons.
   std::mutex _mtx;
@@ -80,7 +75,7 @@ private:
 
   // This is launched asynchronously and calculates the interpolated precalc frames.
   // Also returns an updated Animation object containing the precalculated frames.
-  std::pair<AnimatorData, anim::Animation> addAnimator(anim::Animation anim, anim::Skeleton skele);
+  std::pair<AnimatorData, render::anim::Animation> addInternalAnimator(render::asset::Animator animator, render::anim::Animation anim, render::anim::Skeleton skele);
 };
 
 }

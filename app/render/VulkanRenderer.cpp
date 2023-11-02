@@ -694,6 +694,21 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     _animThread.addSkeleton(std::move(skel));
   }
 
+  // Removed animators
+  for (auto remAnimator : update._removedAnimators) {
+    _animThread.removeAnimator(remAnimator);
+  }
+
+  // Updated animators
+  for (auto& animator : update._updatedAnimators) {
+    _animThread.updateAnimator(std::move(animator));
+  }
+
+  // Added animators
+  for (auto& animator : update._addedAnimators) {
+    _animThread.addAnimator(std::move(animator));
+  }   
+  
   // Removed renderables. This forces the id map to update aswell (potentially expensive)
   for (auto remId : update._removedRenderables) {
     for (auto it = _currentRenderables.begin(); it != _currentRenderables.end(); ++it) {
@@ -768,10 +783,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     auto& model = _currentModels[_modelIdMap[rend._model]];
     internalRend._meshes = model._meshes;
 
-    if (rend._animation != INVALID_ID && rend._skeleton != INVALID_ID) {
-      // TODO: This may fail because skeleton hasn't had the chance to register inside animthread yet... race.
-      _animThread.connect(rend._animation, rend._skeleton);
-
+    if (rend._skeleton != INVALID_ID) {
       internalRend._skeletonOffset = (uint32_t)_skeletonOffsets[rend._skeleton]._offset;
 
       // If ray tracing is enabled, we need to write individual BLAS:es for each renderable that is animated.
@@ -813,13 +825,6 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     if (it == _renderableIdMap.end()) {
       printf("Could not update renderable %u, doesn't exist!\n", rend._id);
       break;
-    }
-
-    if (rend._animation != _currentRenderables[it->second]._renderable._animation) {
-      auto skeleId = rend._skeleton;
-      auto oldAnimId = _currentRenderables[it->second]._renderable._animation;
-      _animThread.disconnect(oldAnimId, skeleId);
-      _animThread.connect(rend._animation, skeleId);
     }
 
     _currentRenderables[it->second]._renderable = rend;

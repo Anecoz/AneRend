@@ -4,7 +4,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-namespace render::anim {
+namespace render::internal::anim {
 
 namespace
 {
@@ -41,7 +41,7 @@ glm::mat4 lerpTransforms(const glm::mat4& m0, const glm::mat4& m1, double factor
   return out;
 }
 
-void lerpPath(ChannelPath path, glm::mat4* inputMat, const glm::vec4& v0, const glm::vec4& v1, double factor)
+void lerpPath(render::anim::ChannelPath path, glm::mat4* inputMat, const glm::vec4& v0, const glm::vec4& v1, double factor)
 {
   glm::vec3 s;
   glm::quat q;
@@ -52,7 +52,7 @@ void lerpPath(ChannelPath path, glm::mat4* inputMat, const glm::vec4& v0, const 
 
   glm::decompose(*inputMat, s, q, t, unused_0, unused_1);
 
-  if (path == ChannelPath::Rotation) {
+  if (path == render::anim::ChannelPath::Rotation) {
     glm::quat q0{ v0.x, v0.y, v0.z, v0.w };
     glm::quat q1{ v1.x, v1.y, v1.z, v1.w };
 
@@ -60,13 +60,13 @@ void lerpPath(ChannelPath path, glm::mat4* inputMat, const glm::vec4& v0, const 
 
     //printf("q: %f %f %f %f\n", q.x, q.y, q.z, q.w);
   }
-  else if (path == ChannelPath::Translation) {
+  else if (path == render::anim::ChannelPath::Translation) {
     glm::vec3 t0{ v0.x, v0.y, v0.z };
     glm::vec3 t1{ v1.x, v1.y, v1.z };
 
     t = (1.0f - (float)factor) * t0 + (float)factor * t1;
   }
-  else if (path == ChannelPath::Scale) {
+  else if (path == render::anim::ChannelPath::Scale) {
     glm::vec3 s0{ v0.x, v0.y, v0.z };
     glm::vec3 s1{ v1.x, v1.y, v1.z };
 
@@ -80,7 +80,7 @@ void lerpPath(ChannelPath path, glm::mat4* inputMat, const glm::vec4& v0, const 
   *inputMat = transMat * rotMat * scaleMat;
 }
 
-std::size_t findIndexForTime(double time, Channel& channel)
+std::size_t findIndexForTime(double time, render::anim::Channel& channel)
 {
   if (channel._inputTimes.size() == 1) {
     // Save us some trouble
@@ -101,11 +101,11 @@ std::size_t findIndexForTime(double time, Channel& channel)
 }
 
 Animator::Animator()
-  : _state(State::Stopped)
+  : _state(render::asset::Animator::State::Stopped)
 {
 }
 
-void Animator::init(Animation& anim, Skeleton& skeleton)
+void Animator::init(render::anim::Animation& anim, render::anim::Skeleton& skeleton)
 {
   // Calculate max time
   _maxTime = 0.0;
@@ -134,7 +134,7 @@ void Animator::init(Animation& anim, Skeleton& skeleton)
   }
 }*/
 
-void Animator::precalculateAnimationFrames(Animation& anim, Skeleton& skele, unsigned framerate)
+void Animator::precalculateAnimationFrames(render::anim::Animation& anim, render::anim::Skeleton& skele, unsigned framerate)
 {
   printf("Calculating animation frames...\n");
   // Set children
@@ -178,7 +178,7 @@ void Animator::precalculateAnimationFrames(Animation& anim, Skeleton& skele, uns
   double time = 0.0;
 
   while (time <= _maxTime) {
-    Animation::InterpolatedKeyframe kf{};
+    render::anim::Animation::InterpolatedKeyframe kf{};
 
     tempAnim.updateNoPreCalc(anim, skele, timeStep);
     double animTime = tempAnim._animationTime;
@@ -198,28 +198,33 @@ void Animator::precalculateAnimationFrames(Animation& anim, Skeleton& skele, uns
 
 void Animator::play()
 {
-  _state = State::Playing;
+  _state = render::asset::Animator::State::Playing;
 }
 
 void Animator::pause()
 {
-  _state = State::Paused;
+  _state = render::asset::Animator::State::Paused;
 }
 
 void Animator::stop()
 {
-  _state = State::Stopped;
+  _state = render::asset::Animator::State::Stopped;
   _animationTime = 0.0;
 }
 
-void Animator::update(Animation& anim, Skeleton& skele, double delta)
+void anim::Animator::setPlaybackMultiplier(float multiplier)
 {
-  if (_state == State::Stopped || _state == State::Paused) {
+  _playbackMultiplier = multiplier;
+}
+
+void Animator::update(render::anim::Animation& anim, render::anim::Skeleton& skele, double delta)
+{
+  if (_state == render::asset::Animator::State::Stopped || _state == render::asset::Animator::State::Paused) {
     return;
   }
 
   // We're playing
-  _animationTime += delta;
+  _animationTime += delta * _playbackMultiplier;
 
   // Do we have to wrap time?
   if (_animationTime >= _maxTime) {
@@ -243,7 +248,7 @@ void Animator::update(Animation& anim, Skeleton& skele, double delta)
   }
 }
 
-std::size_t Animator::findClosestPrecalcTime(Animation& anim, double time)
+std::size_t Animator::findClosestPrecalcTime(render::anim::Animation& anim, double time)
 {
   for (std::size_t i = 0; i < anim._keyframes.size(); ++i) {
     if (anim._keyframes[i].first >= time) {
@@ -255,14 +260,14 @@ std::size_t Animator::findClosestPrecalcTime(Animation& anim, double time)
   return 0;
 }
 
-void Animator::updateNoPreCalc(Animation& anim, Skeleton& skele, double delta)
+void Animator::updateNoPreCalc(render::anim::Animation& anim, render::anim::Skeleton& skele, double delta)
 {
-  if (_state == State::Stopped || _state == State::Paused) {
+  if (_state == render::asset::Animator::State::Stopped || _state == render::asset::Animator::State::Paused) {
     return;
   }
 
   // We're playing
-  _animationTime += delta;
+  _animationTime += delta * _playbackMultiplier;
 
   // Do we have to wrap time?
   if (_animationTime >= _maxTime) {
@@ -290,7 +295,7 @@ void Animator::updateNoPreCalc(Animation& anim, Skeleton& skele, double delta)
     }
 
     // Find the joint
-    Joint* joint = nullptr;
+    render::anim::Joint* joint = nullptr;
     for (auto& j : skele._joints) {
       if (j._internalId == channel._internalId) {
         joint = &j;

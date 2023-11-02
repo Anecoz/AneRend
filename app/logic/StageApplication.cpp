@@ -137,7 +137,6 @@ render::RenderableId addRenderableRandom(
   float scale,
   float boundingSphereRadius,
   glm::mat4 rot = glm::mat4(1.0f),
-  render::AnimationId animId = render::INVALID_ID,
   render::SkeletonId skeleId = render::INVALID_ID,
   render::asset::Renderable* renderableOut = nullptr)
 {
@@ -160,9 +159,6 @@ render::RenderableId addRenderableRandom(
   auto scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
   renderable._transform = trans * rot * scaleMat;
 
-  if (animId != render::INVALID_ID) {
-    renderable._animation = animId;
-  }
   if (skeleId != render::INVALID_ID) {
     renderable._skeleton = skeleId;
   }
@@ -564,7 +560,6 @@ void StageApplication::render()
         1.0f, 
         2.0f,
         glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
-        _brainstemAnimId, 
         _brainstemSkelId));
     }
     if (ImGui::Button("Spawn shrek")) {
@@ -575,7 +570,6 @@ void StageApplication::render()
         0.001f,
         2.0f,
         glm::mat4(1.0f),
-        _shrekAnimId,
         _shrekSkeleId));
     }
     if (ImGui::Button("Spawn fox")) {
@@ -586,16 +580,48 @@ void StageApplication::render()
         .02f,
         2.0f,
         glm::mat4(1.0f),
-        _foxAnims[0],
         _foxSkeleId,
         &_cachedFoxRenderable));
     }
-    if (ImGui::Button("Change fox animation")) {
-      _foxAnim = (_foxAnim + 1) % (int)_foxAnims.size();
-      _cachedFoxRenderable._animation = _foxAnims[_foxAnim];
+    if (ImGui::Button("Add fox animator")) {
+      _foxAnimator._id = render::IDGenerator::genAnimatorId();
+      _foxAnimator._animId = _foxAnims[0];
+      _foxAnimator._skeleId = _foxSkeleId;
+      _foxAnimator._state = render::asset::Animator::State::Playing;
 
       render::AssetUpdate upd{};
-      upd._updatedRenderables.emplace_back(_cachedFoxRenderable);
+      upd._addedAnimators.emplace_back(_foxAnimator);
+      _vkRenderer.assetUpdate(std::move(upd));
+    }
+    if (ImGui::Button("Change fox animation")) {
+      _foxAnimIdx = (_foxAnimIdx + 1) % (int)_foxAnims.size();
+      _foxAnimator._animId = _foxAnims[_foxAnimIdx];
+
+      render::AssetUpdate upd{};
+      upd._updatedAnimators.emplace_back(_foxAnimator);
+      _vkRenderer.assetUpdate(std::move(upd));
+    }
+    if (ImGui::SliderFloat("Fox playback speed", &_foxAnimator._playbackMultiplier, 0.0f, 5.0f)) {
+      render::AssetUpdate upd{};
+      upd._updatedAnimators.emplace_back(_foxAnimator);
+      _vkRenderer.assetUpdate(std::move(upd));
+    }
+    if (ImGui::Button("Fox pause")) {
+      _foxAnimator._state = render::asset::Animator::State::Paused;
+      render::AssetUpdate upd{};
+      upd._updatedAnimators.emplace_back(_foxAnimator);
+      _vkRenderer.assetUpdate(std::move(upd));
+    }
+    if (ImGui::Button("Fox play")) {
+      _foxAnimator._state = render::asset::Animator::State::Playing;
+      render::AssetUpdate upd{};
+      upd._updatedAnimators.emplace_back(_foxAnimator);
+      _vkRenderer.assetUpdate(std::move(upd));
+    }
+    if (ImGui::Button("Fox stop")) {
+      _foxAnimator._state = render::asset::Animator::State::Stopped;
+      render::AssetUpdate upd{};
+      upd._updatedAnimators.emplace_back(_foxAnimator);
       _vkRenderer.assetUpdate(std::move(upd));
     }
     if (ImGui::Button("Load sponza")) {

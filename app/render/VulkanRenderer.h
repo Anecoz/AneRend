@@ -32,7 +32,6 @@
 #include "internal/BufferMemoryInterface.h"
 #include "internal/DeletionQueue.h"
 #include "AccelerationStructure.h"
-#include "animation/Animator.h"
 
 #include "../logic/WindSystem.h"
 

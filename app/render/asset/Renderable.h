@@ -12,7 +12,6 @@ struct Renderable
 {
   render::RenderableId _id = INVALID_ID;
   render::ModelId _model = INVALID_ID;
-  render::AnimationId _animation = INVALID_ID;
   render::SkeletonId _skeleton = INVALID_ID;
   std::vector<render::MaterialId> _materials; // one for each mesh in the model (could be same ID for multiple meshes tho)
 

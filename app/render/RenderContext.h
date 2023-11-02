@@ -7,6 +7,7 @@
 #include "asset/Model.h"
 #include "asset/Renderable.h"
 #include "asset/Material.h"
+#include "asset/Animator.h"
 #include "animation/Animation.h"
 #include "animation/Skeleton.h"
 #include "internal/InternalMesh.h"
@@ -34,6 +35,10 @@ struct AssetUpdate
 
   std::vector<anim::Animation> _addedAnimations;
   std::vector<AnimationId> _removedAnimations;
+
+  std::vector<asset::Animator> _addedAnimators;
+  std::vector<asset::Animator> _updatedAnimators;
+  std::vector<AnimatorId> _removedAnimators;
 
   std::vector<anim::Skeleton> _addedSkeletons;
   std::vector<SkeletonId> _removedSkeletons;

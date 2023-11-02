@@ -56,146 +56,155 @@ AnimationThread::~AnimationThread()
 }
 
 // Note: This will be called very very often.
-std::vector<anim::Skeleton> AnimationThread::getCurrentSkeletons()
+std::vector<render::anim::Skeleton> AnimationThread::getCurrentSkeletons()
 {
   std::unique_lock<std::mutex> lock(_skelMtx);
   return _currentSkeletons;
 }
 
 // Note: the add/removes down here will not be called very often at all.
-void AnimationThread::addAnimation(anim::Animation&& anim)
+void AnimationThread::addAnimation(render::anim::Animation&& anim)
 {
   std::unique_lock<std::mutex> lock(_mtx);
   _currentAnimations.emplace_back(std::move(anim));
 }
 
-void AnimationThread::addSkeleton(anim::Skeleton&& skele)
+void AnimationThread::addAnimator(render::asset::Animator&& animator)
+{
+  std::unique_lock<std::mutex> lock(_mtx);
+
+  // Check that the animation and skeleton exist
+  bool animFound = false;
+  bool skeleFound = false;
+
+  render::anim::Animation animCopy;
+  render::anim::Skeleton skeleCopy;
+
+  for (auto& anim : _currentAnimations) {
+    if (anim._id == animator._animId) {
+      animFound = true;
+      animCopy = anim;
+      break;
+    }
+  }
+
+  if (!animFound) {
+    printf("Cannot add animator, animation %u doesn't exist!\n", animator._animId);
+    return;
+  }
+
+  lock.unlock();
+  {
+    std::unique_lock<std::mutex> skeleLock(_pendingSkelMtx);
+    for (auto& skel : _currentSkeletons) {
+      if (skel._id == animator._skeleId) {
+        skeleFound = true;
+        skeleCopy = skel;
+        break;
+      }
+    }
+  }
+
+  if (!skeleFound) {
+    printf("Cannot add animator, skeleton %u doesn't exist!\n", animator._skeleId);
+    return;
+  }
+
+  auto animatorCopy = animator;
+
+  lock.lock();
+  _currentAnimators.emplace_back(std::move(animator));
+  lock.unlock();
+
+  auto fut = std::async(std::launch::async, &AnimationThread::addInternalAnimator, 
+    this, animatorCopy, std::move(animCopy), std::move(skeleCopy));
+
+  std::lock_guard<std::mutex> animLock(_pendingAnimatorsMtx);
+  _pendingInternalAnimators.emplace_back(std::move(fut));
+}
+
+void AnimationThread::addSkeleton(render::anim::Skeleton&& skele)
 {
   std::unique_lock<std::mutex> lock(_pendingSkelMtx);
   _pendingAddedSkeletons.emplace_back(std::move(skele));
 }
 
-void AnimationThread::removeAnimation(render::AnimationId animId)
+void AnimationThread::updateAnimator(render::asset::Animator&& animator)
 {
-  {
-    std::unique_lock<std::mutex> lock(_mtx);
-    for (auto it = _currentAnimations.begin(); it != _currentAnimations.end(); ++it) {
-      if (it->_id == animId) {
-        _currentAnimations.erase(it);
+  std::unique_lock<std::mutex> lock(_mtx);
+  for (auto it = _currentInternalAnimators.begin(); it != _currentInternalAnimators.end(); ++it) {
+    if (it->_animatorId == animator._id) {
+
+      // If same skeleton and animation, we can simply update here
+      if (it->_animId == animator._animId && it->_skeleId == animator._skeleId) {
+
+        // Did state change?
+        if (animator._state != it->_animator.state()) {
+          if (animator._state == render::asset::Animator::State::Playing) {
+            it->_animator.play();
+          }
+          else if (animator._state == render::asset::Animator::State::Stopped) {
+            it->_animator.stop();
+          }
+          else if (animator._state == render::asset::Animator::State::Paused) {
+            it->_animator.pause();
+          }
+        }
+
+        // Did multiplier change?
+        if (std::abs(animator._playbackMultiplier - it->_animator.playbackMultipler()) > 0.001) {
+          it->_animator.setPlaybackMultiplier(animator._playbackMultiplier);
+        }
+      }
+      else {
+        // Remove and re-add...
+        _currentInternalAnimators.erase(it);
+        lock.unlock();
+        addAnimator(std::move(animator));
         return;
       }
     }
   }
+}
 
-  // Remove animators with this anim in them
-  {
-    std::unique_lock<std::mutex> lock(_mtx);
-    for (auto it = _currentAnimators.begin(); it != _currentAnimators.end(); ++it) {
-      if (it->_animId == animId) {
-        _currentAnimators.erase(it);
-        return;
-      }
+void AnimationThread::removeAnimation(render::AnimationId animId)
+{
+  std::unique_lock<std::mutex> lock(_mtx);
+  for (auto it = _currentAnimations.begin(); it != _currentAnimations.end(); ++it) {
+    if (it->_id == animId) {
+      _currentAnimations.erase(it);
+      return;
+    }
+  }
+}
+
+void AnimationThread::removeAnimator(render::AnimatorId animatorId)
+{
+  std::unique_lock<std::mutex> lock(_mtx);
+  for (auto it = _currentInternalAnimators.begin(); it != _currentInternalAnimators.end(); ++it) {
+    if (it->_animatorId == animatorId) {
+      _currentInternalAnimators.erase(it);
+      break;
+    }
+  }
+
+  for (auto it = _currentAnimators.begin(); it != _currentAnimators.end(); ++it) {
+    if (it->_id == animatorId) {
+      _currentAnimators.erase(it);
+      break;
     }
   }
 }
 
 void AnimationThread::removeSkeleton(render::SkeletonId skeleId)
 {
-  {
-    std::unique_lock<std::mutex> lock(_skelMtx);
-    for (auto it = _currentSkeletons.begin(); it != _currentSkeletons.end(); ++it) {
-      if (it->_id == skeleId) {
-        _currentSkeletons.erase(it);
-        break;
-      }
-    }
-  }
-
-  // Remove animators with this skele in them
-  {
-    std::unique_lock<std::mutex> lock(_mtx);
-    for (auto it = _currentAnimators.begin(); it != _currentAnimators.end(); ++it) {
-      if (it->_skeleId == skeleId) {
-        _currentAnimators.erase(it);
-        return;
-      }
-    }
-  }
-
-}
-
-// Note: Should not be called often
-void AnimationThread::connect(render::AnimationId animId, render::SkeletonId skeleId)
-{
-  // Check if this connection already exists, and in that case early exit
-  std::unique_lock<std::mutex> lock(_mtx);
-  for (auto& animator : _currentAnimators) {
-    if (animator._animId == animId && animator._skeleId == skeleId) {
-      return;
-    }
-  }
-
-  std::unique_lock<std::mutex> skelLock(_skelMtx);
-  anim::Animation* animp = nullptr;
-  anim::Skeleton* skelep = nullptr;
-
-  for (auto& anim : _currentAnimations) {
-    if (anim._id == animId) {
-      animp = &anim;
+  std::unique_lock<std::mutex> lock(_skelMtx);
+  for (auto it = _currentSkeletons.begin(); it != _currentSkeletons.end(); ++it) {
+    if (it->_id == skeleId) {
+      _currentSkeletons.erase(it);
       break;
     }
   }
-
-  for (auto& skele : _currentSkeletons) {
-    if (skele._id == skeleId) {
-      skelep = &skele;
-      break;
-    }
-  }
-
-  if (!animp || !skelep) {
-    lock.unlock();
-    skelLock.unlock();
-    printf("Cannot connect anim %u with skele %u, one of them doesn't exist!\n", animId, skeleId);
-    return;
-  }
-
-  anim::Animation animCopy = *animp;
-  anim::Skeleton skeleCopy = *skelep;
-
-  lock.unlock();
-  skelLock.unlock();
-
-  auto fut = std::async(std::launch::async, &AnimationThread::addAnimator, this, std::move(animCopy), std::move(skeleCopy));
-
-  std::lock_guard<std::mutex> animLock(_pendingAnimatorsMtx);
-  _pendingAnimators.emplace_back(std::move(fut));
-}
-
-void AnimationThread::disconnect(render::AnimationId animId, render::SkeletonId skeleId)
-{
-  std::unique_lock<std::mutex> lock(_mtx);
-  for (auto it = _currentAnimators.begin(); it != _currentAnimators.end(); ++it) {
-    if (it->_animId == animId && it->_skeleId == skeleId) {
-      _currentAnimators.erase(it);
-      return;
-    }
-  }
-}
-
-void AnimationThread::playAnimation(render::SkeletonId skeleId)
-{
-  // TODO
-}
-
-void AnimationThread::pauseAnimation(render::SkeletonId skeleId)
-{
-  // TODO
-}
-
-void AnimationThread::stopAnimation(render::SkeletonId skeleId)
-{
-  // TODO
 }
 
 void AnimationThread::updateThread()
@@ -203,13 +212,13 @@ void AnimationThread::updateThread()
   auto lastUpdate = std::chrono::high_resolution_clock::now();
   while (!_shutdown.load()) {
     // Check pending animators
-    std::vector<std::pair<AnimatorData, anim::Animation>> completedAnimators;
+    std::vector<std::pair<AnimatorData, render::anim::Animation>> completedAnimators;
     {
       std::lock_guard<std::mutex> animLock(_pendingAnimatorsMtx);
-      for (auto it = _pendingAnimators.begin(); it != _pendingAnimators.end();) {
+      for (auto it = _pendingInternalAnimators.begin(); it != _pendingInternalAnimators.end();) {
         if (it->wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
           completedAnimators.emplace_back(std::move(it->get()));
-          it = _pendingAnimators.erase(it);
+          it = _pendingInternalAnimators.erase(it);
         }
         else {
           ++it;
@@ -231,12 +240,12 @@ void AnimationThread::updateThread()
         }
 
         // Add animator
-        _currentAnimators.emplace_back(std::move(newAnim.first));
+        _currentInternalAnimators.emplace_back(std::move(newAnim.first));
       }
     }
 
     // Check pending skeletons
-    std::vector<anim::Skeleton> addedSkeletons;
+    std::vector<render::anim::Skeleton> addedSkeletons;
     {
       std::lock_guard<std::mutex> lock(_pendingSkelMtx);
       std::swap(addedSkeletons, _pendingAddedSkeletons);
@@ -257,7 +266,7 @@ void AnimationThread::updateThread()
 
     double deltaSeconds = std::chrono::duration<double>(elapsed).count();
 
-    std::vector<anim::Skeleton> currentSkeletons;
+    std::vector<render::anim::Skeleton> currentSkeletons;
     {
       std::lock_guard<std::mutex> lock(_skelMtx);
       currentSkeletons = _currentSkeletons;
@@ -265,9 +274,9 @@ void AnimationThread::updateThread()
 
     {
       std::unique_lock<std::mutex> lock(_mtx);
-      for (auto& animator : _currentAnimators) {
-        anim::Animation* animp = nullptr;
-        anim::Skeleton* skelep = nullptr;
+      for (auto& animator : _currentInternalAnimators) {
+        render::anim::Animation* animp = nullptr;
+        render::anim::Skeleton* skelep = nullptr;
 
         for (auto& anim : _currentAnimations) {
           if (anim._id == animator._animId) {
@@ -303,17 +312,35 @@ void AnimationThread::updateThread()
   }
 }
 
-std::pair<AnimationThread::AnimatorData, anim::Animation> AnimationThread::addAnimator(anim::Animation anim, anim::Skeleton skele)
+std::pair<AnimationThread::AnimatorData, render::anim::Animation> AnimationThread::addInternalAnimator(
+  render::asset::Animator animatorAsset,
+  render::anim::Animation anim, 
+  render::anim::Skeleton skele)
 {
   anim::Animator animator{};
   animator.init(anim, skele);
   animator.play();
   animator.precalculateAnimationFrames(anim, skele);
+  animator.setPlaybackMultiplier(animatorAsset._playbackMultiplier);
+  animator.stop();
+
+  switch (animatorAsset._state) {
+  case render::asset::Animator::State::Playing:
+    animator.play();
+    break;
+  case render::asset::Animator::State::Stopped:
+    animator.stop();
+    break;
+  case render::asset::Animator::State::Paused:
+    animator.pause();
+    break;
+  }
 
   AnimatorData animData{};
   animData._animator = std::move(animator);
   animData._animId = anim._id;
   animData._skeleId = skele._id;
+  animData._animatorId = animatorAsset._id;
 
   return { animData, anim };
 }

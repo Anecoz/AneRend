@@ -8,6 +8,7 @@ typedef std::uint32_t ModelId;
 typedef std::uint32_t MeshId;
 typedef std::uint32_t RenderableId;
 typedef std::uint32_t AnimationId;
+typedef std::uint32_t AnimatorId;
 typedef std::uint32_t MaterialId;
 typedef std::uint32_t SkeletonId;
 
@@ -19,6 +20,7 @@ struct IDGenerator
   static MeshId genMeshId() { return ++_currentMeshId; }
   static RenderableId genRenderableId() { return ++_currentRenderableId; }
   static AnimationId genAnimationId() { return ++_currentAnimationId; }
+  static AnimationId genAnimatorId() { return ++_currentAnimatorId; }
   static MaterialId genMaterialId() { return ++_currentMaterialId; }
   static SkeletonId genSkeletonId() { return ++_currentSkeletonId; }
 
@@ -27,6 +29,7 @@ private:
   static MeshId _currentMeshId;
   static RenderableId _currentRenderableId;
   static AnimationId _currentAnimationId;
+  static AnimationId _currentAnimatorId;
   static MaterialId _currentMaterialId;
   static SkeletonId _currentSkeletonId;
 };

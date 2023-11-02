@@ -66,7 +66,8 @@ private:
   std::vector<render::AnimationId> _foxAnims;
   render::SkeletonId _foxSkeleId;
   render::asset::Renderable _cachedFoxRenderable;
-  int _foxAnim = 0;
+  render::asset::Animator _foxAnimator;
+  int _foxAnimIdx = 0;
 
   std::vector<render::RenderableId> _rends;
 

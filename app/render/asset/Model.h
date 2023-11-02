@@ -9,7 +9,7 @@ namespace render::asset {
 
 struct Model
 {
-  render::ModelId _id;
+  render::ModelId _id = INVALID_ID;
   std::vector<Mesh> _meshes;
 };
 
