@@ -30,6 +30,7 @@
 #include "internal/GigaBuffer.h"
 #include "internal/AnimationThread.h"
 #include "internal/BufferMemoryInterface.h"
+#include "internal/DeletionQueue.h"
 #include "AccelerationStructure.h"
 #include "animation/Animator.h"
 
@@ -508,5 +509,6 @@ private:
   };
 
   std::uint32_t _currentFrame = 0;
+  internal::DeletionQueue _delQ;
 };
 }

@@ -9,6 +9,7 @@ namespace vkext {
   extern PFN_vkCmdBuildAccelerationStructuresIndirectKHR vkCmdBuildAccelerationStructuresIndirectKHR;
   extern PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
   extern PFN_vkCmdCopyAccelerationStructureKHR vkCmdCopyAccelerationStructureKHR;
+  extern PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
 
   void vulkanExtensionInit(VkDevice device);
 }

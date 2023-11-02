@@ -5,7 +5,12 @@
 
 namespace render {
 
-struct AllocatedBuffer {
+struct AllocatedBuffer 
+{
+  explicit operator bool() const {
+    return _buffer != VK_NULL_HANDLE;
+  }
+
   VkBuffer _buffer = VK_NULL_HANDLE;
   VmaAllocation _allocation;
 };

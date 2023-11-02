@@ -122,20 +122,6 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateAccelerationStructureKHR(
   }
 }
 
-VKAPI_ATTR void VKAPI_CALL DestroyAccelerationStructureKHR(
-  VkDevice                                    device,
-  VkAccelerationStructureKHR                  accelerationStructure,
-  const VkAllocationCallbacks* pAllocator)
-{
-  auto func = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR");
-  if (func != nullptr) {
-    return func(device, accelerationStructure, pAllocator);
-  }
-  else {
-    printf("vkDestroyAccelerationStructureKHR not available!\n");
-  }
-}
-
 VKAPI_ATTR void VKAPI_CALL GetAccelerationStructureBuildSizesKHR(
   VkDevice                                    device,
   VkAccelerationStructureBuildTypeKHR         buildType,
@@ -183,6 +169,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _window(window)
   , _enableValidationLayers(true)
   , _enableRayTracing(true)
+  , _delQ()
 {
   imageutil::init();
 }
@@ -222,20 +209,20 @@ VulkanRenderer::~VulkanRenderer()
     for (auto& blas : _blases) {
       vmaDestroyBuffer(_vmaAllocator, blas.second._buffer._buffer, blas.second._buffer._allocation);
       vmaDestroyBuffer(_vmaAllocator, blas.second._scratchBuffer._buffer, blas.second._scratchBuffer._allocation);
-      DestroyAccelerationStructureKHR(_device, blas.second._as, nullptr);
+      vkext::vkDestroyAccelerationStructureKHR(_device, blas.second._as, nullptr);
     }
 
     for (auto& dynamicPair : _dynamicBlases) {
       for (auto& blas : dynamicPair.second) {
         vmaDestroyBuffer(_vmaAllocator, blas._buffer._buffer, blas._buffer._allocation);
         vmaDestroyBuffer(_vmaAllocator, blas._scratchBuffer._buffer, blas._scratchBuffer._allocation);
-        DestroyAccelerationStructureKHR(_device, blas._as, nullptr);
+        vkext::vkDestroyAccelerationStructureKHR(_device, blas._as, nullptr);
       }
     }
 
     vmaDestroyBuffer(_vmaAllocator, _tlas._buffer._buffer, _tlas._buffer._allocation);
     vmaDestroyBuffer(_vmaAllocator, _tlas._scratchBuffer._buffer, _tlas._scratchBuffer._allocation);
-    DestroyAccelerationStructureKHR(_device, _tlas._as, nullptr);
+    vkext::vkDestroyAccelerationStructureKHR(_device, _tlas._as, nullptr);
   }
 
   for (auto& light: _lights) {
@@ -447,6 +434,8 @@ bool VulkanRenderer::init()
   upd._addedModels.emplace_back(std::move(sphereModel));
   assetUpdate(std::move(upd));
 
+  _delQ = internal::DeletionQueue(MAX_FRAMES_IN_FLIGHT, _vmaAllocator, _device);
+
   return res;
 }
 
@@ -475,13 +464,10 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     for (auto& mesh : internalModel._meshes) {
       for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
         if (meshIt->_id == mesh) {
-          // Destroy blas, probably want to do this off a critical path...
+          // Put blas on del q
           if (_enableRayTracing) {
             auto& blas = _blases[mesh];
-
-            vmaDestroyBuffer(_vmaAllocator, blas._buffer._buffer, blas._buffer._allocation);
-            vmaDestroyBuffer(_vmaAllocator, blas._scratchBuffer._buffer, blas._scratchBuffer._allocation);
-            DestroyAccelerationStructureKHR(_device, blas._as, nullptr);
+            _delQ.add(blas);
 
             _blases.erase(mesh);
           }
@@ -521,6 +507,8 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
       _meshIdMap[_currentMeshes[i]._id] = i;
     }
+
+    modelIdMapUpdate = false;
   }
 
   // Added models
@@ -573,6 +561,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   for (auto& mat : update._removedMaterials) {
     for (auto it = _currentMaterials.begin(); it != _currentMaterials.end();) {
       if (it->_id == mat) {
+        // TODO: Add to deletion q
         if (it->_albedoInfo) {
           _bindlessTextureMemIf.removeData(it->_albedoInfo._bindlessIndexHandle);
 
@@ -722,13 +711,11 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
             for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
               if (meshIt->_id == mesh) {
-                // Destroy blas, probably want to do this off a critical path...
+                // Put blas on deletion q
                 auto& blas = dynamicBlas[i];
+                _delQ.add(blas); // copy
 
-                vmaDestroyBuffer(_vmaAllocator, blas._buffer._buffer, blas._buffer._allocation);
-                vmaDestroyBuffer(_vmaAllocator, blas._scratchBuffer._buffer, blas._scratchBuffer._allocation);
-                DestroyAccelerationStructureKHR(_device, blas._as, nullptr);
-
+                // Remove meshes so that nothing uses the blas anymore
                 _gigaVtxBuffer._memInterface.removeData(meshIt->_vertexHandle);
                 _gigaIdxBuffer._memInterface.removeData(meshIt->_indexHandle);
                 meshIt = _currentMeshes.erase(meshIt);
@@ -844,6 +831,19 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
     for (std::size_t i = 0; i < _currentMaterials.size(); ++i) {
       _materialIdMap[_currentMaterials[i]._id] = i;
+    }
+  }
+
+  // Model/mesh id map update
+  if (modelIdMapUpdate) {
+    _modelIdMap.clear();
+    _meshIdMap.clear();
+
+    for (std::size_t i = 0; i < _currentModels.size(); ++i) {
+      _modelIdMap[_currentModels[i]._id] = i;
+    }
+    for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
+      _meshIdMap[_currentMeshes[i]._id] = i;
     }
   }
 
@@ -3625,7 +3625,6 @@ void VulkanRenderer::prepare()
 
 void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
 {
-  //if (_currentRenderables.empty()) return;
   // At the start of the frame, we want to wait until the previous frame has finished, so that the command buffer and semaphores are available to use.
   vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
 
@@ -3655,6 +3654,9 @@ void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
 
   // Recording command buffer
   vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
+
+  // Execute deletion queue
+  _delQ.execute();
 
   executeFrameGraph(_commandBuffers[_currentFrame], imageIndex);
 
