@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Identifiers.h"
+#include "TileIndex.h"
 
 #include <glm/glm.hpp>
 
@@ -12,7 +13,7 @@ class Tile
 {
 public:
   Tile();
-  Tile(const glm::ivec2& index);
+  Tile(const TileIndex& index);
   ~Tile();
 
   Tile(Tile&&);
@@ -26,9 +27,13 @@ public:
 
   void addRenderable(RenderableId id);
   void removeRenderable(RenderableId id);
+  const std::vector<RenderableId>& getRenderableIds() const { return _renderables; }
+
+  static const unsigned _tileSize = 32; // in world space
+  static TileIndex posToIdx(const glm::vec3& pos);
 
 private:
-  glm::ivec2 _index;
+  TileIndex _index;
   bool _initialized = false;
 
   // TODO: Lights, particles

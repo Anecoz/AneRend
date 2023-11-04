@@ -167,7 +167,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _latestCamera(initialCamera)
   , _fgb(&_vault)
   , _window(window)
-  , _enableValidationLayers(true)
+  , _enableValidationLayers(false)
   , _enableRayTracing(true)
   , _delQ()
 {
@@ -439,12 +439,77 @@ bool VulkanRenderer::init()
   return res;
 }
 
+// Stolen from here: https://gist.github.com/dgoguerra/7194777
+std::string bytesToFormattedString(std::size_t bytes)
+{
+  char* suffix[] = { "B", "KB", "MB", "GB", "TB" };
+  char length = sizeof(suffix) / sizeof(suffix[0]);
+
+  int i = 0;
+  double dblBytes = (double)bytes;
+
+  if (bytes > 1024) {
+    for (i = 0; (bytes / 1024) > 0 && i < length - 1; i++, bytes /= 1024)
+      dblBytes = bytes / 1024.0;
+  }
+
+  static char output[200];
+  sprintf_s(output, "%.02lf %s", dblBytes, suffix[i]);
+  return output;
+}
+
+void printAssetUpdateInfo(
+  std::size_t modelBytes,
+  std::size_t materialBytes,
+  std::size_t numModels,
+  std::size_t numMeshes,
+  std::size_t numSkeles,
+  std::size_t numAnimations,
+  std::size_t numAnimators,
+  std::size_t numRendsAdd,
+  std::size_t numRendsUpd, 
+  std::size_t numRendsDel)
+{
+  printf("Asset Update info: \n");
+  if (modelBytes > 0) {
+    printf("\tModel bytes added: %s\n", bytesToFormattedString(modelBytes).c_str());
+  }
+  if (materialBytes > 0) {
+    printf("\tMaterial bytes added: %s\n", bytesToFormattedString(materialBytes).c_str());
+  }
+  if (numModels > 0) {
+    printf("\tNum models: %zu\n", numModels);
+  }
+  if (numMeshes > 0) {
+    printf("\tNum meshes: %zu\n", numMeshes);
+  }
+  if (numSkeles > 0) {
+    printf("\tNum skeles: %zu\n", numSkeles);
+  }
+  if (numAnimations > 0) {
+    printf("\tNum animations: %zu\n", numAnimations);
+  }
+  if (numAnimators > 0) {
+    printf("\tNum animators: %zu\n", numAnimators);
+  }
+  if (numRendsAdd > 0) {
+    printf("\tNum rends added: %zu\n", numRendsAdd);
+  }
+  if (numRendsUpd > 0) {
+    printf("\tNum rends updated: %zu\n", numRendsUpd);
+  }
+  if (numRendsDel > 0) {
+    printf("\tNum rends deleted: %zu\n", numRendsDel);
+  }
+}
+
 void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 {
   // TODO: Threading? Do this on a dedicated update thread, i.e. just queue this update here?
 
   std::size_t modelBytes = 0;
   std::size_t materialBytes = 0;
+  std::size_t numMeshes = 0;
 
   bool rendIdMapUpdate = !update._removedRenderables.empty();
   bool modelIdMapUpdate = !update._removedModels.empty();
@@ -535,6 +600,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
       modelBytes += mesh._vertices.size() * sizeof(Vertex);
       modelBytes += mesh._indices.size() * sizeof(uint32_t);
+      numMeshes++;
 
       internal::InternalMesh internalMesh{};
       internalMesh._id = mesh._id;
@@ -714,35 +780,70 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     for (auto it = _currentRenderables.begin(); it != _currentRenderables.end(); ++it) {
       if (it->_renderable._id == remId) {
         if (_enableRayTracing && it->_rtFirstDynamicMeshId != INVALID_ID) {
-          // TODO: Delete dynamic blases related to this renderable (if it is dynamic!)
-          //       Delete the extra meshes that were copied (if it is dynamic!)
 
           modelIdMapUpdate = true;
           forceModelChange = true;
-          auto& dynamicBlas = _dynamicBlases[remId];
 
-          for (std::size_t i = 0; i < it->_meshes.size(); ++i) {
-            MeshId mesh = it->_rtFirstDynamicMeshId + (MeshId)i;
+          if (_dynamicBlases.count(remId) > 0) {
+            auto& dynamicBlas = _dynamicBlases[remId];
 
-            for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
-              if (meshIt->_id == mesh) {
-                // Put blas on deletion q
-                auto& blas = dynamicBlas[i];
-                _delQ.add(blas); // copy
+            for (std::size_t i = 0; i < it->_meshes.size(); ++i) {
+              MeshId mesh = it->_rtFirstDynamicMeshId + (MeshId)i;
 
-                // Remove meshes so that nothing uses the blas anymore
-                _gigaVtxBuffer._memInterface.removeData(meshIt->_vertexHandle);
-                _gigaIdxBuffer._memInterface.removeData(meshIt->_indexHandle);
-                meshIt = _currentMeshes.erase(meshIt);
-                break;
-              }
-              else {
-                ++meshIt;
+              for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
+                if (meshIt->_id == mesh) {
+                  // Put blas on deletion q
+                  auto& blas = dynamicBlas[i];
+                  _delQ.add(blas); // copy
+
+                  // Remove meshes so that nothing uses the blas anymore
+                  _gigaVtxBuffer._memInterface.removeData(meshIt->_vertexHandle);
+                  _gigaIdxBuffer._memInterface.removeData(meshIt->_indexHandle);
+                  meshIt = _currentMeshes.erase(meshIt);
+                  break;
+                }
+                else {
+                  ++meshIt;
+                }
               }
             }
-          }
 
-          _dynamicBlases.erase(remId);
+            _dynamicBlases.erase(remId);
+            printf("erased id %u from dynamic blases\n", remId);
+          }
+        }
+        else if (_enableRayTracing) {
+          // If we're still in the process of adding this dynamic rend, remove it from the processing list
+          for (auto it = _dynamicModelsToCopy.begin(); it != _dynamicModelsToCopy.end(); ++it) {
+            if (it->_renderableId == remId) {
+
+              // Add any potentially added blases to delQ
+              for (auto& blas : it->_currentBlases) {
+                _delQ.add(blas);
+              }
+
+              // Also give back potential meshes that have already been added
+              for (std::size_t i = 0; i < it->_currentBlases.size(); ++i) {
+                MeshId meshId = it->_generatedDynamicIds[i];
+                for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
+                  if (meshIt->_id == meshId) {
+
+                    // Remove meshes so that nothing uses the blas anymore
+                    _gigaVtxBuffer._memInterface.removeData(meshIt->_vertexHandle);
+                    _gigaIdxBuffer._memInterface.removeData(meshIt->_indexHandle);
+                    meshIt = _currentMeshes.erase(meshIt);
+                    break;
+                  }
+                  else {
+                    ++meshIt;
+                  }
+                }
+              }
+
+              _dynamicModelsToCopy.erase(it);
+              break;
+            }
+          }
         }
         _currentRenderables.erase(it);
         break;
@@ -795,7 +896,9 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
         // TODO: Don't do this if we already have this skeleton + model combination copied
         //       In that case, just point to the dynamic model already present
-        _dynamicModelsToCopy.emplace_back(internalRend._renderable._id);
+        DynamicModelCopyInfo copyInfo{};
+        copyInfo._renderableId = internalRend._renderable._id;
+        _dynamicModelsToCopy.emplace_back(std::move(copyInfo));
 
         for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
           _modelsChanged[i] = true;
@@ -875,7 +978,18 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     }
   }
 
-  printf("Asset update, %zu mesh bytes and %zu material bytes to upload\n", modelBytes, materialBytes);
+  printAssetUpdateInfo(
+    modelBytes,
+    materialBytes,
+    update._addedModels.size(),
+    numMeshes,
+    update._addedSkeletons.size(),
+    update._addedAnimations.size(),
+    update._addedAnimators.size(),
+    update._addedRenderables.size(),
+    update._updatedRenderables.size(),
+    update._removedRenderables.size());
+  //printf("Asset update, %zu mesh bytes and %zu material bytes to upload\n", modelBytes, materialBytes);
 }
 
 void VulkanRenderer::uploadPendingModels(VkCommandBuffer cmdBuffer)
@@ -1121,7 +1235,13 @@ void VulkanRenderer::uploadPendingMaterials(VkCommandBuffer cmdBuffer)
 
 void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
 {
-  for (auto rend : _dynamicModelsToCopy) {
+  const std::size_t maxBuildsPerFrame = 5;
+  std::size_t numBuilds = 0;
+
+  std::vector<VkBufferMemoryBarrier> blasBarrs;
+  std::vector<VkBufferMemoryBarrier> vtxBarrs;
+  for (auto it = _dynamicModelsToCopy.begin(); it != _dynamicModelsToCopy.end();) {
+    auto rend = it->_renderableId;
     auto& internalRend = _currentRenderables[_renderableIdMap[rend]];
 
     // Copy all meshes and BLASes
@@ -1132,20 +1252,21 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
       continue;
     }
 
-    bool firstDynamicMeshIdSet = false;
-    for (auto meshId : model._meshes) {
+    if (it->_generatedDynamicIds.empty()) {
+      it->_generatedDynamicIds = IDGenerator::genMeshIdRange(model._meshes.size());
+    }
+
+    for (auto meshIt = model._meshes.begin() + it->_currentMeshIdx; meshIt != model._meshes.end(); ++meshIt) {
+      if (numBuilds >= maxBuildsPerFrame) break;
+
+      auto meshId = *meshIt;
+
       auto& internalMesh = _currentMeshes[_meshIdMap[meshId]];
 
-      // TODO: The ID ranges must all be sequential! Add a "genIdRange" to IDGenerator!
       internal::InternalMesh meshCopy{};
-      meshCopy._id = IDGenerator::genMeshId();
+      meshCopy._id = it->_generatedDynamicIds[meshIt - model._meshes.begin()];
       meshCopy._numIndices = internalMesh._numIndices;
       meshCopy._numVertices = internalMesh._numVertices;
-
-      if (!firstDynamicMeshIdSet) {
-        internalRend._rtFirstDynamicMeshId = meshCopy._id;
-        firstDynamicMeshIdSet = true;
-      }
 
       auto vtxHandle = _gigaVtxBuffer._memInterface.addData(internalMesh._vertexHandle._size);
       auto idxHandle = _gigaIdxBuffer._memInterface.addData(internalMesh._indexHandle._size);
@@ -1173,13 +1294,7 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
         memBarr.offset = vtxHandle._offset;
         memBarr.size = internalMesh._vertexHandle._size;
 
-        vkCmdPipelineBarrier(
-          cmdBuffer,
-          VK_PIPELINE_STAGE_TRANSFER_BIT,
-          VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-          0, 0, nullptr,
-          1, &memBarr,
-          0, nullptr);
+        vtxBarrs.emplace_back(std::move(memBarr));
       }
 
       // Index
@@ -1200,13 +1315,7 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
         memBarr.offset = idxHandle._offset;
         memBarr.size = internalMesh._indexHandle._size;
 
-        vkCmdPipelineBarrier(
-          cmdBuffer,
-          VK_PIPELINE_STAGE_TRANSFER_BIT,
-          VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-          0, 0, nullptr,
-          1, &memBarr,
-          0, nullptr);
+        vtxBarrs.emplace_back(std::move(memBarr));
       }
 
       meshCopy._vertexOffset = static_cast<uint32_t>(vtxHandle._offset / sizeof(Vertex));
@@ -1220,7 +1329,7 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
       _currentMeshes.emplace_back(std::move(meshCopy));
 
       // Copy BLAS
-      auto blas = registerBottomLevelAS(cmdBuffer, idCopy, true);
+      auto blas = registerBottomLevelAS(cmdBuffer, idCopy, true, false);
 
       if (!blas) {
         printf("Something went horribly wrong!\n");
@@ -1233,11 +1342,48 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
       VkDeviceAddress blasAddress = GetAccelerationStructureDeviceAddressKHR(_device, &addressInfo);
       _currentMeshes.back()._blasRef = blasAddress;
 
-      _dynamicBlases[rend].emplace_back(std::move(blas));
+      VkBufferMemoryBarrier postBarrier{};
+      postBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+      postBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+      postBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+      postBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      postBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      postBarrier.buffer = blas._buffer._buffer;
+      postBarrier.offset = 0;
+      postBarrier.size = VK_WHOLE_SIZE;
+
+      blasBarrs.emplace_back(std::move(postBarrier));
+
+      it->_currentBlases.emplace_back(std::move(blas));
+
+      numBuilds++;
+      it->_currentMeshIdx++;
     }
+    
+    if (numBuilds >= maxBuildsPerFrame) break;
+
+    internalRend._rtFirstDynamicMeshId = it->_generatedDynamicIds[0];
+    _dynamicBlases[rend] = std::move(it->_currentBlases);
+    printf("added id %u to dynamic blases, dynamic mesh id is %u\n", rend, internalRend._rtFirstDynamicMeshId);
+    it = _dynamicModelsToCopy.erase(it);
   }
 
-  _dynamicModelsToCopy.clear();
+  // Do all barriers at once
+  vkCmdPipelineBarrier(cmdBuffer,
+    VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+    VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR | VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+    0,
+    0, nullptr,
+    (uint32_t)blasBarrs.size(), blasBarrs.data(),
+    0, nullptr);
+
+  vkCmdPipelineBarrier(
+    cmdBuffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    0, 0, nullptr,
+    (uint32_t)vtxBarrs.size(), vtxBarrs.data(),
+    0, nullptr);
 }
 
 void VulkanRenderer::update(
@@ -1336,7 +1482,11 @@ void VulkanRenderer::update(
   }
 }
 
-AccelerationStructure VulkanRenderer::registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId meshId, bool dynamic)
+AccelerationStructure VulkanRenderer::registerBottomLevelAS(
+  VkCommandBuffer cmdBuffer, 
+  MeshId meshId, 
+  bool dynamic, 
+  bool doBarrier)
 {
   if (!dynamic && _blases.count(meshId) > 0) {
     printf("Cannot create BLAS for mesh id %u, it already exists!\n", meshId);
@@ -1396,15 +1546,10 @@ AccelerationStructure VulkanRenderer::registerBottomLevelAS(VkCommandBuffer cmdB
   VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
   sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
   GetAccelerationStructureBuildSizesKHR(
-    // The device
     _device,
-    // Build on device instead of host.
     VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-    // Pointer to build info
     &buildInfo,
-    // Array of number of primitives per geometry
     &rangeInfo.primitiveCount,
-    // Output pointer to store sizes
     &sizeInfo);
 
   // Output buffer that will hold BLAS
@@ -1452,34 +1597,37 @@ AccelerationStructure VulkanRenderer::registerBottomLevelAS(VkCommandBuffer cmdB
 
   // Do the build
   VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
+
   vkext::vkCmdBuildAccelerationStructuresKHR(
-    cmdBuffer, // The command buffer to record the command
-    1, // Number of acceleration structures to build
-    &buildInfo, // Array of ...BuildGeometryInfoKHR objects
-    &pRangeInfo); // Array of ...RangeInfoKHR objects
+    cmdBuffer,
+    1,
+    &buildInfo,
+    &pRangeInfo);
 
   blas._scratchBuffer = scratchBuffer;
   blas._scratchAddress = scratchAddr;
   blas._scratchBufferSize = sizeInfo.buildScratchSize;
 
   // Barrier
-  VkBufferMemoryBarrier postBarrier{};
-  postBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  postBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-  postBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-  postBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  postBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  postBarrier.buffer = blas._buffer._buffer;
-  postBarrier.offset = 0;
-  postBarrier.size = VK_WHOLE_SIZE;
+  if (doBarrier) {
+    VkBufferMemoryBarrier postBarrier{};
+    postBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    postBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+    postBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+    postBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    postBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    postBarrier.buffer = blas._buffer._buffer;
+    postBarrier.offset = 0;
+    postBarrier.size = VK_WHOLE_SIZE;
 
-  vkCmdPipelineBarrier(cmdBuffer,
-    VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-    VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR | VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-    0,
-    0, nullptr,
-    1, &postBarrier,
-    0, nullptr);
+    vkCmdPipelineBarrier(cmdBuffer,
+      VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+      VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR | VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+      0,
+      0, nullptr,
+      1, &postBarrier,
+      0, nullptr);
+  }
 
   return blas;
 }
@@ -4161,7 +4309,7 @@ bool VulkanRenderer::getRenderableById(RenderableId id, internal::InternalRender
 bool VulkanRenderer::getMeshById(MeshId id, internal::InternalMesh** out)
 {
   if (_meshIdMap.find(id) == _meshIdMap.end()) {
-    printf("Warning! Cannot get renderable with id %u, doesn't exist!\n", id);
+    printf("Warning! Cannot get mesh with id %u, doesn't exist!\n", id);
     return false;
   }
 

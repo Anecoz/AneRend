@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace render {
 
@@ -20,9 +21,17 @@ struct IDGenerator
   static MeshId genMeshId() { return ++_currentMeshId; }
   static RenderableId genRenderableId() { return ++_currentRenderableId; }
   static AnimationId genAnimationId() { return ++_currentAnimationId; }
-  static AnimationId genAnimatorId() { return ++_currentAnimatorId; }
+  static AnimatorId genAnimatorId() { return ++_currentAnimatorId; }
   static MaterialId genMaterialId() { return ++_currentMaterialId; }
   static SkeletonId genSkeletonId() { return ++_currentSkeletonId; }
+
+  static std::vector<ModelId> genModelIdRange(std::size_t num);
+  static std::vector<MeshId> genMeshIdRange(std::size_t num);
+  static std::vector<RenderableId> genRenderableIdRange(std::size_t num);
+  static std::vector<AnimationId> genAnimationIdRange(std::size_t num);
+  static std::vector<AnimatorId> genAnimatorIdRange(std::size_t num);
+  static std::vector<MaterialId> genMaterialIdRange(std::size_t num);
+  static std::vector<SkeletonId> genSkeletonIdRange(std::size_t num);
 
 private:
   static ModelId _currentModelId;

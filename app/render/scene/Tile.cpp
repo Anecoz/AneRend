@@ -3,11 +3,11 @@
 namespace render::scene {
 
 Tile::Tile()
-  : _index({0, 0})
-{
-}
+  : _index(0, 0)
+  , _initialized(false)
+{}
 
-Tile::Tile(const glm::ivec2& index)
+Tile::Tile(const TileIndex& index)
   : _index(index)
   , _initialized(true)
 {}
@@ -48,6 +48,15 @@ void Tile::addRenderable(RenderableId id)
 void Tile::removeRenderable(RenderableId id)
 {
   _renderables.erase(std::remove(_renderables.begin(), _renderables.end(), id), _renderables.end());
+}
+
+TileIndex Tile::posToIdx(const glm::vec3& pos)
+{
+  // Project translation to y=0 plane
+  int tileX = (int)(pos.x / (float)_tileSize);
+  int tileY = (int)(pos.z / (float)_tileSize);
+
+  return { tileX, tileY };
 }
 
 }

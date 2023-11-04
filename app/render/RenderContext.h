@@ -27,6 +27,24 @@ namespace render {
 
 struct AssetUpdate
 {
+  explicit operator bool() const {
+    return
+      !_addedModels.empty() ||
+      !_removedModels.empty() ||
+      !_addedMaterials.empty() ||
+      !_removedMaterials.empty() ||
+      !_addedAnimations.empty() ||
+      !_removedAnimations.empty() ||
+      !_addedAnimators.empty() ||
+      !_updatedAnimators.empty() ||
+      !_removedAnimators.empty() ||
+      !_addedSkeletons.empty() ||
+      !_removedSkeletons.empty() ||
+      !_addedRenderables.empty() ||
+      !_updatedRenderables.empty() ||
+      !_removedRenderables.empty();
+  }
+
   std::vector<asset::Model> _addedModels;
   std::vector<ModelId> _removedModels;
 

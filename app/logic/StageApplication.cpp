@@ -23,8 +23,10 @@ StageApplication::StageApplication(std::string title)
   , _vkRenderer(_window, _camera)
   , _windDir(glm::vec2(-1.0, 0.0))
   , _shadowCamera(glm::vec3(-20.0f, 15.0f, -20.0f), render::ProjectionType::Orthogonal)
+  , _scene()
+  , _scenePager(&_vkRenderer)
 {
-
+  _scenePager.setScene(&_scene);
 }
 
 StageApplication::~StageApplication()
@@ -38,100 +40,56 @@ static bool g_PP = true;
 namespace {
 
 bool loadGLTF(
-  render::VulkanRenderer& renderer, 
+  render::scene::Scene& scene, 
   const std::string& path, 
   render::ModelId& modelIdOut, 
   std::vector<render::MaterialId>& materialIdsOut,
   render::SkeletonId& skeletonIdOut,
-  std::vector<render::AnimationId>& animationIdsOut,
-  render::asset::Model* modelOut = nullptr,
-  std::vector<render::asset::Material>* materialsOut = nullptr)
+  std::vector<render::AnimationId>& animationIdsOut)
 {
   materialIdsOut.clear();
   animationIdsOut.clear();
 
-  if (materialsOut != nullptr) {
-    materialsOut->clear();
-  }
-
   render::asset::Model model{};
   render::anim::Skeleton skeleton{};
-  std::vector<render::anim::Animation> animations{};
+  std::vector<render::anim::Animation> animations;
   std::vector<render::asset::Material> materials;
   std::vector<int> materialIndices;
   if (!GLTFLoader::loadFromFile(path, model, materials, materialIndices, skeleton, animations)) {
-    printf("Could not load model!\n");
+    printf("Could not load model (%s)!\n", path.c_str());
     return false;
   }
 
   // Model and meshes
-  model._id = render::IDGenerator::genModelId();
-  modelIdOut = model._id;
-
-  for (auto& mesh : model._meshes) {
-    mesh._id = render::IDGenerator::genMeshId();
-  }
-
-  if (modelOut != nullptr) {
-    *modelOut = model;
-  }
+  modelIdOut = scene.addModel(std::move(model));
 
   // Materials
+  std::vector<render::MaterialId> materialIds;
   for (auto& mat : materials) {
-    mat._id = render::IDGenerator::genMaterialId();
-    if (materialsOut != nullptr) {
-      materialsOut->push_back(mat);
-    }
+    materialIds.emplace_back(scene.addMaterial(std::move(mat)));
   }
 
   for (auto& idx : materialIndices) {
-    materialIdsOut.push_back(materials[idx]._id);
+    materialIdsOut.push_back(materialIds[idx]);
   }
 
   // Skeleton
   if (skeleton) {
-    skeleton._id = render::IDGenerator::genSkeletonId();
-    skeletonIdOut = skeleton._id;
+    skeletonIdOut = scene.addSkeleton(std::move(skeleton));
   }
 
   // Animations
   if (!animations.empty()) {
     for (auto& anim : animations) {
-      anim._id = render::IDGenerator::genAnimationId();
-      animationIdsOut.push_back(anim._id);
+      animationIdsOut.push_back(scene.addAnimation(std::move(anim)));
     }
   }
 
-  // Asset update 
-  render::AssetUpdate upd{};
-  upd._addedModels.emplace_back(std::move(model));
-  upd._addedMaterials = std::move(materials);
-  
-  if (!animations.empty()) {
-    upd._addedAnimations = std::move(animations);
-  }
-
-  if (skeleton) {
-    upd._addedSkeletons.emplace_back(std::move(skeleton));
-  }
-
-  renderer.assetUpdate(std::move(upd));
   return true;
 }
 
-void loadModelAsset(
-  render::VulkanRenderer& renderer,
-  render::asset::Model& model,
-  std::vector<render::asset::Material>& materials)
-{
-  render::AssetUpdate upd{};
-  upd._addedModels.emplace_back(model);
-  upd._addedMaterials = materials;
-  renderer.assetUpdate(std::move(upd));
-}
-
 render::RenderableId addRenderableRandom(
-  render::VulkanRenderer& renderer, 
+  render::scene::Scene& scene, 
   render::ModelId modelId, 
   std::vector<render::MaterialId>& materials, 
   float scale,
@@ -149,7 +107,6 @@ render::RenderableId addRenderableRandom(
   render::asset::Renderable renderable{};
 
   renderable._materials = materials;
-  renderable._id = render::IDGenerator::genRenderableId();
   renderable._boundingSphere = glm::vec4(.0f, .0f, .0f, boundingSphereRadius);
   renderable._model = modelId;
   renderable._visible = true;
@@ -165,14 +122,15 @@ render::RenderableId addRenderableRandom(
 
   xOff = xOff + 4.0f;
 
-  auto idCopy = renderable._id;
   if (renderableOut) {
     *renderableOut = renderable;
   }
 
-  render::AssetUpdate upd{};
-  upd._addedRenderables.emplace_back(std::move(renderable));
-  renderer.assetUpdate(std::move(upd));
+  auto idCopy = scene.addRenderable(std::move(renderable));
+
+  if (renderableOut) {
+    renderableOut->_id = idCopy;
+  }
 
   return idCopy;
 }
@@ -496,6 +454,8 @@ void StageApplication::update(double delta)
   }
 
   _camera.update(delta);
+  _scenePager.update(_camera.getPosition());
+  _scene.resetEvents();
 
   //_windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));
@@ -547,14 +507,14 @@ void StageApplication::render()
     ImGui::Checkbox("Texture Debug View", &_renderDebugOptions.debugView);
     //ImGui::Checkbox("Apply post processing", &g_PP);
     if (ImGui::Button("Spawn lantern")) {
-      _rends.emplace_back(addRenderableRandom(_vkRenderer, _lanternModelId, _lanternMaterials, 0.2f, 5.0f));
+      _rends.emplace_back(addRenderableRandom(_scene, _lanternModelId, _lanternMaterials, 0.2f, 5.0f));
     }
     if (ImGui::Button("Spawn sponza")) {
-      _rends.emplace_back(addRenderableRandom(_vkRenderer, _sponzaModelId, _sponzaMaterialIds, 0.01f, 40.0f));
+      _rends.emplace_back(addRenderableRandom(_scene, _sponzaModelId, _sponzaMaterialIds, 0.01f, 40.0f));
     }
     if (ImGui::Button("Spawn brainstem")) {
       _rends.emplace_back(addRenderableRandom(
-        _vkRenderer, 
+        _scene,
         _brainstemModelId, 
         _brainstemMaterials, 
         1.0f, 
@@ -564,7 +524,7 @@ void StageApplication::render()
     }
     if (ImGui::Button("Spawn shrek")) {
       _rends.emplace_back(addRenderableRandom(
-        _vkRenderer,
+        _scene,
         _shrekModelId,
         _shrekMaterials,
         0.001f,
@@ -574,7 +534,7 @@ void StageApplication::render()
     }
     if (ImGui::Button("Spawn fox")) {
       _rends.emplace_back(addRenderableRandom(
-        _vkRenderer,
+        _scene,
         _foxModelId,
         _foxMaterials,
         .02f,
@@ -625,20 +585,15 @@ void StageApplication::render()
       _vkRenderer.assetUpdate(std::move(upd));
     }
     if (ImGui::Button("Load sponza")) {
-      if (_sponzaMaterials.empty()) {
-        loadGLTF(_vkRenderer, std::string(ASSET_PATH) + "models/sponza-gltf-pbr/sponza.glb", _sponzaModelId, _sponzaMaterialIds, _dummySkele, _dummyAnimations, &_sponzaModel, &_sponzaMaterials);
-      }
-      else {
-        loadModelAsset(_vkRenderer, _sponzaModel, _sponzaMaterials);
-      }
+      loadGLTF(_scene, std::string(ASSET_PATH) + "models/sponza-gltf-pbr/sponza.glb", _sponzaModelId, _sponzaMaterialIds, _dummySkele, _dummyAnimations);
     }
     if (ImGui::Button("Load lantern")) {      
-      loadGLTF(_vkRenderer, std::string(ASSET_PATH) + "models/lantern_gltf/Lantern.glb", _lanternModelId, _lanternMaterials, _dummySkele, _dummyAnimations);
+      loadGLTF(_scene, std::string(ASSET_PATH) + "models/lantern_gltf/Lantern.glb", _lanternModelId, _lanternMaterials, _dummySkele, _dummyAnimations);
     }
     if (ImGui::Button("Load shrek")) {
       std::vector<render::AnimationId> animIds;
       loadGLTF(
-        _vkRenderer,
+        _scene,
         std::string(ASSET_PATH) + "models/shrek_dancing_gltf/shrek_dancing.glb",
         _shrekModelId,
         _shrekMaterials,
@@ -649,7 +604,7 @@ void StageApplication::render()
     if (ImGui::Button("Load brainstem")) {
       std::vector<render::AnimationId> animIds;
       loadGLTF(
-        _vkRenderer, 
+        _scene,
         std::string(ASSET_PATH) + "models/brainstem_gltf/BrainStem.glb", 
         _brainstemModelId,
         _brainstemMaterials, 
@@ -659,19 +614,12 @@ void StageApplication::render()
     }
     if (ImGui::Button("Load fox")) {
       loadGLTF(
-        _vkRenderer,
+        _scene,
         std::string(ASSET_PATH) + "models/fox_gltf/fox_indexed.gltf",
         _foxModelId,
         _foxMaterials,
         _foxSkeleId,
         _foxAnims);
-    }
-    if (ImGui::Button("Remove sponza model")) {
-      removeModel(_vkRenderer, _sponzaModelId, _sponzaMaterialIds);
-    }
-    if (ImGui::Button("Remove lantern model")) {
-      removeModel(_vkRenderer, _lanternModelId, _lanternMaterials);
-      _lanternModelId = render::INVALID_ID;
     }
     if (ImGui::Button("Remove random renderable")) {
       if (!_rends.empty()) {

@@ -259,7 +259,7 @@ private:
   void uploadPendingMaterials(VkCommandBuffer cmdBuffer);
 
   // Ray tracing related
-  AccelerationStructure registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId meshId, bool dynamic = false);
+  AccelerationStructure registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId meshId, bool dynamic = false, bool doBarrier = true);
   void buildTopLevelAS();
   void writeTLASDescriptor();
   bool _topLevelBuilt = false;
@@ -267,14 +267,16 @@ private:
   // Only for ray-tracing: These renderables need to have their models (all meshes)
   // copied, aswell as their blases, since they are dynamic (per-renderable).
   // Typically animated.
-  std::vector<RenderableId> _dynamicModelsToCopy;
+  struct DynamicModelCopyInfo
+  {
+    RenderableId _renderableId;
+    std::vector<MeshId> _generatedDynamicIds;
+    std::vector<AccelerationStructure> _currentBlases;
+    std::size_t _currentMeshIdx = 0;
+  };
+  std::vector<DynamicModelCopyInfo> _dynamicModelsToCopy;
 
   void copyDynamicModels(VkCommandBuffer cmdBuffer);
-
-  // If ray tracing is enabled, this contains per-animated-renderable offsets where each renderable writes
-  // updated (animated) vertices.
-  //std::unordered_map<RenderableId, internal::BufferMemoryInterface::Handle> _dynamicMeshOffsets;
-  //internal::BufferMemoryInterface _dynamicMeshMemIf;
 
   // Static BLAS for each mesh
   std::unordered_map<MeshId, AccelerationStructure> _blases;

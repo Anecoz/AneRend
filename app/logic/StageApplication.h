@@ -11,6 +11,8 @@
 #include "../render/RenderOptions.h"
 #include "../render/asset/Model.h"
 #include "../render/asset/Renderable.h"
+#include "../render/scene/Scene.h"
+#include "../render/scene/ScenePager.h"
 #include "WindSystem.h"
 
 class StageApplication : public Application
@@ -46,8 +48,6 @@ private:
   render::ModelId _lanternModelId;
   std::vector<render::MaterialId> _lanternMaterials;
 
-  render::asset::Model _sponzaModel;
-  std::vector<render::asset::Material> _sponzaMaterials;
   render::ModelId _sponzaModelId;
   std::vector<render::MaterialId> _sponzaMaterialIds;
 
@@ -73,4 +73,7 @@ private:
 
   std::vector<render::AnimationId> _dummyAnimations;
   render::SkeletonId _dummySkele;
+
+  render::scene::Scene _scene;
+  render::scene::ScenePager _scenePager;
 };

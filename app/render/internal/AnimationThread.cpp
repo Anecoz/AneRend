@@ -298,6 +298,7 @@ void AnimationThread::updateThread()
         }
 
         animator._animator.update(*animp, *skelep, deltaSeconds);
+        //animator._animator.updateNoPreCalc(*animp, *skelep, deltaSeconds);
       }
     }
 
