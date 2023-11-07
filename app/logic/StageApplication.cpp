@@ -27,6 +27,9 @@ StageApplication::StageApplication(std::string title)
   , _scenePager(&_vkRenderer)
 {
   _scenePager.setScene(&_scene);
+
+  auto cd = std::filesystem::current_path();
+  _scenePath = cd/"scene.anerend";
 }
 
 StageApplication::~StageApplication()
@@ -114,7 +117,7 @@ render::RenderableId addRenderableRandom(
   auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f + xOff, 0.0f, 5.0f));
   //auto rot = glm::rotate(glm::mat4(1.0f), glm::radians((float)rotOff(rng)), glm::vec3(0.0f, 1.0f, 0.0f));
   auto scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
-  renderable._transform = trans * rot * scaleMat;
+  renderable._transform = trans * scaleMat;
 
   if (skeleId != render::INVALID_ID) {
     renderable._skeleton = skeleId;
@@ -453,6 +456,19 @@ void StageApplication::update(double delta)
     _camera._enabled = !_camera._enabled;
   }
 
+  if (_sceneFut.valid() && _sceneFut.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+    auto dat = _sceneFut.get();
+
+    // set id state
+    render::IDGenerator::setState(dat._idState);
+
+    // Update the scene
+    auto scenePtr = dat._scene.get();
+    _scene = std::move(*scenePtr);
+    _scenePager.setScene(&_scene);
+    scenePtr = nullptr;
+  }
+
   _camera.update(delta);
   _scenePager.update(_camera.getPosition());
   _scene.resetEvents();
@@ -506,6 +522,12 @@ void StageApplication::render()
     ImGui::Slider2DFloat("Wind dir", &_windDir.x, &_windDir.y, -1.0f, 1.0f, -1.0f, 1.0f);*/
     ImGui::Checkbox("Texture Debug View", &_renderDebugOptions.debugView);
     //ImGui::Checkbox("Apply post processing", &g_PP);
+    if (ImGui::Button("Serialize scene")) {
+      _scene.serializeAsync(_scenePath);
+    }
+    if (ImGui::Button("Deserialize scene")) {
+      _sceneFut = _scene.deserializeAsync(_scenePath);
+    }
     if (ImGui::Button("Spawn lantern")) {
       _rends.emplace_back(addRenderableRandom(_scene, _lanternModelId, _lanternMaterials, 0.2f, 5.0f));
     }

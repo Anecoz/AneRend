@@ -10,7 +10,7 @@ struct Joint
   Joint* _parent = nullptr;
   std::vector<Joint*> _children;
 
-  glm::mat4 _globalTransform;
+  glm::mat4 _globalTransform = glm::mat4(1.0f);
   glm::mat4 _localTransform;
   glm::mat4 _originalLocalTransform;
   glm::mat4 _inverseBindMatrix = glm::mat4(1.0f);

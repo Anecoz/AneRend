@@ -15,6 +15,8 @@
 #include "../render/scene/ScenePager.h"
 #include "WindSystem.h"
 
+#include <filesystem>
+
 class StageApplication : public Application
 {
 public:
@@ -75,5 +77,7 @@ private:
   render::SkeletonId _dummySkele;
 
   render::scene::Scene _scene;
+  std::future<render::scene::DeserialisedSceneData> _sceneFut;
   render::scene::ScenePager _scenePager;
+  std::filesystem::path _scenePath;
 };

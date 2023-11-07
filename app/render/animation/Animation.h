@@ -8,7 +8,7 @@
 
 namespace render::anim {
 
-enum class ChannelPath
+enum class ChannelPath : std::uint8_t
 {
   Rotation,
   Translation,

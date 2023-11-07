@@ -15,6 +15,17 @@ typedef std::uint32_t SkeletonId;
 
 const std::uint32_t INVALID_ID = 0;
 
+struct IdentifiersState
+{
+  ModelId _modelIdState;
+  MeshId _meshIdState;
+  RenderableId _renderableIdState;
+  AnimationId _animationIdState;
+  AnimatorId _animatorIdState;
+  MaterialId _materialIdState;
+  SkeletonId _skeletonIdState;
+};
+
 struct IDGenerator
 {
   static ModelId genModelId() { return ++_currentModelId; }
@@ -32,6 +43,9 @@ struct IDGenerator
   static std::vector<AnimatorId> genAnimatorIdRange(std::size_t num);
   static std::vector<MaterialId> genMaterialIdRange(std::size_t num);
   static std::vector<SkeletonId> genSkeletonIdRange(std::size_t num);
+
+  static IdentifiersState getState();
+  static void setState(IdentifiersState state);
 
 private:
   static ModelId _currentModelId;

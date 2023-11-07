@@ -26,7 +26,7 @@ add_dependencies(stage compile_shaders)
 
 if (WIN32)
   add_definitions(-DGLEW_STATIC)
-  target_link_libraries(stage glfw ${Vulkan_LIBRARIES} glm libnoise)
+  target_link_libraries(stage glfw ${Vulkan_LIBRARIES} glm libnoise Bitsery::bitsery)
   target_include_directories(stage PRIVATE ${Vulkan_INCLUDE_DIRS})
 else()
   set(THREADS_PREFER_PTHREAD_FLAG ON)

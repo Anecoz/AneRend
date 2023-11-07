@@ -2,6 +2,7 @@
 
 #include "Tile.h"
 #include "TileIndex.h"
+#include "DeserialisedSceneData.h"
 
 #include "../Identifiers.h"
 #include "../asset/Model.h"
@@ -11,6 +12,11 @@
 #include "../animation/Skeleton.h"
 #include "../animation/Animation.h"
 
+#include "internal/SceneSerializer.h"
+
+#include <filesystem>
+#include <future>
+#include <memory>
 #include <vector>
 
 namespace render::scene {
@@ -55,28 +61,35 @@ public:
   Scene(const Scene&) = delete;
   Scene& operator=(const Scene&) = delete;
 
+  // This will take a snapshot of the scene as it is at call time,
+  // and then asynchronously serialize to path.
+  void serializeAsync(const std::filesystem::path& path);
+
+  // This will set ID state aswell
+  std::future<DeserialisedSceneData> deserializeAsync(const std::filesystem::path& path);
+
   const SceneEventLog& getEvents() const;
   void resetEvents();
 
   bool getTile(TileIndex idx, Tile** tileOut);
 
-  ModelId addModel(asset::Model&& model);
+  ModelId addModel(asset::Model&& model, bool genId = true);
   void removeModel(ModelId id);
   const asset::Model* getModel(ModelId id);
 
-  MaterialId addMaterial(asset::Material&& material);
+  MaterialId addMaterial(asset::Material&& material, bool genId = true);
   void removeMaterial(MaterialId id);
   const asset::Material* getMaterial(MaterialId id);
 
-  AnimationId addAnimation(anim::Animation&& animation);
+  AnimationId addAnimation(anim::Animation&& animation, bool genId = true);
   void removeAnimation(AnimationId id);
   const anim::Animation* getAnimation(AnimationId id);
 
-  SkeletonId addSkeleton(anim::Skeleton&& skeleton);
+  SkeletonId addSkeleton(anim::Skeleton&& skeleton, bool genId = true);
   void removeSkeleton(SkeletonId id);
   const anim::Skeleton* getSkeleton(SkeletonId id);
 
-  RenderableId addRenderable(asset::Renderable&& renderable);
+  RenderableId addRenderable(asset::Renderable&& renderable, bool genId = true);
   void removeRenderable(RenderableId id);
   const asset::Renderable* getRenderable(RenderableId id);
 
@@ -85,6 +98,8 @@ public:
   void setRenderableTransform(RenderableId id, const glm::mat4& transform);
 
 private:
+  friend struct internal::SceneSerializer;
+
   std::unordered_map<TileIndex, Tile> _tiles;
 
   // TODO: In the future maybe these need to be tile-based aswell.
@@ -95,6 +110,7 @@ private:
   std::vector<asset::Renderable> _renderables;
 
   SceneEventLog _eventLog;
+  internal::SceneSerializer _serialiser;
 
   void addEvent(SceneEventType type, uint32_t id, TileIndex tileIdx = TileIndex());
 };

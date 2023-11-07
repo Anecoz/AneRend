@@ -167,7 +167,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
   , _latestCamera(initialCamera)
   , _fgb(&_vault)
   , _window(window)
-  , _enableValidationLayers(false)
+  , _enableValidationLayers(true)
   , _enableRayTracing(true)
   , _delQ()
 {
@@ -1256,12 +1256,19 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
       it->_generatedDynamicIds = IDGenerator::genMeshIdRange(model._meshes.size());
     }
 
+    bool abortRend = false;
     for (auto meshIt = model._meshes.begin() + it->_currentMeshIdx; meshIt != model._meshes.end(); ++meshIt) {
       if (numBuilds >= maxBuildsPerFrame) break;
 
       auto meshId = *meshIt;
 
       auto& internalMesh = _currentMeshes[_meshIdMap[meshId]];
+
+      // This mesh may have not been uploaded yet
+      if (!internalMesh._vertexHandle) {
+        abortRend = true;
+        continue;
+      }
 
       internal::InternalMesh meshCopy{};
       meshCopy._id = it->_generatedDynamicIds[meshIt - model._meshes.begin()];
@@ -1361,6 +1368,7 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
     }
     
     if (numBuilds >= maxBuildsPerFrame) break;
+    if (abortRend) break;
 
     internalRend._rtFirstDynamicMeshId = it->_generatedDynamicIds[0];
     _dynamicBlases[rend] = std::move(it->_currentBlases);
@@ -4078,7 +4086,12 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
   if (_enableRayTracing && !_dynamicModelsToCopy.empty()) {
     copyDynamicModels(commandBuffer);
-    _modelsChanged[_currentFrame] = true;
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      // Models changed because new meshes have been added
+      _modelsChanged[i] = true;
+      // renderables changed because there might be a new dynamicMeshId in the renderable
+      _renderablesChanged[i] = true;
+    }
   }
 
   // Mapping buffer that maps the engine-wide *Id to the indices used internally in the GPU buffers
@@ -4086,7 +4099,7 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
     prefillGPUIdMapBuffer(commandBuffer);    
   }
 
-  // Skeletons, get copies from animation thread
+  // Skeletons, get copies from animation thread. No-op if the list is empty
   prefillGPUSkeletonBuffer(commandBuffer, _animThread.getCurrentSkeletons());
 
   // Uploads

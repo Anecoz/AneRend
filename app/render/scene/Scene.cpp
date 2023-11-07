@@ -1,5 +1,7 @@
 #include "Scene.h"
 
+#include "internal/SceneSerializer.h"
+
 #include <glm/gtx/matrix_decompose.hpp>
 
 namespace render::scene
@@ -9,15 +11,18 @@ namespace {
 
 TileIndex findRenderableTile(const asset::Renderable& renderable, unsigned tileSize)
 {
-  glm::vec3 s;
+  /*glm::vec3 s;
   glm::quat q;
   glm::vec3 t;
 
   glm::vec3 unused_0;
   glm::vec4 unused_1;
 
-  glm::decompose(renderable._transform, s, q, t, unused_0, unused_1);
+  if (!glm::decompose(renderable._transform, s, q, t, unused_0, unused_1)) {
+    printf("Warning! Could not decompose transform of rend %u\n", renderable._id);
+  }*/
 
+  glm::vec3 t = renderable._transform[3];
   return Tile::posToIdx(t);
 }
 
@@ -44,23 +49,37 @@ Scene::~Scene()
 Scene::Scene(Scene&& rhs)
 {
   std::swap(_tiles, rhs._tiles);
+  std::swap(_materials, rhs._materials);
   std::swap(_animations, rhs._animations);
   std::swap(_skeletons, rhs._skeletons);
   std::swap(_models, rhs._models);
   std::swap(_renderables, rhs._renderables);
+  std::swap(_eventLog, rhs._eventLog);
 }
 
 Scene& Scene::operator=(Scene&& rhs)
 {
   if (this != &rhs) {
     std::swap(_tiles, rhs._tiles);
+    std::swap(_materials, rhs._materials);
     std::swap(_animations, rhs._animations);
     std::swap(_skeletons, rhs._skeletons);
     std::swap(_models, rhs._models);
     std::swap(_renderables, rhs._renderables);
+    std::swap(_eventLog, rhs._eventLog);
   }
 
   return *this;
+}
+
+void Scene::serializeAsync(const std::filesystem::path& path)
+{
+  _serialiser.serialize(*this, path);
+}
+
+std::future<DeserialisedSceneData> Scene::deserializeAsync(const std::filesystem::path& path)
+{
+  return _serialiser.deserialize(path);
 }
 
 const SceneEventLog& Scene::getEvents() const
@@ -83,17 +102,20 @@ bool Scene::getTile(TileIndex idx, Tile** tileOut)
   return true;
 }
 
-ModelId Scene::addModel(asset::Model&& model)
+ModelId Scene::addModel(asset::Model&& model, bool genId)
 {
-  auto id = IDGenerator::genModelId();
-  model._id = id;
+  auto id = model._id;
+  if (genId) {
+    id = IDGenerator::genModelId();
+    model._id = id;
+  }
 
   for (auto& mesh : model._meshes) {
     mesh._id = IDGenerator::genMeshId();
   }
 
+  addEvent(SceneEventType::ModelAdded, model._id);
   _models.emplace_back(std::move(model));
-  addEvent(SceneEventType::ModelAdded, id);
   return id;
 }
 
@@ -117,12 +139,16 @@ const asset::Model* Scene::getModel(ModelId id)
   return model;
 }
 
-MaterialId Scene::addMaterial(asset::Material&& material)
+MaterialId Scene::addMaterial(asset::Material&& material, bool genId)
 {
-  auto id = IDGenerator::genMaterialId();
-  material._id = id;
+  auto id = material._id;
+  if (genId) {
+    id = IDGenerator::genMaterialId();
+    material._id = id;
+  }
+
+  addEvent(SceneEventType::MaterialAdded, material._id);
   _materials.emplace_back(std::move(material));
-  addEvent(SceneEventType::MaterialAdded, id);
   return id;
 }
 
@@ -146,12 +172,16 @@ const asset::Material* Scene::getMaterial(MaterialId id)
   return material;
 }
 
-AnimationId Scene::addAnimation(anim::Animation&& animation)
+AnimationId Scene::addAnimation(anim::Animation&& animation, bool genId)
 {
-  auto id = IDGenerator::genAnimationId();
-  animation._id = id;
+  auto id = animation._id;
+  if (genId) {
+    id = IDGenerator::genAnimationId();
+    animation._id = id;
+  }
+
+  addEvent(SceneEventType::AnimationAdded, animation._id);
   _animations.emplace_back(std::move(animation));
-  addEvent(SceneEventType::AnimationAdded, id);
   return id;
 }
 
@@ -175,12 +205,16 @@ const anim::Animation* Scene::getAnimation(AnimationId id)
   return animation;
 }
 
-SkeletonId Scene::addSkeleton(anim::Skeleton&& skeleton)
+SkeletonId Scene::addSkeleton(anim::Skeleton&& skeleton, bool genId)
 {
-  auto id = IDGenerator::genSkeletonId();
-  skeleton._id = id;
+  auto id = skeleton._id;
+  if (genId) {
+    id = IDGenerator::genSkeletonId();
+    skeleton._id = id;
+  }
+
+  addEvent(SceneEventType::SkeletonAdded, skeleton._id);
   _skeletons.emplace_back(std::move(skeleton));
-  addEvent(SceneEventType::SkeletonAdded, id);
   return id;
 }
 
@@ -204,10 +238,15 @@ const anim::Skeleton* Scene::getSkeleton(SkeletonId id)
   return skele;
 }
 
-RenderableId Scene::addRenderable(asset::Renderable&& renderable)
+RenderableId Scene::addRenderable(asset::Renderable&& renderable, bool genId)
 {
+  auto id = renderable._id;
+
+  if (genId) {
+    id = IDGenerator::genRenderableId();
+  }
+
   // Find which tile this renderable belongs to
-  auto id = IDGenerator::genRenderableId();
   auto tileIdx = findRenderableTile(renderable, Tile::_tileSize);
   renderable._id = id;
   _renderables.emplace_back(std::move(renderable));

@@ -14,7 +14,7 @@ bool OBJLoader::loadFromFile(
   std::vector<render::Vertex>& outVerts,
   std::vector<uint32_t>& outIndices)
 {
-	tinyobj::attrib_t attrib;
+	/*tinyobj::attrib_t attrib;
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
   std::string warn, err;
@@ -89,6 +89,6 @@ bool OBJLoader::loadFromFile(
 
       outIndices.emplace_back(uniqueVertices[vert]);
     }
-  }
-  return true;
+  }*/
+  return false;
 }

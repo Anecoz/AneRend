@@ -18,7 +18,7 @@ std::vector<T> genRange(std::size_t num, T& start)
 {
   std::vector<T> out(num);
 
-  std::iota(out.begin(), out.end(), start);
+  std::iota(out.begin(), out.end(), start + 1);
   start += (T)num;
 
   return out;
@@ -58,4 +58,31 @@ std::vector<SkeletonId> IDGenerator::genSkeletonIdRange(std::size_t num)
 {
   return genRange(num, _currentSkeletonId);
 }
+
+IdentifiersState IDGenerator::getState()
+{
+  IdentifiersState state {
+    _currentModelId,
+    _currentMeshId,
+    _currentRenderableId,
+    _currentAnimationId,
+    _currentAnimatorId,
+    _currentMaterialId,
+    _currentSkeletonId
+  };
+
+  return state;
+}
+
+void IDGenerator::setState(IdentifiersState state)
+{
+  _currentModelId = state._modelIdState;
+  _currentMeshId = state._meshIdState;
+  _currentRenderableId = state._renderableIdState;
+  _currentAnimationId = state._animationIdState;
+  _currentAnimatorId = state._animatorIdState;
+  _currentMaterialId = state._materialIdState;
+  _currentSkeletonId = state._skeletonIdState;
+}
+
 }
