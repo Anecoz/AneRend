@@ -566,45 +566,33 @@ void StageApplication::render()
         &_cachedFoxRenderable));
     }
     if (ImGui::Button("Add fox animator")) {
-      _foxAnimator._id = render::IDGenerator::genAnimatorId();
       _foxAnimator._animId = _foxAnims[0];
       _foxAnimator._skeleId = _foxSkeleId;
       _foxAnimator._state = render::asset::Animator::State::Playing;
 
-      render::AssetUpdate upd{};
-      upd._addedAnimators.emplace_back(_foxAnimator);
-      _vkRenderer.assetUpdate(std::move(upd));
+      auto animatorCopy = _foxAnimator;
+      _foxAnimator._id = _scene.addAnimator(std::move(animatorCopy));
     }
     if (ImGui::Button("Change fox animation")) {
       _foxAnimIdx = (_foxAnimIdx + 1) % (int)_foxAnims.size();
       _foxAnimator._animId = _foxAnims[_foxAnimIdx];
 
-      render::AssetUpdate upd{};
-      upd._updatedAnimators.emplace_back(_foxAnimator);
-      _vkRenderer.assetUpdate(std::move(upd));
+      _scene.updateAnimator(_foxAnimator);
     }
     if (ImGui::SliderFloat("Fox playback speed", &_foxAnimator._playbackMultiplier, 0.0f, 5.0f)) {
-      render::AssetUpdate upd{};
-      upd._updatedAnimators.emplace_back(_foxAnimator);
-      _vkRenderer.assetUpdate(std::move(upd));
+      _scene.updateAnimator(_foxAnimator);
     }
     if (ImGui::Button("Fox pause")) {
       _foxAnimator._state = render::asset::Animator::State::Paused;
-      render::AssetUpdate upd{};
-      upd._updatedAnimators.emplace_back(_foxAnimator);
-      _vkRenderer.assetUpdate(std::move(upd));
+      _scene.updateAnimator(_foxAnimator);
     }
     if (ImGui::Button("Fox play")) {
       _foxAnimator._state = render::asset::Animator::State::Playing;
-      render::AssetUpdate upd{};
-      upd._updatedAnimators.emplace_back(_foxAnimator);
-      _vkRenderer.assetUpdate(std::move(upd));
+      _scene.updateAnimator(_foxAnimator);
     }
     if (ImGui::Button("Fox stop")) {
       _foxAnimator._state = render::asset::Animator::State::Stopped;
-      render::AssetUpdate upd{};
-      upd._updatedAnimators.emplace_back(_foxAnimator);
-      _vkRenderer.assetUpdate(std::move(upd));
+      _scene.updateAnimator(_foxAnimator);
     }
     if (ImGui::Button("Load sponza")) {
       loadGLTF(_scene, std::string(ASSET_PATH) + "models/sponza-gltf-pbr/sponza.glb", _sponzaModelId, _sponzaMaterialIds, _dummySkele, _dummyAnimations);

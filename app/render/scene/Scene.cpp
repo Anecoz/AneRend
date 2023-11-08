@@ -53,6 +53,7 @@ Scene::Scene(Scene&& rhs)
   std::swap(_animations, rhs._animations);
   std::swap(_skeletons, rhs._skeletons);
   std::swap(_models, rhs._models);
+  std::swap(_animators, rhs._animators);
   std::swap(_renderables, rhs._renderables);
   std::swap(_eventLog, rhs._eventLog);
 }
@@ -65,6 +66,7 @@ Scene& Scene::operator=(Scene&& rhs)
     std::swap(_animations, rhs._animations);
     std::swap(_skeletons, rhs._skeletons);
     std::swap(_models, rhs._models);
+    std::swap(_animators, rhs._animators);
     std::swap(_renderables, rhs._renderables);
     std::swap(_eventLog, rhs._eventLog);
   }
@@ -236,6 +238,52 @@ const anim::Skeleton* Scene::getSkeleton(SkeletonId id)
   anim::Skeleton* skele = nullptr;
   getAsset(_skeletons, id, &skele);
   return skele;
+}
+
+AnimatorId Scene::addAnimator(asset::Animator&& animator, bool genId)
+{
+  auto id = animator._id;
+  if (genId) {
+    id = IDGenerator::genAnimatorId();
+    animator._id = id;
+  }
+
+  addEvent(SceneEventType::AnimatorAdded, animator._id);
+  _animators.emplace_back(std::move(animator));
+  return id;
+}
+
+void Scene::updateAnimator(asset::Animator animator)
+{
+  for (auto it = _animators.begin(); it != _animators.end(); ++it) {
+    if (it->_id == animator._id) {
+      *it = animator;
+      addEvent(SceneEventType::AnimatorUpdated, animator._id);
+      return;
+    }
+  }
+
+  printf("Could not update animator with id %u, doesn't exist!\n", animator._id);
+}
+
+void Scene::removeAnimator(AnimatorId id)
+{
+  for (auto it = _animators.begin(); it != _animators.end(); ++it) {
+    if (it->_id == id) {
+      _animators.erase(it);
+      addEvent(SceneEventType::AnimatorRemoved, id);
+      return;
+    }
+  }
+
+  printf("Could not remove animator with id %u, doesn't exist!\n", id);
+}
+
+const asset::Animator* Scene::getAnimator(AnimatorId id)
+{
+  asset::Animator* animator = nullptr;
+  getAsset(_animators, id, &animator);
+  return animator;
 }
 
 RenderableId Scene::addRenderable(asset::Renderable&& renderable, bool genId)

@@ -95,7 +95,20 @@ void AnimationThread::addAnimator(render::asset::Animator&& animator)
 
   lock.unlock();
   {
+    // Try pending skeletons
     std::unique_lock<std::mutex> skeleLock(_pendingSkelMtx);
+    for (auto& skel : _pendingAddedSkeletons) {
+      if (skel._id == animator._skeleId) {
+        skeleFound = true;
+        skeleCopy = skel;
+        break;
+      }
+    }
+  }
+
+  if (!skeleFound) {
+    // try current skeletons
+    std::unique_lock<std::mutex> skelLock(_skelMtx);
     for (auto& skel : _currentSkeletons) {
       if (skel._id == animator._skeleId) {
         skeleFound = true;

@@ -8,7 +8,7 @@ struct Animator
 {
   AnimatorId _id = INVALID_ID;
 
-  enum class State {
+  enum class State : std::uint8_t {
     Playing,
     Paused,
     Stopped

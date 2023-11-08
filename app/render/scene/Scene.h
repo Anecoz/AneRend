@@ -8,6 +8,7 @@
 #include "../asset/Model.h"
 #include "../asset/Renderable.h"
 #include "../asset/Material.h"
+#include "../asset/Animator.h"
 
 #include "../animation/Skeleton.h"
 #include "../animation/Animation.h"
@@ -27,6 +28,9 @@ enum class SceneEventType
   ModelRemoved,
   AnimationAdded,
   AnimationRemoved,
+  AnimatorAdded,
+  AnimatorUpdated,
+  AnimatorRemoved,
   SkeletonAdded,
   SkeletonRemoved,
   MaterialAdded,
@@ -65,7 +69,6 @@ public:
   // and then asynchronously serialize to path.
   void serializeAsync(const std::filesystem::path& path);
 
-  // This will set ID state aswell
   std::future<DeserialisedSceneData> deserializeAsync(const std::filesystem::path& path);
 
   const SceneEventLog& getEvents() const;
@@ -89,6 +92,11 @@ public:
   void removeSkeleton(SkeletonId id);
   const anim::Skeleton* getSkeleton(SkeletonId id);
 
+  AnimatorId addAnimator(asset::Animator&& animator, bool genId = true);
+  void updateAnimator(asset::Animator animator);
+  void removeAnimator(AnimatorId id);
+  const asset::Animator* getAnimator(AnimatorId id);
+
   RenderableId addRenderable(asset::Renderable&& renderable, bool genId = true);
   void removeRenderable(RenderableId id);
   const asset::Renderable* getRenderable(RenderableId id);
@@ -102,11 +110,17 @@ private:
 
   std::unordered_map<TileIndex, Tile> _tiles;
 
-  // TODO: In the future maybe these need to be tile-based aswell.
+  /*
+  * TODO: In the future maybe these need to be tile - based aswell.
+  * They may need to be streamed in on demand, but that should be decided using renderables
+  * _using_ the assets.
+  * Renderables aren't really assets... Maybe assets don't belong here, only renderables, lights, particle emitters etc.
+  */ 
   std::vector<asset::Model> _models;
   std::vector<asset::Material> _materials;
   std::vector<anim::Animation> _animations;
   std::vector<anim::Skeleton> _skeletons;
+  std::vector<asset::Animator> _animators;
   std::vector<asset::Renderable> _renderables;
 
   SceneEventLog _eventLog;

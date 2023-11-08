@@ -164,6 +164,22 @@ void serialize(S& s, std::vector<render::anim::Animation>& a)
 }
 
 template <typename S>
+void serialize(S& s, render::asset::Animator& a)
+{
+  s.value4b(a._id);
+  s.value1b(a._state);
+  s.value4b(a._skeleId);
+  s.value4b(a._animId);
+  s.value4b(a._playbackMultiplier);
+}
+
+template <typename S>
+void serialize(S& s, std::vector<render::asset::Animator>& a)
+{
+  s.container(a, 100);
+}
+
+template <typename S>
 void serialize(S& s, render::anim::Joint& j)
 {
   s.object(j._globalTransform);
@@ -222,6 +238,7 @@ std::uint32_t headerSize()
     4 + // mat idx
     4 + // anim idx
     4 + // skel idx
+    4 + // animator idx
     4; // rend idx
 }
 
@@ -269,6 +286,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
         4 bytes material idx    (uint32_t)
         4 bytes animation idx   (uint32_t)
         4 bytes skeleton idx    (uint32_t)
+        4 bytes animator idx    (uint32_t)
         4 bytes renderable idx  (uint32_t)
         
         -- identifiers state --
@@ -280,6 +298,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
         -- animations --
 
         -- skeletons --
+
+        -- animators --
 
         -- renderables --
 
@@ -294,6 +314,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       auto animations = scene._animations;
       auto skeletons = scene._skeletons;
       auto renderables = scene._renderables;
+      auto animators = scene._animators;
 
       std::ofstream file(path, std::ios::binary);
       if (file.bad()) {
@@ -310,6 +331,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       std::vector<std::uint8_t> serialisedMats;
       std::vector<std::uint8_t> serialisedAnimations;
       std::vector<std::uint8_t> serialisedSkeletons;
+      std::vector<std::uint8_t> serialisedAnimators;
       std::vector<std::uint8_t> serializedRenderables;
 
       printf("Serialising id state...\n");
@@ -322,6 +344,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       auto animationsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedAnimations, animations);
       printf("Serialising skeletons...\n");
       auto skeletonsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedSkeletons, skeletons);
+      printf("Serialising animators...\n");
+      auto animatorsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedAnimators, animators);
       printf("Serialising renderables...\n");
       auto renderablesByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serializedRenderables, renderables);
 
@@ -334,7 +358,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       auto materialIdx = modelIdx + modelsByteSize;
       auto animationIdx = materialIdx + matsByteSize;
       auto skeletonIdx = animationIdx + animationsByteSize;
-      auto renderableIdx = skeletonIdx + skeletonsByteSize;
+      auto animatorIdx = skeletonIdx + skeletonsByteSize;
+      auto renderableIdx = animatorIdx + animatorsByteSize;
 
       file.write((const char*)&version, 1);
       // identifiers state idx
@@ -347,6 +372,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       file.write((const char*)&animationIdx, 4);
       // skeleton idx
       file.write((const char*)&skeletonIdx, 4);
+      // animator idx
+      file.write((const char*)&animatorIdx, 4);
       // renderable idx
       file.write((const char*)&renderableIdx, 4);
 
@@ -356,6 +383,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       file.write((const char*)serialisedMats.data(), matsByteSize);
       file.write((const char*)serialisedAnimations.data(), animationsByteSize);
       file.write((const char*)serialisedSkeletons.data(), skeletonsByteSize);
+      file.write((const char*)serialisedAnimators.data(), animatorsByteSize);
       file.write((const char*)serializedRenderables.data(), renderablesByteSize);
 
       file.close();
@@ -417,6 +445,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         4 bytes material idx    (uint32_t)
         4 bytes animation idx   (uint32_t)
         4 bytes skeleton idx    (uint32_t)
+        4 bytes animator idx    (uint32_t)
         4 bytes renderable idx  (uint32_t)
 
         -- identifiers state --
@@ -428,6 +457,8 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         -- animations --
 
         -- skeletons --
+
+        -- animators -- 
 
         -- renderables --
 
@@ -459,13 +490,15 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       uint32_t materialIdx = header4BytePtr[2];
       uint32_t animationIdx = header4BytePtr[3];
       uint32_t skeletonIdx = header4BytePtr[4];
-      uint32_t rendIdx = header4BytePtr[5];
+      uint32_t animatorIdx = header4BytePtr[5];
+      uint32_t rendIdx = header4BytePtr[6];
 
       std::vector<std::uint8_t> serialisedState(modelIdx - idStateIdx);
       std::vector<std::uint8_t> serialisedModels(materialIdx - modelIdx);
       std::vector<std::uint8_t> serialisedMats(animationIdx - materialIdx);
       std::vector<std::uint8_t> serialisedAnimations(skeletonIdx - animationIdx);
-      std::vector<std::uint8_t> serialisedSkeletons(rendIdx - skeletonIdx);
+      std::vector<std::uint8_t> serialisedSkeletons(animatorIdx - skeletonIdx);
+      std::vector<std::uint8_t> serialisedAnimators(rendIdx - animatorIdx);
       std::vector<std::uint8_t> serialisedRenderables(fileSize - rendIdx);
 
       // We need these here so that we can add them properly to the scene.
@@ -473,6 +506,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       std::vector<render::asset::Material> mats;
       std::vector<render::anim::Animation> animations;
       std::vector<render::anim::Skeleton> skeletons;
+      std::vector<render::asset::Animator> animators;
       std::vector<render::asset::Renderable> rends;
 
       // Read id state
@@ -505,6 +539,12 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         return;
       }
 
+      // Read animators
+      if (!desHelper(file, animatorIdx, serialisedAnimators, animators)) {
+        p.set_value(DeserialisedSceneData());
+        return;
+      }
+
       // Read renderables
       if (!desHelper(file, rendIdx, serialisedRenderables, rends)) {
         p.set_value(DeserialisedSceneData());
@@ -512,19 +552,22 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       }
 
       for (auto& model : models) {
-        outputData._scene->addModel(std::move(model));
+        outputData._scene->addModel(std::move(model), false);
       }
       for (auto& mat : mats) {
-        outputData._scene->addMaterial(std::move(mat));
+        outputData._scene->addMaterial(std::move(mat), false);
       }
       for (auto& anim : animations) {
-        outputData._scene->addAnimation(std::move(anim));
+        outputData._scene->addAnimation(std::move(anim), false);
       }
       for (auto& skel : skeletons) {
-        outputData._scene->addSkeleton(std::move(skel));
+        outputData._scene->addSkeleton(std::move(skel), false);
+      }
+      for (auto& animator : animators) {
+        outputData._scene->addAnimator(std::move(animator), false);
       }
       for (auto& r : rends) {
-        outputData._scene->addRenderable(std::move(r));
+        outputData._scene->addRenderable(std::move(r), false);
       }
 
       p.set_value(std::move(outputData));
