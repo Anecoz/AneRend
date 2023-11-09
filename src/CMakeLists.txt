@@ -1,0 +1,2 @@
+add_subdirectory(anerend)
+add_subdirectory(anedit)

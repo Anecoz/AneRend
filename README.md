@@ -1,6 +1,6 @@
 # AneRend
 
-![Image](screenshot1.png)
+![Image](screenshots/screenshot1.png)
 _PBR Sponza example scene with global illumination (DDGI) and ray traced hard shadows turned on_
 
 AneRend is a Vulkan renderer where I prototype state-of-the-art rendering techniques. Among those currently implemented in some form are:
@@ -366,7 +366,7 @@ Resolution: 1920x1080
 
 Note that the engine is heavily GPU-bound, by design.
 
-|![Image](screenshot1.png)|
+|![Image](screenshots/screenshot1.png)|
 |:--:|
 |_Test render for frame times_|
 

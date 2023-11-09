@@ -13,14 +13,20 @@ if (WIN32)
   set_target_properties(libnoise PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_LIST_DIR}/libnoise/lib/Release/LibNoise64.lib)
   target_include_directories(libnoise INTERFACE ${CMAKE_CURRENT_LIST_DIR}/libnoise/include)
 
+   #vulkan
+  find_package(Vulkan REQUIRED)
+
+  #imgui
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/imgui)
+
+  #tinygltf
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tinygltf)
+  
+  #lodepng
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/LodePng)
+
   #bitsery
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/bitsery)
 
-  #vulkan
-  find_package(Vulkan REQUIRED)
-
 else()  
-  find_package(glfw3 REQUIRED)
-  find_package(glm REQUIRED)
-  find_package(vulkan REQUIRED)
 endif()
