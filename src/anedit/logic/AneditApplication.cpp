@@ -538,3 +538,8 @@ void AneditApplication::notifyFramebufferResized()
 {
   _vkRenderer.notifyFramebufferResized();
 }
+
+render::scene::Scene& AneditApplication::scene()
+{
+  return _scene;
+}

@@ -2,6 +2,8 @@
 
 #include "Application.h"
 
+#include "AneditContext.h"
+
 #include <glm/glm.hpp>
 
 #include "../render/VulkanRenderer.h"
@@ -17,7 +19,7 @@
 
 #include <filesystem>
 
-class AneditApplication : public Application
+class AneditApplication : public Application, public logic::AneditContext
 {
 public:
   AneditApplication(std::string title);
@@ -29,6 +31,12 @@ public:
   void update(double delta) override final;
 
   void notifyFramebufferResized();
+
+  // AneditContext begin
+
+  render::scene::Scene& scene() override final;
+
+  // AneditContext end
 
 private:
   void calculateShadowMatrix();
