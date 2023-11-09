@@ -17,11 +17,11 @@
 
 #include <filesystem>
 
-class StageApplication : public Application
+class AneditApplication : public Application
 {
 public:
-  StageApplication(std::string title);
-  ~StageApplication();
+  AneditApplication(std::string title);
+  ~AneditApplication();
 
   bool init();
 

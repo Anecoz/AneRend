@@ -1,8 +1,8 @@
-#include "logic/StageApplication.h"
+#include "logic/AneditApplication.h"
 
 int main()
 {
-  StageApplication app("Stage");
+  AneditApplication app("AnEdit");
 
   if (!app.init()) {
     return -1;

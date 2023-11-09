@@ -1,4 +1,4 @@
-#include "StageApplication.h"
+#include "AneditApplication.h"
 
 #include "../../common/input/KeyInput.h"
 #include "../util/GLTFLoader.h"
@@ -12,11 +12,11 @@
 
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
 {
-  auto app = reinterpret_cast<StageApplication*>(glfwGetWindowUserPointer(window));
+  auto app = reinterpret_cast<AneditApplication*>(glfwGetWindowUserPointer(window));
   app->notifyFramebufferResized();
 }
 
-StageApplication::StageApplication(std::string title)
+AneditApplication::AneditApplication(std::string title)
   : Application(std::move(title))
   , _sunDir(glm::vec3(0.7f, -0.7f, 0.7f))
   , _camera(glm::vec3(-17.0, 6.0, 4.0), render::ProjectionType::Perspective)
@@ -32,7 +32,7 @@ StageApplication::StageApplication(std::string title)
   _scenePath = cd/"scene.anerend";
 }
 
-StageApplication::~StageApplication()
+AneditApplication::~AneditApplication()
 {
 }
 
@@ -155,7 +155,7 @@ void removeRenderable(render::VulkanRenderer& renderer, render::RenderableId id)
 
 }
 
-bool StageApplication::init()
+bool AneditApplication::init()
 {
   glfwSetWindowUserPointer(_window, this);
   glfwSetFramebufferSizeCallback(_window, framebufferResizeCallback);
@@ -172,7 +172,7 @@ bool StageApplication::init()
   return true;
 }
 
-void StageApplication::update(double delta)
+void AneditApplication::update(double delta)
 {
   calculateShadowMatrix();
 
@@ -211,7 +211,7 @@ void StageApplication::update(double delta)
     //_windSystem.getCurrentWindMap());
 }
 
-void StageApplication::render()
+void AneditApplication::render()
 {
   _vkRenderer.prepare();
 
@@ -436,7 +436,7 @@ void StageApplication::render()
   _vkRenderer.drawFrame(g_PP, g_DebugShadow);
 }
 
-void StageApplication::calculateShadowMatrix()
+void AneditApplication::calculateShadowMatrix()
 {
   //if (glm::distance(_lastCamPos, _camera.getPosition()) < 5.0f) return;
 
@@ -534,7 +534,7 @@ void StageApplication::calculateShadowMatrix()
   _shadowCamera.setProjection(lpMatrix, minZ, maxZ);
 }
 
-void StageApplication::notifyFramebufferResized()
+void AneditApplication::notifyFramebufferResized()
 {
   _vkRenderer.notifyFramebufferResized();
 }
