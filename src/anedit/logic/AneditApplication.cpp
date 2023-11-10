@@ -3,6 +3,10 @@
 #include "../../common/input/KeyInput.h"
 #include "../util/GLTFLoader.h"
 
+#include "../gui/SceneAssetGUI.h"
+#include "../gui/SceneListGUI.h"
+#include "../gui/EditRenderableGUI.h"
+
 #include <imgui.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -34,6 +38,9 @@ AneditApplication::AneditApplication(std::string title)
 
 AneditApplication::~AneditApplication()
 {
+  for (auto gui : _guis) {
+    delete gui;
+  }
 }
 
 static bool g_DebugShadow = true;
@@ -117,7 +124,7 @@ render::RenderableId addRenderableRandom(
   auto trans = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f + xOff, 0.0f, 5.0f));
   //auto rot = glm::rotate(glm::mat4(1.0f), glm::radians((float)rotOff(rng)), glm::vec3(0.0f, 1.0f, 0.0f));
   auto scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
-  renderable._transform = trans * scaleMat;
+  renderable._transform = trans * rot * scaleMat;
 
   if (skeleId != render::INVALID_ID) {
     renderable._skeleton = skeleId;
@@ -163,6 +170,8 @@ bool AneditApplication::init()
   if (!_vkRenderer.init()) {
     return false;
   }
+
+  setupGuis();
 
   // Set shadow cam somewhere
   _shadowCamera.setViewMatrix(glm::lookAt(glm::vec3(-16.0f, 10.0f, -18.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
@@ -223,6 +232,27 @@ void AneditApplication::render()
     ImGui::Text("Camera pos %.1f, %.1f, %.1f", _camera.getPosition().x, _camera.getPosition().y, _camera.getPosition().z);
     ImGui::End();
   }
+
+  for (auto gui : _guis) {
+    gui->immediateDraw(this);
+  }
+
+  oldUI();
+
+  ImGui::End();
+
+  _vkRenderer.drawFrame(g_PP, g_DebugShadow);
+}
+
+void AneditApplication::setupGuis()
+{
+  _guis.emplace_back(new gui::SceneAssetGUI());
+  _guis.emplace_back(new gui::SceneListGUI());
+  _guis.emplace_back(new gui::EditRenderableGUI());
+}
+
+void AneditApplication::oldUI()
+{
   {
     ImGui::Begin("Parameters");
     float dir[2];
@@ -261,9 +291,9 @@ void AneditApplication::render()
     if (ImGui::Button("Spawn brainstem")) {
       _rends.emplace_back(addRenderableRandom(
         _scene,
-        _brainstemModelId, 
-        _brainstemMaterials, 
-        1.0f, 
+        _brainstemModelId,
+        _brainstemMaterials,
+        1.0f,
         2.0f,
         glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
         _brainstemSkelId));
@@ -321,7 +351,7 @@ void AneditApplication::render()
     if (ImGui::Button("Load sponza")) {
       loadGLTF(_scene, std::string(ASSET_PATH) + "models/sponza-gltf-pbr/sponza.glb", _sponzaModelId, _sponzaMaterialIds, _dummySkele, _dummyAnimations);
     }
-    if (ImGui::Button("Load lantern")) {      
+    if (ImGui::Button("Load lantern")) {
       loadGLTF(_scene, std::string(ASSET_PATH) + "models/lantern_gltf/Lantern.glb", _lanternModelId, _lanternMaterials, _dummySkele, _dummyAnimations);
     }
     if (ImGui::Button("Load shrek")) {
@@ -339,10 +369,10 @@ void AneditApplication::render()
       std::vector<render::AnimationId> animIds;
       loadGLTF(
         _scene,
-        std::string(ASSET_PATH) + "models/brainstem_gltf/BrainStem.glb", 
+        std::string(ASSET_PATH) + "models/brainstem_gltf/BrainStem.glb",
         _brainstemModelId,
-        _brainstemMaterials, 
-        _brainstemSkelId, 
+        _brainstemMaterials,
+        _brainstemSkelId,
         animIds);
       _brainstemAnimId = animIds[0];
     }
@@ -432,8 +462,6 @@ void AneditApplication::render()
 
     ImGui::End();
   }
-
-  _vkRenderer.drawFrame(g_PP, g_DebugShadow);
 }
 
 void AneditApplication::calculateShadowMatrix()
@@ -542,4 +570,14 @@ void AneditApplication::notifyFramebufferResized()
 render::scene::Scene& AneditApplication::scene()
 {
   return _scene;
+}
+
+render::RenderableId& AneditApplication::selectedRenderable()
+{
+  return _selectedRenderable;
+}
+
+render::Camera& AneditApplication::camera()
+{
+  return _camera;
 }

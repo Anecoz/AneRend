@@ -347,7 +347,8 @@ void Scene::setRenderableTint(RenderableId id, const glm::vec3& tint)
   for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
     if (it->_id == id) {
       it->_tint = tint;
-      addEvent(SceneEventType::RenderableUpdated, id);
+      auto tileIdx = findRenderableTile(*it, Tile::_tileSize);
+      addEvent(SceneEventType::RenderableUpdated, id, tileIdx);
       return;
     }
   }
@@ -360,7 +361,9 @@ void Scene::setRenderableTransform(RenderableId id, const glm::mat4& transform)
   for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
     if (it->_id == id) {
       it->_transform = transform;
-      addEvent(SceneEventType::RenderableUpdated, id);
+
+      auto tileIdx = findRenderableTile(*it, Tile::_tileSize);
+      addEvent(SceneEventType::RenderableUpdated, id, tileIdx);
       return;
     }
   }

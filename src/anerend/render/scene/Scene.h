@@ -76,6 +76,30 @@ public:
 
   bool getTile(TileIndex idx, Tile** tileOut);
 
+  const std::vector<asset::Material>& getMaterials() const {
+    return _materials;
+  }
+
+  const std::vector<asset::Model>& getModels() const {
+    return _models;
+  }
+
+  const std::vector<anim::Animation>& getAnimations() const {
+    return _animations;
+  }
+
+  const std::vector<anim::Skeleton>& getSkeletons() const {
+    return _skeletons;
+  }
+
+  const std::vector<asset::Animator>& getAnimators() const {
+    return _animators;
+  }
+
+  const std::vector<asset::Renderable>& getRenderables() const {
+    return _renderables;
+  }
+
   ModelId addModel(asset::Model&& model, bool genId = true);
   void removeModel(ModelId id);
   const asset::Model* getModel(ModelId id);

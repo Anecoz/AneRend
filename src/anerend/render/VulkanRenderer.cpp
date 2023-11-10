@@ -46,6 +46,7 @@
 #include "../imgui/imgui.h"
 #include "../imgui/imgui_impl_glfw.h"
 #include "../imgui/imgui_impl_vulkan.h"
+#include <ImGuizmo.h>
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -3782,6 +3783,7 @@ void VulkanRenderer::prepare()
   ImGui_ImplGlfw_NewFrame();
 
   ImGui::NewFrame();
+  ImGuizmo::BeginFrame();
 }
 
 void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
