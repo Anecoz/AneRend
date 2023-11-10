@@ -41,7 +41,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     }
 
     ImGui::Text("Translation");
-    if (ImGui::InputFloat3("##translation", &translation[0]) && id) {
+    if (ImGui::InputFloat3("##translation", &translation[0], "%.3f", ImGuiInputTextFlags_EnterReturnsTrue) && id) {
       auto oldTrans = c->scene().getRenderable(id)->_transform;
 
       auto& t = oldTrans[3];
@@ -52,7 +52,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
 
 
     ImGui::Text("Scale");
-    if (ImGui::InputFloat3("##scale", &scale[0]) && id) {
+    if (ImGui::InputFloat3("##scale", &scale[0], "%.3f", ImGuiInputTextFlags_EnterReturnsTrue) && id) {
       auto oldTrans = c->scene().getRenderable(id)->_transform;
 
       // normalize first
