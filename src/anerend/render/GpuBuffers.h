@@ -16,12 +16,12 @@ struct alignas(16) GPURenderable {
   glm::mat4 _transform;
   glm::vec4 _bounds;
   glm::vec4 _tint;
-  uint32_t _firstMeshId;
-  uint32_t _numMeshIds;
+  uint32_t _modelOffset;
+  uint32_t _numMeshes;
   uint32_t _skeletonOffset;
   uint32_t _visible;
   uint32_t _firstMaterialIndex;
-  uint32_t _rtFirstDynamicMeshId;
+  uint32_t _dynamicModelOffset;
 };
 
 // See render::asset::Material

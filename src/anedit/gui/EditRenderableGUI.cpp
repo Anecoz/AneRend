@@ -1,7 +1,7 @@
 #include "EditRenderableGUI.h"
 
 #include "../logic/AneditContext.h"
-#include "../render/scene/Scene.h"
+#include <render/scene/Scene.h>
 
 #include <glm/glm.hpp>
 #include <imgui.h>

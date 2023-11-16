@@ -12,6 +12,7 @@ MeshId IDGenerator::_currentMeshId = INVALID_ID;
 RenderableId IDGenerator::_currentRenderableId = INVALID_ID;
 MaterialId IDGenerator::_currentMaterialId = INVALID_ID;
 SkeletonId IDGenerator::_currentSkeletonId = INVALID_ID;
+PrefabId IDGenerator::_currentPrefabId = INVALID_ID;
 
 template <typename T>
 std::vector<T> genRange(std::size_t num, T& start)
@@ -59,6 +60,11 @@ std::vector<SkeletonId> IDGenerator::genSkeletonIdRange(std::size_t num)
   return genRange(num, _currentSkeletonId);
 }
 
+std::vector<PrefabId> IDGenerator::genPrefabIdRange(std::size_t num)
+{
+  return genRange(num, _currentPrefabId);
+}
+
 IdentifiersState IDGenerator::getState()
 {
   IdentifiersState state {
@@ -68,7 +74,8 @@ IdentifiersState IDGenerator::getState()
     _currentAnimationId,
     _currentAnimatorId,
     _currentMaterialId,
-    _currentSkeletonId
+    _currentSkeletonId,
+    _currentPrefabId
   };
 
   return state;
@@ -83,6 +90,7 @@ void IDGenerator::setState(IdentifiersState state)
   _currentAnimatorId = state._animatorIdState;
   _currentMaterialId = state._materialIdState;
   _currentSkeletonId = state._skeletonIdState;
+  _currentPrefabId = state._prefabIdState;
 }
 
 }

@@ -1,7 +1,7 @@
 #include "SceneListGUI.h"
 
 #include "../logic/AneditContext.h"
-#include "../render/scene/Scene.h"
+#include <render/scene/Scene.h>
 
 #include <imgui.h>
 

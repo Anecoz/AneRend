@@ -6,20 +6,12 @@ struct Renderable
   mat4 transform;
   vec4 bounds;
   vec4 tint;
-  uint firstMeshId;
-  uint numMeshIds;
+  uint modelOffset;
+  uint numMeshes;
   uint skeletonOffset;
   uint visible;
   uint firstMaterialIndex;
-  uint rtFirstDynamicMeshId; // Only for ray-tracing: First dynamic mesh id (numMeshId applies here aswell)
-};
-
-// Map from engine IDs to internal indices.
-struct IdMap
-{
-  uint meshIndex;
-  uint renderableIndex;
-  uint materialIndex;
+  uint dynamicModelOffset; // Only for ray-tracing: First dynamic mesh id (numMeshId applies here aswell)
 };
 
 struct Light 
@@ -135,27 +127,27 @@ layout(std430, set = 0, binding = 6) readonly buffer RenderableMatIndexBuffer {
   uint indices[];
 } rendMatIndexBuffer;
 
-layout(std430, set = 0, binding = 7) readonly buffer IndexBuffer {
+layout(std430, set = 0, binding = 7) readonly buffer RenderableModelBuffer {
+  uint indices[];
+} rendModelBuffer;
+
+layout(std430, set = 0, binding = 8) readonly buffer IndexBuffer {
   uint indices[];
 } indexBuffer;
 
-layout(std430, set = 0, binding = 8) buffer VertexBuffer {
+layout(std430, set = 0, binding = 9) buffer VertexBuffer {
   PackedVertex vertices[];
 } vertexBuffer;
 
-layout(std430, set = 0, binding = 9) readonly buffer MeshBuffer {
+layout(std430, set = 0, binding = 10) readonly buffer MeshBuffer {
   MeshInfo meshes[];
 } meshBuffer;
 
 // Tlas is binding 10
 
-layout(std430, set = 0, binding = 11) readonly buffer SkeletonBuffer {
+layout(std430, set = 0, binding = 12) readonly buffer SkeletonBuffer {
   mat4 joints[];
 } skeletonBuffer;
-
-layout(std430, set = 0, binding = 12) readonly buffer IdMapBuffer {
-  IdMap idMaps[];
-} idMapBuffer;
 
 layout(set = 0, binding = 13) uniform sampler2D textures[];
 
@@ -240,31 +232,4 @@ uint setVisibleBit(Renderable rend, bool val)
 {
   uint insert = val ? 1 : 0;
   return bitfieldInsert(rend.visible, insert, 0, 1);
-}
-
-uint renderableIndexFromId(uint id)
-{
-  return idMapBuffer.idMaps[id].renderableIndex;
-}
-
-Renderable renderableFromId(uint id)
-{
-  uint index = renderableIndexFromId(id);
-  return renderableBuffer.renderables[index];
-}
-
-uint meshIndexFromId(uint id)
-{
-  return idMapBuffer.idMaps[id].meshIndex;
-}
-
-uint materialIndexFromId(uint id)
-{
-  return idMapBuffer.idMaps[id].materialIndex;
-}
-
-MaterialInfo materialFromId(uint id)
-{
-  uint index = materialIndexFromId(id);
-  return materialBuffer.infos[index];
 }

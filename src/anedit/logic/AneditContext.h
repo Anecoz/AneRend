@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../render/Identifiers.h"
-#include "../render/Camera.h"
+#include <render/Identifiers.h>
+#include <render/Camera.h>
 
 namespace render::scene { class Scene; }
 

@@ -7,7 +7,7 @@
 struct TranslationId
 {
   uint renderableIndex;
-  uint meshId;
+  uint meshOffset;
 };
 
 layout(std430, set = 1, binding = 0) buffer TranslationBuffer {
@@ -57,9 +57,10 @@ void main() {
   fragNormal =  normalize(mat3(model) * normal);
   fragPos = (model * vec4(inPosition, 1.0)).xyz;
   fragUV = inUV;
-  uint meshId = translationBuffer.ids[gl_InstanceIndex].meshId;
-  uint materialOffset = meshId - renderableBuffer.renderables[renderableIndex].firstMeshId;
 
+  uint meshOffset = translationBuffer.ids[gl_InstanceIndex].meshOffset;
+  uint firstMeshOffset = renderableBuffer.renderables[renderableIndex].modelOffset;
+  uint materialOffset = meshOffset - firstMeshOffset;
   fragMaterialIdx = renderableBuffer.renderables[renderableIndex].firstMaterialIndex + materialOffset;
 
   vec3 bitangentL = cross(normal, inTangent.xyz);
@@ -71,13 +72,13 @@ void main() {
 
   // If ray tracing is enabled, we need to write our verts to the dynamic mesh buffer (for creating BLASes)
   // But only if we are animated!
-  uint firstDynamicMesh = renderableBuffer.renderables[renderableIndex].rtFirstDynamicMeshId;
-  if (ubo.rtEnabled == 1 && firstDynamicMesh != 0) {
-    uint firstMeshId = renderableBuffer.renderables[renderableIndex].firstMeshId;
-    uint dynamicMeshId = meshId - firstMeshId + firstDynamicMesh;
+  uint dynamicModelOffset = renderableBuffer.renderables[renderableIndex].dynamicModelOffset;
+  if (ubo.rtEnabled == 1 && dynamicModelOffset != 0) {
+    uint meshIndex = rendModelBuffer.indices[meshOffset];
+    uint dynamicIndex = rendModelBuffer.indices[materialOffset + dynamicModelOffset];
 
-    MeshInfo dynamicMeshInfo = meshBuffer.meshes[meshIndexFromId(dynamicMeshId)];
-    MeshInfo meshInfo = meshBuffer.meshes[meshIndexFromId(meshId)];
+    MeshInfo dynamicMeshInfo = meshBuffer.meshes[dynamicIndex];
+    MeshInfo meshInfo = meshBuffer.meshes[meshIndex];
 
     Vertex v;
     v.pos = pos;

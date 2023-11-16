@@ -1,7 +1,7 @@
 #include "AneditApplication.h"
 
 #include "../../common/input/KeyInput.h"
-#include "../util/GLTFLoader.h"
+#include <util/GLTFLoader.h>
 
 #include "../gui/SceneAssetGUI.h"
 #include "../gui/SceneListGUI.h"

@@ -7,15 +7,15 @@
 
 #include <glm/glm.hpp>
 
-#include "../render/VulkanRenderer.h"
-#include "../render/asset/Model.h"
-#include "../render/Camera.h"
-#include "../render/RenderDebugOptions.h"
-#include "../render/RenderOptions.h"
-#include "../render/asset/Model.h"
-#include "../render/asset/Renderable.h"
-#include "../render/scene/Scene.h"
-#include "../render/scene/ScenePager.h"
+#include <render/VulkanRenderer.h>
+#include <render/asset/Model.h>
+#include <render/Camera.h>
+#include <render/RenderDebugOptions.h>
+#include <render/RenderOptions.h>
+#include <render/asset/Model.h>
+#include <render/asset/Renderable.h>
+#include <render/scene/Scene.h>
+#include <render/scene/ScenePager.h>
 #include "WindSystem.h"
 
 #include <filesystem>

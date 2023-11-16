@@ -300,13 +300,13 @@ private:
   std::vector<VkDescriptorSet> _bindlessDescriptorSets;
 
   uint32_t _renderableMatIndexBinding = 6;
-  uint32_t _gigaIdxBinding = _renderableMatIndexBinding + 1;
+  uint32_t _modelBinding = _renderableMatIndexBinding + 1;
+  uint32_t _gigaIdxBinding = _modelBinding + 1;
   uint32_t _gigaVtxBinding = _gigaIdxBinding + 1;
   uint32_t _meshBinding = _gigaVtxBinding + 1;
   uint32_t _tlasBinding = _meshBinding + 1;
   uint32_t _skeletonBinding = _tlasBinding + 1;
-  uint32_t _idMapBinding = _skeletonBinding + 1;
-  uint32_t _bindlessTextureBinding = _idMapBinding + 1;
+  uint32_t _bindlessTextureBinding = _skeletonBinding + 1;
 
   // Use a mem interface to select empty bindless indices.
   internal::BufferMemoryInterface _bindlessTextureMemIf;
@@ -356,14 +356,14 @@ private:
   // Contains renderable info for compute culling shader.
   std::vector<AllocatedBuffer> _gpuRenderableBuffer;
 
-  // Contains mappings from *Id to internal indices.
-  std::vector<AllocatedBuffer> _gpuIdMapBuffer;
-
   // Contains material info.
   std::vector<AllocatedBuffer> _gpuMaterialBuffer;
 
   // Maps renderable material indices into the actual material buffer.
   std::vector<AllocatedBuffer> _gpuRenderableMaterialIndexBuffer;
+
+  // Maps models to mesh indices
+  std::vector<AllocatedBuffer> _gpuModelBuffer;
 
   // Contains mesh info
   std::vector<AllocatedBuffer> _gpuMeshInfoBuffer;
@@ -395,8 +395,8 @@ private:
   // Fill info about which material index each renderable references.
   void prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer);
 
-  // Fills gpu id map buffer with the current renderable and mesh ids.
-  void prefillGPUIdMapBuffer(VkCommandBuffer& commandBuffer);
+  // Fill buffer with mesh indices of currently used models.
+  void prefillGPUModelBuffer(VkCommandBuffer& commandBuffer);
 
   // Fill gpu mesh info.
   void prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer);

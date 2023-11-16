@@ -1,7 +1,7 @@
 #pragma once
 
 #include "IGUI.h"
-#include "../render/Identifiers.h"
+#include <render/Identifiers.h>
 
 namespace gui {
 

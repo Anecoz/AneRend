@@ -22,7 +22,6 @@ void main() {
   vec3 normal = normalize(fragNormal);
 
   uint matIndex = rendMatIndexBuffer.indices[fragMaterialIdx];
-  //MaterialInfo matInfo = materialFromId(fragMaterialIdx);
   MaterialInfo matInfo = materialBuffer.infos[matIndex];
 
   SurfaceData surfData = getSurfaceDataFromMat(matInfo, fragUV, normal, fragTBN, fragTangent, fragColor);

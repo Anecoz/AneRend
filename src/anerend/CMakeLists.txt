@@ -22,6 +22,7 @@ if (WIN32)
   target_link_libraries(anerend glfw ${Vulkan_LIBRARIES} imgui lodepng glm libnoise Bitsery::bitsery)
   target_include_directories(anerend PRIVATE ${Vulkan_INCLUDE_DIRS})
 
-  target_include_directories(anerend INTERFACE headers)
+  #target_include_directories(anerend INTERFACE headers)
+  target_include_directories(anerend INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 else()
 endif()

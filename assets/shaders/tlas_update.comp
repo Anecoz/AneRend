@@ -52,22 +52,20 @@ void main()
   // It's visible, so advance primitive count and create an instance
   mat4 t = renderableBuffer.renderables[idx].transform;
 
-  for (int i = 0; i < renderableBuffer.renderables[idx].numMeshIds; ++i) {
-    uint meshId = renderableBuffer.renderables[idx].firstMeshId + i;
-    uint meshIndex = meshIndexFromId(meshId);
-    uint dynamicMeshId = renderableBuffer.renderables[idx].rtFirstDynamicMeshId;
-    uint materialOffset = meshId - renderableBuffer.renderables[idx].firstMeshId;
+  for (int i = 0; i < renderableBuffer.renderables[idx].numMeshes; ++i) {
+    uint modelIdx = renderableBuffer.renderables[idx].modelOffset + i;
+    uint meshIndex = rendModelBuffer.indices[modelIdx];
+    uint dynamicMeshOffset = renderableBuffer.renderables[idx].dynamicModelOffset;
+    uint materialOffset = i;
 
     uint materialIndexAbstract = renderableBuffer.renderables[idx].firstMaterialIndex + materialOffset;
     uint matIndex = rendMatIndexBuffer.indices[materialIndexAbstract];
 
-    if (dynamicMeshId > 0) {
-      meshIndex = meshIndexFromId(dynamicMeshId + i);
+    if (dynamicMeshOffset > 0) {
+      meshIndex = rendModelBuffer.indices[dynamicMeshOffset + i];
     }
 
     uint countBefore = atomicAdd(counterBuffer.counter[0], 1);
-    //uint countBefore = idx * 128 + i;
-    //uint insertIdx = idx;
 
     TransformMatrix mtx;
     mtx.matrix[0][0] = t[0][0];

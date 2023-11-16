@@ -263,13 +263,13 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _gpuRenderableBuffer[i]._buffer, _gpuRenderableBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuMaterialBuffer[i]._buffer, _gpuMaterialBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuRenderableMaterialIndexBuffer[i]._buffer, _gpuRenderableMaterialIndexBuffer[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _gpuModelBuffer[i]._buffer, _gpuModelBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuMeshInfoBuffer[i]._buffer, _gpuMeshInfoBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuStagingBuffer[i]._buffer, _gpuStagingBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSceneDataBuffer[i]._buffer, _gpuSceneDataBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuLightBuffer[i]._buffer, _gpuLightBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuViewClusterBuffer[i]._buffer, _gpuViewClusterBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSkeletonBuffer[i]._buffer, _gpuSkeletonBuffer[i]._allocation);
-    vmaDestroyBuffer(_vmaAllocator, _gpuIdMapBuffer[i]._buffer, _gpuIdMapBuffer[i]._allocation);
 
     vkDestroyImageView(_device, _gpuWindForceView[i], nullptr);
     vmaDestroyImage(_vmaAllocator, _gpuWindForceImage[i]._image, _gpuWindForceImage[i]._allocation);
@@ -780,7 +780,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   for (auto remId : update._removedRenderables) {
     for (auto it = _currentRenderables.begin(); it != _currentRenderables.end(); ++it) {
       if (it->_renderable._id == remId) {
-        if (_enableRayTracing && it->_rtFirstDynamicMeshId != INVALID_ID) {
+        if (_enableRayTracing && !it->_dynamicMeshes.empty()) {
 
           modelIdMapUpdate = true;
           forceModelChange = true;
@@ -789,7 +789,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
             auto& dynamicBlas = _dynamicBlases[remId];
 
             for (std::size_t i = 0; i < it->_meshes.size(); ++i) {
-              MeshId mesh = it->_rtFirstDynamicMeshId + (MeshId)i;
+              MeshId mesh = it->_dynamicMeshes[i];
 
               for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
                 if (meshIt->_id == mesh) {
@@ -1371,9 +1371,9 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
     if (numBuilds >= maxBuildsPerFrame) break;
     if (abortRend) break;
 
-    internalRend._rtFirstDynamicMeshId = it->_generatedDynamicIds[0];
+    internalRend._dynamicMeshes = it->_generatedDynamicIds;
     _dynamicBlases[rend] = std::move(it->_currentBlases);
-    printf("added id %u to dynamic blases, dynamic mesh id is %u\n", rend, internalRend._rtFirstDynamicMeshId);
+    printf("added id %u to dynamic blases, first dynamic mesh id is %u\n", rend, internalRend._dynamicMeshes[0]);
     it = _dynamicModelsToCopy.erase(it);
   }
 
@@ -2595,6 +2595,72 @@ void VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
   _currentStagingOffset += dataSize;
 }
 
+void VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
+{
+  if (_currentModels.empty()) return;
+  if (_currentRenderables.empty()) return;
+
+  uint8_t* data;
+  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+
+  // Offset according to current staging buffer usage
+  data = data + _currentStagingOffset;
+
+  std::uint32_t* mappedData = reinterpret_cast<std::uint32_t*>(data);
+
+  uint32_t currIdx = 0;
+  for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
+    auto& rend = _currentRenderables[i];
+    rend._modelBufferOffset = currIdx;
+
+    for (auto& mesh: rend._meshes) {
+      auto idx = _meshIdMap[mesh];
+      mappedData[currIdx] = (uint32_t)idx;
+      currIdx++;
+    }
+
+    if (_enableRayTracing && !rend._dynamicMeshes.empty()) {
+      rend._dynamicModelBufferOffset = currIdx;
+
+      for (auto& mesh : rend._dynamicMeshes) {
+        auto idx = _meshIdMap[mesh];
+        mappedData[currIdx] = (uint32_t)idx;
+        currIdx++;
+      }
+    }
+  }
+
+  std::size_t dataSize = (currIdx + 1) * sizeof(uint32_t);
+  VkBufferCopy copyRegion{};
+  copyRegion.dstOffset = 0;
+  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.size = dataSize;
+  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuModelBuffer[_currentFrame]._buffer, 1, &copyRegion);
+
+  VkBufferMemoryBarrier memBarr{};
+  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+  memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.buffer = _gpuModelBuffer[_currentFrame]._buffer;
+  memBarr.offset = 0;
+  memBarr.size = VK_WHOLE_SIZE;
+
+  vkCmdPipelineBarrier(
+    commandBuffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    0, 0, nullptr,
+    1, &memBarr,
+    0, nullptr);
+
+  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+
+  // Update staging offset
+  _currentStagingOffset += dataSize;
+}
+
 void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 {
   if (_currentRenderables.empty()) return;
@@ -2623,13 +2689,13 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     
     mappedData[i]._transform = renderable._transform;
     mappedData[i]._tint = glm::vec4(renderable._tint, 1.0f);
-    mappedData[i]._firstMeshId = (uint32_t)model._meshes[0];
-    mappedData[i]._numMeshIds = (uint32_t)model._meshes.size();
+    mappedData[i]._modelOffset = _currentRenderables[i]._modelBufferOffset;
+    mappedData[i]._numMeshes = (uint32_t)model._meshes.size();
     mappedData[i]._skeletonOffset = _currentRenderables[i]._skeletonOffset;
     mappedData[i]._bounds = renderable._boundingSphere;
     mappedData[i]._visible = renderable._visible ? 1 : 0;
     mappedData[i]._firstMaterialIndex = _currentRenderables[i]._materialIndexBufferIndex;
-    mappedData[i]._rtFirstDynamicMeshId = _currentRenderables[i]._rtFirstDynamicMeshId;
+    mappedData[i]._dynamicModelOffset = _currentRenderables[i]._dynamicModelBufferOffset;
   }
 
   VkBufferCopy copyRegion{};
@@ -2653,77 +2719,6 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     VK_PIPELINE_STAGE_TRANSFER_BIT,
     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
     0, 0, nullptr, 
-    1, &memBarr,
-    0, nullptr);
-
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
-
-  // Update staging offset
-  _currentStagingOffset += dataSize;
-}
-
-void VulkanRenderer::prefillGPUIdMapBuffer(VkCommandBuffer& commandBuffer)
-{
-  std::uint32_t highestId = 0;
-
-  for (auto& pair : _renderableIdMap) {
-    if (pair.first > highestId) highestId = pair.first;
-  }
-
-  for (auto& pair : _meshIdMap) {
-    if (pair.first > highestId) highestId = pair.first;
-  }
-
-  for (auto& pair : _modelIdMap) {
-    if (pair.first > highestId) highestId = pair.first;
-  }
-
-  for (auto& pair : _materialIdMap) {
-    if (pair.first > highestId) highestId = pair.first;
-  }
-
-  std::size_t dataSize = (highestId + 1) * sizeof(gpu::GPUIdMap); // +1 because they are used as indices
-  uint8_t* data;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
-
-  // Offset according to current staging buffer usage
-  data = data + _currentStagingOffset;
-
-  // This is a bit iffy, we're relying on the meshId and renderableIds to not be too divergent...
-  gpu::GPUIdMap* mappedData = reinterpret_cast<gpu::GPUIdMap*>(data);
-  for (auto& pair : _renderableIdMap) {
-    mappedData[pair.first]._renderableIndex = (uint32_t)pair.second;
-  }
-
-  for (auto& pair : _meshIdMap) {
-    mappedData[pair.first]._meshIndex = (uint32_t)pair.second;
-  }
-
-  for (auto& pair : _materialIdMap) {
-    mappedData[pair.first]._materialIndex = (uint32_t)pair.second;
-  }
-
-  VkBufferCopy copyRegion{};
-  copyRegion.dstOffset = 0;
-  copyRegion.srcOffset = _currentStagingOffset;
-  copyRegion.size = dataSize;
-  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuIdMapBuffer[_currentFrame]._buffer, 1, &copyRegion);
-
-  VkBufferMemoryBarrier memBarr{};
-  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-  memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  memBarr.buffer = _gpuIdMapBuffer[_currentFrame]._buffer;
-  memBarr.offset = 0;
-  memBarr.size = VK_WHOLE_SIZE;
-
-  vkCmdPipelineBarrier(
-    commandBuffer,
-    VK_PIPELINE_STAGE_TRANSFER_BIT,
-    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    0, 0, nullptr,
     1, &memBarr,
     0, nullptr);
 
@@ -3108,6 +3103,13 @@ bool VulkanRenderer::initBindless()
     rendMatIdxBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
     bindings.emplace_back(std::move(rendMatIdxBinding));
 
+    VkDescriptorSetLayoutBinding modelBinding{};
+    modelBinding.binding = _modelBinding;
+    modelBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    modelBinding.descriptorCount = 1;
+    modelBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    bindings.emplace_back(std::move(modelBinding));
+
     VkDescriptorSetLayoutBinding idxLayoutBinding{};
     idxLayoutBinding.binding = _gigaIdxBinding;
     idxLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -3142,13 +3144,6 @@ bool VulkanRenderer::initBindless()
     skeletonLayoutBinding.descriptorCount = 1;
     skeletonLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     bindings.emplace_back(std::move(skeletonLayoutBinding));
-
-    VkDescriptorSetLayoutBinding idMapBinding{};
-    idMapBinding.binding = _idMapBinding;
-    idMapBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    idMapBinding.descriptorCount = 1;
-    idMapBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_FRAGMENT_BIT;
-    bindings.emplace_back(std::move(idMapBinding));
 
     VkDescriptorSetLayoutBinding texLayoutBinding{};
     texLayoutBinding.binding = _bindlessTextureBinding;
@@ -3343,6 +3338,24 @@ bool VulkanRenderer::initBindless()
 
       descriptorWrites.emplace_back(std::move(rendMatIdxBufWrite));
 
+      // Model mesh index buffer
+      VkDescriptorBufferInfo modelBufInfo{};
+      VkWriteDescriptorSet modelBufWrite{};
+
+      modelBufInfo.buffer = _gpuModelBuffer[i]._buffer;
+      modelBufInfo.offset = 0;
+      modelBufInfo.range = VK_WHOLE_SIZE;
+
+      modelBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      modelBufWrite.dstSet = _bindlessDescriptorSets[i];
+      modelBufWrite.dstBinding = _modelBinding;
+      modelBufWrite.dstArrayElement = 0;
+      modelBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      modelBufWrite.descriptorCount = 1;
+      modelBufWrite.pBufferInfo = &modelBufInfo;
+
+      descriptorWrites.emplace_back(std::move(modelBufWrite));
+
       // Idx buffer
       VkDescriptorBufferInfo idxBufferInfo{};
       VkWriteDescriptorSet idxBufWrite{};
@@ -3414,24 +3427,6 @@ bool VulkanRenderer::initBindless()
       skeletonBufWrite.pBufferInfo = &skeletonBufferInfo;
 
       descriptorWrites.emplace_back(std::move(skeletonBufWrite));
-
-      // Id Map buffer
-      VkDescriptorBufferInfo idMapBufferInfo{};
-      VkWriteDescriptorSet idMapBufWrite{};
-
-      idMapBufferInfo.buffer = _gpuIdMapBuffer[i]._buffer;
-      idMapBufferInfo.offset = 0;
-      idMapBufferInfo.range = VK_WHOLE_SIZE;
-
-      idMapBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      idMapBufWrite.dstSet = _bindlessDescriptorSets[i];
-      idMapBufWrite.dstBinding = _idMapBinding;
-      idMapBufWrite.dstArrayElement = 0;
-      idMapBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-      idMapBufWrite.descriptorCount = 1;
-      idMapBufWrite.pBufferInfo = &idMapBufferInfo;
-
-      descriptorWrites.emplace_back(std::move(idMapBufWrite));
 
       // Samplers
       std::vector<VkDescriptorImageInfo> imageInfos;
@@ -3538,6 +3533,7 @@ bool VulkanRenderer::initGpuBuffers()
   _gpuRenderableBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuMaterialBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuRenderableMaterialIndexBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuModelBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuMeshInfoBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuSceneDataBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuWindForceSampler.resize(MAX_FRAMES_IN_FLIGHT);
@@ -3546,7 +3542,6 @@ bool VulkanRenderer::initGpuBuffers()
   _gpuLightBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuViewClusterBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuSkeletonBuffer.resize(MAX_FRAMES_IN_FLIGHT);
-  _gpuIdMapBuffer.resize(MAX_FRAMES_IN_FLIGHT);
 
   for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     // Create a staging buffer that will be used to temporarily hold data that is to be copied to the gpu buffers.
@@ -3587,6 +3582,15 @@ bool VulkanRenderer::initGpuBuffers()
       _gpuRenderableMaterialIndexBuffer[i]);
     name = "_gpuRenderableMaterialIndexBuffer" + std::to_string(i);
     setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuRenderableMaterialIndexBuffer[i]._buffer, name.c_str());
+
+    bufferutil::createBuffer(
+      _vmaAllocator,
+      sizeof(uint32_t) * MAX_NUM_MESHES,
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+      0,
+      _gpuModelBuffer[i]);
+    name = "_gpuModelBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuModelBuffer[i]._buffer, name.c_str());
 
     // Create a buffer that will contain renderable information for use by the frustum culling compute shader.
     bufferutil::createBuffer(
@@ -3634,15 +3638,6 @@ bool VulkanRenderer::initGpuBuffers()
       _gpuSkeletonBuffer[i]);
     name = "_gpuSkeletonBuffer" + std::to_string(i);
     setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuSkeletonBuffer[i]._buffer, name.c_str());
-
-    bufferutil::createBuffer(
-      _vmaAllocator,
-      sizeof(gpu::GPUIdMap) * MAX_NUM_RENDERABLES,
-      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-      0,
-      _gpuIdMapBuffer[i]);
-    name = "_gpuIdMapBuffer" + std::to_string(i);
-    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuIdMapBuffer[i]._buffer, name.c_str());
 
     // Wind force sampler
     VkSamplerCreateInfo samplerCreate{};
@@ -4086,19 +4081,16 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
   imageutil::transitionImageLayout(commandBuffer, _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
     VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
+  bool forceRenderableUpdate = false;
+
   if (_enableRayTracing && !_dynamicModelsToCopy.empty()) {
     copyDynamicModels(commandBuffer);
     for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
       // Models changed because new meshes have been added
       _modelsChanged[i] = true;
       // renderables changed because there might be a new dynamicMeshId in the renderable
-      _renderablesChanged[i] = true;
+      forceRenderableUpdate = true;
     }
-  }
-
-  // Mapping buffer that maps the engine-wide *Id to the indices used internally in the GPU buffers
-  if (_modelsChanged[_currentFrame] || _renderablesChanged[_currentFrame] || _materialsChanged[_currentFrame]) {
-    prefillGPUIdMapBuffer(commandBuffer);    
   }
 
   // Skeletons, get copies from animation thread. No-op if the list is empty
@@ -4114,6 +4106,9 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
       // Fill the mesh info buffers used on the GPU in the ray tracing pipelines
       prefillGPUMeshBuffer(commandBuffer);
 
+      // force rend update because they need a model buffer update
+      forceRenderableUpdate = true;
+
       _modelsChanged[_currentFrame] = false;
     }
 
@@ -4121,14 +4116,25 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
     if (_materialsChanged[_currentFrame]) {
       uploadPendingMaterials(commandBuffer);
 
+      // force rend update because the material indices might now be out of date
+      forceRenderableUpdate = true;
+
       _materialsChanged[_currentFrame] = false;
     }
 
     // TODO: Textures
   }
 
+  if (forceRenderableUpdate) {
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      // renderables changed because there might be a new dynamicMeshId in the renderable
+      _renderablesChanged[i] = true;
+    }
+  }
+
   // Prefill renderable buffer
   if (_renderablesChanged[_currentFrame]) {
+    prefillGPUModelBuffer(commandBuffer);
     prefillGPURendMatIdxBuffer(commandBuffer);
     prefillGPURenderableBuffer(commandBuffer);
     _renderablesChanged[_currentFrame] = false;

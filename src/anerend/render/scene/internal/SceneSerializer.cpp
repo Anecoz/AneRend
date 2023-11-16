@@ -22,6 +22,7 @@ void serialize(S& s, render::IdentifiersState& state)
   s.value4b(state._animatorIdState);
   s.value4b(state._materialIdState);
   s.value4b(state._skeletonIdState);
+  s.value4b(state._prefabIdState);
 }
 
 template <typename S>

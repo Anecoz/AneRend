@@ -12,6 +12,7 @@ typedef std::uint32_t AnimationId;
 typedef std::uint32_t AnimatorId;
 typedef std::uint32_t MaterialId;
 typedef std::uint32_t SkeletonId;
+typedef std::uint32_t PrefabId;
 
 const std::uint32_t INVALID_ID = 0;
 
@@ -24,6 +25,7 @@ struct IdentifiersState
   AnimatorId _animatorIdState;
   MaterialId _materialIdState;
   SkeletonId _skeletonIdState;
+  PrefabId _prefabIdState;
 };
 
 struct IDGenerator
@@ -35,6 +37,7 @@ struct IDGenerator
   static AnimatorId genAnimatorId() { return ++_currentAnimatorId; }
   static MaterialId genMaterialId() { return ++_currentMaterialId; }
   static SkeletonId genSkeletonId() { return ++_currentSkeletonId; }
+  static PrefabId genPrefabId() { return ++_currentPrefabId; }
 
   static std::vector<ModelId> genModelIdRange(std::size_t num);
   static std::vector<MeshId> genMeshIdRange(std::size_t num);
@@ -43,6 +46,7 @@ struct IDGenerator
   static std::vector<AnimatorId> genAnimatorIdRange(std::size_t num);
   static std::vector<MaterialId> genMaterialIdRange(std::size_t num);
   static std::vector<SkeletonId> genSkeletonIdRange(std::size_t num);
+  static std::vector<PrefabId> genPrefabIdRange(std::size_t num);
 
   static IdentifiersState getState();
   static void setState(IdentifiersState state);
@@ -55,6 +59,7 @@ private:
   static AnimationId _currentAnimatorId;
   static MaterialId _currentMaterialId;
   static SkeletonId _currentSkeletonId;
+  static PrefabId _currentPrefabId;
 };
 
 }
