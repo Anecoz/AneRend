@@ -11,6 +11,7 @@ namespace gui {
 
 EditRenderableGUI::EditRenderableGUI()
   : IGUI()
+  , _currentGuizmoOp(ImGuizmo::OPERATION::TRANSLATE)
 {}
 
 EditRenderableGUI::~EditRenderableGUI()
@@ -19,8 +20,10 @@ EditRenderableGUI::~EditRenderableGUI()
 void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
 {
   auto id = c->selectedRenderable();
+  bool changed = false;
   glm::vec3 translation{ 0.0f };
   glm::vec3 scale{ 0.0f };
+  glm::vec3 rot{ 0.0f };
 
   ImGui::Begin("EditRenderable");
 
@@ -31,46 +34,47 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     else {
       auto oldTrans = c->scene().getRenderable(id)->_transform;
 
-      // extract translation
-      translation = oldTrans[3];
+      ImGuizmo::DecomposeMatrixToComponents(&oldTrans[0][0], &translation[0], &rot[0], &scale[0]);
+    }
 
-      // extract scale
-      scale.x = glm::length(glm::vec3(oldTrans[0])); // Basis vector X
-      scale.y = glm::length(glm::vec3(oldTrans[1])); // Basis vector Y
-      scale.z = glm::length(glm::vec3(oldTrans[2])); // Basis vector Z
+    // Radio buttons for choosing guizmo mode
+    if (ImGui::RadioButton("Translate", _currentGuizmoOp == ImGuizmo::TRANSLATE)) {
+      _currentGuizmoOp = ImGuizmo::TRANSLATE;
+    }
+      
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Rotate", _currentGuizmoOp == ImGuizmo::ROTATE)) {
+      _currentGuizmoOp = ImGuizmo::ROTATE;
+    }
+      
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Scale", _currentGuizmoOp == ImGuizmo::SCALE)) {
+      _currentGuizmoOp = ImGuizmo::SCALE;
     }
 
     ImGui::Text("Translation");
     if (ImGui::InputFloat3("##translation", &translation[0], "%.3f", ImGuiInputTextFlags_EnterReturnsTrue) && id) {
-      auto oldTrans = c->scene().getRenderable(id)->_transform;
-
-      auto& t = oldTrans[3];
-      t = glm::vec4(translation, 1.0f);
-
-      c->scene().setRenderableTransform(id, oldTrans);
+      changed = true;
     }
-
 
     ImGui::Text("Scale");
     if (ImGui::InputFloat3("##scale", &scale[0], "%.3f", ImGuiInputTextFlags_EnterReturnsTrue) && id) {
-      auto oldTrans = c->scene().getRenderable(id)->_transform;
+      changed = true;
+    }
 
-      // normalize first
-      auto& c0 = oldTrans[0];
-      auto& c1 = oldTrans[1];
-      auto& c2 = oldTrans[2];
-
-      c0 = glm::normalize(c0);
-      c1 = glm::normalize(c1);
-      c2 = glm::normalize(c2);
-
-      auto newTrans = glm::scale(oldTrans, scale);
-
-      c->scene().setRenderableTransform(id, newTrans);
+    ImGui::Text("Rotation");
+    if (ImGui::InputFloat3("##rot", &rot[0], "%.3f", ImGuiInputTextFlags_EnterReturnsTrue) && id) {
+      changed = true;
     }
 
     if (id == render::INVALID_ID) {
       ImGui::EndDisabled();
+    }
+    else if (changed) {
+      // recompose
+      glm::mat4 m;
+      ImGuizmo::RecomposeMatrixFromComponents(&translation[0], &rot[0], &scale[0], &m[0][0]);
+      c->scene().setRenderableTransform(id, m);
     }
   }
 
@@ -88,13 +92,12 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     bool manipulated = ImGuizmo::Manipulate(
       &viewMatrix[0][0],
       &projMatrix[0][0],
-      ImGuizmo::OPERATION::TRANSLATE,
+      (ImGuizmo::OPERATION)_currentGuizmoOp,
       ImGuizmo::MODE::WORLD,
       (float*)&m[0][0]);
 
     if (manipulated) {
       c->scene().setRenderableTransform(id, m);
-      //printf("Manipulated!\n");
     }
   }
 

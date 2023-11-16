@@ -12,6 +12,8 @@ public:
   ~EditRenderableGUI();
 
   void immediateDraw(logic::AneditContext* c) override final;
+private:
+  int _currentGuizmoOp;
 };
 
 }
