@@ -40,12 +40,12 @@ Tile::operator bool() const
   return _initialized;
 }
 
-void Tile::addRenderable(RenderableId id)
+void Tile::addRenderable(util::Uuid id)
 {
   _renderables.emplace_back(id);
 }
 
-void Tile::removeRenderable(RenderableId id)
+void Tile::removeRenderable(util::Uuid id)
 {
   _renderables.erase(std::remove(_renderables.begin(), _renderables.end(), id), _renderables.end());
 }

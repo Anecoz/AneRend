@@ -1,12 +1,12 @@
 #pragma once
 
-#include "../Identifiers.h"
+#include "../../util/Uuid.h"
 
 namespace render::asset {
 
 struct Animator
 {
-  AnimatorId _id = INVALID_ID;
+  util::Uuid _id = util::Uuid::generate();
 
   enum class State : std::uint8_t {
     Playing,
@@ -14,8 +14,8 @@ struct Animator
     Stopped
   } _state;
 
-  SkeletonId _skeleId = INVALID_ID;
-  AnimationId _animId = INVALID_ID;
+  util::Uuid _skeleId;
+  util::Uuid _animId;
   float _playbackMultiplier = 1.0f;
 };
 

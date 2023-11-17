@@ -32,7 +32,8 @@ void prefillParticleBuffer(RenderContext* rc, AllocatedBuffer& buffer)
     gpuParticle->initialVelocity = glm::vec4(cpuParticle._initialVelocity, cpuParticle._scale);
     gpuParticle->currentPosition = glm::vec4(0.0f, 0.0f, 0.0f, cpuParticle._spawnDelay);
     gpuParticle->currentVelocity = glm::vec4(0.0f);
-    gpuParticle->renderableId = static_cast<uint32_t>(cpuParticle._renderableId);
+    // TODO: CHANGE THIS TO INDEX! USE ID MAP!
+    //gpuParticle->renderableId = static_cast<uint32_t>(cpuParticle._renderableId);
     gpuParticle->alive = 0;
   }
 

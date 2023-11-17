@@ -28,7 +28,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
   ImGui::Begin("EditRenderable");
 
   {
-    if (id == render::INVALID_ID) {
+    if (!id) {
       ImGui::BeginDisabled();
     }
     else {
@@ -67,7 +67,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       changed = true;
     }
 
-    if (id == render::INVALID_ID) {
+    if (!id) {
       ImGui::EndDisabled();
     }
     else if (changed) {

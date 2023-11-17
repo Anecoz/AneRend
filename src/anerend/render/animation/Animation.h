@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Identifiers.h"
+#include "../../util/Uuid.h"
 
 #include <glm/glm.hpp>
 #include <utility>
@@ -30,7 +30,7 @@ struct Channel
 
 struct Animation
 {
-  render::AnimationId _id = INVALID_ID;
+  util::Uuid _id = util::Uuid::generate();
   std::vector<Channel> _channels;
 
   // Keyframes that are pre-calculated from the channels. Typically an Animator will set these.

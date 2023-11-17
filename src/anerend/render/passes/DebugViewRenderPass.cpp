@@ -34,14 +34,10 @@ uint32_t DebugViewRenderPass::translateNameToBinding(const std::string& name)
 void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
   // Screen quad
-  _meshId = IDGenerator::genMeshId();
-
   asset::Model quadModel{};
-  quadModel._id = IDGenerator::genModelId();
-
   asset::Mesh quadMesh{};
-  quadMesh._id = _meshId;
-  quadMesh._vertices = graphicsutil::createScreenQuad(0.75f, 0.75f);
+  _meshId = quadMesh._id;
+  quadMesh._vertices = util::createScreenQuad(0.75f, 0.75f);
   quadModel._meshes.emplace_back(std::move(quadMesh));
 
   AssetUpdate upd{};

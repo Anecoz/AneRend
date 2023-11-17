@@ -1,7 +1,7 @@
 #pragma once
 
 #include "RenderPass.h"
-#include "../Identifiers.h"
+#include "../../util/Uuid.h"
 
 namespace render {
 
@@ -15,7 +15,7 @@ public:
   void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
 
 private:
-  MeshId _meshId;
+  util::Uuid _meshId;
 };
 
 }

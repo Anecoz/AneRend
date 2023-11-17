@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Identifiers.h"
+#include "../../util/Uuid.h"
 
 #include <vector>
 
@@ -9,8 +9,8 @@ namespace render::internal
 
 struct InternalModel
 {
-  render::ModelId _id;
-  std::vector<render::MeshId> _meshes;
+  util::Uuid _id;
+  std::vector<util::Uuid> _meshes;
 };
 
 }

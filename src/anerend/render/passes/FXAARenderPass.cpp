@@ -18,14 +18,11 @@ FXAARenderPass::~FXAARenderPass()
 void FXAARenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
 {
   // Screen quad
-  _meshId = IDGenerator::genMeshId();
-
   asset::Model quadModel{};
-  quadModel._id = IDGenerator::genModelId();
 
   asset::Mesh quadMesh{};
-  quadMesh._id = _meshId;
-  quadMesh._vertices = graphicsutil::createScreenQuad(1.0f, 1.0f);
+  _meshId = quadMesh._id;
+  quadMesh._vertices = util::createScreenQuad(1.0f, 1.0f);
   quadModel._meshes.emplace_back(std::move(quadMesh));
 
   AssetUpdate upd{};

@@ -9,7 +9,7 @@ struct InternalRenderable
   render::asset::Renderable _renderable;
 
   // Convenience
-  std::vector<render::MeshId> _meshes;
+  std::vector<util::Uuid> _meshes;
 
   // Index into the renderable material index buffer
   std::uint32_t _materialIndexBufferIndex = 0;
@@ -21,7 +21,7 @@ struct InternalRenderable
   std::uint32_t _modelBufferOffset = 0;
 
   // Only used for ray tracing: Offset where to write animated vertices
-  std::vector<MeshId> _dynamicMeshes;
+  std::vector<util::Uuid> _dynamicMeshes;
   std::uint32_t _dynamicModelBufferOffset = 0;
   //MeshId _rtFirstDynamicMeshId = INVALID_ID;
 };

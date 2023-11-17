@@ -15,182 +15,184 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../tinygltf/tiny_gltf.h"
 
+namespace util {
+
 namespace {
 
-glm::mat4 transformFromNode(const tinygltf::Node& node)
-{
-  glm::mat4 out{1.0f};
+  glm::mat4 transformFromNode(const tinygltf::Node& node)
+  {
+    glm::mat4 out{ 1.0f };
 
-  if (!node.matrix.empty()) {
-    out = glm::make_mat4(node.matrix.data());
+    if (!node.matrix.empty()) {
+      out = glm::make_mat4(node.matrix.data());
+      return out;
+    }
+
+    glm::vec3 trans{ 0.0f, 0.0f, 0.0f };
+    glm::vec3 scale{ 1.0f, 1.0f, 1.0f };
+    glm::quat rotQuat{ 1.0f, 0.0f, 0.0f, 0.0f };
+
+    if (!node.translation.empty()) {
+      trans = glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+    }
+    if (!node.scale.empty()) {
+      scale = glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+    }
+    if (!node.rotation.empty()) {
+      rotQuat = glm::quat((float)node.rotation[3], (float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2]);
+    }
+
+    glm::mat4 rotMat = glm::toMat4(rotQuat);
+    glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), scale);
+    glm::mat4 transMat = glm::translate(glm::mat4(1.0f), trans);
+
+    out = transMat * rotMat * scaleMat;
     return out;
   }
 
-  glm::vec3 trans{0.0f, 0.0f, 0.0f};
-  glm::vec3 scale{1.0f, 1.0f, 1.0f};
-  glm::quat rotQuat{ 1.0f, 0.0f, 0.0f, 0.0f };
+  render::anim::ChannelPath convertPath(const std::string& path)
+  {
+    if (path == "rotation") {
+      return render::anim::ChannelPath::Rotation;
+    }
+    if (path == "translation") {
+      return render::anim::ChannelPath::Translation;
+    }
+    if (path == "scale") {
+      return render::anim::ChannelPath::Scale;
+    }
 
-  if (!node.translation.empty()) {
-    trans = glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
-  }
-  if (!node.scale.empty()) {
-    scale = glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
-  }
-  if (!node.rotation.empty()) {
-    rotQuat = glm::quat((float)node.rotation[3], (float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2]);
-  }
-
-  glm::mat4 rotMat = glm::toMat4(rotQuat);
-  glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), scale);
-  glm::mat4 transMat = glm::translate(glm::mat4(1.0f), trans);
-
-  out = transMat * rotMat * scaleMat;
-  return out;
-}
-
-render::anim::ChannelPath convertPath(const std::string& path)
-{
-  if (path == "rotation") {
-    return render::anim::ChannelPath::Rotation;
-  }
-  if (path == "translation") {
     return render::anim::ChannelPath::Translation;
   }
-  if (path == "scale") {
-    return render::anim::ChannelPath::Scale;
-  }
 
-  return render::anim::ChannelPath::Translation;
-}
+  std::vector<render::anim::Animation> constructAnimations(const std::vector<tinygltf::Animation>& anims, const tinygltf::Model& model)
+  {
+    std::vector<render::anim::Animation> out;
+    out.reserve(anims.size());
 
-std::vector<render::anim::Animation> constructAnimations(const std::vector<tinygltf::Animation>& anims, const tinygltf::Model& model)
-{
-  std::vector<render::anim::Animation> out;
-  out.reserve(anims.size());
+    for (auto& gltfAnim : anims) {
+      render::anim::Animation animation{};
 
-  for (auto& gltfAnim : anims) {
-    render::anim::Animation animation{};
+      for (auto& gltfChannel : gltfAnim.channels) {
+        render::anim::Channel channel{};
+        channel._internalId = gltfChannel.target_node;
+        channel._path = convertPath(gltfChannel.target_path);
 
-    for (auto& gltfChannel : gltfAnim.channels) {
-      render::anim::Channel channel{};
-      channel._internalId = gltfChannel.target_node;
-      channel._path = convertPath(gltfChannel.target_path);
+        // Access input and output buffers
+        auto& sampler = gltfAnim.samplers[gltfChannel.sampler];
 
-      // Access input and output buffers
-      auto& sampler = gltfAnim.samplers[gltfChannel.sampler];
+        auto& iaccessor = model.accessors[sampler.input];
+        auto& ibufferView = model.bufferViews[iaccessor.bufferView];
+        auto times = reinterpret_cast<const float*>(&(model.buffers[ibufferView.buffer].data[iaccessor.byteOffset + ibufferView.byteOffset]));
 
-      auto& iaccessor = model.accessors[sampler.input];
-      auto& ibufferView = model.bufferViews[iaccessor.bufferView];
-      auto times = reinterpret_cast<const float*>(&(model.buffers[ibufferView.buffer].data[iaccessor.byteOffset + ibufferView.byteOffset]));
+        auto& oaccessor = model.accessors[sampler.output];
+        auto& obufferView = model.bufferViews[oaccessor.bufferView];
+        auto poses = reinterpret_cast<const float*>(&(model.buffers[obufferView.buffer].data[oaccessor.byteOffset + obufferView.byteOffset]));
 
-      auto& oaccessor = model.accessors[sampler.output];
-      auto& obufferView = model.bufferViews[oaccessor.bufferView];
-      auto poses = reinterpret_cast<const float*>(&(model.buffers[obufferView.buffer].data[oaccessor.byteOffset + obufferView.byteOffset]));
+        for (std::size_t i = 0; i < iaccessor.count; ++i) {
+          channel._inputTimes.emplace_back(times[i]);
 
-      for (std::size_t i = 0; i < iaccessor.count; ++i) {
-        channel._inputTimes.emplace_back(times[i]);
+          glm::vec4 vec{ 0.0f };
+          if (channel._path == render::anim::ChannelPath::Rotation) {
+            vec = { poses[i * 4 + 3], poses[i * 4 + 0], poses[i * 4 + 1], poses[i * 4 + 2] };
+          }
+          else if (channel._path == render::anim::ChannelPath::Translation) {
+            vec = { poses[i * 3 + 0], poses[i * 3 + 1], poses[i * 3 + 2], 0.0f };
+          }
+          else if (channel._path == render::anim::ChannelPath::Scale) {
+            vec = { poses[i * 3 + 0], poses[i * 3 + 1], poses[i * 3 + 2], 0.0f };
+          }
 
-        glm::vec4 vec{ 0.0f };
-        if (channel._path == render::anim::ChannelPath::Rotation) {
-          vec = { poses[i * 4 + 3], poses[i * 4 + 0], poses[i * 4 + 1], poses[i * 4 + 2] };
+          channel._outputs.emplace_back(std::move(vec));
         }
-        else if(channel._path == render::anim::ChannelPath::Translation) {
-          vec = { poses[i * 3 + 0], poses[i * 3 + 1], poses[i * 3 + 2], 0.0f };
-        }
-        else if (channel._path == render::anim::ChannelPath::Scale) {
-          vec = { poses[i * 3 + 0], poses[i * 3 + 1], poses[i * 3 + 2], 0.0f };
-        }
-        
-        channel._outputs.emplace_back(std::move(vec));
+
+        animation._channels.emplace_back(std::move(channel));
       }
 
-      animation._channels.emplace_back(std::move(channel));
+      out.emplace_back(std::move(animation));
     }
 
-    out.emplace_back(std::move(animation));
+    return out;
   }
 
-  return out;
-}
+  render::anim::Skeleton constructSkeleton(const std::vector<tinygltf::Node>& nodes, const tinygltf::Skin& skin, const tinygltf::Model& model)
+  {
+    // NOTE: We say that if there is a "skeleton" entry, this will be the root
+    //       transform of all joints, else the first joint is the root.
+    //       This may not hold at all, the skeleton might have a parent for instance.
+    render::anim::Skeleton skeleton{};
 
-render::anim::Skeleton constructSkeleton(const std::vector<tinygltf::Node>& nodes, const tinygltf::Skin& skin, const tinygltf::Model& model)
-{
-  // NOTE: We say that if there is a "skeleton" entry, this will be the root
-  //       transform of all joints, else the first joint is the root.
-  //       This may not hold at all, the skeleton might have a parent for instance.
-  render::anim::Skeleton skeleton{};
-
-  if (skin.skeleton != -1) {
-    // There is a root transform
-    render::anim::Joint rootJoint{};
-    rootJoint._internalId = skin.skeleton;
-    rootJoint._localTransform = transformFromNode(nodes[skin.skeleton]);
-    rootJoint._originalLocalTransform = rootJoint._localTransform;
-    rootJoint._childrenInternalIds = nodes[skin.skeleton].children;
-    skeleton._nonJointRoot = true;
-    skeleton._joints.emplace_back(std::move(rootJoint));
-  }
-
-  // Check if there is a inverseBindMatrices entry
-  const float* ibmBufferPtr = nullptr;
-  if (skin.inverseBindMatrices != -1) {
-    auto& ibmAccessor = model.accessors[skin.inverseBindMatrices];
-    auto& ibmBufferView = model.bufferViews[ibmAccessor.bufferView];
-
-    ibmBufferPtr = reinterpret_cast<const float*>(&(model.buffers[ibmBufferView.buffer].data[ibmAccessor.byteOffset + ibmBufferView.byteOffset]));
-  }
-
-  // The calculations/construction below are split up for readability...
-
-  // Start by populating joints
-  for (int i = 0; i < skin.joints.size(); ++i) {
-    auto& jointNode = nodes[skin.joints[i]];
-
-    render::anim::Joint joint{};
-    joint._internalId = skin.joints[i];
-    joint._localTransform = transformFromNode(jointNode);
-    joint._originalLocalTransform = joint._localTransform;
-    joint._childrenInternalIds = jointNode.children;
-
-    if (ibmBufferPtr != nullptr) {
-      joint._inverseBindMatrix = glm::make_mat4(ibmBufferPtr + 16 * i);
+    if (skin.skeleton != -1) {
+      // There is a root transform
+      render::anim::Joint rootJoint{};
+      rootJoint._internalId = skin.skeleton;
+      rootJoint._localTransform = transformFromNode(nodes[skin.skeleton]);
+      rootJoint._originalLocalTransform = rootJoint._localTransform;
+      rootJoint._childrenInternalIds = nodes[skin.skeleton].children;
+      skeleton._nonJointRoot = true;
+      skeleton._joints.emplace_back(std::move(rootJoint));
     }
 
-    skeleton._joints.emplace_back(std::move(joint));
-  }
+    // Check if there is a inverseBindMatrices entry
+    const float* ibmBufferPtr = nullptr;
+    if (skin.inverseBindMatrices != -1) {
+      auto& ibmAccessor = model.accessors[skin.inverseBindMatrices];
+      auto& ibmBufferView = model.bufferViews[ibmAccessor.bufferView];
 
-  // Set children
-  for (auto& joint: skeleton._joints) {
+      ibmBufferPtr = reinterpret_cast<const float*>(&(model.buffers[ibmBufferView.buffer].data[ibmAccessor.byteOffset + ibmBufferView.byteOffset]));
+    }
 
-    for (auto childId : joint._childrenInternalIds) {
-      for (auto& child : skeleton._joints) {
-        if (child._internalId == childId) {
-          joint._children.emplace_back(&child);
+    // The calculations/construction below are split up for readability...
+
+    // Start by populating joints
+    for (int i = 0; i < skin.joints.size(); ++i) {
+      auto& jointNode = nodes[skin.joints[i]];
+
+      render::anim::Joint joint{};
+      joint._internalId = skin.joints[i];
+      joint._localTransform = transformFromNode(jointNode);
+      joint._originalLocalTransform = joint._localTransform;
+      joint._childrenInternalIds = jointNode.children;
+
+      if (ibmBufferPtr != nullptr) {
+        joint._inverseBindMatrix = glm::make_mat4(ibmBufferPtr + 16 * i);
+      }
+
+      skeleton._joints.emplace_back(std::move(joint));
+    }
+
+    // Set children
+    for (auto& joint : skeleton._joints) {
+
+      for (auto childId : joint._childrenInternalIds) {
+        for (auto& child : skeleton._joints) {
+          if (child._internalId == childId) {
+            joint._children.emplace_back(&child);
+            break;
+          }
+        }
+      }
+    }
+
+    // Set parents
+    for (auto& joint : skeleton._joints) {
+      for (auto& parent : skeleton._joints) {
+        for (auto childIdInParent : parent._childrenInternalIds) {
+          if (childIdInParent == joint._internalId) {
+            joint._parent = &parent;
+            break;
+          }
+        }
+        if (joint._parent != nullptr) {
+          // We found a parent and broke inner loop, break
           break;
         }
       }
     }
-  }
 
-  // Set parents
-  for (auto& joint : skeleton._joints) {
-    for (auto& parent : skeleton._joints) {
-      for (auto childIdInParent : parent._childrenInternalIds) {
-        if (childIdInParent == joint._internalId) {
-          joint._parent = &parent;
-          break;
-        }
-      }
-      if (joint._parent != nullptr) {
-        // We found a parent and broke inner loop, break
-        break;
-      }
-    }
+    skeleton.calcGlobalTransforms();
+    return skeleton;
   }
-
-  skeleton.calcGlobalTransforms();
-  return skeleton;
-}
 
 }
 
@@ -242,7 +244,7 @@ bool GLTFLoader::loadFromFile(
   std::vector<int> parsedMaterials;
 
   for (int i = 0; i < model.meshes.size(); ++i) {
-    
+
     // Find a potential transform
     // TODO: All sorts of transforms, not just translation...
     glm::vec3 trans = {};
@@ -258,7 +260,7 @@ bool GLTFLoader::loadFromFile(
         }
       }
     }
-    
+
     for (int j = 0; j < model.meshes[i].primitives.size(); ++j) {
       auto& primitive = model.meshes[i].primitives[j];
       render::asset::Mesh mesh{};
@@ -313,8 +315,8 @@ bool GLTFLoader::loadFromFile(
         vertexCount = accessor.count; // Note: According to spec all attributes MUST have same count, so this is ok
 
         // Check min/max against current in model
-        glm::vec3 min{accessor.minValues[0], accessor.minValues[1], accessor.minValues[2]};
-        glm::vec3 max{accessor.maxValues[0], accessor.maxValues[1], accessor.maxValues[2]};
+        glm::vec3 min{ accessor.minValues[0], accessor.minValues[1], accessor.minValues[2] };
+        glm::vec3 max{ accessor.maxValues[0], accessor.maxValues[1], accessor.maxValues[2] };
 
         //modelOut._min = glm::min(min, modelOut._min);
         //modelOut._max = glm::max(max, modelOut._max);
@@ -547,4 +549,6 @@ bool GLTFLoader::loadFromFile(
   printf("Loaded model %s. %zu meshes, %zu materials\n", path.c_str(), modelOut._meshes.size(), materialsOut.size());
 
   return true;
+}
+
 }

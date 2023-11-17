@@ -13,16 +13,14 @@ namespace bitsery
 {
 
 template <typename S>
-void serialize(S& s, render::IdentifiersState& state)
+void serialize(S& s, util::Uuid& uuid)
 {
-  s.value4b(state._modelIdState);
-  s.value4b(state._meshIdState);
-  s.value4b(state._renderableIdState);
-  s.value4b(state._animationIdState);
-  s.value4b(state._animatorIdState);
-  s.value4b(state._materialIdState);
-  s.value4b(state._skeletonIdState);
-  s.value4b(state._prefabIdState);
+  auto bytes = uuid.bytes();
+  s.container1b(bytes, 16);
+
+  std::array<std::uint8_t, 16> data;
+  std::copy_n(std::make_move_iterator(bytes.begin()), 16, data.begin());
+  uuid = util::Uuid(std::move(data));
 }
 
 template <typename S>
@@ -97,7 +95,7 @@ void serialize(S& s, render::Vertex& v)
 template <typename S>
 void serialize(S& s, render::asset::Mesh& m)
 {
-  s.value4b(m._id);
+  s.object(m._id);
   s.container(m._vertices, 500000);
   s.container4b(m._indices, 500000);
 }
@@ -105,7 +103,7 @@ void serialize(S& s, render::asset::Mesh& m)
 template <typename S>
 void serialize(S& s, render::asset::Model& m)
 {
-  s.value4b(m._id);
+  s.object(m._id);
   s.container(m._meshes, 200);
 }
 
@@ -127,7 +125,7 @@ void serialize(S& s, render::imageutil::TextureData& t)
 template <typename S>
 void serialize(S& s, render::asset::Material& m)
 {
-  s.value4b(m._id);
+  s.object(m._id);
   s.object(m._baseColFactor);
   s.object(m._emissive);
   s.object(m._metallicRoughnessTex);
@@ -154,7 +152,7 @@ void serialize(S& s, render::anim::Channel& c)
 template <typename S>
 void serialize(S& s, render::anim::Animation& a)
 {
-  s.value4b(a._id);
+  s.object(a._id);
   s.container(a._channels, 100);
 }
 
@@ -167,10 +165,10 @@ void serialize(S& s, std::vector<render::anim::Animation>& a)
 template <typename S>
 void serialize(S& s, render::asset::Animator& a)
 {
-  s.value4b(a._id);
+  s.object(a._id);
   s.value1b(a._state);
-  s.value4b(a._skeleId);
-  s.value4b(a._animId);
+  s.object(a._skeleId);
+  s.object(a._animId);
   s.value4b(a._playbackMultiplier);
 }
 
@@ -194,7 +192,7 @@ void serialize(S& s, render::anim::Joint& j)
 template <typename S>
 void serialize(S& s, render::anim::Skeleton& skel)
 {
-  s.value4b(skel._id);
+  s.object(skel._id);
   s.value1b(skel._nonJointRoot);
   s.container(skel._joints, 100);
 }
@@ -208,10 +206,10 @@ void serialize(S& s, std::vector<render::anim::Skeleton>& skel)
 template <typename S>
 void serialize(S& s, render::asset::Renderable& r)
 {
-  s.value4b(r._id);
-  s.value4b(r._model);
-  s.value4b(r._skeleton);
-  s.container4b(r._materials, 200);
+  s.object(r._id);
+  s.object(r._model);
+  s.object(r._skeleton);
+  s.container(r._materials, 200);
   s.object(r._transform);
   s.object(r._tint);
   s.object(r._boundingSphere);
@@ -264,13 +262,10 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
     _serialisationThread.join();
   }
 
-  auto idState = IDGenerator::getState();
-
   _serialisationThread = std::thread(
     [
       &scene,
       path,
-      idState,
       version = _currentVersion
     ]() {
 
@@ -282,15 +277,12 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
 
         -- header--
         1 byte  version         (uint8_t)
-        4 bytes identifiers idx (uint32_t)
         4 bytes model idx       (uint32_t)
         4 bytes material idx    (uint32_t)
         4 bytes animation idx   (uint32_t)
         4 bytes skeleton idx    (uint32_t)
         4 bytes animator idx    (uint32_t)
         4 bytes renderable idx  (uint32_t)
-        
-        -- identifiers state --
 
         -- models --
 
@@ -327,7 +319,6 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       printf("Starting scene serialization to %s\n", path.string().c_str());
 
       // Use bitsery to serialize the vectors
-      std::vector<std::uint8_t> serialisedState;
       std::vector<std::uint8_t> serialisedModels;
       std::vector<std::uint8_t> serialisedMats;
       std::vector<std::uint8_t> serialisedAnimations;
@@ -335,8 +326,6 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       std::vector<std::uint8_t> serialisedAnimators;
       std::vector<std::uint8_t> serializedRenderables;
 
-      printf("Serialising id state...\n");
-      auto stateByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedState, idState);
       printf("Serialising models...\n");
       auto modelsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedModels, models);
       printf("Serialising materials...\n");
@@ -354,8 +343,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
 
       printf("Writing to disk...\n");
 
-      auto stateIdx = headerSz;
-      auto modelIdx = stateIdx + stateByteSize;
+      auto modelIdx = headerSz;
       auto materialIdx = modelIdx + modelsByteSize;
       auto animationIdx = materialIdx + matsByteSize;
       auto skeletonIdx = animationIdx + animationsByteSize;
@@ -363,8 +351,6 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       auto renderableIdx = animatorIdx + animatorsByteSize;
 
       file.write((const char*)&version, 1);
-      // identifiers state idx
-      file.write((const char*)&stateIdx, 4);
       // model idx (where model info starts)
       file.write((const char*)&modelIdx, 4);
       // material idx
@@ -379,7 +365,6 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       file.write((const char*)&renderableIdx, 4);
 
       // write the data
-      file.write((const char*)serialisedState.data(), stateByteSize);
       file.write((const char*)serialisedModels.data(), modelsByteSize);
       file.write((const char*)serialisedMats.data(), matsByteSize);
       file.write((const char*)serialisedAnimations.data(), animationsByteSize);
@@ -441,15 +426,12 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
 
         -- header--
         1 byte  version         (uint8_t)
-        4 bytes identifiers idx (uint32_t)
         4 bytes model idx       (uint32_t)
         4 bytes material idx    (uint32_t)
         4 bytes animation idx   (uint32_t)
         4 bytes skeleton idx    (uint32_t)
         4 bytes animator idx    (uint32_t)
         4 bytes renderable idx  (uint32_t)
-
-        -- identifiers state --
 
         -- models --
 
@@ -486,15 +468,13 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       }
 
       uint32_t* header4BytePtr = reinterpret_cast<uint32_t*>(header.data() + 1);
-      uint32_t idStateIdx = header4BytePtr[0];
-      uint32_t modelIdx = header4BytePtr[1];
-      uint32_t materialIdx = header4BytePtr[2];
-      uint32_t animationIdx = header4BytePtr[3];
-      uint32_t skeletonIdx = header4BytePtr[4];
-      uint32_t animatorIdx = header4BytePtr[5];
-      uint32_t rendIdx = header4BytePtr[6];
+      uint32_t modelIdx = header4BytePtr[0];
+      uint32_t materialIdx = header4BytePtr[1];
+      uint32_t animationIdx = header4BytePtr[2];
+      uint32_t skeletonIdx = header4BytePtr[3];
+      uint32_t animatorIdx = header4BytePtr[4];
+      uint32_t rendIdx = header4BytePtr[5];
 
-      std::vector<std::uint8_t> serialisedState(modelIdx - idStateIdx);
       std::vector<std::uint8_t> serialisedModels(materialIdx - modelIdx);
       std::vector<std::uint8_t> serialisedMats(animationIdx - materialIdx);
       std::vector<std::uint8_t> serialisedAnimations(skeletonIdx - animationIdx);
@@ -509,12 +489,6 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       std::vector<render::anim::Skeleton> skeletons;
       std::vector<render::asset::Animator> animators;
       std::vector<render::asset::Renderable> rends;
-
-      // Read id state
-      if (!desHelper(file, idStateIdx, serialisedState, outputData._idState)) {
-        p.set_value(DeserialisedSceneData());
-        return;
-      }
 
       // Read models
       if (!desHelper(file, modelIdx, serialisedModels, models)) {
@@ -553,22 +527,22 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       }
 
       for (auto& model : models) {
-        outputData._scene->addModel(std::move(model), false);
+        outputData._scene->addModel(std::move(model));
       }
       for (auto& mat : mats) {
-        outputData._scene->addMaterial(std::move(mat), false);
+        outputData._scene->addMaterial(std::move(mat));
       }
       for (auto& anim : animations) {
-        outputData._scene->addAnimation(std::move(anim), false);
+        outputData._scene->addAnimation(std::move(anim));
       }
       for (auto& skel : skeletons) {
-        outputData._scene->addSkeleton(std::move(skel), false);
+        outputData._scene->addSkeleton(std::move(skel));
       }
       for (auto& animator : animators) {
-        outputData._scene->addAnimator(std::move(animator), false);
+        outputData._scene->addAnimator(std::move(animator));
       }
       for (auto& r : rends) {
-        outputData._scene->addRenderable(std::move(r), false);
+        outputData._scene->addRenderable(std::move(r));
       }
 
       p.set_value(std::move(outputData));

@@ -1,13 +1,13 @@
 #pragma once
 
-#include "../Identifiers.h"
+#include "../../util/Uuid.h"
 #include "BufferMemoryInterface.h"
 
 namespace render::internal {
 
 struct InternalMesh
 {
-  render::MeshId _id;
+  util::Uuid _id;
 
   uint32_t _numIndices;
   uint32_t _numVertices;

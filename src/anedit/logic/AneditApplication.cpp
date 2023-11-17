@@ -52,10 +52,10 @@ namespace {
 bool loadGLTF(
   render::scene::Scene& scene, 
   const std::string& path, 
-  render::ModelId& modelIdOut, 
-  std::vector<render::MaterialId>& materialIdsOut,
-  render::SkeletonId& skeletonIdOut,
-  std::vector<render::AnimationId>& animationIdsOut)
+  util::Uuid& modelIdOut, 
+  std::vector<util::Uuid>& materialIdsOut,
+  util::Uuid& skeletonIdOut,
+  std::vector<util::Uuid>& animationIdsOut)
 {
   materialIdsOut.clear();
   animationIdsOut.clear();
@@ -65,7 +65,7 @@ bool loadGLTF(
   std::vector<render::anim::Animation> animations;
   std::vector<render::asset::Material> materials;
   std::vector<int> materialIndices;
-  if (!GLTFLoader::loadFromFile(path, model, materials, materialIndices, skeleton, animations)) {
+  if (!util::GLTFLoader::loadFromFile(path, model, materials, materialIndices, skeleton, animations)) {
     printf("Could not load model (%s)!\n", path.c_str());
     return false;
   }
@@ -74,7 +74,7 @@ bool loadGLTF(
   modelIdOut = scene.addModel(std::move(model));
 
   // Materials
-  std::vector<render::MaterialId> materialIds;
+  std::vector<util::Uuid> materialIds;
   for (auto& mat : materials) {
     materialIds.emplace_back(scene.addMaterial(std::move(mat)));
   }
@@ -98,14 +98,14 @@ bool loadGLTF(
   return true;
 }
 
-render::RenderableId addRenderableRandom(
+util::Uuid addRenderableRandom(
   render::scene::Scene& scene, 
-  render::ModelId modelId, 
-  std::vector<render::MaterialId>& materials, 
+  util::Uuid modelId, 
+  std::vector<util::Uuid>& materials, 
   float scale,
   float boundingSphereRadius,
   glm::mat4 rot = glm::mat4(1.0f),
-  render::SkeletonId skeleId = render::INVALID_ID,
+  util::Uuid skeleId = util::Uuid(),
   render::asset::Renderable* renderableOut = nullptr)
 {
   static float xOff = 0.0f;
@@ -126,7 +126,7 @@ render::RenderableId addRenderableRandom(
   auto scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
   renderable._transform = trans * rot * scaleMat;
 
-  if (skeleId != render::INVALID_ID) {
+  if (skeleId) {
     renderable._skeleton = skeleId;
   }
 
@@ -145,7 +145,7 @@ render::RenderableId addRenderableRandom(
   return idCopy;
 }
 
-void removeModel(render::VulkanRenderer& renderer, render::ModelId id, std::vector<render::MaterialId>& materials)
+void removeModel(render::VulkanRenderer& renderer, util::Uuid id, std::vector<util::Uuid>& materials)
 {
   render::AssetUpdate upd{};
   upd._removedModels.emplace_back(id);
@@ -153,7 +153,7 @@ void removeModel(render::VulkanRenderer& renderer, render::ModelId id, std::vect
   renderer.assetUpdate(std::move(upd));
 }
 
-void removeRenderable(render::VulkanRenderer& renderer, render::RenderableId id)
+void removeRenderable(render::VulkanRenderer& renderer, util::Uuid id)
 {
   render::AssetUpdate upd{};
   upd._removedRenderables.emplace_back(id);
@@ -191,9 +191,6 @@ void AneditApplication::update(double delta)
 
   if (_sceneFut.valid() && _sceneFut.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
     auto dat = _sceneFut.get();
-
-    // set id state
-    render::IDGenerator::setState(dat._idState);
 
     // Update the scene
     auto scenePtr = dat._scene.get();
@@ -355,7 +352,7 @@ void AneditApplication::oldUI()
       loadGLTF(_scene, std::string(ASSET_PATH) + "models/lantern_gltf/Lantern.glb", _lanternModelId, _lanternMaterials, _dummySkele, _dummyAnimations);
     }
     if (ImGui::Button("Load shrek")) {
-      std::vector<render::AnimationId> animIds;
+      std::vector<util::Uuid> animIds;
       loadGLTF(
         _scene,
         std::string(ASSET_PATH) + "models/shrek_dancing_gltf/shrek_dancing.glb",
@@ -366,7 +363,7 @@ void AneditApplication::oldUI()
       _shrekAnimId = animIds[0];
     }
     if (ImGui::Button("Load brainstem")) {
-      std::vector<render::AnimationId> animIds;
+      std::vector<util::Uuid> animIds;
       loadGLTF(
         _scene,
         std::string(ASSET_PATH) + "models/brainstem_gltf/BrainStem.glb",
@@ -572,7 +569,7 @@ render::scene::Scene& AneditApplication::scene()
   return _scene;
 }
 
-render::RenderableId& AneditApplication::selectedRenderable()
+util::Uuid& AneditApplication::selectedRenderable()
 {
   return _selectedRenderable;
 }

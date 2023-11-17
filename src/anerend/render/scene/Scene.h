@@ -4,7 +4,7 @@
 #include "TileIndex.h"
 #include "DeserialisedSceneData.h"
 
-#include "../Identifiers.h"
+#include "../../util/Uuid.h"
 #include "../asset/Model.h"
 #include "../asset/Renderable.h"
 #include "../asset/Material.h"
@@ -44,7 +44,7 @@ struct SceneEvent
 {
   SceneEventType _type;
   TileIndex _tileIdx;
-  uint32_t _id; // cast this to appropriate id
+  util::Uuid _id;
 };
 
 struct SceneEventLog
@@ -100,34 +100,34 @@ public:
     return _renderables;
   }
 
-  ModelId addModel(asset::Model&& model, bool genId = true);
-  void removeModel(ModelId id);
-  const asset::Model* getModel(ModelId id);
+  util::Uuid addModel(asset::Model&& model);
+  void removeModel(util::Uuid id);
+  const asset::Model* getModel(util::Uuid id);
 
-  MaterialId addMaterial(asset::Material&& material, bool genId = true);
-  void removeMaterial(MaterialId id);
-  const asset::Material* getMaterial(MaterialId id);
+  util::Uuid addMaterial(asset::Material&& material);
+  void removeMaterial(util::Uuid id);
+  const asset::Material* getMaterial(util::Uuid id);
 
-  AnimationId addAnimation(anim::Animation&& animation, bool genId = true);
-  void removeAnimation(AnimationId id);
-  const anim::Animation* getAnimation(AnimationId id);
+  util::Uuid addAnimation(anim::Animation&& animation);
+  void removeAnimation(util::Uuid id);
+  const anim::Animation* getAnimation(util::Uuid id);
 
-  SkeletonId addSkeleton(anim::Skeleton&& skeleton, bool genId = true);
-  void removeSkeleton(SkeletonId id);
-  const anim::Skeleton* getSkeleton(SkeletonId id);
+  util::Uuid addSkeleton(anim::Skeleton&& skeleton);
+  void removeSkeleton(util::Uuid id);
+  const anim::Skeleton* getSkeleton(util::Uuid id);
 
-  AnimatorId addAnimator(asset::Animator&& animator, bool genId = true);
+  util::Uuid addAnimator(asset::Animator&& animator);
   void updateAnimator(asset::Animator animator);
-  void removeAnimator(AnimatorId id);
-  const asset::Animator* getAnimator(AnimatorId id);
+  void removeAnimator(util::Uuid id);
+  const asset::Animator* getAnimator(util::Uuid id);
 
-  RenderableId addRenderable(asset::Renderable&& renderable, bool genId = true);
-  void removeRenderable(RenderableId id);
-  const asset::Renderable* getRenderable(RenderableId id);
+  util::Uuid addRenderable(asset::Renderable&& renderable);
+  void removeRenderable(util::Uuid id);
+  const asset::Renderable* getRenderable(util::Uuid id);
 
   // TODO: Decide if the Scene class really is the correct place to access/modify renderables.
-  void setRenderableTint(RenderableId id, const glm::vec3& tint);
-  void setRenderableTransform(RenderableId id, const glm::mat4& transform);
+  void setRenderableTint(util::Uuid id, const glm::vec3& tint);
+  void setRenderableTransform(util::Uuid id, const glm::mat4& transform);
 
 private:
   friend struct internal::SceneSerializer;
@@ -150,7 +150,7 @@ private:
   SceneEventLog _eventLog;
   internal::SceneSerializer _serialiser;
 
-  void addEvent(SceneEventType type, uint32_t id, TileIndex tileIdx = TileIndex());
+  void addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx = TileIndex());
 };
 
 }

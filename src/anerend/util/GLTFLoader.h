@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+namespace util {
+
 class GLTFLoader
 {
 public:
@@ -20,8 +22,12 @@ public:
     const std::string& path,
     render::asset::Model& modelOut,
     std::vector<render::asset::Material>& materialsOut,
-    std::vector<int>& materialIndicesOut, // <mesh index in model, material index>
+    std::vector<int>& materialIndicesOut,
     render::anim::Skeleton& skeletonOut,
     std::vector<render::anim::Animation>& animationsOut);
 };
+
+}
+
+
 

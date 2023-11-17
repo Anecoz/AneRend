@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Identifiers.h"
+#include "../../util/Uuid.h"
 #include "TileIndex.h"
 
 #include <glm/glm.hpp>
@@ -25,9 +25,9 @@ public:
 
   explicit operator bool() const;
 
-  void addRenderable(RenderableId id);
-  void removeRenderable(RenderableId id);
-  const std::vector<RenderableId>& getRenderableIds() const { return _renderables; }
+  void addRenderable(util::Uuid id);
+  void removeRenderable(util::Uuid id);
+  const std::vector<util::Uuid>& getRenderableIds() const { return _renderables; }
 
   static const unsigned _tileSize = 32; // in world space
   static TileIndex posToIdx(const glm::vec3& pos);
@@ -37,7 +37,7 @@ private:
   bool _initialized = false;
 
   // TODO: Lights, particles
-  std::vector<RenderableId> _renderables;
+  std::vector<util::Uuid> _renderables;
 
 };
 

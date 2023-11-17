@@ -36,17 +36,17 @@ public:
 
   void updateAnimator(render::asset::Animator&& animator);
 
-  void removeAnimation(render::AnimationId animId);
-  void removeAnimator(render::AnimatorId animatorId);
-  void removeSkeleton(render::SkeletonId skeleId);
+  void removeAnimation(util::Uuid animId);
+  void removeAnimator(util::Uuid animatorId);
+  void removeSkeleton(util::Uuid skeleId);
 
 private:
   struct AnimatorData
   {
     render::internal::anim::Animator _animator;
-    render::AnimationId _animId;
-    render::SkeletonId _skeleId;
-    render::AnimatorId _animatorId;
+    util::Uuid _animId;
+    util::Uuid _skeleId;
+    util::Uuid _animatorId;
   };
 
   std::vector<render::anim::Skeleton> _currentSkeletons;

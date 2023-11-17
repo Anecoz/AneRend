@@ -1,6 +1,6 @@
 #pragma once 
 
-#include "../Identifiers.h"
+#include "../../util/Uuid.h"
 
 #include <glm/glm.hpp>
 
@@ -10,10 +10,11 @@ namespace render::asset {
 
 struct Renderable
 {
-  render::RenderableId _id = INVALID_ID;
-  render::ModelId _model = INVALID_ID;
-  render::SkeletonId _skeleton = INVALID_ID;
-  std::vector<render::MaterialId> _materials; // one for each mesh in the model (could be same ID for multiple meshes tho)
+  util::Uuid _id = util::Uuid::generate();
+
+  util::Uuid _model;
+  util::Uuid _skeleton;
+  std::vector<util::Uuid> _materials; // one for each mesh in the model (could be same ID for multiple meshes tho)
 
   glm::mat4 _transform;
   glm::vec3 _tint;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Identifiers.h"
+#include "../util/Uuid.h"
 #include <glm/glm.hpp>
 
 namespace render {
@@ -12,7 +12,7 @@ struct Particle
   float _scale;
   float _lifetime;
   float _spawnDelay;
-  RenderableId _renderableId;
+  util::Uuid _renderableId;
 };
 
 }

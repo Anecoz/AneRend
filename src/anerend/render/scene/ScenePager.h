@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Identifiers.h"
+#include "../../util/Uuid.h"
 #include "TileIndex.h"
 
 #include <glm/glm.hpp>
@@ -38,10 +38,10 @@ private:
   int _pageRadius = 0;
   std::vector<TileIndex> _pagedTiles;
 
-  std::vector<ModelId> _pagedModels;
-  std::vector<MaterialId> _pagedMaterials;
-  std::vector<AnimationId> _pagedAnimations;
-  std::vector<SkeletonId> _pagedSkeletons;
+  std::vector<util::Uuid> _pagedModels;
+  std::vector<util::Uuid> _pagedMaterials;
+  std::vector<util::Uuid> _pagedAnimations;
+  std::vector<util::Uuid> _pagedSkeletons;
 };
 
 }

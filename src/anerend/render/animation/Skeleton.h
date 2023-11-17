@@ -1,7 +1,8 @@
 #pragma once
 
 #include "Joint.h"
-#include "../Identifiers.h"
+
+#include "../../util/Uuid.h"
 
 #include <optional>
 #include <vector>
@@ -10,7 +11,7 @@ namespace render::anim {
 
 struct Skeleton
 {
-  render::SkeletonId _id = INVALID_ID;
+  util::Uuid _id = util::Uuid::generate();
 
   void calcGlobalTransforms();
   void reset();

@@ -420,12 +420,10 @@ bool VulkanRenderer::init()
 
   std::vector<Vertex> vert;
   std::vector<std::uint32_t> inds;
-  graphicsutil::createSphere(1.0f, &vert, &inds, true);
+  util::createSphere(1.0f, &vert, &inds, true);
 
   asset::Model sphereModel{};
-  sphereModel._id = IDGenerator::genModelId();
   asset::Mesh sphereMesh{};
-  sphereMesh._id = IDGenerator::genMeshId();
   _debugSphereMeshId = sphereMesh._id;
   sphereMesh._indices = std::move(inds);
   sphereMesh._vertices = std::move(vert);
@@ -522,7 +520,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     // Find internal model and use memory interface to "free" memory
     auto it = _modelIdMap.find(removedModel);
     if (it == _modelIdMap.end()) {
-      printf("Cannot remove model %u, it doesn't exist!\n", removedModel);
+      printf("Cannot remove model %s, it doesn't exist!\n", removedModel.str().c_str());
       continue;
     }
 
@@ -579,7 +577,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
   // Added models
   for (auto& model : update._addedModels) {
-    if (model._id == INVALID_ID) {
+    if (!model._id) {
       printf("Asset update fail: cannot add model with invalid id\n");
       continue;
     }
@@ -594,7 +592,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     internalModel._id = model._id;
 
     for (const auto& mesh : model._meshes) {
-      if (mesh._id == INVALID_ID) {
+      if (!mesh._id) {
         printf("Asset update fail: cannot add mesh with invalid id\n");
         continue;
       }
@@ -680,7 +678,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
   // Added materials
   for (auto& mat : update._addedMaterials) {
-    if (mat._id == INVALID_ID) {
+    if (!mat._id) {
       printf("Material has invalid id, not adding!\n");
       continue;
     }
@@ -728,7 +726,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     bool exist = _skeletonOffsets.count(remSkel) > 0;
 
     if (!exist) {
-      printf("WARNING! Removing skeleton with id %u, but does not exist in mem if!\n", remSkel);
+      printf("WARNING! Removing skeleton with id %s, but does not exist in mem if!\n", remSkel.str().c_str());
     }
     else {
       _skeletonMemIf.removeData(_skeletonOffsets[remSkel]);
@@ -752,7 +750,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
     auto handle = _skeletonMemIf.addData(numMatrices);
     if (!handle) {
-      printf("Cannot add skeleton with id %u, can't fit into mem interface!\n", skel._id);
+      printf("Cannot add skeleton with id %s, can't fit into mem interface!\n", skel._id.str().c_str());
       continue;
     }
 
@@ -789,7 +787,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
             auto& dynamicBlas = _dynamicBlases[remId];
 
             for (std::size_t i = 0; i < it->_meshes.size(); ++i) {
-              MeshId mesh = it->_dynamicMeshes[i];
+              auto& mesh = it->_dynamicMeshes[i];
 
               for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
                 if (meshIt->_id == mesh) {
@@ -810,7 +808,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
             }
 
             _dynamicBlases.erase(remId);
-            printf("erased id %u from dynamic blases\n", remId);
+            printf("erased id %s from dynamic blases\n", remId.str().c_str());
           }
         }
         else if (_enableRayTracing) {
@@ -825,7 +823,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
               // Also give back potential meshes that have already been added
               for (std::size_t i = 0; i < it->_currentBlases.size(); ++i) {
-                MeshId meshId = it->_generatedDynamicIds[i];
+                auto& meshId = it->_generatedDynamicIds[i];
                 for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
                   if (meshIt->_id == meshId) {
 
@@ -863,12 +861,12 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
   // Added renderables
   for (const auto& rend : update._addedRenderables) {
-    if (rend._id == INVALID_ID) {
+    if (!rend._id) {
       printf("Asset update fail: cannot add renderable with invalid id\n");
       continue;
     }
 
-    if (rend._model == INVALID_ID) {
+    if (!rend._model) {
       printf("Asset update fail: cannot add renderable with invalid model id\n");
       continue;
     }
@@ -885,7 +883,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     auto& model = _currentModels[_modelIdMap[rend._model]];
     internalRend._meshes = model._meshes;
 
-    if (rend._skeleton != INVALID_ID) {
+    if (rend._skeleton) {
       internalRend._skeletonOffset = (uint32_t)_skeletonOffsets[rend._skeleton]._offset;
 
       // If ray tracing is enabled, we need to write individual BLAS:es for each renderable that is animated.
@@ -914,12 +912,12 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
   // Updated renderables
   for (const auto& rend : update._updatedRenderables) {
-    if (rend._id == INVALID_ID) {
+    if (!rend._id) {
       printf("Asset update fail: cannot update renderable with invalid id\n");
       continue;
     }
 
-    if (rend._model == INVALID_ID) {
+    if (!rend._model) {
       printf("Asset update fail: cannot update renderable with invalid model id\n");
       continue;
     }
@@ -927,7 +925,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     auto it = _renderableIdMap.find(rend._id);
 
     if (it == _renderableIdMap.end()) {
-      printf("Could not update renderable %u, doesn't exist!\n", rend._id);
+      printf("Could not update renderable %s, doesn't exist!\n", rend._id.str().c_str());
       break;
     }
 
@@ -1254,7 +1252,10 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
     }
 
     if (it->_generatedDynamicIds.empty()) {
-      it->_generatedDynamicIds = IDGenerator::genMeshIdRange(model._meshes.size());
+      it->_generatedDynamicIds.reserve(model._meshes.size());
+      for (std::size_t i = 0; i < model._meshes.size(); ++i) {
+        it->_generatedDynamicIds.emplace_back(util::Uuid::generate());
+      }
     }
 
     bool abortRend = false;
@@ -1373,7 +1374,7 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
 
     internalRend._dynamicMeshes = it->_generatedDynamicIds;
     _dynamicBlases[rend] = std::move(it->_currentBlases);
-    printf("added id %u to dynamic blases, first dynamic mesh id is %u\n", rend, internalRend._dynamicMeshes[0]);
+    printf("added id %s to dynamic blases, first dynamic mesh id is %s\n", rend.str().c_str(), internalRend._dynamicMeshes[0].str().c_str());
     it = _dynamicModelsToCopy.erase(it);
   }
 
@@ -1493,12 +1494,12 @@ void VulkanRenderer::update(
 
 AccelerationStructure VulkanRenderer::registerBottomLevelAS(
   VkCommandBuffer cmdBuffer, 
-  MeshId meshId, 
+  util::Uuid meshId,
   bool dynamic, 
   bool doBarrier)
 {
   if (!dynamic && _blases.count(meshId) > 0) {
-    printf("Cannot create BLAS for mesh id %u, it already exists!\n", meshId);
+    printf("Cannot create BLAS for mesh id %s, it already exists!\n", meshId.str().c_str());
     return AccelerationStructure();
   }
 
@@ -2684,7 +2685,7 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     auto& model = _currentModels[internalModelIdx];
 
     for (uint32_t i = 0; i < model._meshes.size(); ++i) {
-      _currentMeshUsage[model._meshes[0] + i]++;
+      _currentMeshUsage[model._meshes[i]]++;
     }
     
     mappedData[i]._transform = renderable._transform;
@@ -4170,7 +4171,7 @@ void VulkanRenderer::createParticles()
 {
   std::vector<Vertex> vert;
   std::vector<std::uint32_t> inds;
-  graphicsutil::createUnitCube(&vert, &inds, true);
+  util::createUnitCube(&vert, &inds, true);
 
   asset::Mesh cubeMesh{};
   asset::Model cubeModel{};
@@ -4268,7 +4269,7 @@ void VulkanRenderer::drawNonIndexIndirect(VkCommandBuffer* cmdBuffer, VkBuffer d
   vkCmdDrawIndirect(*cmdBuffer, drawCalls, 0, drawCount, stride);
 }
 
-void VulkanRenderer::drawMeshId(VkCommandBuffer* cmdBuffer, MeshId meshId, uint32_t vertCount, uint32_t instanceCount)
+void VulkanRenderer::drawMeshId(VkCommandBuffer* cmdBuffer, util::Uuid meshId, uint32_t vertCount, uint32_t instanceCount)
 {
   auto idx = _meshIdMap[meshId];
   auto& mesh = _currentMeshes[idx];
@@ -4315,10 +4316,10 @@ std::vector<internal::InternalRenderable>& VulkanRenderer::getCurrentRenderables
   return _currentRenderables;
 }
 
-bool VulkanRenderer::getRenderableById(RenderableId id, internal::InternalRenderable** out)
+bool VulkanRenderer::getRenderableById(util::Uuid id, internal::InternalRenderable** out)
 {
   if (_renderableIdMap.find(id) == _renderableIdMap.end()) {
-    printf("Warning! Cannot get renderable with id %u, doesn't exist!\n", id);
+    printf("Warning! Cannot get renderable with id %s, doesn't exist!\n", id.str().c_str());
     return false;
   }
 
@@ -4327,10 +4328,10 @@ bool VulkanRenderer::getRenderableById(RenderableId id, internal::InternalRender
   return true;
 }
 
-bool VulkanRenderer::getMeshById(MeshId id, internal::InternalMesh** out)
+bool VulkanRenderer::getMeshById(util::Uuid id, internal::InternalMesh** out)
 {
   if (_meshIdMap.find(id) == _meshIdMap.end()) {
-    printf("Warning! Cannot get mesh with id %u, doesn't exist!\n", id);
+    printf("Warning! Cannot get mesh with id %s, doesn't exist!\n", id.str().c_str());
     return false;
   }
 
@@ -4339,7 +4340,7 @@ bool VulkanRenderer::getMeshById(MeshId id, internal::InternalMesh** out)
   return true;
 }
 
-std::unordered_map<MeshId, std::size_t>& VulkanRenderer::getCurrentMeshUsage()
+std::unordered_map<util::Uuid, std::size_t>& VulkanRenderer::getCurrentMeshUsage()
 {
   return _currentMeshUsage;
 }
@@ -4349,7 +4350,7 @@ size_t VulkanRenderer::getCurrentNumRenderables()
   return _currentRenderables.size();
 }
 
-std::unordered_map<RenderableId, std::vector<AccelerationStructure>>& VulkanRenderer::getDynamicBlases()
+std::unordered_map<util::Uuid, std::vector<AccelerationStructure>>& VulkanRenderer::getDynamicBlases()
 {
   return _dynamicBlases;
 }

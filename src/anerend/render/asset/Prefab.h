@@ -1,17 +1,16 @@
 #pragma once
 
-#include "Mesh.h"
 #include "../../util/Uuid.h"
-
-#include <vector>
 
 namespace render::asset {
 
-struct Model
+struct Prefab
 {
   util::Uuid _id = util::Uuid::generate();
-  std::vector<Mesh> _meshes;
+
+  util::Uuid _model;
+  util::Uuid _skeleton;
+  std::vector<util::Uuid> _materials;
 };
 
 }
-

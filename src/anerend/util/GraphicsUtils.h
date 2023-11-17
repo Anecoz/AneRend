@@ -8,7 +8,7 @@
 
 #define PI           3.14159265358979323846f  /* pi */
 
-namespace graphicsutil {
+namespace util {
 
 // Counter clockwise
 // Vulkan NDC is
@@ -49,7 +49,7 @@ static void createUnitCube(std::vector<render::Vertex>* vertOut, std::vector<std
   glm::vec3 color{ 1.0f };
 
   if (randomColor) {
-    color = graphicsutil::randomColor();
+    color = util::randomColor();
   }
 
   glm::vec3 normal{ 0.0f, 1.0f, 0.0f};
@@ -127,7 +127,7 @@ static void createSphere(float radius, std::vector<render::Vertex>* vertOut, std
 
   glm::vec4 color{ 1.0f };
   if (randomColor) {
-    color = glm::vec4(graphicsutil::randomColor(), 1.0f);
+    color = glm::vec4(util::randomColor(), 1.0f);
   }
 
   int sectorCount = 30;

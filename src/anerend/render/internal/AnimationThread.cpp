@@ -89,7 +89,7 @@ void AnimationThread::addAnimator(render::asset::Animator&& animator)
   }
 
   if (!animFound) {
-    printf("Cannot add animator, animation %u doesn't exist!\n", animator._animId);
+    printf("Cannot add animator, animation %s doesn't exist!\n", animator._animId.str().c_str());
     return;
   }
 
@@ -119,7 +119,7 @@ void AnimationThread::addAnimator(render::asset::Animator&& animator)
   }
 
   if (!skeleFound) {
-    printf("Cannot add animator, skeleton %u doesn't exist!\n", animator._skeleId);
+    printf("Cannot add animator, skeleton %s doesn't exist!\n", animator._skeleId.str().c_str());
     return;
   }
 
@@ -180,7 +180,7 @@ void AnimationThread::updateAnimator(render::asset::Animator&& animator)
   }
 }
 
-void AnimationThread::removeAnimation(render::AnimationId animId)
+void AnimationThread::removeAnimation(util::Uuid animId)
 {
   std::unique_lock<std::mutex> lock(_mtx);
   for (auto it = _currentAnimations.begin(); it != _currentAnimations.end(); ++it) {
@@ -191,7 +191,7 @@ void AnimationThread::removeAnimation(render::AnimationId animId)
   }
 }
 
-void AnimationThread::removeAnimator(render::AnimatorId animatorId)
+void AnimationThread::removeAnimator(util::Uuid animatorId)
 {
   std::unique_lock<std::mutex> lock(_mtx);
   for (auto it = _currentInternalAnimators.begin(); it != _currentInternalAnimators.end(); ++it) {
@@ -209,7 +209,7 @@ void AnimationThread::removeAnimator(render::AnimatorId animatorId)
   }
 }
 
-void AnimationThread::removeSkeleton(render::SkeletonId skeleId)
+void AnimationThread::removeSkeleton(util::Uuid skeleId)
 {
   std::unique_lock<std::mutex> lock(_skelMtx);
   for (auto it = _currentSkeletons.begin(); it != _currentSkeletons.end(); ++it) {
@@ -306,7 +306,7 @@ void AnimationThread::updateThread()
         }
 
         if (!animp || !skelep) {
-          printf("Cannot connect anim %u with skele %u, one of them doesn't exist!\n", animator._animId, animator._skeleId);
+          printf("Cannot connect anim %s with skele %s, one of them doesn't exist!\n", animator._animId.str().c_str(), animator._skeleId.str().c_str());
           continue;
         }
 

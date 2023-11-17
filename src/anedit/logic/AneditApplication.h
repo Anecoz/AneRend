@@ -37,7 +37,7 @@ public:
 
   render::scene::Scene& scene() override final;
 
-  render::RenderableId& selectedRenderable() override final;
+  util::Uuid& selectedRenderable() override final;
 
   render::Camera& camera() override final;
 
@@ -64,34 +64,34 @@ private:
 
   render::VulkanRenderer _vkRenderer;
 
-  render::ModelId _lanternModelId;
-  std::vector<render::MaterialId> _lanternMaterials;
+  util::Uuid _lanternModelId;
+  std::vector<util::Uuid> _lanternMaterials;
 
-  render::ModelId _sponzaModelId;
-  std::vector<render::MaterialId> _sponzaMaterialIds;
+  util::Uuid _sponzaModelId;
+  std::vector<util::Uuid> _sponzaMaterialIds;
 
-  render::ModelId _brainstemModelId;
-  std::vector<render::MaterialId> _brainstemMaterials;
-  render::AnimationId _brainstemAnimId;
-  render::SkeletonId _brainstemSkelId;
+  util::Uuid _brainstemModelId;
+  std::vector<util::Uuid> _brainstemMaterials;
+  util::Uuid _brainstemAnimId;
+  util::Uuid _brainstemSkelId;
 
-  render::ModelId _shrekModelId;
-  std::vector<render::MaterialId> _shrekMaterials;
-  render::AnimationId _shrekAnimId;
-  render::SkeletonId _shrekSkeleId;
+  util::Uuid _shrekModelId;
+  std::vector<util::Uuid> _shrekMaterials;
+  util::Uuid _shrekAnimId;
+  util::Uuid _shrekSkeleId;
 
-  render::ModelId _foxModelId;
-  std::vector<render::MaterialId> _foxMaterials;
-  std::vector<render::AnimationId> _foxAnims;
-  render::SkeletonId _foxSkeleId;
+  util::Uuid _foxModelId;
+  std::vector<util::Uuid> _foxMaterials;
+  std::vector<util::Uuid> _foxAnims;
+  util::Uuid _foxSkeleId;
   render::asset::Renderable _cachedFoxRenderable;
   render::asset::Animator _foxAnimator;
   int _foxAnimIdx = 0;
 
-  std::vector<render::RenderableId> _rends;
+  std::vector<util::Uuid> _rends;
 
-  std::vector<render::AnimationId> _dummyAnimations;
-  render::SkeletonId _dummySkele;
+  std::vector<util::Uuid> _dummyAnimations;
+  util::Uuid _dummySkele;
 
   render::scene::Scene _scene;
   std::future<render::scene::DeserialisedSceneData> _sceneFut;

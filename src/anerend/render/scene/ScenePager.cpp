@@ -33,7 +33,6 @@ void ScenePager::update(const glm::vec3& pos)
   AssetUpdate upd{};
 
   // Check event log of Scene to see if any materials, models, anims etc have been added
-  std::vector<RenderableId> updatedRends;
   const auto& log = _scene->getEvents();
   for (auto& event : log._events) {
     if (event._type == SceneEventType::ModelAdded) {
@@ -59,9 +58,6 @@ void ScenePager::update(const glm::vec3& pos)
     else if (event._type == SceneEventType::SkeletonAdded) {
       auto copy = *_scene->getSkeleton(event._id);
       upd._addedSkeletons.emplace_back(std::move(copy));
-    }
-    else if (event._type == SceneEventType::RenderableUpdated) {
-      updatedRends.emplace_back(event._id);
     }
 
     // TODO: Removal of assets

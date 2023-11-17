@@ -76,7 +76,7 @@ void UpdateBlasPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
         for (std::size_t i = 0; i < dynamicPair.second.size(); ++i) {
           internal::InternalMesh* mesh = nullptr;
 
-          render::MeshId meshId = renderable->_dynamicMeshes[i];
+          util::Uuid meshId = renderable->_dynamicMeshes[i];
 
           if (!exeParams.rc->getMeshById(meshId, &mesh)) {
             printf("Could not get mesh in BLAS update!\n");

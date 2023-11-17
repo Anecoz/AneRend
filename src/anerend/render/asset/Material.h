@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../Identifiers.h"
 #include "../ImageHelpers.h"
+#include "../../util/Uuid.h"
 
 #include <glm/glm.hpp>
 
@@ -9,7 +9,7 @@ namespace render::asset {
 
 struct Material
 {
-  MaterialId _id = INVALID_ID;
+  util::Uuid _id = util::Uuid::generate();
 
   // This is either a factor applied to the albedo texture, or (if no albedo present) treated as linear RGB values.
   glm::vec3 _baseColFactor = glm::vec3(1.0f);

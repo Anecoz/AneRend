@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../AllocatedImage.h"
-#include "../Identifiers.h"
+#include "../../util/Uuid.h"
 #include "BufferMemoryInterface.h"
 
 #include <glm/glm.hpp>
@@ -22,7 +22,7 @@ struct InternalMaterial
     VkSampler _sampler;
   };
 
-  render::MaterialId _id;
+  util::Uuid _id;
 
   BindlessTexInfo _albedoInfo;
   BindlessTexInfo _metRoughInfo;

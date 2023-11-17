@@ -11,17 +11,6 @@ namespace {
 
 TileIndex findRenderableTile(const asset::Renderable& renderable, unsigned tileSize)
 {
-  /*glm::vec3 s;
-  glm::quat q;
-  glm::vec3 t;
-
-  glm::vec3 unused_0;
-  glm::vec4 unused_1;
-
-  if (!glm::decompose(renderable._transform, s, q, t, unused_0, unused_1)) {
-    printf("Warning! Could not decompose transform of rend %u\n", renderable._id);
-  }*/
-
   glm::vec3 t = renderable._transform[3];
   return Tile::posToIdx(t);
 }
@@ -104,24 +93,16 @@ bool Scene::getTile(TileIndex idx, Tile** tileOut)
   return true;
 }
 
-ModelId Scene::addModel(asset::Model&& model, bool genId)
+util::Uuid Scene::addModel(asset::Model&& model)
 {
   auto id = model._id;
-  if (genId) {
-    id = IDGenerator::genModelId();
-    model._id = id;
-  }
-
-  for (auto& mesh : model._meshes) {
-    mesh._id = IDGenerator::genMeshId();
-  }
 
   addEvent(SceneEventType::ModelAdded, model._id);
   _models.emplace_back(std::move(model));
   return id;
 }
 
-void Scene::removeModel(ModelId id)
+void Scene::removeModel(util::Uuid id)
 {
   for (auto it = _models.begin(); it != _models.end(); ++it) {
     if (it->_id == id) {
@@ -134,27 +115,22 @@ void Scene::removeModel(ModelId id)
   printf("Could not remove model %u, doesn't exist!\n", id);
 }
 
-const asset::Model* Scene::getModel(ModelId id)
+const asset::Model* Scene::getModel(util::Uuid id)
 {
   asset::Model* model = nullptr;
   getAsset(_models, id, &model);
   return model;
 }
 
-MaterialId Scene::addMaterial(asset::Material&& material, bool genId)
+util::Uuid Scene::addMaterial(asset::Material&& material)
 {
   auto id = material._id;
-  if (genId) {
-    id = IDGenerator::genMaterialId();
-    material._id = id;
-  }
-
   addEvent(SceneEventType::MaterialAdded, material._id);
   _materials.emplace_back(std::move(material));
   return id;
 }
 
-void Scene::removeMaterial(MaterialId id)
+void Scene::removeMaterial(util::Uuid id)
 {
   for (auto it = _materials.begin(); it != _materials.end(); ++it) {
     if (it->_id == id) {
@@ -167,27 +143,22 @@ void Scene::removeMaterial(MaterialId id)
   printf("Could not remove material with id %u, doesn't exist!\n", id);
 }
 
-const asset::Material* Scene::getMaterial(MaterialId id)
+const asset::Material* Scene::getMaterial(util::Uuid id)
 {
   asset::Material* material = nullptr;
   getAsset(_materials, id, &material);
   return material;
 }
 
-AnimationId Scene::addAnimation(anim::Animation&& animation, bool genId)
+util::Uuid Scene::addAnimation(anim::Animation&& animation)
 {
   auto id = animation._id;
-  if (genId) {
-    id = IDGenerator::genAnimationId();
-    animation._id = id;
-  }
-
   addEvent(SceneEventType::AnimationAdded, animation._id);
   _animations.emplace_back(std::move(animation));
   return id;
 }
 
-void Scene::removeAnimation(AnimationId id)
+void Scene::removeAnimation(util::Uuid id)
 {
   for (auto it = _animations.begin(); it != _animations.end(); ++it) {
     if (it->_id == id) {
@@ -200,27 +171,22 @@ void Scene::removeAnimation(AnimationId id)
   printf("Could not remove animation %u, doesn't exist!\n", id);
 }
 
-const anim::Animation* Scene::getAnimation(AnimationId id)
+const anim::Animation* Scene::getAnimation(util::Uuid id)
 {
   anim::Animation* animation = nullptr;
   getAsset(_animations, id, &animation);
   return animation;
 }
 
-SkeletonId Scene::addSkeleton(anim::Skeleton&& skeleton, bool genId)
+util::Uuid Scene::addSkeleton(anim::Skeleton&& skeleton)
 {
   auto id = skeleton._id;
-  if (genId) {
-    id = IDGenerator::genSkeletonId();
-    skeleton._id = id;
-  }
-
   addEvent(SceneEventType::SkeletonAdded, skeleton._id);
   _skeletons.emplace_back(std::move(skeleton));
   return id;
 }
 
-void Scene::removeSkeleton(SkeletonId id)
+void Scene::removeSkeleton(util::Uuid id)
 {
   for (auto it = _skeletons.begin(); it != _skeletons.end(); ++it) {
     if (it->_id == id) {
@@ -233,21 +199,16 @@ void Scene::removeSkeleton(SkeletonId id)
   printf("Could not remove skeleton with id %u, doesn't exist!\n", id);
 }
 
-const anim::Skeleton* Scene::getSkeleton(SkeletonId id)
+const anim::Skeleton* Scene::getSkeleton(util::Uuid id)
 {
   anim::Skeleton* skele = nullptr;
   getAsset(_skeletons, id, &skele);
   return skele;
 }
 
-AnimatorId Scene::addAnimator(asset::Animator&& animator, bool genId)
+util::Uuid Scene::addAnimator(asset::Animator&& animator)
 {
   auto id = animator._id;
-  if (genId) {
-    id = IDGenerator::genAnimatorId();
-    animator._id = id;
-  }
-
   addEvent(SceneEventType::AnimatorAdded, animator._id);
   _animators.emplace_back(std::move(animator));
   return id;
@@ -266,7 +227,7 @@ void Scene::updateAnimator(asset::Animator animator)
   printf("Could not update animator with id %u, doesn't exist!\n", animator._id);
 }
 
-void Scene::removeAnimator(AnimatorId id)
+void Scene::removeAnimator(util::Uuid id)
 {
   for (auto it = _animators.begin(); it != _animators.end(); ++it) {
     if (it->_id == id) {
@@ -279,20 +240,16 @@ void Scene::removeAnimator(AnimatorId id)
   printf("Could not remove animator with id %u, doesn't exist!\n", id);
 }
 
-const asset::Animator* Scene::getAnimator(AnimatorId id)
+const asset::Animator* Scene::getAnimator(util::Uuid id)
 {
   asset::Animator* animator = nullptr;
   getAsset(_animators, id, &animator);
   return animator;
 }
 
-RenderableId Scene::addRenderable(asset::Renderable&& renderable, bool genId)
+util::Uuid Scene::addRenderable(asset::Renderable&& renderable)
 {
   auto id = renderable._id;
-
-  if (genId) {
-    id = IDGenerator::genRenderableId();
-  }
 
   // Find which tile this renderable belongs to
   auto tileIdx = findRenderableTile(renderable, Tile::_tileSize);
@@ -314,7 +271,7 @@ RenderableId Scene::addRenderable(asset::Renderable&& renderable, bool genId)
   return id;
 }
 
-void Scene::removeRenderable(RenderableId id)
+void Scene::removeRenderable(util::Uuid id)
 {
   for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
     if (it->_id == id) {
@@ -335,14 +292,14 @@ void Scene::removeRenderable(RenderableId id)
   printf("Could not remove renderable %u, doesn't exist!\n", id);
 }
 
-const asset::Renderable* Scene::getRenderable(RenderableId id)
+const asset::Renderable* Scene::getRenderable(util::Uuid id)
 {
   asset::Renderable* rend = nullptr;
   getAsset(_renderables, id, &rend);
   return rend;
 }
 
-void Scene::setRenderableTint(RenderableId id, const glm::vec3& tint)
+void Scene::setRenderableTint(util::Uuid id, const glm::vec3& tint)
 {
   for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
     if (it->_id == id) {
@@ -356,7 +313,7 @@ void Scene::setRenderableTint(RenderableId id, const glm::vec3& tint)
   printf("Cannot set tint for renderable %u, doesn't exist!\n", id);
 }
 
-void Scene::setRenderableTransform(RenderableId id, const glm::mat4& transform)
+void Scene::setRenderableTransform(util::Uuid id, const glm::mat4& transform)
 {
   for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
     if (it->_id == id) {
@@ -371,7 +328,7 @@ void Scene::setRenderableTransform(RenderableId id, const glm::mat4& transform)
   printf("Cannot set transform for renderable %u, doesn't exist!\n", id);
 }
 
-void Scene::addEvent(SceneEventType type, uint32_t id, TileIndex tileIdx)
+void Scene::addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx)
 {
   SceneEvent event{};
   event._id = id;

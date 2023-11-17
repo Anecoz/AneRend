@@ -46,24 +46,24 @@ struct AssetUpdate
   }
 
   std::vector<asset::Model> _addedModels;
-  std::vector<ModelId> _removedModels;
+  std::vector<util::Uuid> _removedModels;
 
   std::vector<asset::Material> _addedMaterials;
-  std::vector<MaterialId> _removedMaterials;
+  std::vector<util::Uuid> _removedMaterials;
 
   std::vector<anim::Animation> _addedAnimations;
-  std::vector<AnimationId> _removedAnimations;
+  std::vector<util::Uuid> _removedAnimations;
 
   std::vector<asset::Animator> _addedAnimators;
   std::vector<asset::Animator> _updatedAnimators;
-  std::vector<AnimatorId> _removedAnimators;
+  std::vector<util::Uuid> _removedAnimators;
 
   std::vector<anim::Skeleton> _addedSkeletons;
-  std::vector<SkeletonId> _removedSkeletons;
+  std::vector<util::Uuid> _removedSkeletons;
 
   std::vector<asset::Renderable> _addedRenderables;
   std::vector<asset::Renderable> _updatedRenderables;
-  std::vector<RenderableId> _removedRenderables;
+  std::vector<util::Uuid> _removedRenderables;
 };
 
 class RenderContext
@@ -86,7 +86,7 @@ public:
 
   virtual void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount) = 0;
   virtual void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) = 0;
-  virtual void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) = 0;
+  virtual void drawMeshId(VkCommandBuffer*, util::Uuid, uint32_t vertCount, uint32_t instanceCount) = 0;
 
   virtual VkImage& getCurrentSwapImage() = 0;
   virtual int getCurrentMultiBufferIdx() = 0;
@@ -101,12 +101,12 @@ public:
 
   virtual std::vector<internal::InternalMesh>& getCurrentMeshes() = 0;
   virtual std::vector<internal::InternalRenderable>& getCurrentRenderables() = 0;
-  virtual bool getRenderableById(RenderableId id, internal::InternalRenderable** out) = 0;
-  virtual bool getMeshById(MeshId id, internal::InternalMesh** out) = 0;
-  virtual std::unordered_map<MeshId, std::size_t>& getCurrentMeshUsage() = 0;
+  virtual bool getRenderableById(util::Uuid id, internal::InternalRenderable** out) = 0;
+  virtual bool getMeshById(util::Uuid id, internal::InternalMesh** out) = 0;
+  virtual std::unordered_map<util::Uuid, std::size_t>& getCurrentMeshUsage() = 0;
   virtual size_t getCurrentNumRenderables() = 0;
 
-  virtual std::unordered_map<RenderableId, std::vector<AccelerationStructure>>& getDynamicBlases() = 0;
+  virtual std::unordered_map<util::Uuid, std::vector<AccelerationStructure>>& getDynamicBlases() = 0;
 
   virtual gpu::GPUCullPushConstants getCullParams() = 0;
 

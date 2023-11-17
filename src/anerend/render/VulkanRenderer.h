@@ -116,7 +116,7 @@ public:
 
   void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount) override final;
   void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) override final;
-  void drawMeshId(VkCommandBuffer*, MeshId, uint32_t vertCount, uint32_t instanceCount) override final;
+  void drawMeshId(VkCommandBuffer*, util::Uuid, uint32_t vertCount, uint32_t instanceCount) override final;
 
   VkImage& getCurrentSwapImage() override final;
   int getCurrentMultiBufferIdx() override final;
@@ -129,12 +129,12 @@ public:
 
   std::vector<internal::InternalMesh>& getCurrentMeshes() override final;
   std::vector<internal::InternalRenderable>& getCurrentRenderables() override final;
-  bool getRenderableById(RenderableId id, internal::InternalRenderable** out) override final;
-  bool getMeshById(MeshId id, internal::InternalMesh** out) override final;
-  std::unordered_map<MeshId, std::size_t>& getCurrentMeshUsage() override final;
+  bool getRenderableById(util::Uuid id, internal::InternalRenderable** out) override final;
+  bool getMeshById(util::Uuid id, internal::InternalMesh** out) override final;
+  std::unordered_map<util::Uuid, std::size_t>& getCurrentMeshUsage() override final;
   size_t getCurrentNumRenderables() override final;
 
-  std::unordered_map<RenderableId, std::vector<AccelerationStructure>>& getDynamicBlases() override final;
+  std::unordered_map<util::Uuid, std::vector<AccelerationStructure>>& getDynamicBlases() override final;
 
   gpu::GPUCullPushConstants getCullParams() override final;
 
@@ -198,7 +198,7 @@ private:
 
   std::unordered_map<std::string, std::any> _blackboard;
 
-  MeshId _debugSphereMeshId;
+  util::Uuid _debugSphereMeshId;
 
   RenderDebugOptions _debugOptions;
   RenderOptions _renderOptions;
@@ -230,7 +230,7 @@ private:
 
   // Keeps track of where skeletons should go in the related GPU buffer. Does not own skeleton data.
   // NOTE: The offset given by each Handle is in terms of _NUMBER OF_ matrices, not bytes!
-  std::unordered_map<render::SkeletonId, internal::BufferMemoryInterface::Handle> _skeletonOffsets;
+  std::unordered_map<util::Uuid, internal::BufferMemoryInterface::Handle> _skeletonOffsets;
 
   // Assets
   std::vector<internal::InternalModel> _currentModels;
@@ -239,13 +239,13 @@ private:
   std::vector<internal::InternalRenderable> _currentRenderables;
 
   // Maps engine-wide IDs to internal buffer ids.
-  std::unordered_map<ModelId, std::size_t> _modelIdMap;
-  std::unordered_map<MeshId, std::size_t> _meshIdMap;
-  std::unordered_map<RenderableId, std::size_t> _renderableIdMap;
-  std::unordered_map<MaterialId, std::size_t> _materialIdMap;
+  std::unordered_map<util::Uuid, std::size_t> _modelIdMap;
+  std::unordered_map<util::Uuid, std::size_t> _meshIdMap;
+  std::unordered_map<util::Uuid, std::size_t> _renderableIdMap;
+  std::unordered_map<util::Uuid, std::size_t> _materialIdMap;
 
   // This is needed for generating draw calls, it records how many renderables use each mesh.
-  std::unordered_map<MeshId, std::size_t> _currentMeshUsage;
+  std::unordered_map<util::Uuid, std::size_t> _currentMeshUsage;
 
   std::vector<bool> _modelsChanged;
   std::vector<bool> _renderablesChanged;
@@ -259,7 +259,7 @@ private:
   void uploadPendingMaterials(VkCommandBuffer cmdBuffer);
 
   // Ray tracing related
-  AccelerationStructure registerBottomLevelAS(VkCommandBuffer cmdBuffer, MeshId meshId, bool dynamic = false, bool doBarrier = true);
+  AccelerationStructure registerBottomLevelAS(VkCommandBuffer cmdBuffer, util::Uuid meshId, bool dynamic = false, bool doBarrier = true);
   void buildTopLevelAS();
   void writeTLASDescriptor();
   bool _topLevelBuilt = false;
@@ -269,8 +269,8 @@ private:
   // Typically animated.
   struct DynamicModelCopyInfo
   {
-    RenderableId _renderableId;
-    std::vector<MeshId> _generatedDynamicIds;
+    util::Uuid _renderableId;
+    std::vector<util::Uuid> _generatedDynamicIds;
     std::vector<AccelerationStructure> _currentBlases;
     std::size_t _currentMeshIdx = 0;
   };
@@ -279,11 +279,11 @@ private:
   void copyDynamicModels(VkCommandBuffer cmdBuffer);
 
   // Static BLAS for each mesh
-  std::unordered_map<MeshId, AccelerationStructure> _blases;
+  std::unordered_map<util::Uuid, AccelerationStructure> _blases;
 
   // Dynamic BLASes for dynamically updated (animated) renderables
   // Vector contains one BLAS per mesh in the renderable model
-  std::unordered_map<RenderableId, std::vector<AccelerationStructure>> _dynamicBlases;
+  std::unordered_map<util::Uuid, std::vector<AccelerationStructure>> _dynamicBlases;
 
   // The single TLAS written to each frame.
   AccelerationStructure _tlas;

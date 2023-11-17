@@ -1,7 +1,7 @@
 #pragma once
 
 #include "IGUI.h"
-#include <render/Identifiers.h>
+#include <util/Uuid.h>
 
 namespace gui {
 
@@ -14,11 +14,11 @@ public:
   void immediateDraw(logic::AneditContext* c) override final;
 
 private:
-  render::MaterialId _selectedMaterial = render::INVALID_ID;
-  render::ModelId _selectedModel = render::INVALID_ID;
-  render::AnimationId _selectedAnimation = render::INVALID_ID;
-  render::AnimatorId _selectedAnimator = render::INVALID_ID;
-  render::SkeletonId _selectedSkeleton = render::INVALID_ID;
+  util::Uuid _selectedMaterial;
+  util::Uuid _selectedModel;
+  util::Uuid _selectedAnimation;
+  util::Uuid _selectedAnimator;
+  util::Uuid _selectedSkeleton;
 };
 
 }

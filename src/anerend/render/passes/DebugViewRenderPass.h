@@ -22,7 +22,7 @@ private:
 
   std::vector<ResourceUsage> _resourceUsages;
 
-  MeshId _meshId;
+  util::Uuid _meshId;
 
   std::string _currResource;
 };
