@@ -28,8 +28,9 @@ if (WIN32)
   #bitsery
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/bitsery)
 
-  #uuid_v4
-  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/uuid_v4)
+  #stduuid
+  set(UUID_SYSTEM_GENERATOR ON CACHE BOOL "Enable operating system uuid generator" FORCE)
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/stduuid)
 
 else()  
 endif()

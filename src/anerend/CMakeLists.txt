@@ -19,7 +19,7 @@ add_definitions(-DGLM_FORCE_DEPTH_ZERO_TO_ONE=1)
 add_library(anerend STATIC ${src} ${common_src})
 
 if (WIN32)
-  target_link_libraries(anerend glfw ${Vulkan_LIBRARIES} imgui lodepng glm libnoise Bitsery::bitsery)
+  target_link_libraries(anerend glfw ${Vulkan_LIBRARIES} imgui lodepng glm libnoise Bitsery::bitsery stduuid)
   target_include_directories(anerend PRIVATE ${Vulkan_INCLUDE_DIRS})
 
   #target_include_directories(anerend INTERFACE headers)
