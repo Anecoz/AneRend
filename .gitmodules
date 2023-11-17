@@ -1,3 +1,6 @@
 [submodule "contrib/bitsery"]
 	path = contrib/bitsery
 	url = https://github.com/fraillt/bitsery.git
+[submodule "contrib/uuid_v4"]
+	path = contrib/uuid_v4
+	url = https://github.com/crashoz/uuid_v4.git

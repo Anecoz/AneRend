@@ -28,5 +28,8 @@ if (WIN32)
   #bitsery
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/bitsery)
 
+  #uuid_v4
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/uuid_v4)
+
 else()  
 endif()
