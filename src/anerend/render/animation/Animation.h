@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 #include <utility>
+#include <string>
 #include <vector>
 
 namespace render::anim {
@@ -31,6 +32,8 @@ struct Channel
 struct Animation
 {
   util::Uuid _id = util::Uuid::generate();
+
+  std::string _name;
   std::vector<Channel> _channels;
 
   // Keyframes that are pre-calculated from the channels. Typically an Animator will set these.

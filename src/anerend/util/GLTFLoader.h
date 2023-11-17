@@ -4,6 +4,7 @@
 
 #include "../render/asset/Model.h"
 #include "../render/asset/Material.h"
+#include "../render/asset/Prefab.h"
 #include "../render/animation/Animation.h"
 #include "../render/animation/Skeleton.h"
 
@@ -20,6 +21,7 @@ public:
 
   static bool loadFromFile(
     const std::string& path,
+    render::asset::Prefab& prefabOut,
     render::asset::Model& modelOut,
     std::vector<render::asset::Material>& materialsOut,
     std::vector<int>& materialIndicesOut,

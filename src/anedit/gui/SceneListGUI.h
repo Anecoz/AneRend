@@ -16,6 +16,9 @@ public:
 
 private:
   util::Uuid _selectedRenderable;
+  util::Uuid _selectedPrefab;
+
+  void addFromPrefab(logic::AneditContext* c);
 };
 
 }

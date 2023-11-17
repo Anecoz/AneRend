@@ -72,6 +72,7 @@ namespace {
 
     for (auto& gltfAnim : anims) {
       render::anim::Animation animation{};
+      animation._name = gltfAnim.name;
 
       for (auto& gltfChannel : gltfAnim.channels) {
         render::anim::Channel channel{};
@@ -121,6 +122,7 @@ namespace {
     //       transform of all joints, else the first joint is the root.
     //       This may not hold at all, the skeleton might have a parent for instance.
     render::anim::Skeleton skeleton{};
+    skeleton._name = skin.name;
 
     if (skin.skeleton != -1) {
       // There is a root transform
@@ -198,6 +200,7 @@ namespace {
 
 bool GLTFLoader::loadFromFile(
   const std::string& path,
+  render::asset::Prefab& prefabOut,
   render::asset::Model& modelOut,
   std::vector<render::asset::Material>& materialsOut,
   std::vector<int>& materialIndicesOut,
@@ -206,6 +209,11 @@ bool GLTFLoader::loadFromFile(
 {
   std::filesystem::path p(path);
   auto extension = p.extension().string();
+  modelOut._name = p.stem().string();
+
+  // Invalidate ids
+  modelOut._id = util::Uuid();
+  skeletonOut._id = util::Uuid();
 
   tinygltf::Model model;
   tinygltf::TinyGLTF loader;
@@ -257,6 +265,7 @@ bool GLTFLoader::loadFromFile(
           // Construct skeleton for this mesh
           auto skeleton = constructSkeleton(model.nodes, model.skins[node.skin], model);
           skeletonOut = std::move(skeleton);
+          skeletonOut._id = util::Uuid::generate();
         }
       }
     }
@@ -474,6 +483,7 @@ bool GLTFLoader::loadFromFile(
         else {
           auto& material = model.materials[primitive.material];
           render::asset::Material mat{};
+          mat._name = material.name;
 
           // TODO: Copying image data down here is naive... the same texture can be reused multiple times, a cache would be good
           int baseColIdx = material.pbrMetallicRoughness.baseColorTexture.index;
@@ -537,14 +547,20 @@ bool GLTFLoader::loadFromFile(
       }
 
       if (deleteJoints) delete[] jointsBuffer;
-      //modelOut._meshes.emplace_back(std::move(mesh));
     }
   }
 
-  /*printf("Loaded model %s. %zu meshes (min %f %f %f, max %f %f %f)\n",
-    path.c_str(), modelOut._meshes.size(),
-    modelOut._min.x, modelOut._min.y, modelOut._min.z,
-    modelOut._max.x, modelOut._max.y, modelOut._max.z);*/
+  if (!modelOut._meshes.empty()) {
+    modelOut._id = util::Uuid::generate();
+    prefabOut._model = modelOut._id;
+    prefabOut._skeleton = skeletonOut._id ? skeletonOut._id : util::Uuid();
+
+    for (auto& idx : materialIndicesOut) {
+      prefabOut._materials.push_back(materialsOut[idx]._id);
+    }
+    
+    prefabOut._name = modelOut._name;
+  }
 
   printf("Loaded model %s. %zu meshes, %zu materials\n", path.c_str(), modelOut._meshes.size(), materialsOut.size());
 

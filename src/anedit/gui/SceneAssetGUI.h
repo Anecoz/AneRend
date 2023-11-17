@@ -19,6 +19,7 @@ private:
   util::Uuid _selectedAnimation;
   util::Uuid _selectedAnimator;
   util::Uuid _selectedSkeleton;
+  util::Uuid _selectedPrefab;
 };
 
 }

@@ -44,6 +44,7 @@ Scene::Scene(Scene&& rhs)
   std::swap(_models, rhs._models);
   std::swap(_animators, rhs._animators);
   std::swap(_renderables, rhs._renderables);
+  std::swap(_prefabs, rhs._prefabs);
   std::swap(_eventLog, rhs._eventLog);
 }
 
@@ -57,6 +58,7 @@ Scene& Scene::operator=(Scene&& rhs)
     std::swap(_models, rhs._models);
     std::swap(_animators, rhs._animators);
     std::swap(_renderables, rhs._renderables);
+    std::swap(_prefabs, rhs._prefabs);
     std::swap(_eventLog, rhs._eventLog);
   }
 
@@ -93,6 +95,34 @@ bool Scene::getTile(TileIndex idx, Tile** tileOut)
   return true;
 }
 
+util::Uuid Scene::addPrefab(asset::Prefab&& prefab)
+{
+  auto id = prefab._id;
+  addEvent(SceneEventType::PrefabAdded, prefab._id);
+  _prefabs.emplace_back(std::move(prefab));
+  return id;
+}
+
+void Scene::removePrefab(util::Uuid id)
+{
+  for (auto it = _prefabs.begin(); it != _prefabs.end(); ++it) {
+    if (it->_id == id) {
+      _prefabs.erase(it);
+      addEvent(SceneEventType::PrefabRemoved, id);
+      return;
+    }
+  }
+
+  printf("Could not remove model %s, doesn't exist!\n", id.str().c_str());
+}
+
+const asset::Prefab* Scene::getPrefab(util::Uuid id)
+{
+  asset::Prefab* p = nullptr;
+  getAsset(_prefabs, id, &p);
+  return p;
+}
+
 util::Uuid Scene::addModel(asset::Model&& model)
 {
   auto id = model._id;
@@ -112,7 +142,7 @@ void Scene::removeModel(util::Uuid id)
     }
   }
 
-  printf("Could not remove model %u, doesn't exist!\n", id);
+  printf("Could not remove model %s, doesn't exist!\n", id.str().c_str());
 }
 
 const asset::Model* Scene::getModel(util::Uuid id)
@@ -140,7 +170,7 @@ void Scene::removeMaterial(util::Uuid id)
     }
   }
 
-  printf("Could not remove material with id %u, doesn't exist!\n", id);
+  printf("Could not remove material with id %s, doesn't exist!\n", id.str().c_str());
 }
 
 const asset::Material* Scene::getMaterial(util::Uuid id)
@@ -168,7 +198,7 @@ void Scene::removeAnimation(util::Uuid id)
     }
   }
 
-  printf("Could not remove animation %u, doesn't exist!\n", id);
+  printf("Could not remove animation %s, doesn't exist!\n", id.str().c_str());
 }
 
 const anim::Animation* Scene::getAnimation(util::Uuid id)
@@ -196,7 +226,7 @@ void Scene::removeSkeleton(util::Uuid id)
     }
   }
 
-  printf("Could not remove skeleton with id %u, doesn't exist!\n", id);
+  printf("Could not remove skeleton with id %s, doesn't exist!\n", id.str().c_str());
 }
 
 const anim::Skeleton* Scene::getSkeleton(util::Uuid id)
@@ -224,7 +254,7 @@ void Scene::updateAnimator(asset::Animator animator)
     }
   }
 
-  printf("Could not update animator with id %u, doesn't exist!\n", animator._id);
+  printf("Could not update animator with id %s, doesn't exist!\n", animator._id.str().c_str());
 }
 
 void Scene::removeAnimator(util::Uuid id)
@@ -237,7 +267,7 @@ void Scene::removeAnimator(util::Uuid id)
     }
   }
 
-  printf("Could not remove animator with id %u, doesn't exist!\n", id);
+  printf("Could not remove animator with id %s, doesn't exist!\n", id.str().c_str());
 }
 
 const asset::Animator* Scene::getAnimator(util::Uuid id)
@@ -289,7 +319,7 @@ void Scene::removeRenderable(util::Uuid id)
     }
   }
 
-  printf("Could not remove renderable %u, doesn't exist!\n", id);
+  printf("Could not remove renderable %s, doesn't exist!\n", id.str().c_str());
 }
 
 const asset::Renderable* Scene::getRenderable(util::Uuid id)
@@ -310,7 +340,7 @@ void Scene::setRenderableTint(util::Uuid id, const glm::vec3& tint)
     }
   }
 
-  printf("Cannot set tint for renderable %u, doesn't exist!\n", id);
+  printf("Cannot set tint for renderable %s, doesn't exist!\n", id.str().c_str());
 }
 
 void Scene::setRenderableTransform(util::Uuid id, const glm::mat4& transform)
@@ -325,7 +355,7 @@ void Scene::setRenderableTransform(util::Uuid id, const glm::mat4& transform)
     }
   }
 
-  printf("Cannot set transform for renderable %u, doesn't exist!\n", id);
+  printf("Cannot set transform for renderable %s, doesn't exist!\n", id.str().c_str());
 }
 
 void Scene::addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx)

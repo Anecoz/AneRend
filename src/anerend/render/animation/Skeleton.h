@@ -5,6 +5,7 @@
 #include "../../util/Uuid.h"
 
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace render::anim {
@@ -12,6 +13,8 @@ namespace render::anim {
 struct Skeleton
 {
   util::Uuid _id = util::Uuid::generate();
+
+  std::string _name;
 
   void calcGlobalTransforms();
   void reset();

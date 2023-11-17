@@ -62,10 +62,11 @@ bool loadGLTF(
 
   render::asset::Model model{};
   render::anim::Skeleton skeleton{};
+  render::asset::Prefab prefab{};
   std::vector<render::anim::Animation> animations;
   std::vector<render::asset::Material> materials;
   std::vector<int> materialIndices;
-  if (!util::GLTFLoader::loadFromFile(path, model, materials, materialIndices, skeleton, animations)) {
+  if (!util::GLTFLoader::loadFromFile(path, prefab, model, materials, materialIndices, skeleton, animations)) {
     printf("Could not load model (%s)!\n", path.c_str());
     return false;
   }
@@ -93,6 +94,10 @@ bool loadGLTF(
     for (auto& anim : animations) {
       animationIdsOut.push_back(scene.addAnimation(std::move(anim)));
     }
+  }
+
+  if (prefab._id) {
+    scene.addPrefab(std::move(prefab));
   }
 
   return true;

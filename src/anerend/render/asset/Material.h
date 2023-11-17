@@ -3,6 +3,8 @@
 #include "../ImageHelpers.h"
 #include "../../util/Uuid.h"
 
+#include <string>
+
 #include <glm/glm.hpp>
 
 namespace render::asset {
@@ -10,6 +12,8 @@ namespace render::asset {
 struct Material
 {
   util::Uuid _id = util::Uuid::generate();
+
+  std::string _name;
 
   // This is either a factor applied to the albedo texture, or (if no albedo present) treated as linear RGB values.
   glm::vec3 _baseColFactor = glm::vec3(1.0f);
