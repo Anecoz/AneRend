@@ -32,5 +32,8 @@ if (WIN32)
   set(UUID_SYSTEM_GENERATOR ON CACHE BOOL "Enable operating system uuid generator" FORCE)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/stduuid)
 
+  # NativeFileDialog_extended (nfd)
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/nativefiledialog-extended)
+
 else()  
 endif()

@@ -4,3 +4,6 @@
 [submodule "contrib/stduuid"]
 	path = contrib/stduuid
 	url = https://github.com/mariusbancila/stduuid.git
+[submodule "contrib/nativefiledialog-extended"]
+	path = contrib/nativefiledialog-extended
+	url = https://github.com/btzy/nativefiledialog-extended.git
