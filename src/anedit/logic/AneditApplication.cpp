@@ -8,6 +8,7 @@
 #include "../gui/EditRenderableGUI.h"
 
 #include <imgui.h>
+#include <nfd.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -41,6 +42,12 @@ AneditApplication::~AneditApplication()
   for (auto gui : _guis) {
     delete gui;
   }
+
+  _config._lastCamPos = _camera.getPosition();
+  auto p = std::filesystem::current_path() / "anedit.conf";
+  _config.saveToPath(std::move(p));
+
+  NFD_Quit();
 }
 
 static bool g_DebugShadow = true;
@@ -176,6 +183,20 @@ bool AneditApplication::init()
     return false;
   }
 
+  // Init nfd
+  NFD_Init();
+
+  // Get config
+  auto p = std::filesystem::current_path()/"anedit.conf";
+  _config.readFromPath(std::move(p));
+
+  if (!_config._scenePath.empty()) {
+    _scenePath = _config._scenePath;
+    loadSceneFrom(_scenePath);
+  }
+
+  _camera.setPosition(_config._lastCamPos);
+
   setupGuis();
 
   // Set shadow cam somewhere
@@ -251,6 +272,11 @@ void AneditApplication::setupGuis()
   _guis.emplace_back(new gui::SceneAssetGUI());
   _guis.emplace_back(new gui::SceneListGUI());
   _guis.emplace_back(new gui::EditRenderableGUI());
+}
+
+void AneditApplication::updateConfig()
+{
+  _config._scenePath = _scenePath;
 }
 
 void AneditApplication::oldUI()
@@ -572,6 +598,22 @@ void AneditApplication::notifyFramebufferResized()
 render::scene::Scene& AneditApplication::scene()
 {
   return _scene;
+}
+
+void AneditApplication::serializeScene()
+{
+  _scene.serializeAsync(_scenePath);
+}
+
+void AneditApplication::loadSceneFrom(std::filesystem::path p)
+{
+  _sceneFut = _scene.deserializeAsync(p);
+}
+
+void AneditApplication::setScenePath(std::filesystem::path p)
+{
+  _scenePath = p;
+  updateConfig();
 }
 
 util::Uuid& AneditApplication::selectedRenderable()

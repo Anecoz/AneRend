@@ -3,6 +3,7 @@
 #include "Application.h"
 
 #include "AneditContext.h"
+#include "AneditConfig.h"
 #include "../gui/IGUI.h"
 
 #include <glm/glm.hpp>
@@ -36,6 +37,9 @@ public:
   // AneditContext begin
 
   render::scene::Scene& scene() override final;
+  void serializeScene() override final;
+  void loadSceneFrom(std::filesystem::path p) override final;
+  void setScenePath(std::filesystem::path p) override final;
 
   util::Uuid& selectedRenderable() override final;
 
@@ -45,10 +49,14 @@ public:
 
 private:
   void setupGuis();
+  void updateConfig();
   void oldUI();
   void calculateShadowMatrix();
 
   std::vector<gui::IGUI*> _guis;
+
+  std::filesystem::path _scenePath;
+  logic::AneditConfig _config;
 
   glm::vec3 _lastCamPos;
 
@@ -96,5 +104,4 @@ private:
   render::scene::Scene _scene;
   std::future<render::scene::DeserialisedSceneData> _sceneFut;
   render::scene::ScenePager _scenePager;
-  std::filesystem::path _scenePath;
 };

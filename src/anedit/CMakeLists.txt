@@ -28,7 +28,7 @@ add_custom_target(
 add_dependencies(anedit compile_shaders)
 
 if (WIN32)
-  target_link_libraries(anedit anerend glfw glm imgui tinygltf lodepng nfd)
+  target_link_libraries(anedit anerend glfw glm imgui tinygltf lodepng nfd bitsery)
     target_include_directories(anedit PRIVATE ${Vulkan_INCLUDE_DIRS})
 else()
 endif()

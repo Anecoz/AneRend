@@ -1,5 +1,7 @@
 #pragma once
 
+#include <filesystem>
+
 #include <util/Uuid.h>
 #include <render/Camera.h>
 
@@ -12,6 +14,9 @@ struct AneditContext
   virtual ~AneditContext() {}
 
   virtual render::scene::Scene& scene() = 0;
+  virtual void serializeScene() = 0;
+  virtual void loadSceneFrom(std::filesystem::path p) = 0;
+  virtual void setScenePath(std::filesystem::path p) = 0;
 
   virtual util::Uuid& selectedRenderable() = 0;
 

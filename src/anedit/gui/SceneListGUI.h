@@ -19,6 +19,9 @@ private:
   util::Uuid _selectedPrefab;
 
   void addFromPrefab(logic::AneditContext* c);
+  void saveSceneAsClicked(logic::AneditContext* c);
+  void saveSceneClicked(logic::AneditContext* c);
+  void loadSceneClicked(logic::AneditContext* c);
 };
 
 }
