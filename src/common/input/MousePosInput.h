@@ -17,6 +17,16 @@ public:
     return glm::vec2(xPos, yPos);
   }
 
+  static void setDisabledMode()
+  {
+    glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  }
+
+  static void setNormalMode()
+  {
+    glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+  }
+
   static void invoke(GLFWwindow* window, double xPos, double yPos);
 
   static GLFWwindow* _window;

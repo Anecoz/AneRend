@@ -212,7 +212,7 @@ void AneditApplication::update(double delta)
   calculateShadowMatrix();
 
   if (KeyInput::isKeyClicked(GLFW_KEY_ESCAPE)) {
-    _camera._enabled = !_camera._enabled;
+    _camera.enable(!_camera.enabled());
   }
 
   if (_sceneFut.valid() && _sceneFut.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {

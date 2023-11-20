@@ -42,7 +42,8 @@ public:
   bool insideFrustum(const glm::vec3& point) const;
   bool insideFrustum(const Box3D& box) const;
 
-  bool _enabled;
+  bool enabled() const { return _enabled; }
+  void enable(bool val);
 
 private:
   void freelookUpdate(double delta);
@@ -55,6 +56,8 @@ private:
   double _yaw;
   double _pitch;
   double _roll;
+
+  bool _enabled;
 
   glm::mat4 _projection;
   glm::mat4 _cameraMatrix;

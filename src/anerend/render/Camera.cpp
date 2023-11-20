@@ -10,10 +10,10 @@
 namespace render {
 
 Camera::Camera(glm::vec3 initialPosition, ProjectionType type)
-  : _enabled(true)
-  , _yaw(0.0)
+  : _yaw(0.0)
   , _pitch(0.0)
   , _roll(0.0)
+  , _enabled(true)
   , _firstMouse(true)
   , _projection(glm::mat4(1.0f))  
   , _position(initialPosition)
@@ -31,6 +31,7 @@ Camera::Camera(glm::vec3 initialPosition, ProjectionType type)
   }
 
   update(0.0);
+  MousePosInput::setDisabledMode();
 }
 
 bool Camera::insideFrustum(const glm::vec3& point) const
@@ -50,6 +51,19 @@ bool Camera::insideFrustum(const Box3D& box) const
   }
 
   return false;
+}
+
+void Camera::enable(bool val)
+{
+  _enabled = val;
+
+  if (_enabled) {
+    MousePosInput::setDisabledMode();
+    _firstMouse = true;
+  }
+  else {
+    MousePosInput::setNormalMode();
+  }
 }
 
 void Camera::updateFrustum()
