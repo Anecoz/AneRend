@@ -596,6 +596,11 @@ bool FrameGraphBuilder::createResources(RenderContext* renderContext, RenderReso
             auto flags = findImageCreateFlags(usage._resourceName);
 
             VkImageUsageFlagBits flag{};
+
+            if (usage._imageCreateInfo->_flags != 0) {
+              flag = VkImageUsageFlagBits(usage._imageCreateInfo->_flags);
+            }
+
             for (auto f : flags) {
               flag = VkImageUsageFlagBits(flag | f);
             }

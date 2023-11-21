@@ -37,12 +37,13 @@
 
 #include <array>
 #include <any>
+#include <functional>
 #include <unordered_map>
-#include <optional>
 #include <vector>
-#include <tuple>
 
 namespace render {
+
+typedef std::function<void(glm::vec3)> WorldPosCallback;
 
 struct PerFrameTimer
 {
@@ -99,6 +100,9 @@ public:
 
   // Will recreate swapchain to accomodate the new window size.
   void notifyFramebufferResized();
+
+  // Request a world position for a given viewport 2D position.
+  void requestWorldPosition(glm::ivec2 viewportPos, WorldPosCallback callback);
 
   // Render Context interface
   VkDevice& device() override final;
@@ -197,6 +201,19 @@ private:
   static const std::size_t MAX_NUM_SKINNED_MODELS = 1000;
 
   std::unordered_map<std::string, std::any> _blackboard;
+
+  // Pending world position request
+  struct WorldPosRequest
+  {
+    glm::ivec2 _viewportPos;
+    AllocatedBuffer _hostBuffer;
+    WorldPosCallback _callback;
+    std::uint32_t _frameWhenRecordedCopy;
+    bool _recorded = false;
+  } _worldPosRequest;
+  
+  void checkWorldPosCallback();
+  void worldPosCopy(VkCommandBuffer cmdBuf);
 
   util::Uuid _debugSphereMeshId;
 

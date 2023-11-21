@@ -100,6 +100,7 @@ struct ImageInitialCreateInfo
   VkImageLayout _initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   std::function<void(RenderContext*, VkImage&)> _initialDataCb = nullptr;
   bool _multiBuffered = false;
+  VkImageUsageFlags _flags = 0;
 };
 
 struct ResourceUsage

@@ -182,6 +182,8 @@ VulkanRenderer::~VulkanRenderer()
 
   vmaDestroyBuffer(_vmaAllocator, _gigaVtxBuffer._buffer._buffer, _gigaVtxBuffer._buffer._allocation);
   vmaDestroyBuffer(_vmaAllocator, _gigaIdxBuffer._buffer._buffer, _gigaIdxBuffer._buffer._allocation);
+  
+  vmaDestroyBuffer(_vmaAllocator, _worldPosRequest._hostBuffer._buffer, _worldPosRequest._hostBuffer._allocation);
 
   for (auto& mat : _currentMaterials) {
     if (mat._albedoInfo) {
@@ -434,6 +436,14 @@ bool VulkanRenderer::init()
   assetUpdate(std::move(upd));
 
   _delQ = internal::DeletionQueue(MAX_FRAMES_IN_FLIGHT, _vmaAllocator, _device);
+
+  // Buffer for world pos requests, where depth value will be copied into
+  bufferutil::createBuffer(
+    _vmaAllocator,
+    4, // 4 bytes for exactly 1 D32 float value
+    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT, // hopefully BAR mem
+    _worldPosRequest._hostBuffer);
 
   return res;
 }
@@ -2301,6 +2311,121 @@ VkPhysicalDeviceRayTracingPipelinePropertiesKHR VulkanRenderer::getRtPipeProps()
   return _rtPipeProps;
 }
 
+void VulkanRenderer::checkWorldPosCallback()
+{
+  if (!_worldPosRequest._callback || !_worldPosRequest._recorded) return;
+
+  // If we are on the same frame, we should be done.
+  // This absolutely necessitates that the worldPosCopy is done at the end of frame,
+  // and this function call is done at the start of frame.
+  if (_currentFrame == _worldPosRequest._frameWhenRecordedCopy) {
+    // Map the host buffer and read the depth value back.
+    void* data;
+    vmaMapMemory(_vmaAllocator, _worldPosRequest._hostBuffer._allocation, &data);
+
+    // Read exactly 4 bytes
+    float depth = 0.0f;
+    memcpy(&depth, data, 4);
+
+    vmaUnmapMemory(_vmaAllocator, _worldPosRequest._hostBuffer._allocation);
+
+    // Use last known camera to get the 3D position
+    glm::vec2 screenSizePixels{ _swapChain._swapChainExtent.width, _swapChain._swapChainExtent.height };
+    glm::vec4 clipSpacePos{
+      (float)_worldPosRequest._viewportPos.x / screenSizePixels.x * 2.0f - 1.0f,
+      (float)_worldPosRequest._viewportPos.y / screenSizePixels.y * 2.0f - 1.0f,
+      depth,
+      1.0f };
+
+    auto proj = _latestCamera.getProjection();
+    proj[1][1] *= -1;
+    auto invView = glm::inverse(_latestCamera.getCamMatrix());
+    auto invProj = glm::inverse(proj);
+    auto invViewProj = invView * invProj;
+
+    glm::vec4 position = invViewProj * clipSpacePos;
+    position /= position.w;
+
+    _worldPosRequest._callback(glm::vec3(position.x, position.y, position.z));
+
+    // Reset
+    _worldPosRequest._callback = {};
+    _worldPosRequest._recorded = false;
+  }
+}
+
+void VulkanRenderer::worldPosCopy(VkCommandBuffer cmdBuf)
+{
+  // Check if there is a request
+  if (!_worldPosRequest._callback || _worldPosRequest._recorded) return;
+
+  // Get depth buffer. This is a bit yikers since it is created in the frame graph but whatever
+  auto depthRes = (ImageRenderResource*)_vault.getResource("GeometryDepthImage");
+  if (!depthRes) {
+    printf("Could not get depth resource for world pos request!\n");
+    return;
+  }
+
+  // Depth image has to transition to transfer_src_optimal
+  imageutil::transitionImageLayout(
+    cmdBuf,
+    depthRes->_image._image,
+    depthRes->_format,
+    VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+  // Record the copy command
+  VkBufferImageCopy imCopy{};
+  imCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+  imCopy.imageSubresource.baseArrayLayer = 0;
+  imCopy.imageSubresource.layerCount = 1;
+  imCopy.imageSubresource.mipLevel = 0;
+  imCopy.imageOffset.x = _worldPosRequest._viewportPos.x;
+  imCopy.imageOffset.y = _worldPosRequest._viewportPos.y;
+  imCopy.imageOffset.z = 0;
+  imCopy.imageExtent.depth = 1;
+  imCopy.imageExtent.height = 1;
+  imCopy.imageExtent.width = 1;
+
+  vkCmdCopyImageToBuffer(
+    cmdBuf,
+    depthRes->_image._image,
+    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    _worldPosRequest._hostBuffer._buffer,
+    1,
+    &imCopy);
+
+  // Barrier for the host buffer
+  VkBufferMemoryBarrier memBarr{};
+  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  memBarr.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+  memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.buffer = _worldPosRequest._hostBuffer._buffer;
+  memBarr.offset = 0;
+  memBarr.size = VK_WHOLE_SIZE;
+
+  vkCmdPipelineBarrier(
+    cmdBuf,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_HOST_BIT,
+    0, 0, nullptr,
+    1, &memBarr,
+    0, nullptr);
+
+  // Transition depth back as to now disturb the frame graph
+  imageutil::transitionImageLayout(
+    cmdBuf,
+    depthRes->_image._image,
+    depthRes->_format,
+    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+
+  _worldPosRequest._frameWhenRecordedCopy = _currentFrame;
+  _worldPosRequest._recorded = true;
+}
+
 int VulkanRenderer::findTimerIndex(const std::string& timer)
 {
   for (std::size_t i = 0; i < _perFrameTimers.size(); ++i) {
@@ -3787,6 +3912,9 @@ void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
   // At the start of the frame, we want to wait until the previous frame has finished, so that the command buffer and semaphores are available to use.
   vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
 
+  // Check world pos requests
+  checkWorldPosCallback();
+
   ImGui::Render();
 
   // Acquire an image from the swap chain
@@ -4158,6 +4286,9 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
   _fgb.executeGraph(commandBuffer, this);
 
+  // Potentially add world pos requests
+  worldPosCopy(_commandBuffers[_currentFrame]);
+
   // The swapchain image has to go to present, which is the last thing the frame graph does.
   imageutil::transitionImageLayout(commandBuffer, _swapChain._swapChainImages[imageIndex], _swapChain._swapChainImageFormat,
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -4212,6 +4343,21 @@ void VulkanRenderer::createParticles()
 void VulkanRenderer::notifyFramebufferResized()
 {
   _framebufferResized = true;
+}
+
+void VulkanRenderer::requestWorldPosition(glm::ivec2 viewportPos, WorldPosCallback callback)
+{
+  // If we already have one queued, don't queue another one...?
+  if (_worldPosRequest._callback) return;
+
+  // If the request is unreasonable, don't do it
+  if (viewportPos.x < 0 || viewportPos.x >= _swapChain._swapChainExtent.width ||
+    viewportPos.y < 0 || viewportPos.y >= _swapChain._swapChainExtent.height) {
+    return;
+  }
+
+  _worldPosRequest._callback = callback;
+  _worldPosRequest._viewportPos = viewportPos;
 }
 
 VkDevice& VulkanRenderer::device()

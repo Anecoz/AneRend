@@ -164,6 +164,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
     createInfo._initialWidth = rc->swapChainExtent().width;
     createInfo._intialFormat = VK_FORMAT_D32_SFLOAT;
     createInfo._initialDataCb = initDepthImage;
+    createInfo._flags = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     usage._imageCreateInfo = createInfo;
 
