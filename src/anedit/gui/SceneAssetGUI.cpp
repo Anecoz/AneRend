@@ -4,6 +4,7 @@
 #include <render/scene/Scene.h>
 
 #include <imgui.h>
+#include <nfd.hpp>
 
 namespace gui {
 
@@ -18,8 +19,22 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
 {
   const int numPanels = 5;
 
-  ImGui::Begin("Assets");
+  ImGui::Begin("Assets", NULL, ImGuiWindowFlags_MenuBar);
   ImVec2 size = ImVec2(ImGui::GetWindowWidth() / numPanels, 0);
+
+  // Menu
+  if (ImGui::BeginMenuBar()) {
+
+    if (ImGui::BeginMenu("File")) {
+      if (ImGui::MenuItem("Load GLTF...")) {
+        loadGLTFClicked(c);
+      }
+
+      ImGui::EndMenu();
+    }
+
+    ImGui::EndMenuBar();
+  }
 
   // Materials
   {
@@ -120,6 +135,18 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
   }
 
   ImGui::End();
+}
+
+void SceneAssetGUI::loadGLTFClicked(logic::AneditContext* c)
+{
+  // Open a file dialog and ask context to load GLTF
+  NFD::UniquePath outPath;
+  nfdfilteritem_t filterItem[1] = { {"GLTF", "gltf,glb"} };
+
+  auto result = NFD::OpenDialog(outPath, filterItem, 1);
+  if (result == NFD_OKAY) {
+    c->startLoadGLTF(outPath.get());
+  }
 }
 
 }

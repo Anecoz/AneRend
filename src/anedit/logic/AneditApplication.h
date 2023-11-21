@@ -4,6 +4,7 @@
 
 #include "AneditContext.h"
 #include "AneditConfig.h"
+#include "GLTFImporter.h"
 #include "../gui/IGUI.h"
 
 #include <glm/glm.hpp>
@@ -41,6 +42,8 @@ public:
   void loadSceneFrom(std::filesystem::path p) override final;
   void setScenePath(std::filesystem::path p) override final;
 
+  void startLoadGLTF(std::filesystem::path p) override final;
+
   util::Uuid& selectedRenderable() override final;
 
   render::Camera& camera() override final;
@@ -50,6 +53,7 @@ public:
 private:
   void setupGuis();
   void updateConfig();
+  void addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData> data);
   void oldUI();
   void calculateShadowMatrix();
 
@@ -57,6 +61,8 @@ private:
 
   std::filesystem::path _scenePath;
   logic::AneditConfig _config;
+
+  logic::GLTFImporter _gltfImporter;
 
   glm::vec3 _lastCamPos;
 

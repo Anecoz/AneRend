@@ -18,6 +18,8 @@ struct AneditContext
   virtual void loadSceneFrom(std::filesystem::path p) = 0;
   virtual void setScenePath(std::filesystem::path p) = 0;
 
+  virtual void startLoadGLTF(std::filesystem::path p) = 0;
+
   virtual util::Uuid& selectedRenderable() = 0;
 
   virtual render::Camera& camera() = 0;

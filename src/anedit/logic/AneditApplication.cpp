@@ -225,6 +225,12 @@ void AneditApplication::update(double delta)
     scenePtr = nullptr;
   }
 
+  // Check if we have a GLTF model that is being loaded
+  if (_gltfImporter.hasResult()) {
+    auto gltfData = _gltfImporter.takeResult();
+    addGltfDataToScene(std::move(gltfData));
+  }
+
   _camera.update(delta);
   _scenePager.update(_camera.getPosition());
   _scene.resetEvents();
@@ -277,6 +283,24 @@ void AneditApplication::setupGuis()
 void AneditApplication::updateConfig()
 {
   _config._scenePath = _scenePath;
+}
+
+void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData> data)
+{
+  _scene.addModel(std::move(data->_model));
+  _scene.addPrefab(std::move(data->_prefab));
+
+  if (data->_skeleton) {
+    _scene.addSkeleton(std::move(data->_skeleton));
+  }
+
+  for (auto& anim : data->_animations) {
+    _scene.addAnimation(std::move(anim));
+  }
+
+  for (auto& mat : data->_materials) {
+    _scene.addMaterial(std::move(mat));
+  }
 }
 
 void AneditApplication::oldUI()
@@ -614,6 +638,11 @@ void AneditApplication::setScenePath(std::filesystem::path p)
 {
   _scenePath = p;
   updateConfig();
+}
+
+void AneditApplication::startLoadGLTF(std::filesystem::path p)
+{
+  _gltfImporter.startLoad(p);
 }
 
 util::Uuid& AneditApplication::selectedRenderable()

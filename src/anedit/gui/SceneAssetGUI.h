@@ -14,6 +14,8 @@ public:
   void immediateDraw(logic::AneditContext* c) override final;
 
 private:
+  void loadGLTFClicked(logic::AneditContext* c);
+
   util::Uuid _selectedMaterial;
   util::Uuid _selectedModel;
   util::Uuid _selectedAnimation;
