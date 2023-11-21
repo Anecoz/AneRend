@@ -139,6 +139,7 @@ public:
   // TODO: Decide if the Scene class really is the correct place to access/modify renderables.
   void setRenderableTint(util::Uuid id, const glm::vec3& tint);
   void setRenderableTransform(util::Uuid id, const glm::mat4& transform);
+  void setRenderableName(util::Uuid id, std::string name);
 
 private:
   friend struct internal::SceneSerializer;

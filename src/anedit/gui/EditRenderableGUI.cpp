@@ -25,6 +25,10 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
   glm::vec3 scale{ 0.0f };
   glm::vec3 rot{ 0.0f };
 
+  glm::vec3 tint{ 0.0f };
+
+  char name[32];
+
   ImGui::Begin("EditRenderable");
 
   {
@@ -33,6 +37,8 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     }
     else {
       auto oldTrans = c->scene().getRenderable(id)->_transform;
+      std::strcpy(name, c->scene().getRenderable(id)->_name.c_str());
+      tint = c->scene().getRenderable(id)->_tint;
 
       ImGuizmo::DecomposeMatrixToComponents(&oldTrans[0][0], &translation[0], &rot[0], &scale[0]);
     }
@@ -51,7 +57,8 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     if (ImGui::RadioButton("Scale", _currentGuizmoOp == ImGuizmo::SCALE)) {
       _currentGuizmoOp = ImGuizmo::SCALE;
     }
-
+    
+    // Inputs for transform
     ImGui::Text("Translation");
     if (ImGui::InputFloat3("##translation", &translation[0], "%.3f", ImGuiInputTextFlags_EnterReturnsTrue) && id) {
       changed = true;
@@ -67,6 +74,18 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       changed = true;
     }
 
+    // Name
+    ImGui::Text("Name");
+    if (ImGui::InputText("##name", name, 32)) {
+      changed = true;
+    }
+
+    // Tint
+    ImGui::Text("Tint");
+    if (ImGui::ColorEdit3("##tint", &tint[0])) {
+      changed = true;
+    }
+
     if (!id) {
       ImGui::EndDisabled();
     }
@@ -75,6 +94,8 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       glm::mat4 m;
       ImGuizmo::RecomposeMatrixFromComponents(&translation[0], &rot[0], &scale[0], &m[0][0]);
       c->scene().setRenderableTransform(id, m);
+      c->scene().setRenderableName(id, name);
+      c->scene().setRenderableTint(id, tint);
     }
   }
 

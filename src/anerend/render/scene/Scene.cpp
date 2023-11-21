@@ -358,6 +358,21 @@ void Scene::setRenderableTransform(util::Uuid id, const glm::mat4& transform)
   printf("Cannot set transform for renderable %s, doesn't exist!\n", id.str().c_str());
 }
 
+void Scene::setRenderableName(util::Uuid id, std::string name)
+{
+  for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
+    if (it->_id == id) {
+      it->_name = std::move(name);
+
+      auto tileIdx = findRenderableTile(*it, Tile::_tileSize);
+      addEvent(SceneEventType::RenderableUpdated, id, tileIdx);
+      return;
+    }
+  }
+
+  printf("Cannot set name for renderable %s, doesn't exist!\n", id.str().c_str());
+}
+
 void Scene::addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx)
 {
   SceneEvent event{};

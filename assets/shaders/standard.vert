@@ -23,12 +23,13 @@ layout(location = 5) in ivec4 joints;
 layout(location = 6) in vec4 jointWeights;
 
 layout(location = 0) out vec3 fragColor;
-layout(location = 1) out vec3 fragNormal;
-layout(location = 2) out vec3 fragPos;
-layout(location = 3) out vec2 fragUV;
-layout(location = 4) out flat uint fragMaterialIdx;
-layout(location = 5) out vec3 fragTangent;
-layout(location = 6) out mat3 fragTBN;
+layout(location = 1) out vec3 fragTint;
+layout(location = 2) out vec3 fragNormal;
+layout(location = 3) out vec3 fragPos;
+layout(location = 4) out vec2 fragUV;
+layout(location = 5) out flat uint fragMaterialIdx;
+layout(location = 6) out vec3 fragTangent;
+layout(location = 7) out mat3 fragTBN;
 
 void main() {
   uint renderableIndex = translationBuffer.ids[gl_InstanceIndex].renderableIndex;
@@ -53,7 +54,8 @@ void main() {
   }
 
   gl_Position = ubo.proj * ubo.view * model * vec4(pos, 1.0);
-  fragColor = toLinear(vec4(inColor, 1.0)).rgb * renderableBuffer.renderables[renderableIndex].tint.rgb;
+  fragColor = toLinear(vec4(inColor, 1.0)).rgb;
+  fragTint = renderableBuffer.renderables[renderableIndex].tint.rgb;
   fragNormal =  normalize(mat3(model) * normal);
   fragPos = (model * vec4(inPosition, 1.0)).xyz;
   fragUV = inUV;

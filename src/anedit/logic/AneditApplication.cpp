@@ -219,11 +219,13 @@ void AneditApplication::update(double delta)
   if (_sceneFut.valid() && _sceneFut.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
     auto dat = _sceneFut.get();
 
-    // Update the scene
-    auto scenePtr = dat._scene.get();
-    _scene = std::move(*scenePtr);
-    _scenePager.setScene(&_scene);
-    scenePtr = nullptr;
+    if (dat._scene != nullptr) {
+      // Update the scene
+      auto scenePtr = dat._scene.get();
+      _scene = std::move(*scenePtr);
+      _scenePager.setScene(&_scene);
+      scenePtr = nullptr;
+    }
   }
 
   // Check if we have a GLTF model that is being loaded

@@ -185,7 +185,7 @@ private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
   static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 512;
-  static const std::size_t STAGING_BUFFER_SIZE_MB = 512;
+  static const std::size_t STAGING_BUFFER_SIZE_MB = 1024;
   static const std::size_t MAX_NUM_RENDERABLES = std::size_t(1e5);
   static const std::size_t MAX_NUM_MESHES = std::size_t(1e3);
   static const std::size_t MAX_NUM_MATERIALS = 10000;

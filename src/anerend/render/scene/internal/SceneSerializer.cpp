@@ -228,6 +228,7 @@ template <typename S>
 void serialize(S& s, render::asset::Renderable& r)
 {
   s.object(r._id);
+  s.text1b(r._name, 40);
   s.object(r._model);
   s.object(r._skeleton);
   s.container(r._materials, 200);
