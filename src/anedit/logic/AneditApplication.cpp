@@ -646,6 +646,25 @@ void AneditApplication::startLoadGLTF(std::filesystem::path p)
   _gltfImporter.startLoad(p);
 }
 
+void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
+{
+  _vkRenderer.requestWorldPosition(MousePosInput::getPosition(),
+    [prefab, this](glm::vec3 worldPos) {
+      auto* p = _scene.getPrefab(prefab);
+      render::asset::Renderable rend{};
+      rend._materials = p->_materials;
+      rend._model = p->_model;
+      rend._skeleton = p->_skeleton;
+      rend._name = p->_name.empty() ? "" : p->_name;
+
+      rend._boundingSphere = glm::vec4(0.0f, 0.0f, 0.0f, 20.0f);
+      rend._visible = true;
+      rend._transform = glm::translate(glm::mat4(1.0f), worldPos);
+
+      _scene.addRenderable(std::move(rend));
+    });
+}
+
 util::Uuid& AneditApplication::selectedRenderable()
 {
   return _selectedRenderable;

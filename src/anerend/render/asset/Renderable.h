@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 
+#include <string>
 #include <vector>
 
 namespace render::asset {
@@ -11,6 +12,8 @@ namespace render::asset {
 struct Renderable
 {
   util::Uuid _id = util::Uuid::generate();
+
+  std::string _name; // for debugging
 
   util::Uuid _model;
   util::Uuid _skeleton;

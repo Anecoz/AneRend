@@ -122,16 +122,36 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
     ImGui::Text("Prefabs");
     ImGui::Separator();
 
+    bool dragThisFrame = false;
     const auto& v = c->scene().getPrefabs();
     for (const auto& i : v) {
       std::string label = std::string("Prefab ") + (i._name.empty() ? i._id.str() : i._name);
       if (ImGui::Selectable(label.c_str(), _selectedPrefab == i._id)) {
         _selectedPrefab = i._id;
-        printf("Selected prefab %s\n", _selectedPrefab.str().c_str());
+      }
+
+      // drag&drop
+      if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+        ImGui::Text(label.c_str());
+
+        dragThisFrame = true;
+        _draggedPrefab = i._id;
+
+        ImGui::EndDragDropSource();
       }
     }
 
     ImGui::EndChild();
+
+    // Did drag status change?
+    if (_draggingPrefab && !dragThisFrame && _draggedPrefab) {
+      c->spawnFromPrefabAtMouse(_draggedPrefab);
+
+      // Reset dragged prefab id
+      _draggedPrefab = util::Uuid();
+    }
+
+    _draggingPrefab = dragThisFrame;
   }
 
   ImGui::End();

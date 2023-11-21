@@ -44,6 +44,8 @@ public:
 
   void startLoadGLTF(std::filesystem::path p) override final;
 
+  void spawnFromPrefabAtMouse(const util::Uuid& prefab) override final;
+
   util::Uuid& selectedRenderable() override final;
 
   render::Camera& camera() override final;

@@ -49,7 +49,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
     ImGui::Separator();
 
     for (const auto& r : renderables) {
-      std::string label = std::string("Renderable ") + r._id.str();
+      std::string label = std::string("Renderable ") + (r._name.empty()? r._id.str() : r._name);
       if (ImGui::Selectable(label.c_str(), _selectedRenderable == r._id)) {
         _selectedRenderable = r._id;
         c->selectedRenderable() = _selectedRenderable;

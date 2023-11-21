@@ -20,6 +20,8 @@ struct AneditContext
 
   virtual void startLoadGLTF(std::filesystem::path p) = 0;
 
+  virtual void spawnFromPrefabAtMouse(const util::Uuid& prefab) = 0;
+
   virtual util::Uuid& selectedRenderable() = 0;
 
   virtual render::Camera& camera() = 0;

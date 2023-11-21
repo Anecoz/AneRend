@@ -22,6 +22,9 @@ private:
   util::Uuid _selectedAnimator;
   util::Uuid _selectedSkeleton;
   util::Uuid _selectedPrefab;
+
+  bool _draggingPrefab = false;
+  util::Uuid _draggedPrefab;
 };
 
 }
