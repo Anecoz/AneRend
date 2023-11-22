@@ -135,6 +135,15 @@ void ScenePager::update(const glm::vec3& pos)
 
   _pagedTiles = std::move(pagedTiles);
 
+  // Filter out copies of the same renderable update
+  if (upd._updatedRenderables.size() > 1) {
+    upd._updatedRenderables.erase(
+      std::unique(upd._updatedRenderables.begin(), upd._updatedRenderables.end(),
+        [](const render::asset::Renderable& a, const render::asset::Renderable& b) {
+          return a._id == b._id;
+        }), upd._updatedRenderables.end());
+  }
+
   // Do the asset update via rc
   if (upd) {
     _rc->assetUpdate(std::move(upd));
