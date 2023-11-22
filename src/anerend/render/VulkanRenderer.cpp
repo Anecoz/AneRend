@@ -3882,6 +3882,12 @@ bool VulkanRenderer::initImgui()
   ImGuiIO& io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
+  // Set font
+  std::string fontPath = std::string(ASSET_PATH) + "/fonts/Roboto/Roboto-Regular.ttf";
+  auto font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 16.0f);
+  assert(font != NULL && "Font not loaded!");
+  io.Fonts->Build();
+
   ImGui::StyleColorsDark();
 
   if (!ImGui_ImplGlfw_InitForVulkan(_window, true)) {
