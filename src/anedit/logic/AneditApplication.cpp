@@ -271,8 +271,6 @@ void AneditApplication::render()
 
   oldUI();
 
-  ImGui::End();
-
   _vkRenderer.drawFrame(g_PP, g_DebugShadow);
 }
 

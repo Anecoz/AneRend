@@ -140,6 +140,7 @@ public:
   void setRenderableTint(util::Uuid id, const glm::vec3& tint);
   void setRenderableTransform(util::Uuid id, const glm::mat4& transform);
   void setRenderableName(util::Uuid id, std::string name);
+  void setRenderableBoundingSphere(util::Uuid id, const glm::vec4& boundingSphere);
 
 private:
   friend struct internal::SceneSerializer;

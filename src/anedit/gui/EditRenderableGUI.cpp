@@ -27,6 +27,9 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
 
   glm::vec3 tint{ 0.0f };
 
+  glm::vec3 boundingSphereCenter{ 0.0f };
+  float boundingSphereRadius = 0.0f;
+
   char name[32];
 
   ImGui::Begin("EditRenderable");
@@ -36,9 +39,13 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       ImGui::BeginDisabled();
     }
     else {
-      auto oldTrans = c->scene().getRenderable(id)->_transform;
-      std::strcpy(name, c->scene().getRenderable(id)->_name.c_str());
-      tint = c->scene().getRenderable(id)->_tint;
+      auto* rend = c->scene().getRenderable(id);
+
+      auto oldTrans = rend->_transform;
+      strcpy_s(name, rend->_name.c_str());
+      tint = rend->_tint;
+      boundingSphereCenter = glm::vec3(rend->_boundingSphere.x, rend->_boundingSphere.y, rend->_boundingSphere.z);
+      boundingSphereRadius = rend->_boundingSphere.w;
 
       ImGuizmo::DecomposeMatrixToComponents(&oldTrans[0][0], &translation[0], &rot[0], &scale[0]);
     }
@@ -75,14 +82,27 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     }
 
     // Name
+    ImGui::Separator();
     ImGui::Text("Name");
-    if (ImGui::InputText("##name", name, 32)) {
+    if (ImGui::InputText("##name", name, 32) && id) {
       changed = true;
     }
 
     // Tint
+    ImGui::Separator();
     ImGui::Text("Tint");
-    if (ImGui::ColorEdit3("##tint", &tint[0])) {
+    if (ImGui::ColorEdit3("##tint", &tint[0]) && id) {
+      changed = true;
+    }
+
+    // Bounding sphere
+    ImGui::Separator();
+    ImGui::Text("Bounding Sphere");
+    if (ImGui::InputFloat3("##boundingSphereCenter", &boundingSphereCenter[0], "%.3f", ImGuiInputTextFlags_EnterReturnsTrue) && id) {
+      changed = true;
+    }
+
+    if (ImGui::InputFloat("##boundingSphereRadius", &boundingSphereRadius) && id) {
       changed = true;
     }
 
@@ -96,6 +116,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       c->scene().setRenderableTransform(id, m);
       c->scene().setRenderableName(id, name);
       c->scene().setRenderableTint(id, tint);
+      c->scene().setRenderableBoundingSphere(id, glm::vec4(boundingSphereCenter, boundingSphereRadius));
     }
   }
 

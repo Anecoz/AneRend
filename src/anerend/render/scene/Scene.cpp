@@ -373,6 +373,21 @@ void Scene::setRenderableName(util::Uuid id, std::string name)
   printf("Cannot set name for renderable %s, doesn't exist!\n", id.str().c_str());
 }
 
+void Scene::setRenderableBoundingSphere(util::Uuid id, const glm::vec4& boundingSphere)
+{
+  for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
+    if (it->_id == id) {
+      it->_boundingSphere = boundingSphere;
+
+      auto tileIdx = findRenderableTile(*it, Tile::_tileSize);
+      addEvent(SceneEventType::RenderableUpdated, id, tileIdx);
+      return;
+    }
+  }
+
+  printf("Cannot set bounding sphere for renderable %s, doesn't exist!\n", id.str().c_str());
+}
+
 void Scene::addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx)
 {
   SceneEvent event{};
