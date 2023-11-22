@@ -263,6 +263,9 @@ void AneditApplication::render()
     ImGui::Begin("Debug");
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
     ImGui::Text("Camera pos %.1f, %.1f, %.1f", _camera.getPosition().x, _camera.getPosition().y, _camera.getPosition().z);
+    if (ImGui::Button("Teleport to origin")) {
+      _camera.setPosition({ 0.0f, 0.0f, 0.0f });
+    }
     ImGui::End();
   }
 
