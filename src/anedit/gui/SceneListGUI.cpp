@@ -50,6 +50,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 
     for (const auto& r : renderables) {
       std::string label = std::string("Renderable ") + (r._name.empty()? r._id.str() : r._name);
+      label += "##" + r._id.str();
       if (ImGui::Selectable(label.c_str(), _selectedRenderable == r._id)) {
         _selectedRenderable = r._id;
         c->selectedRenderable() = _selectedRenderable;
@@ -71,6 +72,7 @@ void SceneListGUI::addFromPrefab(logic::AneditContext* c)
     auto& prefabs = c->scene().getPrefabs();
     for (const auto& p : prefabs) {
       std::string label = std::string("Prefab ") + (p._name.empty()? p._id.str() : p._name);
+      label += "##" + p._id.str();
       if (ImGui::Selectable(label.c_str(), p._id == _selectedPrefab, ImGuiSelectableFlags_DontClosePopups)) {
         _selectedPrefab = p._id;
       }

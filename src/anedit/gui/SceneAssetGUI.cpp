@@ -45,6 +45,7 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
     const auto& mats = c->scene().getMaterials();
     for (const auto& mat : mats) {
       std::string label = std::string("Mat ") + (mat._name.empty() ? mat._id.str() : mat._name);
+      label += "##" + mat._id.str();
       if (ImGui::Selectable(label.c_str(), _selectedMaterial == mat._id)) {
         _selectedMaterial = mat._id;
         printf("Selected mat %s\n", _selectedMaterial.str().c_str());
@@ -65,6 +66,7 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
     const auto& models = c->scene().getModels();
     for (const auto& model : models) {
       std::string label = std::string("Model ") + (model._name.empty() ? model._id.str() : model._name);
+      label += "##" + model._id.str();
       if (ImGui::Selectable(label.c_str(), _selectedModel == model._id)) {
         _selectedModel = model._id;
         printf("Selected model %s\n", _selectedModel.str().c_str());
@@ -85,6 +87,7 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
     const auto& v = c->scene().getAnimations();
     for (const auto& i : v) {
       std::string label = std::string("Animation ") + (i._name.empty()? i._id.str() : i._name);
+      label += "##" + i._id.str();
       if (ImGui::Selectable(label.c_str(), _selectedAnimation == i._id)) {
         _selectedAnimation = i._id;
         printf("Selected animation %s\n", _selectedAnimation.str().c_str());
@@ -105,6 +108,7 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
     const auto& v = c->scene().getSkeletons();
     for (const auto& i : v) {
       std::string label = std::string("Skeleton ") + (i._name.empty() ? i._id.str() : i._name);
+      label += "##" + i._id.str();
       if (ImGui::Selectable(label.c_str(), _selectedSkeleton == i._id)) {
         _selectedSkeleton = i._id;
         printf("Selected skeleton %s\n", _selectedSkeleton.str().c_str());
@@ -126,6 +130,7 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
     const auto& v = c->scene().getPrefabs();
     for (const auto& i : v) {
       std::string label = std::string("Prefab ") + (i._name.empty() ? i._id.str() : i._name);
+      label += "##" + i._id.str();
       if (ImGui::Selectable(label.c_str(), _selectedPrefab == i._id)) {
         _selectedPrefab = i._id;
       }
