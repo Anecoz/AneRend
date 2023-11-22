@@ -47,6 +47,7 @@ public:
   void spawnFromPrefabAtMouse(const util::Uuid& prefab) override final;
 
   util::Uuid& selectedRenderable() override final;
+  util::Uuid& selectedMaterial() override final;
 
   render::Camera& camera() override final;
 

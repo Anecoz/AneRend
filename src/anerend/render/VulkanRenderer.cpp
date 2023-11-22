@@ -717,6 +717,25 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     _materialsToUpload.emplace_back(std::move(mat));
   }
 
+  // Updated materials
+  for (auto& mat : update._updatedMaterials){
+    if (!mat._id) {
+      printf("Asset update fail: cannot update material with invalid id\n");
+      continue;
+    }
+
+    auto it = _materialIdMap.find(mat._id);
+
+    if (it == _materialIdMap.end()) {
+      printf("Could not update material %s, doesn't exist!\n", mat._id.str().c_str());
+      break;
+    }
+
+    // TODO: Currently only support updating basecolfac and emissive (not the textures)
+    _currentMaterials[it->second]._baseColFactor = mat._baseColFactor;
+    _currentMaterials[it->second]._emissive = mat._emissive;
+  }
+
   // Removed animations
   for (auto remAnim : update._removedAnimations) {
     // TODO: What if a renderable references this animation?
@@ -967,7 +986,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   // Book-keeping
   bool modelChange = forceModelChange || !update._addedModels.empty() || !update._removedModels.empty();
   bool renderableChange = !update._addedRenderables.empty() || !update._removedRenderables.empty() || !update._updatedRenderables.empty();
-  bool materialChange = !update._addedMaterials.empty() || !update._removedMaterials.empty();
+  bool materialChange = !update._addedMaterials.empty() || !update._removedMaterials.empty() || !update._updatedMaterials.empty();
 
   if (modelChange) {
     for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {

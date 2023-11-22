@@ -37,6 +37,7 @@ enum class SceneEventType
   SkeletonAdded,
   SkeletonRemoved,
   MaterialAdded,
+  MaterialUpdated,
   MaterialRemoved,
   RenderableAdded,
   RenderableUpdated,
@@ -116,6 +117,7 @@ public:
   const asset::Model* getModel(util::Uuid id);
 
   util::Uuid addMaterial(asset::Material&& material);
+  void updateMaterial(asset::Material material);
   void removeMaterial(util::Uuid id);
   const asset::Material* getMaterial(util::Uuid id);
 

@@ -7,6 +7,7 @@
 #include "../gui/SceneAssetGUI.h"
 #include "../gui/SceneListGUI.h"
 #include "../gui/EditRenderableGUI.h"
+#include "../gui/EditMaterialGUI.h"
 
 #include <imgui.h>
 #include <nfd.hpp>
@@ -279,6 +280,7 @@ void AneditApplication::setupGuis()
   _guis.emplace_back(new gui::SceneAssetGUI());
   _guis.emplace_back(new gui::SceneListGUI());
   _guis.emplace_back(new gui::EditRenderableGUI());
+  _guis.emplace_back(new gui::EditMaterialGUI());
 }
 
 void AneditApplication::updateConfig()
@@ -668,6 +670,11 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
 util::Uuid& AneditApplication::selectedRenderable()
 {
   return _selectedRenderable;
+}
+
+util::Uuid& AneditApplication::selectedMaterial()
+{
+  return _selectedMaterial;
 }
 
 render::Camera& AneditApplication::camera()

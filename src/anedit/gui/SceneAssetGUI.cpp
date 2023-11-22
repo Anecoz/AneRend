@@ -48,6 +48,7 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
       label += "##" + mat._id.str();
       if (ImGui::Selectable(label.c_str(), _selectedMaterial == mat._id)) {
         _selectedMaterial = mat._id;
+        c->selectedMaterial() = _selectedMaterial;
         printf("Selected mat %s\n", _selectedMaterial.str().c_str());
       }
     }

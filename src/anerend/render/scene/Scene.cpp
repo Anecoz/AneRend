@@ -160,6 +160,19 @@ util::Uuid Scene::addMaterial(asset::Material&& material)
   return id;
 }
 
+void Scene::updateMaterial(asset::Material material)
+{
+  for (auto it = _materials.begin(); it != _materials.end(); ++it) {
+    if (it->_id == material._id) {
+      *it = material;
+      addEvent(SceneEventType::MaterialUpdated, material._id);
+      return;
+    }
+  }
+
+  printf("Could not update material with id %s, doesn't exist!\n", material._id.str().c_str());
+}
+
 void Scene::removeMaterial(util::Uuid id)
 {
   for (auto it = _materials.begin(); it != _materials.end(); ++it) {

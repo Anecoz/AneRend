@@ -32,6 +32,7 @@ struct AssetUpdate
       !_addedModels.empty() ||
       !_removedModels.empty() ||
       !_addedMaterials.empty() ||
+      !_updatedMaterials.empty() ||
       !_removedMaterials.empty() ||
       !_addedAnimations.empty() ||
       !_removedAnimations.empty() ||
@@ -49,6 +50,7 @@ struct AssetUpdate
   std::vector<util::Uuid> _removedModels;
 
   std::vector<asset::Material> _addedMaterials;
+  std::vector<asset::Material> _updatedMaterials;
   std::vector<util::Uuid> _removedMaterials;
 
   std::vector<anim::Animation> _addedAnimations;

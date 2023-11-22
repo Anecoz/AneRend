@@ -43,6 +43,10 @@ void ScenePager::update(const glm::vec3& pos)
       auto copy = *_scene->getMaterial(event._id);
       upd._addedMaterials.emplace_back(std::move(copy));
     }
+    else if (event._type == SceneEventType::MaterialUpdated) {
+      auto copy = *_scene->getMaterial(event._id);
+      upd._updatedMaterials.emplace_back(std::move(copy));
+    }
     else if (event._type == SceneEventType::AnimationAdded) {
       auto copy = *_scene->getAnimation(event._id);
       upd._addedAnimations.emplace_back(std::move(copy));
