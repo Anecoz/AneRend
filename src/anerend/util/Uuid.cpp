@@ -31,7 +31,9 @@ Uuid& Uuid::operator=(const Uuid& rhs)
 Uuid& Uuid::operator=(Uuid&& rhs)
 {
   if (this != &rhs) {
-    std::swap(rhs._data, _data);
+    if (!rhs._data.empty()) {
+      std::swap(rhs._data, _data);
+    }
   }
 
   return *this;
