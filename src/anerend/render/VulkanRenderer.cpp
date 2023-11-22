@@ -4376,8 +4376,8 @@ void VulkanRenderer::requestWorldPosition(glm::ivec2 viewportPos, WorldPosCallba
   if (_worldPosRequest._callback) return;
 
   // If the request is unreasonable, don't do it
-  if (viewportPos.x < 0 || viewportPos.x >= _swapChain._swapChainExtent.width ||
-    viewportPos.y < 0 || viewportPos.y >= _swapChain._swapChainExtent.height) {
+  if (viewportPos.x < 0 || (uint32_t)viewportPos.x >= _swapChain._swapChainExtent.width ||
+    viewportPos.y < 0 || (uint32_t)viewportPos.y >= _swapChain._swapChainExtent.height) {
     return;
   }
 
