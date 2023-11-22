@@ -68,7 +68,7 @@ void UpdateBlasPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
         assert(renderable->_meshes.size() == dynamicPair.second.size() &&
           "Dynamic blas and stored renderable don't match number of meshes!");
 
-        assert(renderable->_rtFirstDynamicMeshId != INVALID_ID &&
+        assert(!renderable->_dynamicMeshes.empty() &&
           "Dynamic blas update cannot run on a renderable without dynamic mesh id set!");
 
         // TODO: The vector assumes to be same length as num meshes of the renderable...
