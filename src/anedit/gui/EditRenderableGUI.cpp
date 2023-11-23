@@ -12,6 +12,7 @@ namespace gui {
 EditRenderableGUI::EditRenderableGUI()
   : IGUI()
   , _currentGuizmoOp(ImGuizmo::OPERATION::TRANSLATE)
+  , _bsGuizmoOp(ImGuizmo::OPERATION::UNIVERSAL + 1)
 {}
 
 EditRenderableGUI::~EditRenderableGUI()
@@ -30,6 +31,8 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
   glm::vec3 boundingSphereCenter{ 0.0f };
   float boundingSphereRadius = 0.0f;
 
+  bool visible = false;
+
   char name[32];
 
   ImGui::Begin("EditRenderable");
@@ -46,6 +49,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       tint = rend->_tint;
       boundingSphereCenter = glm::vec3(rend->_boundingSphere.x, rend->_boundingSphere.y, rend->_boundingSphere.z);
       boundingSphereRadius = rend->_boundingSphere.w;
+      visible = rend->_visible;
 
       ImGuizmo::DecomposeMatrixToComponents(&oldTrans[0][0], &translation[0], &rot[0], &scale[0]);
     }
@@ -63,6 +67,11 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     ImGui::SameLine();
     if (ImGui::RadioButton("Scale", _currentGuizmoOp == ImGuizmo::SCALE)) {
       _currentGuizmoOp = ImGuizmo::SCALE;
+    }
+
+    ImGui::SameLine();
+    if (ImGui::RadioButton("BS", _currentGuizmoOp == _bsGuizmoOp)) {
+      _currentGuizmoOp = _bsGuizmoOp;
     }
     
     // Inputs for transform
@@ -106,6 +115,13 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       changed = true;
     }
 
+    // Visible flag
+    ImGui::Separator();
+    ImGui::Text("Visibility");
+    if (ImGui::Checkbox("##visible", &visible)) {
+      changed = true;
+    }
+
     if (!id) {
       ImGui::EndDisabled();
     }
@@ -117,14 +133,24 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       c->scene().setRenderableName(id, name);
       c->scene().setRenderableTint(id, tint);
       c->scene().setRenderableBoundingSphere(id, glm::vec4(boundingSphereCenter, boundingSphereRadius));
+      c->scene().setRenderableVisible(id, visible);
     }
   }
 
   ImGui::End();
 
-  // Experiment with ImGuizmo
+  // Do gizmo (transform) editing with ImGuizmo
   if (id) {
-    auto m = c->scene().getRenderable(id)->_transform;
+    glm::vec3 modelTrans = c->scene().getRenderable(id)->_transform[3];
+    glm::mat4 m{ 1.0f };
+
+    if (_currentGuizmoOp == _bsGuizmoOp) {
+      m = glm::translate(m, boundingSphereCenter + modelTrans);
+    }
+    else {
+      m = c->scene().getRenderable(id)->_transform;
+    }
+    
     auto& viewMatrix = c->camera().getCamMatrix();
     auto& projMatrix = c->camera().getProjection();
 
@@ -134,12 +160,20 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     bool manipulated = ImGuizmo::Manipulate(
       &viewMatrix[0][0],
       &projMatrix[0][0],
-      (ImGuizmo::OPERATION)_currentGuizmoOp,
+      _currentGuizmoOp == _bsGuizmoOp ? ImGuizmo::OPERATION::TRANSLATE : (ImGuizmo::OPERATION)_currentGuizmoOp,
       ImGuizmo::MODE::WORLD,
       (float*)&m[0][0]);
 
     if (manipulated) {
-      c->scene().setRenderableTransform(id, m);
+
+      if (_currentGuizmoOp == _bsGuizmoOp) {
+        glm::vec3 t = m[3];
+        t = t - modelTrans;
+        c->scene().setRenderableBoundingSphere(id, glm::vec4(t, boundingSphereRadius));
+      }
+      else {
+        c->scene().setRenderableTransform(id, m);
+      }
     }
   }
 

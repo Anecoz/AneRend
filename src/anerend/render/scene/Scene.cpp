@@ -401,6 +401,21 @@ void Scene::setRenderableBoundingSphere(util::Uuid id, const glm::vec4& bounding
   printf("Cannot set bounding sphere for renderable %s, doesn't exist!\n", id.str().c_str());
 }
 
+void Scene::setRenderableVisible(util::Uuid id, bool val)
+{
+  for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
+    if (it->_id == id) {
+      it->_visible = val;
+
+      auto tileIdx = findRenderableTile(*it, Tile::_tileSize);
+      addEvent(SceneEventType::RenderableUpdated, id, tileIdx);
+      return;
+    }
+  }
+
+  printf("Cannot update visibility for renderable %s, doesn't exist!\n", id.str().c_str());
+}
+
 void Scene::addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx)
 {
   SceneEvent event{};
