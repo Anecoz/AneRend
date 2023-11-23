@@ -26,6 +26,7 @@ namespace render::scene {
 enum class SceneEventType
 {
   PrefabAdded,
+  PrefabUpdated,
   PrefabRemoved,
   ModelAdded,
   ModelRemoved,
@@ -109,6 +110,7 @@ public:
   }
 
   util::Uuid addPrefab(asset::Prefab&& prefab);
+  void updatePrefab(asset::Prefab prefab);
   void removePrefab(util::Uuid id);
   const asset::Prefab* getPrefab(util::Uuid id);
 
@@ -143,6 +145,7 @@ public:
   void setRenderableTransform(util::Uuid id, const glm::mat4& transform);
   void setRenderableName(util::Uuid id, std::string name);
   void setRenderableBoundingSphere(util::Uuid id, const glm::vec4& boundingSphere);
+  void setRenderableVisible(util::Uuid id, bool val);
 
 private:
   friend struct internal::SceneSerializer;

@@ -134,6 +134,7 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
       label += "##" + i._id.str();
       if (ImGui::Selectable(label.c_str(), _selectedPrefab == i._id)) {
         _selectedPrefab = i._id;
+        c->selectedPrefab() = _selectedPrefab;
       }
 
       // drag&drop

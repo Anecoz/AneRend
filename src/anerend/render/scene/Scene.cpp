@@ -103,6 +103,19 @@ util::Uuid Scene::addPrefab(asset::Prefab&& prefab)
   return id;
 }
 
+void Scene::updatePrefab(asset::Prefab prefab)
+{
+  for (auto it = _prefabs.begin(); it != _prefabs.end(); ++it) {
+    if (it->_id == prefab._id) {
+      *it = prefab;
+      addEvent(SceneEventType::PrefabUpdated, prefab._id);
+      return;
+    }
+  }
+
+  printf("Could not update prefab with id %s, doesn't exist!\n", prefab._id.str().c_str());
+}
+
 void Scene::removePrefab(util::Uuid id)
 {
   for (auto it = _prefabs.begin(); it != _prefabs.end(); ++it) {

@@ -8,6 +8,7 @@
 #include "../gui/SceneListGUI.h"
 #include "../gui/EditRenderableGUI.h"
 #include "../gui/EditMaterialGUI.h"
+#include "../gui/EditPrefabGUI.h"
 
 #include <imgui.h>
 #include <nfd.hpp>
@@ -284,6 +285,7 @@ void AneditApplication::setupGuis()
   _guis.emplace_back(new gui::SceneListGUI());
   _guis.emplace_back(new gui::EditRenderableGUI());
   _guis.emplace_back(new gui::EditMaterialGUI());
+  _guis.emplace_back(new gui::EditPrefabGUI());
 }
 
 void AneditApplication::updateConfig()
@@ -662,10 +664,21 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
       rend._skeleton = p->_skeleton;
       rend._name = p->_name.empty() ? "" : p->_name;
 
-      rend._boundingSphere = glm::vec4(0.0f, 0.0f, 0.0f, 20.0f);
+      rend._boundingSphere = p->_boundingSphere;
       rend._visible = true;
-      rend._transform = glm::translate(glm::mat4(1.0f), worldPos);
+      rend._tint = p->_tint;
 
+      // Replace translation part of prefab transform with worldPos
+      glm::mat4 pMat = p->_transform;
+      auto& temp = pMat[3];
+      temp.x = worldPos.x;
+      temp.y = worldPos.y;
+      temp.z = worldPos.z;
+      pMat[3] = temp;
+      rend._transform = std::move(pMat);
+
+      // Also select it
+      _selectedRenderable = rend._id;
       _scene.addRenderable(std::move(rend));
     });
 }
@@ -678,6 +691,11 @@ util::Uuid& AneditApplication::selectedRenderable()
 util::Uuid& AneditApplication::selectedMaterial()
 {
   return _selectedMaterial;
+}
+
+util::Uuid& AneditApplication::selectedPrefab()
+{
+  return _selectedPrefab;
 }
 
 render::Camera& AneditApplication::camera()

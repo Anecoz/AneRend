@@ -88,9 +88,10 @@ void SceneListGUI::addFromPrefab(logic::AneditContext* c)
         rend._model = p->_model;
         rend._skeleton = p->_skeleton;
 
-        rend._boundingSphere = glm::vec4(0.0f, 0.0f, 0.0f, 20.0f);
+        rend._boundingSphere = p->_boundingSphere;
         rend._visible = true;
-        rend._transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f));
+        rend._transform = p->_transform;
+        rend._tint = p->_tint;
 
         c->scene().addRenderable(std::move(rend));
       }
