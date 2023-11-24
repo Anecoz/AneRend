@@ -25,6 +25,7 @@ struct AneditContext
   virtual util::Uuid& selectedRenderable() = 0;
   virtual util::Uuid& selectedMaterial() = 0;
   virtual util::Uuid& selectedPrefab() = 0;
+  virtual util::Uuid& selectedAnimator() = 0;
 
   virtual render::Camera& camera() = 0;
 
@@ -32,6 +33,7 @@ protected:
   util::Uuid _selectedRenderable;
   util::Uuid _selectedMaterial;
   util::Uuid _selectedPrefab;
+  util::Uuid _selectedAnimator;
 };
 
 }

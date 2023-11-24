@@ -49,6 +49,7 @@ public:
   util::Uuid& selectedRenderable() override final;
   util::Uuid& selectedMaterial() override final;
   util::Uuid& selectedPrefab() override final;
+  util::Uuid& selectedAnimator() override final;
 
   render::Camera& camera() override final;
 

@@ -89,8 +89,7 @@ void AnimationThread::addAnimator(render::asset::Animator&& animator)
   }
 
   if (!animFound) {
-    printf("Cannot add animator, animation %s doesn't exist!\n", animator._animId.str().c_str());
-    return;
+    printf("Warning, adding animator with no animation (%s)!\n", animator._animId.str().c_str());
   }
 
   lock.unlock();
@@ -119,21 +118,28 @@ void AnimationThread::addAnimator(render::asset::Animator&& animator)
   }
 
   if (!skeleFound) {
-    printf("Cannot add animator, skeleton %s doesn't exist!\n", animator._skeleId.str().c_str());
-    return;
+    printf("Warning, adding animator with no skeleton (%s)!\n", animator._skeleId.str().c_str());
   }
 
   auto animatorCopy = animator;
 
   lock.lock();
+  if (!skeleFound || !animFound) {
+    // Just add anyway
+    AnimatorData internalAnim{};
+    internalAnim._animatorId = animator._id;
+    _currentInternalAnimators.emplace_back(std::move(internalAnim));
+  }
   _currentAnimators.emplace_back(std::move(animator));
   lock.unlock();
 
-  auto fut = std::async(std::launch::async, &AnimationThread::addInternalAnimator, 
-    this, animatorCopy, std::move(animCopy), std::move(skeleCopy));
+  if (skeleFound && animFound) {
+    auto fut = std::async(std::launch::async, &AnimationThread::addInternalAnimator,
+      this, animatorCopy, std::move(animCopy), std::move(skeleCopy));
 
-  std::lock_guard<std::mutex> animLock(_pendingAnimatorsMtx);
-  _pendingInternalAnimators.emplace_back(std::move(fut));
+    std::lock_guard<std::mutex> animLock(_pendingAnimatorsMtx);
+    _pendingInternalAnimators.emplace_back(std::move(fut));
+  }
 }
 
 void AnimationThread::addSkeleton(render::anim::Skeleton&& skele)
@@ -288,6 +294,10 @@ void AnimationThread::updateThread()
     {
       std::unique_lock<std::mutex> lock(_mtx);
       for (auto& animator : _currentInternalAnimators) {
+        if (!animator._animId || !animator._skeleId) {
+          continue;
+        }
+
         render::anim::Animation* animp = nullptr;
         render::anim::Skeleton* skelep = nullptr;
 

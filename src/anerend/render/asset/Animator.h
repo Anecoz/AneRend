@@ -8,6 +8,8 @@ struct Animator
 {
   util::Uuid _id = util::Uuid::generate();
 
+  std::string _name;
+
   enum class State : std::uint8_t {
     Playing,
     Paused,

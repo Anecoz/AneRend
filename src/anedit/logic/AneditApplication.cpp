@@ -9,6 +9,7 @@
 #include "../gui/EditRenderableGUI.h"
 #include "../gui/EditMaterialGUI.h"
 #include "../gui/EditPrefabGUI.h"
+#include "../gui/EditAnimatorGUI.h"
 
 #include <imgui.h>
 #include <nfd.hpp>
@@ -166,6 +167,7 @@ void AneditApplication::setupGuis()
   _guis.emplace_back(new gui::EditRenderableGUI());
   _guis.emplace_back(new gui::EditMaterialGUI());
   _guis.emplace_back(new gui::EditPrefabGUI());
+  _guis.emplace_back(new gui::EditAnimatorGUI());
 }
 
 void AneditApplication::updateConfig()
@@ -457,6 +459,11 @@ util::Uuid& AneditApplication::selectedMaterial()
 util::Uuid& AneditApplication::selectedPrefab()
 {
   return _selectedPrefab;
+}
+
+util::Uuid& AneditApplication::selectedAnimator()
+{
+  return _selectedAnimator;
 }
 
 render::Camera& AneditApplication::camera()

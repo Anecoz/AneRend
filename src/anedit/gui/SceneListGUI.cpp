@@ -19,32 +19,45 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 {
   // Draw list of current renderables, animators, lights, particle emitters etc
   const auto& renderables = c->scene().getRenderables();
+  const auto& animators = c->scene().getAnimators();
 
-  ImGui::Begin("Scene list");
+  ImGui::Begin("Scene list", NULL, ImGuiWindowFlags_MenuBar);
 
+  // Menu
+  std::string menuAction;
+  if (ImGui::BeginMenuBar()) {
+
+    if (ImGui::BeginMenu("File")) {
+      if (ImGui::MenuItem("Add renderable...")) {
+        menuAction = "AddRenderable";
+      }
+      if (ImGui::MenuItem("Add animator...")) {
+        addAnimatorClicked(c);
+      }
+      if (ImGui::MenuItem("Save scene as...")) {
+        saveSceneAsClicked(c);
+      }
+      if (ImGui::MenuItem("Save scene")) {
+        saveSceneClicked(c);
+      }
+      if (ImGui::MenuItem("Load scene...")) {
+        loadSceneClicked(c);
+      }
+
+      ImGui::EndMenu();
+    }
+
+    ImGui::EndMenuBar();
+  }
+
+  // renderables
   {
-    ImGui::BeginChild("Renderables", ImVec2(0, 0), true);
     ImGui::Text("Renderables");
 
-    ImGui::SameLine();
-    if (ImGui::Button("Add...")) {
-      ImGui::OpenPopup("Add prefab");
+    if (menuAction == "AddRenderable") {
+      ImGui::OpenPopup("Add from prefab");
     }
     addFromPrefab(c); // this has to run every frame but only executes if the button above was pressed
-
-    //ImGui::SameLine();
-    if (ImGui::Button("Save scene as...")) {
-      saveSceneAsClicked(c);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Save scene")) {
-      saveSceneClicked(c);
-    }
-
-    //ImGui::SameLine();
-    if (ImGui::Button("Load scene...")) {
-      loadSceneClicked(c);
-    }
 
     ImGui::Separator();
 
@@ -54,11 +67,26 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
       if (ImGui::Selectable(label.c_str(), _selectedRenderable == r._id)) {
         _selectedRenderable = r._id;
         c->selectedRenderable() = _selectedRenderable;
-        printf("Selected rend %s\n", _selectedRenderable.str().c_str());
       }
     }
+  }
 
-    ImGui::EndChild();
+  ImGui::Separator();
+
+  // animators
+  {
+    ImGui::Text("Animators");
+
+    ImGui::Separator();
+
+    for (const auto& a : animators) {
+      std::string label = std::string("Animator ") + (a._name.empty() ? a._id.str() : a._name);
+      label += "##" + a._id.str();
+      if (ImGui::Selectable(label.c_str(), _selectedAnimator == a._id)) {
+        _selectedAnimator = a._id;
+        c->selectedAnimator() = _selectedAnimator;
+      }
+    }
   }
 
   ImGui::End();
@@ -66,7 +94,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 
 void SceneListGUI::addFromPrefab(logic::AneditContext* c)
 {
-  if (ImGui::BeginPopupModal("Add prefab")) {
+  if (ImGui::BeginPopupModal("Add from prefab")) {
     
     // List all prefabs as selectable
     auto& prefabs = c->scene().getPrefabs();
@@ -120,6 +148,15 @@ void SceneListGUI::loadSceneClicked(logic::AneditContext* c)
   else {
     printf("Could not load scene!\n");
   }
+}
+
+void SceneListGUI::addAnimatorClicked(logic::AneditContext* c)
+{
+  // Just add a default animator with no skele and anim
+  render::asset::Animator animator{};
+  animator._name = "New animator";
+  animator._state = render::asset::Animator::State::Stopped;
+  c->scene().addAnimator(std::move(animator));
 }
 
 void SceneListGUI::saveSceneClicked(logic::AneditContext* c)

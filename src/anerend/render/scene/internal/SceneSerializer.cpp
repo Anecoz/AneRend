@@ -193,6 +193,7 @@ template <typename S>
 void serialize(S& s, render::asset::Animator& a)
 {
   s.object(a._id);
+  s.text1b(a._name, 40);
   s.value1b(a._state);
   s.object(a._skeleId);
   s.object(a._animId);
