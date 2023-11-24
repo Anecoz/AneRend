@@ -70,7 +70,7 @@ void main()
     result.rgb /= result.w;
   }
 
-  float hysteresis = 0.98;
+  float hysteresis = 0.96;
   vec4 outRes = result * (1.0 - hysteresis) + oldVal * hysteresis;
   //vec4 outRes = result;
 
