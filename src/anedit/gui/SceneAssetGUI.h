@@ -25,6 +25,12 @@ private:
 
   bool _draggingPrefab = false;
   util::Uuid _draggedPrefab;
+
+  std::string _matFilter;
+  std::string _modelFilter;
+  std::string _animationFilter;
+  std::string _skeletonFilter;
+  std::string _prefabFilter;
 };
 
 }

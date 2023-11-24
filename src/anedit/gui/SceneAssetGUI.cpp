@@ -1,5 +1,7 @@
 #include "SceneAssetGUI.h"
 
+#include "GUIUtil.h"
+
 #include "../logic/AneditContext.h"
 #include <render/scene/Scene.h>
 
@@ -7,6 +9,72 @@
 #include <nfd.hpp>
 
 namespace gui {
+
+namespace {
+
+// Returns if selectedUuid was changed
+template <typename T>
+bool drawAssetList(
+  const ImVec2& size, 
+  std::string& filter,
+  const char* label, 
+  const std::vector<T>& v, 
+  util::Uuid& selectedUuid,
+  util::Uuid& draggedUuid, // not necessarily the same as selected
+  bool& dragged)
+{
+  bool changed = false;
+  ImGui::BeginChild(label, size, true);
+  ImGui::Text(label);
+
+  char buf[40];
+  strcpy_s(buf, filter.c_str());
+  if (ImGui::InputText("Filter", buf, 40)) {
+    filter = std::string(buf);
+
+    std::transform(filter.begin(), filter.end(), filter.begin(),
+      [](unsigned char c) { return std::tolower(c); });
+  }
+
+  ImGui::Separator();
+
+  for (const auto& i : v) {
+
+    if (!filter.empty()) {
+      std::string name = i._name;
+
+      std::transform(name.begin(), name.end(), name.begin(),
+        [](unsigned char c) { return std::tolower(c); });
+
+      if (name.find(filter) == std::string::npos) {
+        continue;
+      }
+    }
+
+    std::string label2 = std::string("Mat ") + (i._name.empty() ? i._id.str() : i._name);
+    label2 += "##" + i._id.str();
+    if (ImGui::Selectable(label2.c_str(), selectedUuid == i._id)) {
+      selectedUuid = i._id;
+      changed = true;
+    }
+
+    // drag&drop
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+      ImGui::Text(label2.c_str());
+
+      dragged = true;
+      draggedUuid = i._id;
+
+      ImGui::EndDragDropSource();
+    }
+  }
+
+  ImGui::EndChild();
+
+  return changed;
+}
+
+}
 
 SceneAssetGUI::SceneAssetGUI()
   : IGUI()
@@ -37,128 +105,51 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
   }
 
   // Materials
-  {
-    ImGui::BeginChild("Materials", size, true);
-    ImGui::Text("Materials");
-    ImGui::Separator();
-
-    const auto& mats = c->scene().getMaterials();
-    for (const auto& mat : mats) {
-      std::string label = std::string("Mat ") + (mat._name.empty() ? mat._id.str() : mat._name);
-      label += "##" + mat._id.str();
-      if (ImGui::Selectable(label.c_str(), _selectedMaterial == mat._id)) {
-        _selectedMaterial = mat._id;
-        c->selectedMaterial() = _selectedMaterial;
-        printf("Selected mat %s\n", _selectedMaterial.str().c_str());
-      }
-    }
-
-    ImGui::EndChild();
+  bool dummy;
+  util::Uuid dummyUuid;
+  if (drawAssetList(size, _matFilter, "Materials", c->scene().getMaterials(), _selectedMaterial, dummyUuid, dummy)) {
+    c->selectedMaterial() = _selectedMaterial;
   }
 
   ImGui::SameLine();
 
   // Models
-  {
-    ImGui::BeginChild("Models", size, true);
-    ImGui::Text("Models");
-    ImGui::Separator();
-
-    const auto& models = c->scene().getModels();
-    for (const auto& model : models) {
-      std::string label = std::string("Model ") + (model._name.empty() ? model._id.str() : model._name);
-      label += "##" + model._id.str();
-      if (ImGui::Selectable(label.c_str(), _selectedModel == model._id)) {
-        _selectedModel = model._id;
-        printf("Selected model %s\n", _selectedModel.str().c_str());
-      }
-    }
-
-    ImGui::EndChild();
+  if (drawAssetList(size, _modelFilter, "Models", c->scene().getModels(), _selectedModel, dummyUuid, dummy)) {
+    // select model in context
   }
 
   ImGui::SameLine();
 
   // Animations
-  {
-    ImGui::BeginChild("Animations", size, true);
-    ImGui::Text("Animations");
-    ImGui::Separator();
+  if (drawAssetList(size, _animationFilter, "Animations", c->scene().getAnimations(), _selectedAnimation, dummyUuid, dummy)) {
 
-    const auto& v = c->scene().getAnimations();
-    for (const auto& i : v) {
-      std::string label = std::string("Animation ") + (i._name.empty()? i._id.str() : i._name);
-      label += "##" + i._id.str();
-      if (ImGui::Selectable(label.c_str(), _selectedAnimation == i._id)) {
-        _selectedAnimation = i._id;
-        printf("Selected animation %s\n", _selectedAnimation.str().c_str());
-      }
-    }
-
-    ImGui::EndChild();
   }
 
   ImGui::SameLine();
 
   // Skeletons
-  {
-    ImGui::BeginChild("Skeletons", size, true);
-    ImGui::Text("Skeletons");
-    ImGui::Separator();
+  if (drawAssetList(size, _skeletonFilter, "Skeletons", c->scene().getSkeletons(), _selectedSkeleton, dummyUuid, dummy)) {
 
-    const auto& v = c->scene().getSkeletons();
-    for (const auto& i : v) {
-      std::string label = std::string("Skeleton ") + (i._name.empty() ? i._id.str() : i._name);
-      label += "##" + i._id.str();
-      if (ImGui::Selectable(label.c_str(), _selectedSkeleton == i._id)) {
-        _selectedSkeleton = i._id;
-        printf("Selected skeleton %s\n", _selectedSkeleton.str().c_str());
-      }
-    }
-
-    ImGui::EndChild();
   }
 
   ImGui::SameLine();
 
   // Prefabs
   {
-    ImGui::BeginChild("Prefabs", size, true);
-    ImGui::Text("Prefabs");
-    ImGui::Separator();
-
-    bool dragThisFrame = false;
-    const auto& v = c->scene().getPrefabs();
-    for (const auto& i : v) {
-      std::string label = std::string("Prefab ") + (i._name.empty() ? i._id.str() : i._name);
-      label += "##" + i._id.str();
-      if (ImGui::Selectable(label.c_str(), _selectedPrefab == i._id)) {
-        _selectedPrefab = i._id;
-        c->selectedPrefab() = _selectedPrefab;
-      }
-
-      // drag&drop
-      if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
-        ImGui::Text(label.c_str());
-
-        dragThisFrame = true;
-        _draggedPrefab = i._id;
-
-        ImGui::EndDragDropSource();
-      }
+    bool draggedThisFrame = false;
+    if (drawAssetList(size, _prefabFilter, "Prefabs", c->scene().getPrefabs(), _selectedPrefab, _draggedPrefab, draggedThisFrame)) {
+      c->selectedPrefab() = _selectedPrefab;
     }
 
-    ImGui::EndChild();
-
     // Did drag status change?
-    if (_draggingPrefab && !dragThisFrame && _draggedPrefab) {
+    if (_draggingPrefab && !draggedThisFrame && _draggedPrefab) {
       c->spawnFromPrefabAtMouse(_draggedPrefab);
 
       // Reset dragged prefab id
       _draggedPrefab = util::Uuid();
     }
 
-    _draggingPrefab = dragThisFrame;
+    _draggingPrefab = draggedThisFrame;
   }
 
   ImGui::End();
