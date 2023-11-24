@@ -5,6 +5,7 @@
 #include "../render/asset/Model.h"
 #include "../render/asset/Material.h"
 #include "../render/asset/Prefab.h"
+#include "../render/asset/Texture.h"
 #include "../render/animation/Animation.h"
 #include "../render/animation/Skeleton.h"
 
@@ -23,6 +24,7 @@ public:
     const std::string& path,
     render::asset::Prefab& prefabOut,
     render::asset::Model& modelOut,
+    std::vector<render::asset::Texture>& texturesOut,
     std::vector<render::asset::Material>& materialsOut,
     std::vector<int>& materialIndicesOut,
     render::anim::Skeleton& skeletonOut,

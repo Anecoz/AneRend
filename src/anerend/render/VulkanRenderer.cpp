@@ -185,27 +185,10 @@ VulkanRenderer::~VulkanRenderer()
   
   vmaDestroyBuffer(_vmaAllocator, _worldPosRequest._hostBuffer._buffer, _worldPosRequest._hostBuffer._allocation);
 
-  for (auto& mat : _currentMaterials) {
-    if (mat._albedoInfo) {
-      vkDestroySampler(_device, mat._albedoInfo._sampler, nullptr);
-      vmaDestroyImage(_vmaAllocator, mat._albedoInfo._image._image, mat._albedoInfo._image._allocation);
-      vkDestroyImageView(_device, mat._albedoInfo._view, nullptr);
-    }
-    if (mat._emissiveInfo) {
-      vkDestroySampler(_device, mat._emissiveInfo._sampler, nullptr);
-      vmaDestroyImage(_vmaAllocator, mat._emissiveInfo._image._image, mat._emissiveInfo._image._allocation);
-      vkDestroyImageView(_device, mat._emissiveInfo._view, nullptr);
-    }
-    if (mat._metRoughInfo) {
-      vkDestroySampler(_device, mat._metRoughInfo._sampler, nullptr);
-      vmaDestroyImage(_vmaAllocator, mat._metRoughInfo._image._image, mat._metRoughInfo._image._allocation);
-      vkDestroyImageView(_device, mat._metRoughInfo._view, nullptr);
-    }
-    if (mat._normalInfo) {
-      vkDestroySampler(_device, mat._normalInfo._sampler, nullptr);
-      vmaDestroyImage(_vmaAllocator, mat._normalInfo._image._image, mat._normalInfo._image._allocation);
-      vkDestroyImageView(_device, mat._normalInfo._view, nullptr);
-    }
+  for (auto& tex : _currentTextures) {
+    vkDestroySampler(_device, tex._bindlessInfo._sampler, nullptr);
+    vmaDestroyImage(_vmaAllocator, tex._bindlessInfo._image._image, tex._bindlessInfo._image._allocation);
+    vkDestroyImageView(_device, tex._bindlessInfo._view, nullptr);
   }
 
   if (_enableRayTracing) {
@@ -470,6 +453,7 @@ std::string bytesToFormattedString(std::size_t bytes)
 void printAssetUpdateInfo(
   std::size_t modelBytes,
   std::size_t materialBytes,
+  std::size_t textureBytes,
   std::size_t numModels,
   std::size_t numMeshes,
   std::size_t numSkeles,
@@ -485,6 +469,9 @@ void printAssetUpdateInfo(
   }
   if (materialBytes > 0) {
     printf("\tMaterial bytes added: %s\n", bytesToFormattedString(materialBytes).c_str());
+  }
+  if (textureBytes > 0) {
+    printf("\tTexture bytes added: %s\n", bytesToFormattedString(textureBytes).c_str());
   }
   if (numModels > 0) {
     printf("\tNum models: %zu\n", numModels);
@@ -518,11 +505,13 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
   std::size_t modelBytes = 0;
   std::size_t materialBytes = 0;
+  std::size_t textureBytes = 0;
   std::size_t numMeshes = 0;
 
   bool rendIdMapUpdate = !update._removedRenderables.empty();
   bool modelIdMapUpdate = !update._removedModels.empty();
   bool materialIdMapUpdate = !update._removedMaterials.empty();
+  bool textureIdMapUpdate = !update._removedTextures.empty();
   bool forceModelChange = false;
 
   // Removed models (forces id map to update, could be expensive)
@@ -632,40 +621,55 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     _modelsToUpload.emplace_back(std::move(model));
   }
 
+  // Removed textures
+  for (auto& tex : update._removedTextures) {
+    for (auto it = _currentTextures.begin(); it != _currentTextures.end();) {
+      if (it->_id == tex) {
+        // TODO: Add to deletion q
+        _bindlessTextureMemIf.removeData(it->_bindlessInfo._bindlessIndexHandle);
+
+        vkDestroySampler(_device, it->_bindlessInfo._sampler, nullptr);
+        vmaDestroyImage(_vmaAllocator, it->_bindlessInfo._image._image, it->_bindlessInfo._image._allocation);
+        vkDestroyImageView(_device, it->_bindlessInfo._view, nullptr);
+
+        it = _currentTextures.erase(it);
+        break;
+      }
+      else {
+        ++it;
+      }
+    }
+  }
+
+  // Tex id map update
+  if (textureIdMapUpdate) {
+    _textureIdMap.clear();
+
+    for (std::size_t i = 0; i < _currentTextures.size(); ++i) {
+      _textureIdMap[_currentTextures[i]._id] = i;
+    }
+  }
+
+  // Added textures
+  for (auto& tex : update._addedTextures) {
+    if (!tex._id) {
+      printf("Cannot add texture with invalid id!\n");
+      continue;
+    }
+
+    if (!tex) {
+      printf("Cannot add texture without data!\n");
+      continue;
+    }
+
+    textureBytes += tex._data.size();
+    _texturesToUpload.emplace_back(std::move(tex));
+  }
+
   // Removed materials
   for (auto& mat : update._removedMaterials) {
     for (auto it = _currentMaterials.begin(); it != _currentMaterials.end();) {
       if (it->_id == mat) {
-        // TODO: Add to deletion q
-        if (it->_albedoInfo) {
-          _bindlessTextureMemIf.removeData(it->_albedoInfo._bindlessIndexHandle);
-
-          vkDestroySampler(_device, it->_albedoInfo._sampler, nullptr);
-          vmaDestroyImage(_vmaAllocator, it->_albedoInfo._image._image, it->_albedoInfo._image._allocation);
-          vkDestroyImageView(_device, it->_albedoInfo._view, nullptr);
-        }
-        if (it->_metRoughInfo) {
-          _bindlessTextureMemIf.removeData(it->_metRoughInfo._bindlessIndexHandle);
-
-          vkDestroySampler(_device, it->_metRoughInfo._sampler, nullptr);
-          vmaDestroyImage(_vmaAllocator, it->_metRoughInfo._image._image, it->_metRoughInfo._image._allocation);
-          vkDestroyImageView(_device, it->_metRoughInfo._view, nullptr);
-        }
-        if (it->_normalInfo) {
-          _bindlessTextureMemIf.removeData(it->_normalInfo._bindlessIndexHandle);
-
-          vkDestroySampler(_device, it->_normalInfo._sampler, nullptr);
-          vmaDestroyImage(_vmaAllocator, it->_normalInfo._image._image, it->_normalInfo._image._allocation);
-          vkDestroyImageView(_device, it->_normalInfo._view, nullptr);
-        }
-        if (it->_emissiveInfo) {
-          _bindlessTextureMemIf.removeData(it->_emissiveInfo._bindlessIndexHandle);
-
-          vkDestroySampler(_device, it->_emissiveInfo._sampler, nullptr);
-          vmaDestroyImage(_vmaAllocator, it->_emissiveInfo._image._image, it->_emissiveInfo._image._allocation);
-          vkDestroyImageView(_device, it->_emissiveInfo._view, nullptr);
-        }
-
         it = _currentMaterials.erase(it);
         break;
       } 
@@ -702,11 +706,10 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     internalMat._emissive = mat._emissive;
     internalMat._baseColFactor = mat._baseColFactor;
     internalMat._id = mat._id;
-
-    if (mat._albedoTex) materialBytes += mat._albedoTex.data.size();
-    if (mat._metallicRoughnessTex) materialBytes += mat._metallicRoughnessTex.data.size();
-    if (mat._normalTex) materialBytes += mat._normalTex.data.size();
-    if (mat._emissiveTex) materialBytes += mat._emissiveTex.data.size();
+    internalMat._albedoTex = mat._albedoTex;
+    internalMat._metRoughTex = mat._metallicRoughnessTex;
+    internalMat._normalTex = mat._normalTex;
+    internalMat._emissiveTex = mat._emissiveTex;
 
     materialBytes += 4 * 4 + 3 * 4; // basecol and emissive
 
@@ -1009,6 +1012,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   printAssetUpdateInfo(
     modelBytes,
     materialBytes,
+    textureBytes,
     update._addedModels.size(),
     numMeshes,
     update._addedSkeletons.size(),
@@ -1148,65 +1152,6 @@ void VulkanRenderer::uploadPendingModels(VkCommandBuffer cmdBuffer)
 
 void VulkanRenderer::uploadPendingMaterials(VkCommandBuffer cmdBuffer)
 {
-  // Create all necessary textures and add to bindless.
-  // This (currently) only needs to happen once, not for each multibuffer index.
-  for (auto& mat : _materialsToUpload) {
-    auto& internalMat = _currentMaterials[_materialIdMap[mat._id]];
-
-    if (mat._albedoTex && !internalMat._albedoInfo) {      
-      createTexture(
-        cmdBuffer,
-        VK_FORMAT_R8G8B8A8_SRGB,
-        mat._albedoTex.width,
-        mat._albedoTex.height,
-        mat._albedoTex.data,
-        internalMat._albedoInfo._sampler,
-        internalMat._albedoInfo._image,
-        internalMat._albedoInfo._view);
-
-      internalMat._albedoInfo._bindlessIndexHandle = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, internalMat._albedoInfo._view, internalMat._albedoInfo._sampler);
-    }
-    if (mat._metallicRoughnessTex && !internalMat._metRoughInfo) {
-      createTexture(
-        cmdBuffer,
-        VK_FORMAT_R8G8B8A8_UNORM,
-        mat._metallicRoughnessTex.width,
-        mat._metallicRoughnessTex.height,
-        mat._metallicRoughnessTex.data,
-        internalMat._metRoughInfo._sampler,
-        internalMat._metRoughInfo._image,
-        internalMat._metRoughInfo._view);
-
-      internalMat._metRoughInfo._bindlessIndexHandle = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, internalMat._metRoughInfo._view, internalMat._metRoughInfo._sampler);
-    }
-    if (mat._normalTex && !internalMat._normalInfo) {
-      createTexture(
-        cmdBuffer,
-        VK_FORMAT_R8G8B8A8_UNORM,
-        mat._normalTex.width,
-        mat._normalTex.height,
-        mat._normalTex.data,
-        internalMat._normalInfo._sampler,
-        internalMat._normalInfo._image,
-        internalMat._normalInfo._view);
-
-      internalMat._normalInfo._bindlessIndexHandle = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, internalMat._normalInfo._view, internalMat._normalInfo._sampler);
-    }
-    if (mat._emissiveTex && !internalMat._emissiveInfo) {
-      createTexture(
-        cmdBuffer,
-        VK_FORMAT_R8G8B8A8_SRGB,
-        mat._emissiveTex.width,
-        mat._emissiveTex.height,
-        mat._emissiveTex.data,
-        internalMat._emissiveInfo._sampler,
-        internalMat._emissiveInfo._image,
-        internalMat._emissiveInfo._view);
-
-      internalMat._emissiveInfo._bindlessIndexHandle = addTextureToBindless(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, internalMat._emissiveInfo._view, internalMat._emissiveInfo._sampler);
-    }
-  }
-
   // Do upload to GPU buffer. Do all current materials.
   std::size_t dataSize = _currentMaterials.size() * sizeof(gpu::GPUMaterialInfo);
   uint8_t* data;
@@ -1222,11 +1167,12 @@ void VulkanRenderer::uploadPendingMaterials(VkCommandBuffer cmdBuffer)
 
     mappedData[i]._baseColFac = glm::vec4(mat._baseColFactor.x, mat._baseColFactor.y, mat._baseColFactor.z, 0.0f);
     mappedData[i]._emissive = mat._emissive;
-    mappedData[i]._bindlessIndices = glm::ivec4(
-      mat._metRoughInfo._bindlessIndexHandle._offset, 
-      mat._albedoInfo._bindlessIndexHandle._offset,
-      mat._normalInfo._bindlessIndexHandle._offset,
-      mat._emissiveInfo._bindlessIndexHandle._offset);
+    mappedData[i]._bindlessIndices = glm::ivec4(-1, -1, -1, -1);
+
+    if (mat._metRoughTex) mappedData[i]._bindlessIndices.x = _currentTextures[_textureIdMap[mat._metRoughTex]]._bindlessInfo._bindlessIndexHandle._offset;
+    if (mat._albedoTex) mappedData[i]._bindlessIndices.y = _currentTextures[_textureIdMap[mat._albedoTex]]._bindlessInfo._bindlessIndexHandle._offset;
+    if (mat._normalTex) mappedData[i]._bindlessIndices.z = _currentTextures[_textureIdMap[mat._normalTex]]._bindlessInfo._bindlessIndexHandle._offset;
+    if (mat._emissiveTex) mappedData[i]._bindlessIndices.w = _currentTextures[_textureIdMap[mat._emissiveTex]]._bindlessInfo._bindlessIndexHandle._offset;
   }
 
   VkBufferCopy copyRegion{};
@@ -1259,6 +1205,41 @@ void VulkanRenderer::uploadPendingMaterials(VkCommandBuffer cmdBuffer)
   _currentStagingOffset += dataSize;
 
   _materialsToUpload.clear();
+}
+
+void VulkanRenderer::uploadPendingTextures(VkCommandBuffer cmdBuffer)
+{
+  // TODO: Issue 29, upload queue
+  for (auto& tex : _texturesToUpload) {
+    VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+
+    if (tex._format == asset::Texture::Format::RGBA8_SRGB) {
+      format = VK_FORMAT_R8G8B8A8_SRGB;
+    }
+
+    internal::InternalTexture internalTex{};
+    internalTex._id = tex._id;
+
+    createTexture(
+      cmdBuffer,
+      format,
+      tex._width,
+      tex._height,
+      tex._data,
+      internalTex._bindlessInfo._sampler,
+      internalTex._bindlessInfo._image,
+      internalTex._bindlessInfo._view);
+
+    internalTex._bindlessInfo._bindlessIndexHandle = addTextureToBindless(
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+      internalTex._bindlessInfo._view, 
+      internalTex._bindlessInfo._sampler);
+
+    _textureIdMap[internalTex._id] = _currentTextures.size();
+    _currentTextures.emplace_back(std::move(internalTex));
+  }
+
+  _texturesToUpload.clear();
 }
 
 void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
@@ -4252,6 +4233,16 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
   // Uploads
   {
+    // Textures
+    if (!_texturesToUpload.empty()) {
+      uploadPendingTextures(commandBuffer);
+
+      // Force material update, since they rely on the indices just created in the upload
+      for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        _materialsChanged[i] = true;
+      }
+    }
+
     // Models, i.e. meshes that need to be uploaded to giga buffers
     if (_modelsChanged[_currentFrame]) {
       // Upload to the giga vertex and index buffers. This will be a no-op if there is nothing to upload.
@@ -4275,8 +4266,6 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
       _materialsChanged[_currentFrame] = false;
     }
-
-    // TODO: Textures
   }
 
   if (forceRenderableUpdate) {

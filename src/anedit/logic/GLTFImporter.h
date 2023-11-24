@@ -2,6 +2,7 @@
 
 #include <render/asset/Prefab.h>
 #include <render/asset/Model.h>
+#include <render/asset/Texture.h>
 #include <render/asset/Material.h>
 #include <render/animation/Animation.h>
 #include <render/animation/Skeleton.h>
@@ -19,6 +20,7 @@ struct LoadedGLTFData
   render::asset::Prefab _prefab;
 
   render::asset::Model _model;
+  std::vector<render::asset::Texture> _textures;
   std::vector<render::asset::Material> _materials; // one per mesh in the model
 
   render::anim::Skeleton _skeleton;

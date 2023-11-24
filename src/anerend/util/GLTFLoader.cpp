@@ -202,6 +202,7 @@ bool GLTFLoader::loadFromFile(
   const std::string& path,
   render::asset::Prefab& prefabOut,
   render::asset::Model& modelOut,
+  std::vector<render::asset::Texture>& texturesOut,
   std::vector<render::asset::Material>& materialsOut,
   std::vector<int>& materialIndicesOut,
   render::anim::Skeleton& skeletonOut,
@@ -250,6 +251,7 @@ bool GLTFLoader::loadFromFile(
   }
 
   std::vector<int> parsedMaterials;
+  std::unordered_map<int, util::Uuid> parsedTextures;
 
   for (int i = 0; i < model.meshes.size(); ++i) {
 
@@ -489,45 +491,93 @@ bool GLTFLoader::loadFromFile(
           int baseColIdx = material.pbrMetallicRoughness.baseColorTexture.index;
           if (baseColIdx >= 0) {
             int imageIdx = model.textures[baseColIdx].source;
-            auto& image = model.images[imageIdx];
 
-            mat._albedoTex.data = image.image;
-            mat._albedoTex.isColor = true;
-            mat._albedoTex.width = image.width;
-            mat._albedoTex.height = image.height;
+            // has this texture been parsed already?
+            if (parsedTextures.find(imageIdx) != parsedTextures.end()) {
+              mat._albedoTex = parsedTextures[imageIdx];
+            }
+            else {
+              auto& image = model.images[imageIdx];
+              render::asset::Texture tex{};
+              mat._albedoTex = tex._id;
+
+              tex._data = std::move(image.image);
+              tex._format = render::asset::Texture::Format::RGBA8_SRGB;
+              tex._width = image.width;
+              tex._height = image.height;
+              parsedTextures[imageIdx] = tex._id;
+
+              texturesOut.emplace_back(std::move(tex));
+            }
           }
 
           int metRoIdx = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
           if (metRoIdx >= 0) {
             int imageIdx = model.textures[metRoIdx].source;
-            auto& image = model.images[imageIdx];
 
-            mat._metallicRoughnessTex.data = image.image;
-            mat._metallicRoughnessTex.isColor = true;
-            mat._metallicRoughnessTex.width = image.width;
-            mat._metallicRoughnessTex.height = image.height;
+            // has this texture been parsed already?
+            if (parsedTextures.find(imageIdx) != parsedTextures.end()) {
+              mat._metallicRoughnessTex = parsedTextures[imageIdx];
+            }
+            else {
+              auto& image = model.images[imageIdx];
+              render::asset::Texture tex{};
+              mat._metallicRoughnessTex = tex._id;
+
+              tex._data = std::move(image.image);
+              tex._format = render::asset::Texture::Format::RGBA8_UNORM;
+              tex._width = image.width;
+              tex._height = image.height;
+              parsedTextures[imageIdx] = tex._id;
+
+              texturesOut.emplace_back(std::move(tex));
+            }
           }
 
           int normalIdx = material.normalTexture.index;
           if (normalIdx >= 0) {
             int imageIdx = model.textures[normalIdx].source;
-            auto& image = model.images[normalIdx];
 
-            mat._normalTex.data = image.image;
-            mat._normalTex.isColor = true;
-            mat._normalTex.width = image.width;
-            mat._normalTex.height = image.height;
+            // has this texture been parsed already?
+            if (parsedTextures.find(imageIdx) != parsedTextures.end()) {
+              mat._normalTex = parsedTextures[imageIdx];
+            }
+            else {
+              auto& image = model.images[imageIdx];
+              render::asset::Texture tex{};
+              mat._normalTex = tex._id;
+
+              tex._data = std::move(image.image);
+              tex._format = render::asset::Texture::Format::RGBA8_UNORM;
+              tex._width = image.width;
+              tex._height = image.height;
+              parsedTextures[imageIdx] = tex._id;
+
+              texturesOut.emplace_back(std::move(tex));
+            }
           }
 
           int emissiveIdx = material.emissiveTexture.index;
           if (emissiveIdx >= 0) {
             int imageIdx = model.textures[emissiveIdx].source;
-            auto& image = model.images[emissiveIdx];
 
-            mat._emissiveTex.data = image.image;
-            mat._emissiveTex.isColor = true;
-            mat._emissiveTex.width = image.width;
-            mat._emissiveTex.height = image.height;
+            // has this texture been parsed already?
+            if (parsedTextures.find(imageIdx) != parsedTextures.end()) {
+              mat._emissiveTex = parsedTextures[imageIdx];
+            }
+            else {
+              auto& image = model.images[imageIdx];
+              render::asset::Texture tex{};
+              mat._emissiveTex = tex._id;
+
+              tex._data = std::move(image.image);
+              tex._format = render::asset::Texture::Format::RGBA8_SRGB;
+              tex._width = image.width;
+              tex._height = image.height;
+              parsedTextures[imageIdx] = tex._id;
+
+              texturesOut.emplace_back(std::move(tex));
+            }
           }
 
           mat._emissive = glm::vec4(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2], 1.0f);
@@ -562,7 +612,7 @@ bool GLTFLoader::loadFromFile(
     prefabOut._name = modelOut._name;
   }
 
-  printf("Loaded model %s. %zu meshes, %zu materials\n", path.c_str(), modelOut._meshes.size(), materialsOut.size());
+  printf("Loaded model %s. %zu meshes, %zu materials, %zu textures\n", path.c_str(), modelOut._meshes.size(), materialsOut.size(), texturesOut.size());
 
   return true;
 }

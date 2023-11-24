@@ -51,7 +51,7 @@ bool drawAssetList(
       }
     }
 
-    std::string label2 = std::string("Mat ") + (i._name.empty() ? i._id.str() : i._name);
+    std::string label2 = (i._name.empty() ? i._id.str() : i._name);
     label2 += "##" + i._id.str();
     if (ImGui::Selectable(label2.c_str(), selectedUuid == i._id)) {
       selectedUuid = i._id;

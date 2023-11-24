@@ -31,6 +31,7 @@
 #include "internal/AnimationThread.h"
 #include "internal/BufferMemoryInterface.h"
 #include "internal/DeletionQueue.h"
+#include "internal/InternalTexture.h"
 #include "AccelerationStructure.h"
 
 //#include "../logic/WindSystem.h"
@@ -253,6 +254,7 @@ private:
   std::vector<internal::InternalModel> _currentModels;
   std::vector<internal::InternalMesh> _currentMeshes;
   std::vector<internal::InternalMaterial> _currentMaterials;
+  std::vector<internal::InternalTexture> _currentTextures;
   std::vector<internal::InternalRenderable> _currentRenderables;
 
   // Maps engine-wide IDs to internal buffer ids.
@@ -260,6 +262,7 @@ private:
   std::unordered_map<util::Uuid, std::size_t> _meshIdMap;
   std::unordered_map<util::Uuid, std::size_t> _renderableIdMap;
   std::unordered_map<util::Uuid, std::size_t> _materialIdMap;
+  std::unordered_map<util::Uuid, std::size_t> _textureIdMap;
 
   // This is needed for generating draw calls, it records how many renderables use each mesh.
   std::unordered_map<util::Uuid, std::size_t> _currentMeshUsage;
@@ -271,9 +274,11 @@ private:
   // Pending uploads
   std::vector<asset::Model> _modelsToUpload;
   std::vector<asset::Material> _materialsToUpload;
+  std::vector<asset::Texture> _texturesToUpload;
 
   void uploadPendingModels(VkCommandBuffer cmdBuffer);
   void uploadPendingMaterials(VkCommandBuffer cmdBuffer);
+  void uploadPendingTextures(VkCommandBuffer cmdBuffer);
 
   // Ray tracing related
   AccelerationStructure registerBottomLevelAS(VkCommandBuffer cmdBuffer, util::Uuid meshId, bool dynamic = false, bool doBarrier = true);

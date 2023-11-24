@@ -10,6 +10,7 @@
 #include "../asset/Material.h"
 #include "../asset/Animator.h"
 #include "../asset/Prefab.h"
+#include "../asset/Texture.h"
 
 #include "../animation/Skeleton.h"
 #include "../animation/Animation.h"
@@ -28,6 +29,8 @@ enum class SceneEventType
   PrefabAdded,
   PrefabUpdated,
   PrefabRemoved,
+  TextureAdded,
+  TextureRemoved,
   ModelAdded,
   ModelRemoved,
   AnimationAdded,
@@ -105,6 +108,10 @@ public:
     return _prefabs;
   }
 
+  const std::vector<asset::Texture>& getTextures() const {
+    return _textures;
+  }
+
   const std::vector<asset::Renderable>& getRenderables() const {
     return _renderables;
   }
@@ -113,6 +120,10 @@ public:
   void updatePrefab(asset::Prefab prefab);
   void removePrefab(util::Uuid id);
   const asset::Prefab* getPrefab(util::Uuid id);
+
+  util::Uuid addTexture(asset::Texture&& texture);
+  void removeTexture(util::Uuid id);
+  const asset::Texture* getTexture(util::Uuid id);
 
   util::Uuid addModel(asset::Model&& model);
   void removeModel(util::Uuid id);
@@ -164,6 +175,7 @@ private:
   std::vector<anim::Skeleton> _skeletons;
   std::vector<asset::Animator> _animators;
   std::vector<asset::Prefab> _prefabs;
+  std::vector<asset::Texture> _textures;
   std::vector<asset::Renderable> _renderables;
 
   SceneEventLog _eventLog;

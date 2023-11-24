@@ -45,6 +45,7 @@ Scene::Scene(Scene&& rhs)
   std::swap(_animators, rhs._animators);
   std::swap(_renderables, rhs._renderables);
   std::swap(_prefabs, rhs._prefabs);
+  std::swap(_textures, rhs._textures);
   std::swap(_eventLog, rhs._eventLog);
 }
 
@@ -59,6 +60,7 @@ Scene& Scene::operator=(Scene&& rhs)
     std::swap(_animators, rhs._animators);
     std::swap(_renderables, rhs._renderables);
     std::swap(_prefabs, rhs._prefabs);
+    std::swap(_textures, rhs._textures);
     std::swap(_eventLog, rhs._eventLog);
   }
 
@@ -133,6 +135,34 @@ const asset::Prefab* Scene::getPrefab(util::Uuid id)
 {
   asset::Prefab* p = nullptr;
   getAsset(_prefabs, id, &p);
+  return p;
+}
+
+util::Uuid Scene::addTexture(asset::Texture&& texture)
+{
+  auto id = texture._id;
+  addEvent(SceneEventType::TextureAdded, texture._id);
+  _textures.emplace_back(std::move(texture));
+  return id;
+}
+
+void Scene::removeTexture(util::Uuid id)
+{
+  for (auto it = _textures.begin(); it != _textures.end(); ++it) {
+    if (it->_id == id) {
+      _textures.erase(it);
+      addEvent(SceneEventType::TextureRemoved, id);
+      return;
+    }
+  }
+
+  printf("Could not remove model %s, doesn't exist!\n", id.str().c_str());
+}
+
+const asset::Texture* Scene::getTexture(util::Uuid id)
+{
+  asset::Texture* p = nullptr;
+  getAsset(_textures, id, &p);
   return p;
 }
 

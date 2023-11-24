@@ -23,6 +23,7 @@ void GLTFImporter::startLoad(const std::filesystem::path& path)
       path.string(),
       data._prefab,
       data._model,
+      data._textures,
       data._materials,
       materialIndices,
       data._skeleton,

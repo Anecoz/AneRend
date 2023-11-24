@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../ImageHelpers.h"
+//#include "../ImageHelpers.h"
 #include "../../util/Uuid.h"
 
 #include <string>
@@ -22,15 +22,15 @@ struct Material
   glm::vec4 _emissive = glm::vec4(0.0f);
 
   // G-channel roughness, B-channel metallic.
-  imageutil::TextureData _metallicRoughnessTex;
+  util::Uuid _metallicRoughnessTex;
 
-  imageutil::TextureData _albedoTex;
+  util::Uuid _albedoTex;
 
   // In tangent space, only really usable if tangents are present as vertex attributes.
-  imageutil::TextureData _normalTex;
+  util::Uuid _normalTex;
 
   // See _emissive member above.
-  imageutil::TextureData _emissiveTex;
+  util::Uuid _emissiveTex;
 };
 
 }

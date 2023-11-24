@@ -7,6 +7,7 @@
 #include "asset/Model.h"
 #include "asset/Renderable.h"
 #include "asset/Material.h"
+#include "asset/Texture.h"
 #include "asset/Animator.h"
 #include "animation/Animation.h"
 #include "animation/Skeleton.h"
@@ -34,6 +35,8 @@ struct AssetUpdate
       !_addedMaterials.empty() ||
       !_updatedMaterials.empty() ||
       !_removedMaterials.empty() ||
+      !_addedTextures.empty() ||
+      !_removedTextures.empty() ||
       !_addedAnimations.empty() ||
       !_removedAnimations.empty() ||
       !_addedAnimators.empty() ||
@@ -52,6 +55,9 @@ struct AssetUpdate
   std::vector<asset::Material> _addedMaterials;
   std::vector<asset::Material> _updatedMaterials;
   std::vector<util::Uuid> _removedMaterials;
+
+  std::vector<asset::Texture> _addedTextures;
+  std::vector<util::Uuid> _removedTextures;
 
   std::vector<anim::Animation> _addedAnimations;
   std::vector<util::Uuid> _removedAnimations;

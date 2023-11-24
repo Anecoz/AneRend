@@ -132,15 +132,6 @@ void serialize(S& s, std::vector<render::asset::Model>& v)
 }
 
 template <typename S>
-void serialize(S& s, render::imageutil::TextureData& t)
-{
-  s.container1b(t.data, 100'000'000); // 100MB
-  s.value4b(t.width);
-  s.value4b(t.height);
-  s.value1b(t.isColor);
-}
-
-template <typename S>
 void serialize(S& s, render::asset::Material& m)
 {
   s.object(m._id);
@@ -157,6 +148,22 @@ template <typename S>
 void serialize(S& s, std::vector<render::asset::Material>& m)
 {
   s.container(m, 1000);
+}
+
+template <typename S>
+void serialize(S& s, render::asset::Texture& t)
+{
+  s.object(t._id);
+  s.value1b(t._format);
+  s.value4b(t._width);
+  s.value4b(t._height);
+  s.container1b(t._data, 100'000'000); // 100MB
+}
+
+template <typename S>
+void serialize(S& s, std::vector<render::asset::Texture>& t)
+{
+  s.container(t, 500);
 }
 
 template <typename S>
@@ -255,6 +262,7 @@ std::uint32_t headerSize()
   return
     1 + // ver
     4 + // prefab idx
+    4 + // texture idx
     4 + // model idx
     4 + // mat idx
     4 + // anim idx
@@ -300,6 +308,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
         -- header--
         1 byte  version         (uint8_t)
         4 bytes prefab idx      (uint32_t)
+        4 bytes tex idx         (uint32_t)
         4 bytes model idx       (uint32_t)
         4 bytes material idx    (uint32_t)
         4 bytes animation idx   (uint32_t)
@@ -308,6 +317,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
         4 bytes renderable idx  (uint32_t)
 
         -- prefabs --
+
+        -- textures --
 
         -- models --
 
@@ -329,6 +340,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       // TODO: Should probably add a mechanism to make sure that scene stays alive for this duration.
       auto models = scene._models;
       auto prefabs = scene._prefabs;
+      auto textures = scene._textures;
       auto materials = scene._materials;
       auto animations = scene._animations;
       auto skeletons = scene._skeletons;
@@ -346,6 +358,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
 
       // Use bitsery to serialize the vectors
       std::vector<std::uint8_t> serialisedPrefabs;
+      std::vector<std::uint8_t> serialisedTextures;
       std::vector<std::uint8_t> serialisedModels;
       std::vector<std::uint8_t> serialisedMats;
       std::vector<std::uint8_t> serialisedAnimations;
@@ -355,6 +368,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
 
       printf("Serialising prefabs...\n");
       auto prefabsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedPrefabs, prefabs);
+      printf("Serialising textures...\n");
+      auto texturesByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedTextures, textures);
       printf("Serialising models...\n");
       auto modelsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedModels, models);
       printf("Serialising materials...\n");
@@ -373,7 +388,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       printf("Writing to disk...\n");
 
       auto prefabIdx = headerSz;
-      auto modelIdx = prefabIdx + prefabsByteSize;
+      auto textureIdx = prefabIdx + prefabsByteSize;
+      auto modelIdx = textureIdx + texturesByteSize;
       auto materialIdx = modelIdx + modelsByteSize;
       auto animationIdx = materialIdx + matsByteSize;
       auto skeletonIdx = animationIdx + animationsByteSize;
@@ -383,6 +399,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       file.write((const char*)&version, 1);
       // prefab idx (where model info starts)
       file.write((const char*)&prefabIdx, 4);
+      // texture idx (where model info starts)
+      file.write((const char*)&textureIdx, 4);
       // model idx (where model info starts)
       file.write((const char*)&modelIdx, 4);
       // material idx
@@ -399,6 +417,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       
       // write the data
       file.write((const char*)serialisedPrefabs.data(), prefabsByteSize);
+      file.write((const char*)serialisedTextures.data(), texturesByteSize);
       file.write((const char*)serialisedModels.data(), modelsByteSize);
       file.write((const char*)serialisedMats.data(), matsByteSize);
       file.write((const char*)serialisedAnimations.data(), animationsByteSize);
@@ -461,6 +480,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         -- header--
         1 byte  version         (uint8_t)
         4 bytes prefabs idx     (uint32_t)
+        4 bytes tex idx         (uint32_t)
         4 bytes model idx       (uint32_t)
         4 bytes material idx    (uint32_t)
         4 bytes animation idx   (uint32_t)
@@ -469,6 +489,8 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         4 bytes renderable idx  (uint32_t)
 
         -- prefabs --
+
+        -- textures --
 
         -- models --
 
@@ -506,14 +528,16 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
 
       uint32_t* header4BytePtr = reinterpret_cast<uint32_t*>(header.data() + 1);
       uint32_t prefabIdx = header4BytePtr[0];
-      uint32_t modelIdx = header4BytePtr[1];
-      uint32_t materialIdx = header4BytePtr[2];
-      uint32_t animationIdx = header4BytePtr[3];
-      uint32_t skeletonIdx = header4BytePtr[4];
-      uint32_t animatorIdx = header4BytePtr[5];
-      uint32_t rendIdx = header4BytePtr[6];
+      uint32_t textureIdx = header4BytePtr[1];
+      uint32_t modelIdx = header4BytePtr[2];
+      uint32_t materialIdx = header4BytePtr[3];
+      uint32_t animationIdx = header4BytePtr[4];
+      uint32_t skeletonIdx = header4BytePtr[5];
+      uint32_t animatorIdx = header4BytePtr[6];
+      uint32_t rendIdx = header4BytePtr[7];
 
-      std::vector<std::uint8_t> serialisedPrefabs(modelIdx - prefabIdx);
+      std::vector<std::uint8_t> serialisedPrefabs(textureIdx - prefabIdx);
+      std::vector<std::uint8_t> serialisedTextures(modelIdx - textureIdx);
       std::vector<std::uint8_t> serialisedModels(materialIdx - modelIdx);
       std::vector<std::uint8_t> serialisedMats(animationIdx - materialIdx);
       std::vector<std::uint8_t> serialisedAnimations(skeletonIdx - animationIdx);
@@ -523,6 +547,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
 
       // We need these here so that we can add them properly to the scene.
       std::vector<render::asset::Prefab> prefabs;
+      std::vector<render::asset::Texture> textures;
       std::vector<render::asset::Model> models;
       std::vector<render::asset::Material> mats;
       std::vector<render::anim::Animation> animations;
@@ -532,6 +557,12 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
 
       // Read prefabs
       if (!desHelper(file, prefabIdx, serialisedPrefabs, prefabs)) {
+        p.set_value(DeserialisedSceneData());
+        return;
+      }
+
+      // Read textures
+      if (!desHelper(file, textureIdx, serialisedTextures, textures)) {
         p.set_value(DeserialisedSceneData());
         return;
       }
@@ -574,6 +605,9 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
 
       for (auto& p : prefabs) {
         outputData._scene->addPrefab(std::move(p));
+      }
+      for (auto& t : textures) {
+        outputData._scene->addTexture(std::move(t));
       }
       for (auto& model : models) {
         outputData._scene->addModel(std::move(model));
