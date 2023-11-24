@@ -30,6 +30,7 @@ void EditPrefabGUI::immediateDraw(logic::AneditContext* c)
   float boundingSphereRadius = 0.0f;
 
   char name[32];
+  name[0] = '\0';
 
   ImGui::Begin("EditPrefab");
 

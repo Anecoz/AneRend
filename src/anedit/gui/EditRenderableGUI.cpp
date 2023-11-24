@@ -34,6 +34,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
   bool visible = false;
 
   char name[32];
+  name[0] = '\0';
 
   ImGui::Begin("EditRenderable");
 
