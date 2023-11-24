@@ -1169,10 +1169,10 @@ void VulkanRenderer::uploadPendingMaterials(VkCommandBuffer cmdBuffer)
     mappedData[i]._emissive = mat._emissive;
     mappedData[i]._bindlessIndices = glm::ivec4(-1, -1, -1, -1);
 
-    if (mat._metRoughTex) mappedData[i]._bindlessIndices.x = _currentTextures[_textureIdMap[mat._metRoughTex]]._bindlessInfo._bindlessIndexHandle._offset;
-    if (mat._albedoTex) mappedData[i]._bindlessIndices.y = _currentTextures[_textureIdMap[mat._albedoTex]]._bindlessInfo._bindlessIndexHandle._offset;
-    if (mat._normalTex) mappedData[i]._bindlessIndices.z = _currentTextures[_textureIdMap[mat._normalTex]]._bindlessInfo._bindlessIndexHandle._offset;
-    if (mat._emissiveTex) mappedData[i]._bindlessIndices.w = _currentTextures[_textureIdMap[mat._emissiveTex]]._bindlessInfo._bindlessIndexHandle._offset;
+    if (mat._metRoughTex) mappedData[i]._bindlessIndices.x = (int32_t)_currentTextures[_textureIdMap[mat._metRoughTex]]._bindlessInfo._bindlessIndexHandle._offset;
+    if (mat._albedoTex) mappedData[i]._bindlessIndices.y = (int32_t)_currentTextures[_textureIdMap[mat._albedoTex]]._bindlessInfo._bindlessIndexHandle._offset;
+    if (mat._normalTex) mappedData[i]._bindlessIndices.z = (int32_t)_currentTextures[_textureIdMap[mat._normalTex]]._bindlessInfo._bindlessIndexHandle._offset;
+    if (mat._emissiveTex) mappedData[i]._bindlessIndices.w = (int32_t)_currentTextures[_textureIdMap[mat._emissiveTex]]._bindlessInfo._bindlessIndexHandle._offset;
   }
 
   VkBufferCopy copyRegion{};
