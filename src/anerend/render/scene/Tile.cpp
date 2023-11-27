@@ -50,6 +50,16 @@ void Tile::removeRenderable(util::Uuid id)
   _renderables.erase(std::remove(_renderables.begin(), _renderables.end(), id), _renderables.end());
 }
 
+void Tile::addLight(util::Uuid id)
+{
+  _lights.emplace_back(id);
+}
+
+void Tile::removeLight(util::Uuid id)
+{
+  _lights.erase(std::remove(_lights.begin(), _lights.end(), id), _lights.end());
+}
+
 TileIndex Tile::posToIdx(const glm::vec3& pos)
 {
   // Project translation to y=0 plane

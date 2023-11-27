@@ -141,7 +141,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
   ImGui::End();
 
   // Do gizmo (transform) editing with ImGuizmo
-  if (id) {
+  if (id && c->latestSelection() == id) {
     glm::vec3 modelTrans = c->scene().getRenderable(id)->_transform[3];
     glm::mat4 m{ 1.0f };
 

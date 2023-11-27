@@ -15,6 +15,12 @@ TileIndex findRenderableTile(const asset::Renderable& renderable, unsigned tileS
   return Tile::posToIdx(t);
 }
 
+TileIndex findLightTile(const asset::Light& light, unsigned tileSize)
+{
+  glm::vec3 t = light._pos;
+  return Tile::posToIdx(t);
+}
+
 template<typename T, typename IDType>
 bool getAsset(std::vector<T>& vec, IDType id, T** tOut)
 {
@@ -47,6 +53,7 @@ Scene::Scene(Scene&& rhs)
   std::swap(_prefabs, rhs._prefabs);
   std::swap(_textures, rhs._textures);
   std::swap(_eventLog, rhs._eventLog);
+  std::swap(_lights, rhs._lights);
 }
 
 Scene& Scene::operator=(Scene&& rhs)
@@ -62,6 +69,7 @@ Scene& Scene::operator=(Scene&& rhs)
     std::swap(_prefabs, rhs._prefabs);
     std::swap(_textures, rhs._textures);
     std::swap(_eventLog, rhs._eventLog);
+    std::swap(_lights, rhs._lights);
   }
 
   return *this;
@@ -331,6 +339,72 @@ const asset::Animator* Scene::getAnimator(util::Uuid id)
   asset::Animator* animator = nullptr;
   getAsset(_animators, id, &animator);
   return animator;
+}
+
+util::Uuid Scene::addLight(asset::Light&& l)
+{
+  auto id = l._id;
+
+  // Find which tile this light belongs to
+  auto tileIdx = findLightTile(l, Tile::_tileSize);
+  _lights.emplace_back(std::move(l));
+
+  auto it = _tiles.find(tileIdx);
+
+  if (it == _tiles.end()) {
+    // Add a new tile here
+    Tile tile(tileIdx);
+    _tiles[tileIdx] = std::move(tile);
+  }
+
+  _tiles[tileIdx].addLight(id);
+
+  addEvent(SceneEventType::LightAdded, id, tileIdx);
+
+  return id;
+}
+
+void Scene::updateLight(asset::Light l)
+{
+  for (auto it = _lights.begin(); it != _lights.end(); ++it) {
+    if (it->_id == l._id) {
+      *it = std::move(l);
+
+      auto tileIdx = findLightTile(*it, Tile::_tileSize);
+      addEvent(SceneEventType::LightUpdated, it->_id, tileIdx);
+      return;
+    }
+  }
+
+  printf("Could not update light with id %s, doesn't exist!\n", l._id.str().c_str());
+}
+
+void Scene::removeLight(util::Uuid id)
+{
+  for (auto it = _lights.begin(); it != _lights.end(); ++it) {
+    if (it->_id == id) {
+      auto tileIdx = findLightTile(*it, Tile::_tileSize);
+      auto tileIt = _tiles.find(tileIdx);
+
+      if (tileIt != _tiles.end()) {
+        tileIt->second.removeLight(id);
+      }
+
+      _lights.erase(it);
+
+      addEvent(SceneEventType::LightRemoved, id, tileIdx);
+      return;
+    }
+  }
+
+  printf("Could not remove light with id %s, doesn't exist!\n", id.str().c_str());
+}
+
+const asset::Light* Scene::getLight(util::Uuid id)
+{
+  asset::Light* l = nullptr;
+  getAsset(_lights, id, &l);
+  return l;
 }
 
 util::Uuid Scene::addRenderable(asset::Renderable&& renderable)

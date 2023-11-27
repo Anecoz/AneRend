@@ -11,6 +11,7 @@
 #include "../asset/Animator.h"
 #include "../asset/Prefab.h"
 #include "../asset/Texture.h"
+#include "../asset/Light.h"
 
 #include "../animation/Skeleton.h"
 #include "../animation/Animation.h"
@@ -45,7 +46,10 @@ enum class SceneEventType
   MaterialRemoved,
   RenderableAdded,
   RenderableUpdated,
-  RenderableRemoved
+  RenderableRemoved,
+  LightAdded,
+  LightUpdated,
+  LightRemoved
 };
 
 struct SceneEvent
@@ -116,6 +120,10 @@ public:
     return _renderables;
   }
 
+  const std::vector<asset::Light>& getLights() const {
+    return _lights;
+  }
+
   util::Uuid addPrefab(asset::Prefab&& prefab);
   void updatePrefab(asset::Prefab prefab);
   void removePrefab(util::Uuid id);
@@ -147,6 +155,11 @@ public:
   void removeAnimator(util::Uuid id);
   const asset::Animator* getAnimator(util::Uuid id);
 
+  util::Uuid addLight(asset::Light&& l);
+  void updateLight(asset::Light l);
+  void removeLight(util::Uuid id);
+  const asset::Light* getLight(util::Uuid id);
+
   util::Uuid addRenderable(asset::Renderable&& renderable);
   void removeRenderable(util::Uuid id);
   const asset::Renderable* getRenderable(util::Uuid id);
@@ -177,6 +190,7 @@ private:
   std::vector<asset::Prefab> _prefabs;
   std::vector<asset::Texture> _textures;
   std::vector<asset::Renderable> _renderables;
+  std::vector<asset::Light> _lights;
 
   SceneEventLog _eventLog;
   internal::SceneSerializer _serialiser;

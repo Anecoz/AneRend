@@ -9,6 +9,7 @@
 #include "asset/Material.h"
 #include "asset/Texture.h"
 #include "asset/Animator.h"
+#include "asset/Light.h"
 #include "animation/Animation.h"
 #include "animation/Skeleton.h"
 #include "internal/InternalMesh.h"
@@ -46,7 +47,10 @@ struct AssetUpdate
       !_removedSkeletons.empty() ||
       !_addedRenderables.empty() ||
       !_updatedRenderables.empty() ||
-      !_removedRenderables.empty();
+      !_removedRenderables.empty() ||
+      !_addedLights.empty() ||
+      !_updatedLights.empty() ||
+      !_removedLights.empty();
   }
 
   std::vector<asset::Model> _addedModels;
@@ -72,6 +76,10 @@ struct AssetUpdate
   std::vector<asset::Renderable> _addedRenderables;
   std::vector<asset::Renderable> _updatedRenderables;
   std::vector<util::Uuid> _removedRenderables;
+
+  std::vector<asset::Light> _addedLights;
+  std::vector<asset::Light> _updatedLights;
+  std::vector<util::Uuid> _removedLights;
 };
 
 class RenderContext

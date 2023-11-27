@@ -10,6 +10,7 @@
 #include "../gui/EditMaterialGUI.h"
 #include "../gui/EditPrefabGUI.h"
 #include "../gui/EditAnimatorGUI.h"
+#include "../gui/EditLightGUI.h"
 
 #include <imgui.h>
 #include <nfd.hpp>
@@ -168,6 +169,7 @@ void AneditApplication::setupGuis()
   _guis.emplace_back(new gui::EditMaterialGUI());
   _guis.emplace_back(new gui::EditPrefabGUI());
   _guis.emplace_back(new gui::EditAnimatorGUI());
+  _guis.emplace_back(new gui::EditLightGUI());
 }
 
 void AneditApplication::updateConfig()
@@ -442,8 +444,14 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
 
       // Also select it
       _selectedRenderable = rend._id;
+      _latestSelection = rend._id;
       _scene.addRenderable(std::move(rend));
     });
+}
+
+util::Uuid& AneditApplication::latestSelection()
+{
+  return _latestSelection;
 }
 
 util::Uuid& AneditApplication::selectedRenderable()
@@ -464,6 +472,11 @@ util::Uuid& AneditApplication::selectedPrefab()
 util::Uuid& AneditApplication::selectedAnimator()
 {
   return _selectedAnimator;
+}
+
+util::Uuid& AneditApplication::selectedLight()
+{
+  return _selectedLight;
 }
 
 render::Camera& AneditApplication::camera()

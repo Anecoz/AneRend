@@ -29,6 +29,10 @@ public:
   void removeRenderable(util::Uuid id);
   const std::vector<util::Uuid>& getRenderableIds() const { return _renderables; }
 
+  void addLight(util::Uuid id);
+  void removeLight(util::Uuid id);
+  const std::vector<util::Uuid>& getLightIds() const { return _lights; }
+
   static const unsigned _tileSize = 32; // in world space
   static TileIndex posToIdx(const glm::vec3& pos);
 
@@ -36,8 +40,9 @@ private:
   TileIndex _index;
   bool _initialized = false;
 
-  // TODO: Lights, particles
+  // TODO: particles
   std::vector<util::Uuid> _renderables;
+  std::vector<util::Uuid> _lights;
 
 };
 

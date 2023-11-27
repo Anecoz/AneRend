@@ -269,6 +269,7 @@ private:
 
   std::vector<bool> _modelsChanged;
   std::vector<bool> _renderablesChanged;
+  std::vector<bool> _lightsChanged;
   std::vector<bool> _materialsChanged;
 
   // Pending uploads
@@ -442,7 +443,7 @@ private:
 
   std::vector<ViewCluster> _viewClusters;
 
-  std::vector<Light> _lights;
+  std::vector<asset::Light> _lights;
 
   VmaAllocator _vmaAllocator;
 
@@ -458,7 +459,7 @@ private:
   bool createCommandBuffers();
   bool createSyncObjects();
   bool createDescriptorPool();
-  bool initLights();
+  //bool initLights();
   bool initImgui();
   bool initGigaMeshBuffer();
   bool initGpuBuffers();

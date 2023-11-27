@@ -211,7 +211,7 @@ VulkanRenderer::~VulkanRenderer()
     vkext::vkDestroyAccelerationStructureKHR(_device, _tlas._as, nullptr);
   }
 
-  for (auto& light: _lights) {
+  /*for (auto& light : _lights) {
     for (auto& v: light._shadowImageViews) {
       vkDestroyImageView(_device, v, nullptr);
     }
@@ -220,7 +220,7 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyImage(_vmaAllocator, light._shadowImage._image, light._shadowImage._allocation);
     vkDestroySampler(_device, light._sampler, nullptr);
     light._shadowImageViews.clear();
-  }
+  }*/
 
   vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
   vkDestroyDescriptorPool(_device, _imguiDescriptorPool, nullptr);
@@ -279,6 +279,7 @@ VulkanRenderer::~VulkanRenderer()
 bool VulkanRenderer::init()
 {
   _renderablesChanged.resize(MAX_FRAMES_IN_FLIGHT);
+  _lightsChanged.resize(MAX_FRAMES_IN_FLIGHT);
   _modelsChanged.resize(MAX_FRAMES_IN_FLIGHT);
   _materialsChanged.resize(MAX_FRAMES_IN_FLIGHT);
 
@@ -353,10 +354,10 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");
 
-  printf("Init lights...");
+  /*printf("Init lights...");
   res &= initLights();
   if (!res) return false;
-  printf("Done!\n");
+  printf("Done!\n");*/
 
   printf("Init giga mesh buffer...");
   res &= initGigaMeshBuffer();
@@ -394,6 +395,9 @@ bool VulkanRenderer::init()
   printf("Done!\n");  
 
   for (auto& val : _renderablesChanged) {
+    val = false;
+  }
+  for (auto& val : _lightsChanged) {
     val = false;
   }
   for (auto& val : _modelsChanged) {
@@ -964,6 +968,31 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     _currentRenderables[it->second]._renderable = rend;
   }
 
+  // Removed lights
+  for (auto& l : update._removedLights) {
+    for (auto it = _lights.begin(); it != _lights.end(); ++it) {
+      if (it->_id == l) {
+        _lights.erase(it);
+        break;
+      }
+    }
+  }
+
+  // Added lights
+  for (auto& l : update._addedLights) {
+    _lights.emplace_back(std::move(l));
+  }
+
+  // Updated lights
+  for (auto& l : update._updatedLights) {
+    for (auto& oldLight : _lights) {
+      if (oldLight._id == l._id) {
+        oldLight = l;
+        break;
+      }
+    }
+  }
+
   // Mat id map update
   if (materialIdMapUpdate) {
     _materialIdMap.clear();
@@ -986,10 +1015,12 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     }
   }
 
+
   // Book-keeping
   bool modelChange = forceModelChange || !update._addedModels.empty() || !update._removedModels.empty();
   bool renderableChange = !update._addedRenderables.empty() || !update._removedRenderables.empty() || !update._updatedRenderables.empty();
   bool materialChange = !update._addedMaterials.empty() || !update._removedMaterials.empty() || !update._updatedMaterials.empty();
+  bool lightChange = !update._addedLights.empty() || !update._updatedLights.empty() || !update._removedLights.empty();
 
   if (modelChange) {
     for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -1000,6 +1031,12 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   if (renderableChange) {
     for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
       _renderablesChanged[i] = true;
+    }
+  }
+
+  if (lightChange) {
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      _lightsChanged[i] = true;
     }
   }
 
@@ -1486,11 +1523,11 @@ void VulkanRenderer::update(
   ubo.exposure = _renderOptions.exposure;
   ubo.rtEnabled = _enableRayTracing;
 
-  for (int i = 0; i < _lights.size(); ++i) {
+  /*for (int i = 0; i < _lights.size(); ++i) {
     _lights[i].debugUpdatePos(delta);
     //ubo.lightColor[i] = glm::vec4(_lights[i]._color, 1.0);
     //ubo.lightPos[i] = glm::vec4(_lights[i]._pos, 0.0);
-  }
+  }*/
 
   void* data;
   vmaMapMemory(_vmaAllocator, _gpuSceneDataBuffer[_currentFrame]._allocation, &data);
@@ -3108,7 +3145,7 @@ bool VulkanRenderer::createSyncObjects()
   return true;
 }
 
-bool VulkanRenderer::initLights()
+/*bool VulkanRenderer::initLights()
 {
   //_lights.resize(MAX_NUM_LIGHTS);
 
@@ -3146,7 +3183,7 @@ bool VulkanRenderer::initLights()
   }
 
   return true;
-}
+}*/
 
 bool VulkanRenderer::initBindless()
 {
@@ -4283,8 +4320,9 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
     _renderablesChanged[_currentFrame] = false;
   }
 
-  // Only do if lights have updated
-  prefillGPULightBuffer(commandBuffer);
+  if (_lightsChanged[_currentFrame]) {
+    prefillGPULightBuffer(commandBuffer);
+  }
 
   // Update windforce texture
   updateWindForceImage(commandBuffer);

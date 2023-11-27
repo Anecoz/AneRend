@@ -103,6 +103,17 @@ void ScenePager::update(const glm::vec3& pos)
             else if (event._type == SceneEventType::RenderableRemoved) {
               upd._removedRenderables.emplace_back(event._id);
             }
+            else if (event._type == SceneEventType::LightAdded) {
+              auto lightCopy = *_scene->getLight(event._id);
+              upd._addedLights.emplace_back(std::move(lightCopy));
+            }
+            else if (event._type == SceneEventType::LightUpdated) {
+              auto c = *_scene->getLight(event._id);
+              upd._updatedLights.emplace_back(std::move(c));
+            }
+            else if (event._type == SceneEventType::LightRemoved) {
+              upd._removedLights.emplace_back(event._id);
+            }
           }
         }
 
@@ -110,9 +121,14 @@ void ScenePager::update(const glm::vec3& pos)
         continue;
       }
 
+      // Page renderables, lights etc
       for (const auto& rendId : tile->getRenderableIds()) {
         auto copy = *_scene->getRenderable(rendId);
         upd._addedRenderables.emplace_back(std::move(copy));
+      }
+      for (const auto& lightId : tile->getLightIds()) {
+        auto copy = *_scene->getLight(lightId);
+        upd._addedLights.emplace_back(std::move(copy));
       }
 
       pagedTiles.emplace_back(currIdx);
@@ -134,6 +150,10 @@ void ScenePager::update(const glm::vec3& pos)
     // Remove renderables contained in tile
     for (const auto& rendId : tile->getRenderableIds()) {
       upd._removedRenderables.emplace_back(rendId);
+    }
+    // Remove lights
+    for (const auto& lightId : tile->getLightIds()) {
+      upd._removedLights.emplace_back(lightId);
     }
   }
 
