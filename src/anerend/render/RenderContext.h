@@ -112,8 +112,11 @@ public:
 
   virtual size_t getMaxNumMeshes() = 0;
   virtual size_t getMaxNumRenderables() = 0;
-
   virtual size_t getMaxBindlessResources() = 0;
+  virtual size_t getMaxNumPointLightShadows() = 0;
+
+  virtual const std::vector<render::asset::Light>& getLights() = 0;
+  virtual std::vector<int> getShadowCasterLightIndices() = 0;
 
   virtual std::vector<internal::InternalMesh>& getCurrentMeshes() = 0;
   virtual std::vector<internal::InternalRenderable>& getCurrentRenderables() = 0;

@@ -87,6 +87,9 @@ void RenderResourceVault::clear(RenderContext* rc)
         for (int i = 0; i < im->_views.size(); ++i) {
           vkDestroyImageView(rc->device(), im->_views[i], nullptr);
         }
+        for (auto& cubeView : im->_cubeViews) {
+          vkDestroyImageView(rc->device(), cubeView, nullptr);
+        }
       }
     }
   }

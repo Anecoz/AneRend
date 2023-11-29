@@ -51,6 +51,7 @@ struct ImageRenderResource : public IRenderResource
 
   AllocatedImage _image;
   std::vector<VkImageView> _views; // 0 contains all mips, rest contains separate views for each mip (if there are any further mips)
+  std::vector<VkImageView> _cubeViews; // 0 contains the "cube view" and the rest are Front, back, up, down, right, left
   VkFormat _format;
 };
 

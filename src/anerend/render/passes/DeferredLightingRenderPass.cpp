@@ -223,6 +223,18 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
 
     resourceUsages.emplace_back(std::move(usage));
   }
+  for (std::size_t i = 0; i < rc->getMaxNumPointLightShadows(); ++i) {
+    ResourceUsage usage{};
+    usage._resourceName = "PointShadowMap" + std::to_string(i);
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SampledDepthTexture;
+
+    usage._arrayId = 0;
+    usage._arrayIdx = (int)i;
+
+    resourceUsages.emplace_back(std::move(usage));
+  }
   /*for (int i = 0; i < 1; ++i) {
     for (int j = 0; j < 9; ++j) {
       ResourceUsage usage{};
@@ -262,17 +274,24 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
       uint32_t numX = extent.width / 32;
       uint32_t numY = extent.height / 32;
 
-      std::uint32_t pushData[2];
-      pushData[0] = extent.width;
-      pushData[1] = extent.height;
+      struct Push {
+        glm::ivec4 lightIndices;
+        unsigned width;
+        unsigned height;
+      } push;
+
+      auto& lightIndices = exeParams.rc->getShadowCasterLightIndices();
+      push.lightIndices = glm::ivec4(lightIndices[0], lightIndices[1], lightIndices[2], lightIndices[3]);
+      push.width = extent.width;
+      push.height = extent.height;
 
       vkCmdPushConstants(
         *exeParams.cmdBuffer,
         *exeParams.pipelineLayout,
         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR,
         0,
-        2 * sizeof(uint32_t),
-        pushData);
+        sizeof(Push),
+        &push);
         
       vkCmdDispatch(*exeParams.cmdBuffer, numX + 1, numY + 1, 1);
     });

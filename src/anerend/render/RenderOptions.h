@@ -7,6 +7,7 @@ struct RenderOptions
   bool ssao = true;
   bool fxaa = false;
   bool directionalShadows = false;
+  bool pointShadows = true;
   bool raytracedShadows = true;
   bool visualizeBoundingSpheres = false;
   bool raytracingEnabled = true;

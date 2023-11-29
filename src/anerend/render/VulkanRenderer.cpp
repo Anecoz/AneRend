@@ -432,6 +432,8 @@ bool VulkanRenderer::init()
     VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT, // hopefully BAR mem
     _worldPosRequest._hostBuffer);
 
+  std::fill(_shadowCasterIndices.begin(), _shadowCasterIndices.end(), -1);
+
   return res;
 }
 
@@ -972,6 +974,19 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   for (auto& l : update._removedLights) {
     for (auto it = _lights.begin(); it != _lights.end(); ++it) {
       if (it->_id == l) {
+
+        if (it->_shadowCaster) {
+          // Remove index from caster list (if there)
+          auto idx = it - _lights.begin();
+
+          for (auto& ind : _shadowCasterIndices) {
+            if (ind == (int)idx) {
+              ind = -1;
+              break;
+            }
+          }
+        }
+
         _lights.erase(it);
         break;
       }
@@ -980,16 +995,52 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
   // Added lights
   for (auto& l : update._addedLights) {
+
+    // add to shadow caster index list (if possible)
+    if (l._shadowCaster) {
+      for (auto& ind : _shadowCasterIndices) {
+        if (ind == -1) {
+          ind = (int)_lights.size();
+          break;
+        }
+      }
+    }
+
+    l.updateViewMatrices();
     _lights.emplace_back(std::move(l));
   }
 
   // Updated lights
   for (auto& l : update._updatedLights) {
+    int idx = 0;
     for (auto& oldLight : _lights) {
       if (oldLight._id == l._id) {
+
+        // Did shadow caster status change?
+        if (oldLight._shadowCaster && !l._shadowCaster) {
+          // it was shadow caster but not anymore, remove from list
+          for (auto& ind : _shadowCasterIndices) {
+            if (ind == idx) {
+              ind = -1;
+              break;
+            }
+          }
+        }
+        else if (!oldLight._shadowCaster && l._shadowCaster) {
+          // wasn't shadow caster but now is, add to list if possible
+          for (auto& ind : _shadowCasterIndices) {
+            if (ind == -1) {
+              ind = idx;
+              break;
+            }
+          }
+        }
+
+        l.updateViewMatrices();
         oldLight = l;
         break;
       }
+      idx++;
     }
   }
 
@@ -4502,6 +4553,26 @@ size_t VulkanRenderer::getMaxNumRenderables()
 size_t VulkanRenderer::getMaxBindlessResources()
 {
   return MAX_BINDLESS_RESOURCES;
+}
+
+size_t VulkanRenderer::getMaxNumPointLightShadows()
+{
+  return MAX_NUM_POINT_LIGHT_SHADOWS;
+}
+
+const std::vector<render::asset::Light>& VulkanRenderer::getLights()
+{
+  return _lights;
+}
+
+std::vector<int> VulkanRenderer::getShadowCasterLightIndices()
+{
+  std::vector<int> out;
+  out.reserve(MAX_NUM_POINT_LIGHT_SHADOWS);
+  for (int ind : _shadowCasterIndices) {
+    out.emplace_back(ind);
+  }
+  return out;
 }
 
 std::vector<internal::InternalMesh>& VulkanRenderer::getCurrentMeshes()

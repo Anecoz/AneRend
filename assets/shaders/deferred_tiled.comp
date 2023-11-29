@@ -20,8 +20,10 @@ layout(set = 1, binding = 7, rgba32f) uniform writeonly image2D outputIm;
 layout(set = 1, binding = 8) uniform sampler2D probeTex;
 layout(set = 1, binding = 9) uniform sampler2D specularGiTex;
 layout(set = 1, binding = 10) uniform sampler2D specularLutTex;
+layout(set = 1, binding = 11) uniform samplerCube pointShadowMap[4];
 
 layout(push_constant) uniform constants {
+  ivec4 lightShadowIndices;
   uint screenWidth;
   uint screenHeight;
 } pushConstants;
@@ -130,6 +132,21 @@ float inShadow(vec3 worldPos) {
   return 0.0;
 }
 
+bool inPointShadow(Light light, vec3 worldPos, int mapIndex)
+{
+  vec3 lightDir = worldPos - light.worldPos.xyz;
+  float distToLight = length(lightDir);
+
+  if (distToLight > light.worldPos.w) {
+    return false;
+  }
+
+  float sampledDist = texture(pointShadowMap[mapIndex], lightDir).r;
+  float testDepth = distToLight / light.worldPos.w; // Normalize by light range
+
+  return sampledDist < testDepth;
+}
+
 vec3 calcWorldPos(vec2 texCoord, float depthSamp)
 {
   vec4 clipSpacePos = vec4(texCoord * 2.0 - vec2(1.0), depthSamp, 1.0);
@@ -203,17 +220,41 @@ void doLight(ivec2 pixel)
     else {
       int lightIndex = int(groupLocalIndexList[i-1]);
       Light light = lightBuffer.lights[lightIndex];
-      vec3 lightContrib = calcLight(
-        normal,
-        albedo,
-        metallic,
-        roughness,
-        fragWorldPos,
-        ubo.cameraPos.xyz,
-        light,
-        0,
-        true);
-      Lo += lightContrib;
+
+      // Is this light a current shadow caster?
+      bool pointShadow = false;
+      int mapIndex = -1;
+
+      if (lightIndex == pushConstants.lightShadowIndices[0]) {
+        mapIndex = 0;
+      }
+      else if (lightIndex == pushConstants.lightShadowIndices[1]) {
+        mapIndex = 1;
+      }
+      else if (lightIndex == pushConstants.lightShadowIndices[2]) {
+        mapIndex = 2;
+      }
+      else if (lightIndex == pushConstants.lightShadowIndices[3]) {
+        mapIndex = 3;
+      }
+
+      if (mapIndex != -1) {
+        pointShadow = inPointShadow(light, fragWorldPos, mapIndex);
+      }
+
+      if (!pointShadow) {
+        vec3 lightContrib = calcLight(
+          normal,
+          albedo,
+          metallic,
+          roughness,
+          fragWorldPos,
+          ubo.cameraPos.xyz,
+          light,
+          0,
+          true);
+        Lo += lightContrib;
+      }
     }
   }
 

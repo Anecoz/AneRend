@@ -129,8 +129,11 @@ public:
 
   size_t getMaxNumMeshes() override final;
   size_t getMaxNumRenderables() override final;
-
   size_t getMaxBindlessResources() override final;
+  size_t getMaxNumPointLightShadows() override final;
+
+  const std::vector<render::asset::Light>& getLights() override final;
+  std::vector<int> getShadowCasterLightIndices() override final;
 
   std::vector<internal::InternalMesh>& getCurrentMeshes() override final;
   std::vector<internal::InternalRenderable>& getCurrentRenderables() override final;
@@ -200,6 +203,7 @@ private:
   static const std::size_t NUM_IRRADIANCE_PROBES_Y = 8;
   static const std::size_t MAX_NUM_JOINTS = 50;
   static const std::size_t MAX_NUM_SKINNED_MODELS = 1000;
+  static const std::size_t MAX_NUM_POINT_LIGHT_SHADOWS = 4;
 
   std::unordered_map<std::string, std::any> _blackboard;
 
@@ -272,7 +276,6 @@ private:
   std::vector<bool> _lightsChanged;
   std::vector<bool> _materialsChanged;
 
-  // Pending uploads
   std::vector<asset::Model> _modelsToUpload;
   std::vector<asset::Material> _materialsToUpload;
   std::vector<asset::Texture> _texturesToUpload;
@@ -444,6 +447,7 @@ private:
   std::vector<ViewCluster> _viewClusters;
 
   std::vector<asset::Light> _lights;
+  std::array<int, MAX_NUM_POINT_LIGHT_SHADOWS> _shadowCasterIndices;
 
   VmaAllocator _vmaAllocator;
 

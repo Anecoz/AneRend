@@ -59,6 +59,8 @@ struct DescriptorBindInfo
 
   // This binding has to be the _last_ binding of the descriptors if we're bindless
   uint32_t binding;
+  uint32_t descriptorCount = 1;
+  uint32_t dstArrayElement = 0;
   VkShaderStageFlags stages;
   VkDescriptorType type;
   VkImageLayout imageLayout;

@@ -57,7 +57,7 @@ void main() {
   fragColor = toLinear(vec4(inColor, 1.0)).rgb;
   fragTint = renderableBuffer.renderables[renderableIndex].tint.rgb;
   fragNormal =  normalize(mat3(model) * normal);
-  fragPos = (model * vec4(inPosition, 1.0)).xyz;
+  fragPos = (model * vec4(pos, 1.0)).xyz;
   fragUV = inUV;
 
   uint meshOffset = translationBuffer.ids[gl_InstanceIndex].meshOffset;

@@ -55,7 +55,7 @@ bool buildDescriptorSetLayout(DescriptorSetLayoutCreateParams params, VkDescript
     VkDescriptorSetLayoutBinding layoutBinding{};
     layoutBinding.binding = bindInfo.binding;
     layoutBinding.descriptorType = bindInfo.type;
-    layoutBinding.descriptorCount = bindInfo.bindless? static_cast<uint32_t>(params.renderContext->getMaxBindlessResources()) : 1;
+    layoutBinding.descriptorCount = bindInfo.bindless? static_cast<uint32_t>(params.renderContext->getMaxBindlessResources()) : bindInfo.descriptorCount;
     layoutBinding.stageFlags = bindInfo.bindless? VK_SHADER_STAGE_ALL : bindInfo.stages;
     bindings.emplace_back(std::move(layoutBinding));
   }
@@ -194,7 +194,7 @@ std::vector<VkDescriptorSet> buildDescriptorSets(DescriptorSetsCreateParams para
       bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       bufWrite.dstSet = sets[currIdx];
       bufWrite.dstBinding = params.bindInfos[j].binding;
-      bufWrite.dstArrayElement = 0;
+      bufWrite.dstArrayElement = params.bindInfos[j].dstArrayElement;
       bufWrite.descriptorType = params.bindInfos[j].type;
       bufWrite.descriptorCount = 1;
       bufWrite.pBufferInfo = &bufferInfo;
@@ -211,7 +211,7 @@ std::vector<VkDescriptorSet> buildDescriptorSets(DescriptorSetsCreateParams para
       bufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       bufWrite.dstSet = sets[currIdx];
       bufWrite.dstBinding = params.bindInfos[j].binding;
-      bufWrite.dstArrayElement = 0;
+      bufWrite.dstArrayElement = params.bindInfos[j].dstArrayElement;
       bufWrite.descriptorType = params.bindInfos[j].type;
       bufWrite.descriptorCount = 1;
       bufWrite.pBufferInfo = &bufferInfo;
@@ -228,7 +228,7 @@ std::vector<VkDescriptorSet> buildDescriptorSets(DescriptorSetsCreateParams para
       imWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       imWrite.dstSet = sets[currIdx];
       imWrite.dstBinding = params.bindInfos[j].binding;
-      imWrite.dstArrayElement = params.bindInfos[j].bindless ? currBindlessIdx++ : 0;
+      imWrite.dstArrayElement = params.bindInfos[j].bindless ? currBindlessIdx++ : params.bindInfos[j].dstArrayElement;
       imWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
       imWrite.descriptorCount = 1;
       imWrite.pImageInfo = &imageInfo;
@@ -244,7 +244,7 @@ std::vector<VkDescriptorSet> buildDescriptorSets(DescriptorSetsCreateParams para
       imWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       imWrite.dstSet = sets[currIdx];
       imWrite.dstBinding = params.bindInfos[j].binding;
-      imWrite.dstArrayElement = params.bindInfos[j].bindless ? currBindlessIdx++ : 0;
+      imWrite.dstArrayElement = params.bindInfos[j].bindless ? currBindlessIdx++ : params.bindInfos[j].dstArrayElement;
       imWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
       imWrite.descriptorCount = 1;
       imWrite.pImageInfo = &imageInfo;

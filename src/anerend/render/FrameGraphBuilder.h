@@ -32,6 +32,7 @@ struct RenderExeParams
 
   std::vector<VkImageView> colorAttachmentViews;
   std::vector<VkImageView> depthAttachmentViews;
+  std::vector<VkImageView> depthAttachmentCubeViews;
   VkImage presentImage;
   std::vector<VkBuffer> buffers;
   std::vector<VkSampler> samplers;
@@ -97,6 +98,8 @@ struct ImageInitialCreateInfo
   std::uint32_t _initialHeight;
   VkFormat _intialFormat;
   std::uint32_t _mipLevels = 1;
+  std::uint32_t _arrayLayers = 1;
+  bool _cubeCompat = false;
   VkImageLayout _initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   std::function<void(RenderContext*, VkImage&)> _initialDataCb = nullptr;
   bool _multiBuffered = false;
@@ -110,6 +113,9 @@ struct ResourceUsage
   Type _type;
 
   std::uint32_t _imageBaseLayer;
+
+  int _arrayId = -1; // >= 0 means this usage is part of an array, with this id
+  int _arrayIdx = -1; // which index in the arrayId this usage is located at
 
   bool _invalidateAfterRead = false;
   bool _ownedByEngine = false; // If true, indicates that the renderer owns it, so no create info is needed

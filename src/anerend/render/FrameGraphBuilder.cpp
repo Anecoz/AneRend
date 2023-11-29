@@ -233,8 +233,16 @@ void FrameGraphBuilder::executeGraph(VkCommandBuffer& cmdBuffer, RenderContext* 
           exeParams.colorAttachmentViews.emplace_back(view);
         }
         else if (us._type == Type::DepthAttachment) {
-          auto view = ((ImageRenderResource*)_vault->getResource(us._resourceName))->_views[0];
-          exeParams.depthAttachmentViews.emplace_back(view);
+          auto* res = (ImageRenderResource*)_vault->getResource(us._resourceName);
+
+          if (!res->_views.empty()) {
+            auto view = res->_views[0];
+            exeParams.depthAttachmentViews.emplace_back(view);
+          }
+
+          for (auto& cubeView : res->_cubeViews) {
+            exeParams.depthAttachmentCubeViews.emplace_back(cubeView);
+          }
         }
         else if (us._type == Type::SSBO) {
           auto buf = ((BufferRenderResource*)_vault->getResource(us._resourceName, multiIdx))->_buffer._buffer;
@@ -622,8 +630,9 @@ bool FrameGraphBuilder::createResources(RenderContext* renderContext, RenderReso
                 renderContext->vmaAllocator(),
                 flag,
                 im->_image,
-                usage._imageCreateInfo->_mipLevels
-              );
+                usage._imageCreateInfo->_mipLevels,
+                usage._imageCreateInfo->_arrayLayers,
+                usage._imageCreateInfo->_cubeCompat ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0);
 
               // Do a transition if we're not undefined from the start (this is hacky...)
               if (usage._imageCreateInfo->_initialLayout != VK_IMAGE_LAYOUT_UNDEFINED) {
@@ -640,13 +649,27 @@ bool FrameGraphBuilder::createResources(RenderContext* renderContext, RenderReso
                 renderContext->endSingleTimeCommands(cmdBuffer);
               }
 
-              im->_views.emplace_back(imageutil::createImageView(
-                renderContext->device(), 
+              auto view = imageutil::createImageView(
+                renderContext->device(),
                 im->_image._image,
                 im->_format,
                 usage._type == Type::DepthAttachment ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
                 0,
-                usage._imageCreateInfo->_mipLevels));
+                usage._imageCreateInfo->_mipLevels,
+                0,
+                usage._imageCreateInfo->_arrayLayers,
+                usage._imageCreateInfo->_cubeCompat ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D);
+
+              if (usage._imageCreateInfo->_cubeCompat) {
+                im->_cubeViews.emplace_back(std::move(view));
+                std::string viewName = usage._resourceName + "View_cube_" + std::to_string(i);
+                renderContext->setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)im->_cubeViews[0], viewName.c_str());
+              }
+              else {
+                im->_views.emplace_back(std::move(view));
+                std::string viewName = usage._resourceName + "View" + std::to_string(i);
+                renderContext->setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)im->_views[0], viewName.c_str());
+              }
 
               // Create separate views for each mip (if there are any more)
               if (usage._imageCreateInfo->_mipLevels > 1) {
@@ -664,10 +687,27 @@ bool FrameGraphBuilder::createResources(RenderContext* renderContext, RenderReso
                 }
               }
 
+              // Create separate views for each cube face (if cube compat)
+              if (usage._imageCreateInfo->_cubeCompat) {
+                for (uint32_t j = 0; j < 6; ++j) {
+                  im->_cubeViews.emplace_back(
+                    imageutil::createImageView(
+                      renderContext->device(),
+                      im->_image._image,
+                      im->_format,
+                      usage._type == Type::DepthAttachment ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
+                      0,
+                      usage._imageCreateInfo->_mipLevels,
+                      j,
+                      1));
+
+                  std::string viewName = usage._resourceName + "View" + std::to_string(i) + "_cube_" + std::to_string(j);
+                  renderContext->setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)im->_cubeViews[j + 1], viewName.c_str());
+                }
+              }
+
               std::string name = usage._resourceName + "_" + std::to_string(i);
-              std::string viewName = usage._resourceName + "View" + std::to_string(i);
               renderContext->setDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)im->_image._image, name.c_str());
-              renderContext->setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)im->_views[0], viewName.c_str());
 
               if (usage._imageCreateInfo->_initialDataCb) {
                 usage._imageCreateInfo->_initialDataCb(renderContext, im->_image._image);
@@ -753,12 +793,27 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
       continue;
     }
 
+    // If any descriptor arrays are used, find a mapping between array id and binding
+    std::unordered_map<int, uint32_t> arrayBindingMap;
+    std::unordered_map<int, uint32_t> arrayCountMap;
+
     // Do a pre-run to find the highest binding (will be used as bindless binding)
     bool containsBindless = false;
     int highestBinding = 0;
     for (auto& us : node._resourceUsages) {
       if ((isTypeBuffer(us._type) && shouldBeDescriptor(us._stage)) ||
           (isTypeImage(us._type) && shouldBeDescriptor(us._type)) && !us._bindless) {
+
+        if (us._arrayId >= 0) {
+          if (arrayBindingMap.count(us._arrayId) == 0) {
+            arrayBindingMap[us._arrayId] = highestBinding; // this is current binding right now...
+            arrayCountMap[us._arrayId] = 1;
+          }
+          else {
+            arrayCountMap[us._arrayId]++;
+          }
+        }
+
         highestBinding++;
       }
 
@@ -774,16 +829,31 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
 
     int currBinding = 0;
     bool bindlessAdded = false;
+    std::vector<int> arrayIdsAdded;
     for (int i = 0; i < node._resourceUsages.size(); ++i) {
       auto& usage = node._resourceUsages[i];
       if (usage._ownedByEngine) continue;
 
       if ((isTypeBuffer(usage._type) && shouldBeDescriptor(usage._stage)) ||
         (isTypeImage(usage._type) && shouldBeDescriptor(usage._type)) && !bindlessAdded) {
+
+          if (usage._arrayId >= 0) {
+            for (auto id : arrayIdsAdded) {
+              if (id == usage._arrayId) {
+                continue;
+              }
+            }
+          }
+
           DescriptorBindInfo bindInfo{};
           bindInfo.binding = usage._bindless ? highestBinding : currBinding;
           bindInfo.stages = findStages(usage._resourceName);
           bindInfo.type = translateDescriptorType(usage._type);
+          
+          if (usage._arrayId >= 0) {
+            bindInfo.descriptorCount = arrayCountMap[usage._arrayId];
+            arrayIdsAdded.emplace_back(usage._arrayId);
+          }
 
           if (usage._bindless) {
             bindlessAdded = true;
@@ -821,6 +891,11 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
 
       DescriptorBindInfo bindInfo{};
       bindInfo.binding = usage._bindless ? highestBinding : currBinding;
+      if (usage._arrayId >= 0) {
+        bindInfo.binding = arrayBindingMap[usage._arrayId];
+        bindInfo.dstArrayElement = usage._arrayIdx;
+      }
+
       bindInfo.stages = findStages(usage._resourceName);
       bindInfo.type = translateDescriptorType(usage._type);
       bindInfo.bindless = usage._bindless;
@@ -858,12 +933,19 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
 
         for (int i = 0; i < num; ++i) {
           VkImageView view;
+          auto* im = (ImageRenderResource*)vault->getResource(usage._resourceName, i);
 
           if (usage._allMips) {
-            view = ((ImageRenderResource*)vault->getResource(usage._resourceName, i))->_views[0];
+            if (!im->_cubeViews.empty()) {
+              // Just kind of assume we mean the actual cube view (i.e. first one here)
+              view = im->_cubeViews[0];
+            }
+            else {
+              view = im->_views[0];
+            }
           }
           else {
-            view = ((ImageRenderResource*)vault->getResource(usage._resourceName, i))->_views[usage._mip + 1];
+            view = im->_views[usage._mip + 1];
           }
 
           bindInfo.view = view;
@@ -1687,7 +1769,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
               barrier.subresourceRange.baseMipLevel = allMips ? 0 : mip;
               barrier.subresourceRange.levelCount = allMips ? (imageResource->_views.size() == 1 ? 1 : static_cast<uint32_t>(imageResource->_views.size()) - 1) : 1;
               barrier.subresourceRange.baseArrayLayer = baseLayer;
-              barrier.subresourceRange.layerCount = 1;
+              barrier.subresourceRange.layerCount = imageResource->_cubeViews.empty()? 1 : 6;
               barrier.srcAccessMask = srcAccessMask;
               barrier.dstAccessMask = dstAccessMask;
 

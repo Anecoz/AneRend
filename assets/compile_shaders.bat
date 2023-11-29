@@ -1,6 +1,7 @@
 %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/standard.vert -o %2/standard_vert.spv
 
 %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/standard_shadow.vert -o %2/standard_shadow_vert.spv
+%VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/standard_shadow_point.vert -o %2/standard_shadow_point_vert.spv
 %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/standard_shadow.frag -o %2/standard_shadow_frag.spv
 
 REM %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/standard_instanced.vert -o %2/standard_instanced_vert.spv
