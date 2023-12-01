@@ -39,6 +39,7 @@
 #include "passes/LuminanceHistogramPass.h"
 #include "passes/LuminanceAveragePass.h"
 #include "passes/UpdateBlasPass.h"
+#include "passes/CompactDrawsPass.h"
 
 #include "../../common/util/Utils.h"
 #include  "../util/GraphicsUtils.h"
@@ -433,7 +434,7 @@ bool VulkanRenderer::init()
     VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT, // hopefully BAR mem
     _worldPosRequest._hostBuffer);
 
-  std::fill(_shadowCasterIndices.begin(), _shadowCasterIndices.end(), -1);
+  std::fill(_shadowCasters.begin(), _shadowCasters.end(), util::Uuid());
 
   return res;
 }
@@ -977,12 +978,11 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
       if (it->_id == l) {
 
         if (it->_shadowCaster) {
-          // Remove index from caster list (if there)
-          auto idx = it - _lights.begin();
+          // Remove from caster list (if there)
 
-          for (auto& ind : _shadowCasterIndices) {
-            if (ind == (int)idx) {
-              ind = -1;
+          for (auto& id : _shadowCasters) {
+            if (id == it->_id) {
+              id = util::Uuid();
               break;
             }
           }
@@ -999,9 +999,9 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
     // add to shadow caster index list (if possible)
     if (l._shadowCaster) {
-      for (auto& ind : _shadowCasterIndices) {
-        if (ind == -1) {
-          ind = (int)_lights.size();
+      for (auto& id : _shadowCasters) {
+        if (!id) {
+          id = l._id;
           break;
         }
       }
@@ -1020,18 +1020,18 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
         // Did shadow caster status change?
         if (oldLight._shadowCaster && !l._shadowCaster) {
           // it was shadow caster but not anymore, remove from list
-          for (auto& ind : _shadowCasterIndices) {
-            if (ind == idx) {
-              ind = -1;
+          for (auto& id : _shadowCasters) {
+            if (id == oldLight._id) {
+              id = util::Uuid();
               break;
             }
           }
         }
         else if (!oldLight._shadowCaster && l._shadowCaster) {
           // wasn't shadow caster but now is, add to list if possible
-          for (auto& ind : _shadowCasterIndices) {
-            if (ind == -1) {
-              ind = idx;
+          for (auto& id : _shadowCasters) {
+            if (!id) {
+              id = l._id;
               break;
             }
           }
@@ -2207,6 +2207,7 @@ bool VulkanRenderer::createLogicalDevice()
   vulkan12Features.bufferDeviceAddress = VK_TRUE;
   vulkan12Features.hostQueryReset = VK_TRUE;
   vulkan12Features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+  vulkan12Features.drawIndirectCount = VK_TRUE;
 
   atomicFloatFeature.pNext = &vulkan12Features;
 
@@ -3130,12 +3131,21 @@ void VulkanRenderer::prefillGPUPointLightShadowCubeBuffer(VkCommandBuffer& comma
   gpu::GPUPointLightShadowCube* mappedData = reinterpret_cast<gpu::GPUPointLightShadowCube*>(data);
 
   for (std::size_t i = 0; i < MAX_NUM_POINT_LIGHT_SHADOWS; ++i) {
-    if (_shadowCasterIndices[i] != -1) {
-      auto& light = _lights[_shadowCasterIndices[i]];
-      for (int j = 0; j < 6; j++) {
-        auto shadowProj = light._proj;
-        shadowProj[1][1] *= -1;
-        mappedData[i]._shadowMatrices[j] = shadowProj * light._views[j];
+    if (_shadowCasters[i]) {
+      asset::Light* light = nullptr;
+      for (auto& l : _lights) {
+        if (l._id == _shadowCasters[i]) {
+          light = &l;
+          break;
+        }
+      }
+
+      if (light) {
+        for (int j = 0; j < 6; j++) {
+          auto shadowProj = light->_proj;
+          shadowProj[1][1] *= -1;
+          mappedData[i]._shadowMatrices[j] = shadowProj * light->_views[j];
+        }
       }
     }
     else {
@@ -3765,6 +3775,7 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new HiZRenderPass());
   _renderPasses.emplace_back(new ParticleUpdatePass());
   _renderPasses.emplace_back(new CullRenderPass());
+  _renderPasses.emplace_back(new CompactDrawsPass());
   _renderPasses.emplace_back(new ShadowRenderPass());
   _renderPasses.emplace_back(new GrassShadowRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());
@@ -4603,6 +4614,11 @@ void VulkanRenderer::drawGigaBufferIndirect(VkCommandBuffer* commandBuffer, VkBu
   vkCmdDrawIndexedIndirect(*commandBuffer, drawCalls, 0, drawCount, sizeof(gpu::GPUDrawCallCmd));
 }
 
+void VulkanRenderer::drawGigaBufferIndirectCount(VkCommandBuffer* commandBuffer, VkBuffer drawCalls, VkBuffer count, uint32_t maxDrawCount)
+{
+  vkCmdDrawIndexedIndirectCount(*commandBuffer, drawCalls, 0, count, 0, maxDrawCount, sizeof(gpu::GPUDrawCallCmd));
+}
+
 void VulkanRenderer::drawNonIndexIndirect(VkCommandBuffer* cmdBuffer, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride)
 {
   vkCmdDrawIndirect(*cmdBuffer, drawCalls, 0, drawCount, stride);
@@ -4659,8 +4675,15 @@ std::vector<int> VulkanRenderer::getShadowCasterLightIndices()
 {
   std::vector<int> out;
   out.reserve(MAX_NUM_POINT_LIGHT_SHADOWS);
-  for (int ind : _shadowCasterIndices) {
-    out.emplace_back(ind);
+  for (auto& id : _shadowCasters) {
+    if (id) {
+      for (int i = 0; i < _lights.size(); ++i) {
+        if (_lights[i]._id == id) {
+          out.emplace_back(i);
+          break;
+        }
+      }
+    }
   }
   return out;
 }

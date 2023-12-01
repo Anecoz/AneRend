@@ -54,7 +54,16 @@ void ShadowRenderPass::reigsterDirectionalShadowPass(FrameGraphBuilder& fgb, Ren
   }
   {
     ResourceUsage usage{};
-    usage._resourceName = "CullDrawBuf";
+    usage._resourceName = "CompactedCullDrawBuf";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::IndirectDraw);
+    usage._type = Type::SSBO;
+    usage._multiBuffered = true;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "CompactDrawCountBuf";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::IndirectDraw);
     usage._type = Type::SSBO;
@@ -137,7 +146,11 @@ void ShadowRenderPass::reigsterDirectionalShadowPass(FrameGraphBuilder& fgb, Ren
       vkCmdSetScissor(*exeParams.cmdBuffer, 0, 1, &scissor);
 
       // Ask render context to draw big giga buffer
-      exeParams.rc->drawGigaBufferIndirect(exeParams.cmdBuffer, exeParams.buffers[1], static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));
+      exeParams.rc->drawGigaBufferIndirectCount(
+        exeParams.cmdBuffer,
+        exeParams.buffers[1],
+        exeParams.buffers[2],
+        static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));
 
       // Stop dynamic rendering
       vkCmdEndRendering(*exeParams.cmdBuffer);
@@ -178,7 +191,16 @@ void ShadowRenderPass::registerPointShadowPass(FrameGraphBuilder& fgb, RenderCon
   }
   {
     ResourceUsage usage{};
-    usage._resourceName = "CullDrawBuf";
+    usage._resourceName = "CompactedCullDrawBuf";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::IndirectDraw);
+    usage._type = Type::SSBO;
+    usage._multiBuffered = true;
+    info._resourceUsages.emplace_back(std::move(usage));
+  }
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "CompactDrawCountBuf";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::IndirectDraw);
     usage._type = Type::SSBO;
@@ -295,7 +317,11 @@ void ShadowRenderPass::registerPointShadowPass(FrameGraphBuilder& fgb, RenderCon
           &push);
 
         // Ask render context to draw big giga buffer
-        exeParams.rc->drawGigaBufferIndirect(exeParams.cmdBuffer, exeParams.buffers[1], static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));
+        exeParams.rc->drawGigaBufferIndirectCount(
+          exeParams.cmdBuffer,
+          exeParams.buffers[1],
+          exeParams.buffers[2],
+          static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));
 
         // Stop dynamic rendering
         vkCmdEndRendering(*exeParams.cmdBuffer);

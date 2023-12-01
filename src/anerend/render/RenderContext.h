@@ -101,6 +101,7 @@ public:
   virtual VkDeviceAddress getGigaIdxBufferAddr() = 0;
 
   virtual void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount) = 0;
+  virtual void drawGigaBufferIndirectCount(VkCommandBuffer*, VkBuffer drawCalls, VkBuffer count, uint32_t maxDrawCount) = 0;
   virtual void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) = 0;
   virtual void drawMeshId(VkCommandBuffer*, util::Uuid, uint32_t vertCount, uint32_t instanceCount) = 0;
 

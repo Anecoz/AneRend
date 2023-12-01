@@ -14,6 +14,7 @@ REM %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/standard_instanced_shadow.
 %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/debug_view.frag -o %2/debug_view_frag.spv
 
 %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/cull.comp -o %2/cull_comp.spv 
+%VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/compact_draws.comp -o %2/compact_draws_comp.spv 
 
 %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/pp.vert -o %2/pp_vert.spv
 %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/pp_color_inv.frag -o %2/pp_color_inv_frag.spv

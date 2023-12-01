@@ -120,6 +120,7 @@ public:
   VkDeviceAddress getGigaIdxBufferAddr() override final;
 
   void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount) override final;
+  void drawGigaBufferIndirectCount(VkCommandBuffer*, VkBuffer drawCalls, VkBuffer count, uint32_t maxDrawCount) override final;
   void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) override final;
   void drawMeshId(VkCommandBuffer*, util::Uuid, uint32_t vertCount, uint32_t instanceCount) override final;
 
@@ -453,7 +454,7 @@ private:
   std::vector<ViewCluster> _viewClusters;
 
   std::vector<asset::Light> _lights;
-  std::array<int, MAX_NUM_POINT_LIGHT_SHADOWS> _shadowCasterIndices;
+  std::array<util::Uuid, MAX_NUM_POINT_LIGHT_SHADOWS> _shadowCasters;
 
   VmaAllocator _vmaAllocator;
 

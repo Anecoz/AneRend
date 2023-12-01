@@ -182,7 +182,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
   }
   {
     ResourceUsage usage{};
-    usage._resourceName = "CullDrawBuf";
+    usage._resourceName = "CompactedCullDrawBuf";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::IndirectDraw);
     usage._type = Type::SSBO;
@@ -209,26 +209,15 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
     usage._multiBuffered = true;
     resourceUsages.emplace_back(std::move(usage));
   }
-
-  // Init for dynamic mesh buffer
-  /* {
-    ResourceUsage initUsage{};
-    initUsage._type = Type::SSBO;
-    initUsage._access.set((std::size_t)Access::Write);
-    initUsage._stage.set((std::size_t)Stage::Transfer);
-
-    fgb.registerResourceInitExe("DynamicMeshBuffer", std::move(initUsage),
-      [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
-        auto buf = (BufferRenderResource*)resource;
-
-        vkCmdFillBuffer(
-          cmdBuffer,
-          buf->_buffer._buffer,
-          0,
-          VK_WHOLE_SIZE,
-          0);
-      });
-  }*/
+  {
+    ResourceUsage usage{};
+    usage._resourceName = "CompactDrawCountBuf";
+    usage._access.set((std::size_t)Access::Read);
+    usage._stage.set((std::size_t)Stage::IndirectDraw);
+    usage._type = Type::SSBO;
+    usage._multiBuffered = true;
+    resourceUsages.emplace_back(std::move(usage));
+  }
 
   info._resourceUsages = std::move(resourceUsages);
 
@@ -330,7 +319,11 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
       vkCmdSetScissor(*exeParams.cmdBuffer, 0, 1, &scissor);
 
       // Ask render context to draw big giga buffer
-      exeParams.rc->drawGigaBufferIndirect(exeParams.cmdBuffer, exeParams.buffers[1], static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));
+      exeParams.rc->drawGigaBufferIndirectCount(
+        exeParams.cmdBuffer, 
+        exeParams.buffers[1],
+        exeParams.buffers[4],
+        static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));
 
       // Stop dynamic rendering
       vkCmdEndRendering(*exeParams.cmdBuffer);

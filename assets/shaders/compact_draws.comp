@@ -1,0 +1,51 @@
+#version 450
+
+layout (local_size_x = 8) in;
+
+struct DrawCommand
+{
+  uint indexCount;
+  uint instanceCount;
+  uint firstIndex;
+  int vertexOffset;
+  uint firstInstance;
+};
+
+layout(std430, set = 1, binding = 0) readonly buffer DrawBufferIn {
+  DrawCommand draws[];
+} drawBufferIn;
+
+layout(std430, set = 1, binding = 1) writeonly buffer DrawBufferOut {
+  DrawCommand draws[];
+} drawBufferOut;
+
+layout(std430, set = 1, binding = 2) buffer DrawCountBuffer {
+  uint count;
+} drawCountBuffer;
+
+layout(push_constant) uniform constants {
+  uint maxDrawCount;
+} pc;
+
+void main()
+{
+  uint idx = gl_GlobalInvocationID.x;
+
+  if (idx >= pc.maxDrawCount) {
+    return;
+  }
+
+  // Check if our index has instanceCount > 0
+  if (drawBufferIn.draws[idx].instanceCount == 0) {
+    return;
+  }
+  
+  uint countBefore = atomicAdd(drawCountBuffer.count, 1);
+
+  // We now don't need synchronization for access into output buffer, since we atomically received our unique index
+  drawBufferOut.draws[countBefore].indexCount = drawBufferIn.draws[idx].indexCount;
+  drawBufferOut.draws[countBefore].instanceCount = drawBufferIn.draws[idx].instanceCount;
+  drawBufferOut.draws[countBefore].firstIndex = drawBufferIn.draws[idx].firstIndex;
+  drawBufferOut.draws[countBefore].vertexOffset = drawBufferIn.draws[idx].vertexOffset;
+  drawBufferOut.draws[countBefore].firstInstance = drawBufferIn.draws[idx].firstInstance;
+}
