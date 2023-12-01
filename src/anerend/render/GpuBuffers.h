@@ -65,6 +65,11 @@ struct GPULight {
   glm::vec4 _color; // w is enabled or not
 };
 
+struct GPUPointLightShadowCube
+{
+  glm::mat4 _shadowMatrices[6];
+};
+
 struct GPUViewCluster {
   glm::vec4 _min; // view space
   glm::vec4 _max; // view space

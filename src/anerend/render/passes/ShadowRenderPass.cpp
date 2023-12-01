@@ -198,6 +198,7 @@ void ShadowRenderPass::registerPointShadowPass(FrameGraphBuilder& fgb, RenderCon
   params.depthBiasEnable = true;
   params.depthBiasConstant = 4.0f;
   params.depthBiasSlope = 1.5f;
+  params.viewMask = (uint32_t)0b111111; // This enables multiview, the bitmask enables all 6 views of the cube
   //params.cullMode = VK_CULL_MODE_FRONT_BIT;
   info._graphicsParams = params;
 
@@ -218,89 +219,86 @@ void ShadowRenderPass::registerPointShadowPass(FrameGraphBuilder& fgb, RenderCon
 
         auto& light = exeParams.rc->getLights()[lightIndices[i]];
 
-        // For each view of this point light
-        for (std::size_t view = 0; view < 6; ++view) {
+        // Use multiview rendering to just do 1 draw call per cube.
+        // The first view in the attachment is the cube view.
+        auto& cubeView = exeParams.depthAttachmentCubeViews[7 * i];
 
-          auto& cubeView = exeParams.depthAttachmentCubeViews[7 * i + view + 1];
+        VkExtent2D extent{};
+        extent.width = 512;
+        extent.height = 512;
 
-          VkExtent2D extent{};
-          extent.width = 512;
-          extent.height = 512;
+        VkClearValue clearValue;
+        clearValue.depthStencil = { 1.0f, 0 };
 
-          VkClearValue clearValue;
-          clearValue.depthStencil = { 1.0f, 0 };
+        VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
+        depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        depthAttachmentInfo.imageView = cubeView;
+        depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+        depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        depthAttachmentInfo.clearValue = clearValue;
 
-          VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
-          depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-          depthAttachmentInfo.imageView = cubeView;
-          depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-          depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-          depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-          depthAttachmentInfo.clearValue = clearValue;
+        VkRenderingInfoKHR renderInfo{};
+        renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+        renderInfo.renderArea.extent = extent;
+        renderInfo.renderArea.offset = { 0, 0 };
+        renderInfo.viewMask = (uint32_t)0b111111; // This enables multiview, the bitmask enables all 6 views of the cube
+        renderInfo.layerCount = 1; // Not sure about layerCount when multiview is enabled, the spec is a bit unclear
+        renderInfo.colorAttachmentCount = 0;
+        renderInfo.pDepthAttachment = &depthAttachmentInfo;
 
-          VkRenderingInfoKHR renderInfo{};
-          renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-          renderInfo.renderArea.extent = extent;
-          renderInfo.renderArea.offset = { 0, 0 };
-          renderInfo.layerCount = 1;
-          renderInfo.colorAttachmentCount = 0;
-          renderInfo.pDepthAttachment = &depthAttachmentInfo;
+        vkCmdBeginRendering(*exeParams.cmdBuffer, &renderInfo);
 
-          vkCmdBeginRendering(*exeParams.cmdBuffer, &renderInfo);
+        // Viewport and scissor
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(extent.width);
+        viewport.height = static_cast<float>(extent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
 
-          // Viewport and scissor
-          VkViewport viewport{};
-          viewport.x = 0.0f;
-          viewport.y = 0.0f;
-          viewport.width = static_cast<float>(extent.width);
-          viewport.height = static_cast<float>(extent.height);
-          viewport.minDepth = 0.0f;
-          viewport.maxDepth = 1.0f;
+        VkRect2D scissor{};
+        scissor.offset = { 0, 0 };
+        scissor.extent = extent;
 
-          VkRect2D scissor{};
-          scissor.offset = { 0, 0 };
-          scissor.extent = extent;
+        // Bind pipeline
+        vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, *exeParams.pipeline);
 
-          // Bind pipeline
-          vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, *exeParams.pipeline);
+        // Descriptor set for translation buffer in set 1
+        vkCmdBindDescriptorSets(
+          *exeParams.cmdBuffer,
+          VK_PIPELINE_BIND_POINT_GRAPHICS,
+          *exeParams.pipelineLayout,
+          1, 1, &(*exeParams.descriptorSets)[exeParams.rc->getCurrentMultiBufferIdx()],
+          0, nullptr);
 
-          // Descriptor set for translation buffer in set 1
-          vkCmdBindDescriptorSets(
-            *exeParams.cmdBuffer,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            *exeParams.pipelineLayout,
-            1, 1, &(*exeParams.descriptorSets)[exeParams.rc->getCurrentMultiBufferIdx()],
-            0, nullptr);
+        // Set dynamic viewport and scissor
+        vkCmdSetViewport(*exeParams.cmdBuffer, 0, 1, &viewport);
+        vkCmdSetScissor(*exeParams.cmdBuffer, 0, 1, &scissor);
 
-          // Set dynamic viewport and scissor
-          vkCmdSetViewport(*exeParams.cmdBuffer, 0, 1, &viewport);
-          vkCmdSetScissor(*exeParams.cmdBuffer, 0, 1, &scissor);
+        struct Push
+        {
+          glm::vec4 params;
+          unsigned index;
+        } push;
 
-          struct Push
-          {
-            glm::mat4 shadowMtx;
-            glm::vec4 params;
-          } push;
+        push.index = (unsigned)i;
+        push.params = glm::vec4(light._pos, light._range);
 
-          auto shadowProj = light._proj;
-          shadowProj[1][1] *= -1;
-          push.shadowMtx = shadowProj * light._views[view];
-          push.params = glm::vec4(light._pos, light._range);
+        vkCmdPushConstants(
+          *exeParams.cmdBuffer,
+          *exeParams.pipelineLayout,
+          VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+          0,
+          sizeof(Push),
+          &push);
 
-          vkCmdPushConstants(
-            *exeParams.cmdBuffer,
-            *exeParams.pipelineLayout,
-            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR,
-            0,
-            sizeof(Push),
-            &push);
+        // Ask render context to draw big giga buffer
+        exeParams.rc->drawGigaBufferIndirect(exeParams.cmdBuffer, exeParams.buffers[1], static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));
 
-          // Ask render context to draw big giga buffer
-          exeParams.rc->drawGigaBufferIndirect(exeParams.cmdBuffer, exeParams.buffers[1], static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));
-
-          // Stop dynamic rendering
-          vkCmdEndRendering(*exeParams.cmdBuffer);
-        }
+        // Stop dynamic rendering
+        vkCmdEndRendering(*exeParams.cmdBuffer);
       }
     });
 }

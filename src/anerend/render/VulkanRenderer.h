@@ -325,7 +325,7 @@ private:
   VkDescriptorSetLayout _bindlessDescSetLayout;
   std::vector<VkDescriptorSet> _bindlessDescriptorSets;
 
-  uint32_t _renderableMatIndexBinding = 6;
+  uint32_t _renderableMatIndexBinding = 7;
   uint32_t _modelBinding = _renderableMatIndexBinding + 1;
   uint32_t _gigaIdxBinding = _modelBinding + 1;
   uint32_t _gigaVtxBinding = _gigaIdxBinding + 1;
@@ -400,6 +400,9 @@ private:
   // SSBO for light information.
   std::vector<AllocatedBuffer> _gpuLightBuffer;
 
+  // UBO for point light shadow cube views, used in multiview rendering.
+  std::vector<AllocatedBuffer> _gpuPointLightShadowBuffer;
+
   // SSBO for the view clusters.
   std::vector<AllocatedBuffer> _gpuViewClusterBuffer;
 
@@ -432,6 +435,9 @@ private:
 
   // Fills GPU light buffer with current light information.
   void prefillGPULightBuffer(VkCommandBuffer& commandBuffer);
+
+  // Fills GPU buffer containing current point light shadow cube views.
+  void prefillGPUPointLightShadowCubeBuffer(VkCommandBuffer& commandBuffer);
 
   // Update wind force image
   void updateWindForceImage(VkCommandBuffer& commandBuffer);

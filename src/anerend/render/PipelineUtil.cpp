@@ -531,6 +531,7 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
   renderingCreateInfo.colorAttachmentCount = param.colorAttachment ? param.colorAttachmentCount : 0;
   renderingCreateInfo.pColorAttachmentFormats = param.colorAttachment ? param.colorFormats.data() : nullptr;
   renderingCreateInfo.depthAttachmentFormat = param.depthFormat;
+  renderingCreateInfo.viewMask = param.viewMask;
 
   // Creating the pipeline
   VkGraphicsPipelineCreateInfo pipelineInfo{};

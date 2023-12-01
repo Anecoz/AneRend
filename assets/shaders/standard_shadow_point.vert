@@ -1,6 +1,7 @@
 #version 450
 
 #extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_multiview : enable
 #include "bindless.glsl"
 
 struct TranslationId
@@ -14,8 +15,8 @@ layout(std430, set = 1, binding = 0) buffer TranslationBuffer {
 } translationBuffer;
 
 layout(push_constant) uniform constants {
-  mat4 shadowMatrix;
   vec4 lightParams; // pos + range
+  uint shadowIndex; // Used to fetch matrix from bindless UBO
 } pc;
 
 layout(location = 0) in vec3 inPosition;
@@ -44,5 +45,6 @@ void main() {
   fragPos = (model * vec4(pos, 1.0)).xyz;
   fragRange = pc.lightParams.w;
   fragLightPos = pc.lightParams.xyz;
-  gl_Position = pc.shadowMatrix * model * vec4(pos, 1.0);
+  mat4 shadowMatrix = pointLightShadowCubeUBO.cube[pc.shadowIndex].shadowMatrices[gl_ViewIndex];
+  gl_Position = shadowMatrix * model * vec4(pos, 1.0);
 }

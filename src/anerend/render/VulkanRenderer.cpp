@@ -253,6 +253,7 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _gpuStagingBuffer[i]._buffer, _gpuStagingBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSceneDataBuffer[i]._buffer, _gpuSceneDataBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuLightBuffer[i]._buffer, _gpuLightBuffer[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _gpuPointLightShadowBuffer[i]._buffer, _gpuPointLightShadowBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuViewClusterBuffer[i]._buffer, _gpuViewClusterBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSkeletonBuffer[i]._buffer, _gpuSkeletonBuffer[i]._allocation);
 
@@ -2026,6 +2027,10 @@ bool VulkanRenderer::isDeviceSuitable(VkPhysicalDevice device)
   rtFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
   indexingFeatures.pNext = &rtFeatures;
 
+  VkPhysicalDeviceMultiviewFeatures mtFeatures{};
+  mtFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES;
+  rtFeatures.pNext = &mtFeatures;
+
   vkGetPhysicalDeviceFeatures2(device, &deviceFeatures2);
 
   bool swapChainAdequate = false;
@@ -2038,7 +2043,8 @@ bool VulkanRenderer::isDeviceSuitable(VkPhysicalDevice device)
            indexingFeatures.descriptorBindingPartiallyBound && indexingFeatures.runtimeDescriptorArray &&
            deviceFeatures.geometryShader && rtFeatures.rayTracingPipeline && queueFamIndices.isComplete() && 
            atomicFloatFeatures.shaderBufferFloat32AtomicAdd && atomicFloatFeatures.shaderSharedFloat32AtomicAdd &&
-           extensionsSupported && swapChainAdequate && deviceFeatures.samplerAnisotropy;
+           extensionsSupported && swapChainAdequate && deviceFeatures.samplerAnisotropy &&
+           mtFeatures.multiview;
 }
 
 QueueFamilyIndices VulkanRenderer::findQueueFamilies(VkPhysicalDevice device)
@@ -2204,13 +2210,20 @@ bool VulkanRenderer::createLogicalDevice()
 
   atomicFloatFeature.pNext = &vulkan12Features;
 
+  // Vulkan 1.1 for multiview feature
+  VkPhysicalDeviceVulkan11Features vulkan11Features{};
+  vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+  vulkan11Features.multiview = VK_TRUE;
+
+  vulkan12Features.pNext = &vulkan11Features;
+
   // Ray tracing
   VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipeFeatures{};
   VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures{};
   if (_enableRayTracing) {
     rtPipeFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
     rtPipeFeatures.rayTracingPipeline = VK_TRUE;
-    vulkan12Features.pNext = &rtPipeFeatures;
+    vulkan11Features.pNext = &rtPipeFeatures;
 
     asFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
     asFeatures.accelerationStructure = VK_TRUE;
@@ -3105,6 +3118,63 @@ void VulkanRenderer::prefillGPULightBuffer(VkCommandBuffer& commandBuffer)
   _currentStagingOffset += dataSize;
 }
 
+void VulkanRenderer::prefillGPUPointLightShadowCubeBuffer(VkCommandBuffer& commandBuffer)
+{
+  std::size_t dataSize = MAX_NUM_POINT_LIGHT_SHADOWS * sizeof(gpu::GPUPointLightShadowCube);
+  uint8_t* data;
+  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+
+  // Offset according to current staging buffer usage
+  data = data + _currentStagingOffset;
+
+  gpu::GPUPointLightShadowCube* mappedData = reinterpret_cast<gpu::GPUPointLightShadowCube*>(data);
+
+  for (std::size_t i = 0; i < MAX_NUM_POINT_LIGHT_SHADOWS; ++i) {
+    if (_shadowCasterIndices[i] != -1) {
+      auto& light = _lights[_shadowCasterIndices[i]];
+      for (int j = 0; j < 6; j++) {
+        auto shadowProj = light._proj;
+        shadowProj[1][1] *= -1;
+        mappedData[i]._shadowMatrices[j] = shadowProj * light._views[j];
+      }
+    }
+    else {
+      for (int j = 0; j < 6; j++) {
+        mappedData[i]._shadowMatrices[j] = glm::mat4(1.0f);
+      }
+    }
+  }
+
+  VkBufferCopy copyRegion{};
+  copyRegion.dstOffset = 0;
+  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.size = dataSize;
+  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuPointLightShadowBuffer[_currentFrame]._buffer, 1, &copyRegion);
+
+  VkBufferMemoryBarrier memBarr{};
+  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.buffer = _gpuPointLightShadowBuffer[_currentFrame]._buffer;
+  memBarr.offset = 0;
+  memBarr.size = VK_WHOLE_SIZE;
+
+  vkCmdPipelineBarrier(
+    commandBuffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+    0, 0, nullptr,
+    1, &memBarr,
+    0, nullptr);
+
+  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+
+  // Update staging offset
+  _currentStagingOffset += dataSize;
+}
+
 void VulkanRenderer::updateWindForceImage(VkCommandBuffer& commandBuffer)
 {
   /*std::size_t dataSize = _currentWindMap.height * _currentWindMap.width * 4;
@@ -3240,29 +3310,13 @@ bool VulkanRenderer::initBindless()
 {
   // Create a "use-for-all" pipeline layout, descriptor set layout and descriptor sets.
 
-  /*
-  * Bindings:
-  * 0: Scene UBO (UBO)
-  * 1: Wind force (Sampler)
-  * 2: Renderable buffer (SSBO)
-  * 3: Light buffer (SSBO)
-  * 4: View cluster buffer (SSBO)
-  * 5: Mesh material info (SSBO)
-  * 6: Giga idx buffer (SSBO)
-  * 7: Giga vertex buffer (SSBO)
-  * 8: Mesh buffer (SSBO)
-  * 9: TLAS for ray tracing (TLAS)
-  * 10: Skeleton buffer (SSBO)
-  * 11: Id Map buffer (SSBO)
-  * 12: Bindless textures (sampler array)
-  */
-
   uint32_t uboBinding = 0;
   uint32_t windForceBinding = 1;
   uint32_t renderableBinding = 2;
   uint32_t lightBinding = 3;
-  uint32_t clusterBinding = 4;
-  uint32_t materialBinding = 5;
+  uint32_t pointLightShadowCubeBinding = 4;
+  uint32_t clusterBinding = 5;
+  uint32_t materialBinding = 6;
 
   // Descriptor set layout
   {
@@ -3295,6 +3349,13 @@ bool VulkanRenderer::initBindless()
     lightLayoutBinding.descriptorCount = 1;
     lightLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR;
     bindings.emplace_back(std::move(lightLayoutBinding));
+
+    VkDescriptorSetLayoutBinding pointLightShadowLayoutBinding{};
+    pointLightShadowLayoutBinding.binding = pointLightShadowCubeBinding;
+    pointLightShadowLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    pointLightShadowLayoutBinding.descriptorCount = 1;
+    pointLightShadowLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    bindings.emplace_back(std::move(pointLightShadowLayoutBinding));
 
     VkDescriptorSetLayoutBinding clusterLayoutBinding{};
     clusterLayoutBinding.binding = clusterBinding;
@@ -3497,6 +3558,24 @@ bool VulkanRenderer::initBindless()
       lightBufWrite.pBufferInfo = &lightBufferInfo;
 
       descriptorWrites.emplace_back(std::move(lightBufWrite));
+
+      // Point light shadow cube views UBO
+      VkDescriptorBufferInfo pointLightShadowBufferInfo{};
+      VkWriteDescriptorSet pointLightShadowBufWrite{};
+
+      pointLightShadowBufferInfo.buffer = _gpuPointLightShadowBuffer[i]._buffer;
+      pointLightShadowBufferInfo.offset = 0;
+      pointLightShadowBufferInfo.range = VK_WHOLE_SIZE;
+
+      pointLightShadowBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      pointLightShadowBufWrite.dstSet = _bindlessDescriptorSets[i];
+      pointLightShadowBufWrite.dstBinding = pointLightShadowCubeBinding;
+      pointLightShadowBufWrite.dstArrayElement = 0;
+      pointLightShadowBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      pointLightShadowBufWrite.descriptorCount = 1;
+      pointLightShadowBufWrite.pBufferInfo = &pointLightShadowBufferInfo;
+
+      descriptorWrites.emplace_back(std::move(pointLightShadowBufWrite));
 
       // Cluster SSBO
       VkDescriptorBufferInfo clusterBufferInfo{};
@@ -3754,6 +3833,7 @@ bool VulkanRenderer::initGpuBuffers()
   _gpuWindForceImage.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuWindForceView.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuLightBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuPointLightShadowBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuViewClusterBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuSkeletonBuffer.resize(MAX_FRAMES_IN_FLIGHT);
 
@@ -3834,6 +3914,15 @@ bool VulkanRenderer::initGpuBuffers()
       _gpuLightBuffer[i]);
     name = "_gpuLightBuffer" + std::to_string(i);
     setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuLightBuffer[i]._buffer, name.c_str());
+
+    bufferutil::createBuffer(
+      _vmaAllocator,
+      MAX_NUM_POINT_LIGHT_SHADOWS * sizeof(gpu::GPUPointLightShadowCube),
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+      0,
+      _gpuPointLightShadowBuffer[i]);
+    name = "_gpuPointLightShadowBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuPointLightShadowBuffer[i]._buffer, name.c_str());
 
     bufferutil::createBuffer(
       _vmaAllocator,
@@ -4373,6 +4462,7 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
   if (_lightsChanged[_currentFrame]) {
     prefillGPULightBuffer(commandBuffer);
+    prefillGPUPointLightShadowCubeBuffer(commandBuffer);
   }
 
   // Update windforce texture

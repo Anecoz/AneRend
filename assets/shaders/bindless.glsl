@@ -20,6 +20,11 @@ struct Light
   vec4 color; // w is enabled or not
 };
 
+struct PointLightShadowCube
+{
+  mat4 shadowMatrices[6]; // Front, back, up, down, right, left where "front" is +x
+};
+
 struct Cluster
 {
   vec4 minVs;
@@ -115,41 +120,45 @@ layout(std430, set = 0, binding = 3) readonly buffer LightBuffer {
   Light lights[];
 } lightBuffer;
 
-layout(std430, set = 0, binding = 4) readonly buffer ClusterBuffer {
+layout(set = 0, binding = 4) uniform PointLightShadowCubeUBO {
+  PointLightShadowCube cube[4];
+} pointLightShadowCubeUBO;
+
+layout(std430, set = 0, binding = 5) readonly buffer ClusterBuffer {
   Cluster clusters[];
 } clusterBuffer;
 
-layout(std430, set = 0, binding = 5) readonly buffer MaterialBuffer {
+layout(std430, set = 0, binding = 6) readonly buffer MaterialBuffer {
   MaterialInfo infos[];
 } materialBuffer;
 
-layout(std430, set = 0, binding = 6) readonly buffer RenderableMatIndexBuffer {
+layout(std430, set = 0, binding = 7) readonly buffer RenderableMatIndexBuffer {
   uint indices[];
 } rendMatIndexBuffer;
 
-layout(std430, set = 0, binding = 7) readonly buffer RenderableModelBuffer {
+layout(std430, set = 0, binding = 8) readonly buffer RenderableModelBuffer {
   uint indices[];
 } rendModelBuffer;
 
-layout(std430, set = 0, binding = 8) readonly buffer IndexBuffer {
+layout(std430, set = 0, binding = 9) readonly buffer IndexBuffer {
   uint indices[];
 } indexBuffer;
 
-layout(std430, set = 0, binding = 9) buffer VertexBuffer {
+layout(std430, set = 0, binding = 10) buffer VertexBuffer {
   PackedVertex vertices[];
 } vertexBuffer;
 
-layout(std430, set = 0, binding = 10) readonly buffer MeshBuffer {
+layout(std430, set = 0, binding = 11) readonly buffer MeshBuffer {
   MeshInfo meshes[];
 } meshBuffer;
 
-// Tlas is binding 10
+// Tlas is binding 12
 
-layout(std430, set = 0, binding = 12) readonly buffer SkeletonBuffer {
+layout(std430, set = 0, binding = 13) readonly buffer SkeletonBuffer {
   mat4 joints[];
 } skeletonBuffer;
 
-layout(set = 0, binding = 13) uniform sampler2D textures[];
+layout(set = 0, binding = 14) uniform sampler2D textures[];
 
 SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, mat3 inTBN, vec3 inTangent, vec3 inColor)
 {
