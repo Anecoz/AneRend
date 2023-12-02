@@ -24,6 +24,7 @@ void EditLightGUI::immediateDraw(logic::AneditContext* c)
   glm::vec3 color{ 0.0f };
   float range = 0.0f;
   bool enabled = false;
+  bool shadowCaster = false;
 
   char name[32];
   name[0] = '\0';
@@ -42,6 +43,7 @@ void EditLightGUI::immediateDraw(logic::AneditContext* c)
       color = light->_color;
       range = light->_range;
       enabled = light->_enabled;
+      shadowCaster = light->_shadowCaster;
     }
 
     // Input for pos
@@ -78,6 +80,13 @@ void EditLightGUI::immediateDraw(logic::AneditContext* c)
       changed = true;
     }
 
+    // shadowcaster flag
+    ImGui::Separator();
+    ImGui::Text("Shadow caster");
+    if (ImGui::Checkbox("##shadowcaster", &shadowCaster)) {
+      changed = true;
+    }
+
     if (!id) {
       ImGui::EndDisabled();
     }
@@ -88,6 +97,7 @@ void EditLightGUI::immediateDraw(logic::AneditContext* c)
       oldLight._pos = pos;
       oldLight._enabled = enabled;
       oldLight._range = range;
+      oldLight._shadowCaster = shadowCaster;
 
       c->scene().updateLight(std::move(oldLight));
     }
