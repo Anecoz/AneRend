@@ -88,7 +88,7 @@ void main()
     vec4 lightView =  ubo.view * vec4(light.worldPos.xyz, 1.0f);
     bool inFrustum = true;//distance(ubo.cameraPos.xyz, light.worldPos.xyz) < 50.0;
     inFrustum = inFrustum && lightView.z > -50.0;
-    inFrustum = inFrustum && lightView.z < .1;
+    //inFrustum = inFrustum && lightView.z < .1;
     if (inFrustum) {
       for (int j = 3; j >= 0 && inFrustum; --j) {
         float d = dot(frustumPlanes[j], lightView); // Distance of the point from the plane
