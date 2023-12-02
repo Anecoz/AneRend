@@ -69,9 +69,22 @@ layout(std430, set = 1, binding = 11) buffer DebugSphereTranslationBuffer {
   TranslationId ids[];
 } debugSphereTransBuffer;
 
+layout(std430, set = 1, binding = 12) buffer PointLightShadowDrawBufs {
+  DrawCommand draws[];
+} shadowDrawBufs[4];
+
+layout(std430, set = 1, binding = 13) buffer PointLightShadowCountBuf {
+  uint count;
+} shadowCountBufs[4];
+
+layout(std430, set = 1, binding = 14) buffer PointLightShadowTransBuf {
+  TranslationId ids[];
+} shadowTransBufs[4];
+
 layout(push_constant) uniform constants {
   mat4 view;
   vec4 frustumPlanes[4];
+  ivec4 pointLightShadowIndices;
   float nearDist;
   float farDist;
   uint drawCount;
@@ -269,6 +282,40 @@ bool withinRangeOfCamera(vec3 renderablePos, float range)
   return distance(ubo.cameraPos.xyz, renderablePos) <= range;
 }
 
+void checkBSAgainstPointLightShadows(vec3 boundingSphereWorld, float radius, uint drawIndex, uint meshOffset, uint renderableIndex)
+{
+  // Go through all 4 (TODO: variable size) point light shadows
+  for (int i = 0; i < 4; ++i) {
+    int idx = pushConstants.pointLightShadowIndices[i];
+    if (idx == -1) {
+      continue;
+    }
+
+    Light light = lightBuffer.lights[idx];
+    float lightRadius = light.worldPos.w;
+    vec3 lightPos = light.worldPos.xyz;
+
+    // Do a sphere-sphere intersect
+    float d = distance(lightPos, boundingSphereWorld);
+    if (lightRadius + radius >= d) {
+      // add a draw call for this index
+      uint shadowDrawIdx = atomicAdd(shadowCountBufs[i].count, 1);
+
+      shadowDrawBufs[i].draws[shadowDrawIdx].indexCount = drawBuffer.draws[drawIndex].indexCount;
+      shadowDrawBufs[i].draws[shadowDrawIdx].firstIndex = drawBuffer.draws[drawIndex].firstIndex;
+      shadowDrawBufs[i].draws[shadowDrawIdx].vertexOffset = drawBuffer.draws[drawIndex].vertexOffset;
+      shadowDrawBufs[i].draws[shadowDrawIdx].firstInstance = drawBuffer.draws[drawIndex].firstInstance;
+      
+      uint countBefore = atomicAdd(shadowDrawBufs[i].draws[shadowDrawIdx].instanceCount, 1);
+
+      // Update translation buffer (from gl_InstanceIndex to renderableId and meshId)
+      uint instanceIndex = shadowDrawBufs[i].draws[shadowDrawIdx].firstInstance + countBefore;
+      shadowTransBufs[i].ids[instanceIndex].renderableIndex = renderableIndex;
+      shadowTransBufs[i].ids[instanceIndex].meshOffset = meshOffset;
+    }
+  }
+}
+
 void main()
 {
   // Renderable culling
@@ -277,7 +324,6 @@ void main()
   if (gID < pushConstants.drawCount) {
 
     // Check visibility against frustum planes
-    //bool visible = renderableBuffer.renderables[gID].visible == 1 ? true : false;
     bool visible = visibleBitSet(renderableBuffer.renderables[gID]);
 
     if (visible) {
@@ -306,20 +352,41 @@ void main()
         if (visible) {
 
           for (int i = 0; i < renderableBuffer.renderables[gID].numMeshes; ++i) {
+            // Per mesh frustum culling
             uint meshOffset = renderableBuffer.renderables[gID].modelOffset + i;
             uint meshIndex = rendModelBuffer.indices[meshOffset];
-            uint countBefore = atomicAdd(drawBuffer.draws[meshIndex].instanceCount, 1);
+            MeshInfo meshInfo = meshBuffer.meshes[meshIndex];
 
-            // Update translation buffer (from gl_InstanceIndex to renderableId and meshId)
-            uint instanceIndex = drawBuffer.draws[meshIndex].firstInstance + countBefore;
-            translationBuffer.ids[instanceIndex].renderableIndex = gID;
-            translationBuffer.ids[instanceIndex].meshOffset = meshOffset;
+            // Construct simple bounding sphere for this mesh
+            vec4 meshBs = constructBoundingSphere(meshInfo);
+            vec3 scale = getScale(model);
+            meshBs.xyz = vec3(model * vec4(meshBs.xyz, 1.0));
+            meshBs.w *= scale.x; // NOTE: Assuming uniform scaling!
 
-            // Also add debug sphere instances if it is enabled
-            if (ubo.visualizeBoundingSpheresEnabled == 1) {
-              uint countBef = atomicAdd(debugSphereDrawBuffer.draw.instanceCount, 1);
-              debugSphereTransBuffer.ids[countBef].renderableIndex = gID;
-              debugSphereTransBuffer.ids[countBef].meshOffset = meshOffset;
+            visible = sphereVisible(meshBs.xyz, meshBs.w);
+
+            if (visible) {
+              vec3 meshBsView = vec3(pushConstants.view * vec4(meshBs.xyz, 1.0));
+              visible = occlusionCull(meshBsView, meshBs.w);
+
+              if (visible) {
+                // Point light shadows, they have their own respective draw buffers
+                checkBSAgainstPointLightShadows(meshBs.xyz, meshBs.w, meshIndex, meshOffset, gID);
+
+                uint countBefore = atomicAdd(drawBuffer.draws[meshIndex].instanceCount, 1);
+
+                // Update translation buffer (from gl_InstanceIndex to renderableId and meshId)
+                uint instanceIndex = drawBuffer.draws[meshIndex].firstInstance + countBefore;
+                translationBuffer.ids[instanceIndex].renderableIndex = gID;
+                translationBuffer.ids[instanceIndex].meshOffset = meshOffset;
+
+                // Also add debug sphere instances if it is enabled
+                if (ubo.visualizeBoundingSpheresEnabled == 1) {
+                  uint countBef = atomicAdd(debugSphereDrawBuffer.draw.instanceCount, 1);
+                  debugSphereTransBuffer.ids[countBef].renderableIndex = gID;
+                  debugSphereTransBuffer.ids[countBef].meshOffset = meshOffset;
+                }
+              }
             }
           }
         }

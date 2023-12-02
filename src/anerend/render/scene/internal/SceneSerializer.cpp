@@ -115,6 +115,8 @@ void serialize(S& s, render::asset::Mesh& m)
   s.object(m._id);
   s.container(m._vertices, 500000);
   s.container4b(m._indices, 500000);
+  s.object(m._minPos);
+  s.object(m._maxPos);
 }
 
 template <typename S>
@@ -261,6 +263,7 @@ void serialize(S& s, render::asset::Light& l)
   s.object(l._color);
   s.value4b(l._range);
   s.value1b(l._enabled);
+  s.value1b(l._shadowCaster);
 }
 
 template <typename S>

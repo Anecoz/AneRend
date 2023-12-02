@@ -19,8 +19,6 @@ layout(location = 1) in vec3 inColor;
 layout(location = 2) in vec3 inNormal;
 
 layout(location = 0) out vec3 fragColor;
-layout(location = 1) out vec3 fragNormal;
-layout(location = 2) out vec3 fragPos;
 
 mat4 buildTranslation(mat4 model)
 {
@@ -35,18 +33,24 @@ mat4 buildTranslation(mat4 model)
 
 void main() {
   uint renderableId = translationBuffer.ids[gl_InstanceIndex].renderableId;
+  uint meshOffset = translationBuffer.ids[gl_InstanceIndex].meshId;
   mat4 model = renderableBuffer.renderables[renderableId].transform;
+  uint meshIndex = rendModelBuffer.indices[meshOffset];
+  MeshInfo meshInfo = meshBuffer.meshes[meshIndex];
 
   // Only use the translation part from the model matrix
   mat4 trans = buildTranslation(model);
 
+  vec4 sphere = constructBoundingSphere(meshInfo);
+  vec3 scale = getScale(model);
+  sphere.xyz = vec3(model * vec4(sphere.xyz, 1.0));
+  sphere.w *= scale.x; // NOTE: Assuming uniform scaling!
+
   // Scale position by the radius
-  vec3 sphereBoundCenter =  renderableBuffer.renderables[renderableId].bounds.xyz;
-  float radius =  renderableBuffer.renderables[renderableId].bounds.w;
+  vec3 sphereBoundCenter = sphere.xyz;
+  float radius = sphere.w;
   vec3 pos = inPosition * radius + sphereBoundCenter;
 
-  gl_Position = ubo.proj * ubo.view * trans * vec4(pos, 1.0);
+  gl_Position = ubo.proj * ubo.view * vec4(pos, 1.0);
   fragColor = inColor * renderableBuffer.renderables[renderableId].tint.rgb;
-  fragNormal = inNormal;
-  fragPos = (trans * vec4(pos, 1.0)).xyz;
 }

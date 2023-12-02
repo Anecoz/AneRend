@@ -329,8 +329,11 @@ bool GLTFLoader::loadFromFile(
         glm::vec3 min{ accessor.minValues[0], accessor.minValues[1], accessor.minValues[2] };
         glm::vec3 max{ accessor.maxValues[0], accessor.maxValues[1], accessor.maxValues[2] };
 
-        //modelOut._min = glm::min(min, modelOut._min);
-        //modelOut._max = glm::max(max, modelOut._max);
+        min = min + trans;
+        max = max + trans;
+
+        mesh._minPos = min;
+        mesh._maxPos = max;
       }
       if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
         const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("NORMAL")->second];

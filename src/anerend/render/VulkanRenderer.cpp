@@ -612,6 +612,8 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
       internalMesh._id = mesh._id;
       internalMesh._numIndices = static_cast<uint32_t>(mesh._indices.size());
       internalMesh._numVertices = static_cast<uint32_t>(mesh._vertices.size());
+      internalMesh._minPos = mesh._minPos;
+      internalMesh._maxPos = mesh._maxPos;
 
       internalModel._meshes.push_back(mesh._id);
 
@@ -2973,6 +2975,8 @@ void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
 
     mappedData[i]._vertexOffset = mesh._vertexOffset;
     mappedData[i]._indexOffset = (uint32_t)mesh._indexOffset;
+    mappedData[i]._minPos = glm::vec4(mesh._minPos, 0.0f);
+    mappedData[i]._maxPos = glm::vec4(mesh._maxPos, 0.0f);
     mappedData[i]._blasRef = mesh._blasRef;
   }
 
@@ -4684,6 +4688,9 @@ std::vector<int> VulkanRenderer::getShadowCasterLightIndices()
         }
       }
     }
+    else {
+      out.emplace_back(-1);
+    }
   }
   return out;
 }
@@ -4742,6 +4749,8 @@ gpu::GPUCullPushConstants VulkanRenderer::getCullParams()
   gpu::GPUCullPushConstants cullPushConstants{};
   cullPushConstants._drawCount = (uint32_t)_currentRenderables.size();
 
+  auto inds = getShadowCasterLightIndices();
+
   cullPushConstants._frustumPlanes[0] = _latestCamera.getFrustum().getPlane(Frustum::Left);
   cullPushConstants._frustumPlanes[1] = _latestCamera.getFrustum().getPlane(Frustum::Right);
   cullPushConstants._frustumPlanes[2] = _latestCamera.getFrustum().getPlane(Frustum::Top);
@@ -4752,6 +4761,7 @@ gpu::GPUCullPushConstants VulkanRenderer::getCullParams()
   //auto wind = glm::normalize(_currentWindMap.windDir);
   cullPushConstants._windDirX = 0.0f;// wind.x;
   cullPushConstants._windDirY = 0.0f;// wind.y;
+  cullPushConstants._pointLightShadowInds = glm::ivec4(inds[0], inds[1], inds[2], inds[3]);
 
   return cullPushConstants;
 }

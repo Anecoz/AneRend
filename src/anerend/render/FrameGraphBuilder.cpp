@@ -800,9 +800,12 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
     // Do a pre-run to find the highest binding (will be used as bindless binding)
     bool containsBindless = false;
     int highestBinding = 0;
+    bool advanceBinding = true;
     for (auto& us : node._resourceUsages) {
-      if ((isTypeBuffer(us._type) && shouldBeDescriptor(us._stage)) ||
+      if ((isTypeBuffer(us._type) && shouldBeDescriptor(us._stage)) && !us._ownedByEngine ||
           (isTypeImage(us._type) && shouldBeDescriptor(us._type)) && !us._bindless) {
+
+        advanceBinding = true;
 
         if (us._arrayId >= 0) {
           if (arrayBindingMap.count(us._arrayId) == 0) {
@@ -811,10 +814,11 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
           }
           else {
             arrayCountMap[us._arrayId]++;
+            advanceBinding = false;
           }
         }
 
-        highestBinding++;
+        if (advanceBinding) highestBinding++;
       }
 
       if (us._bindless) containsBindless = true;
@@ -1691,7 +1695,7 @@ void FrameGraphBuilder::insertBarriers(std::vector<GraphNode>& stack)
         // Initial layout transition (before executing)
         if (!skipPreBarrier) {
           auto initialLayout = usage._imageAlwaysGeneral ? VK_IMAGE_LAYOUT_GENERAL : findInitialImageLayout(usage._access, usage._type);
-          VkImageLayout oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+          VkImageLayout oldLayout = usage._defaultLayout;
           auto stageBits = translateStageBits(usage._type, usage._type, usage._stage, usage._stage);
           bool depth = isDepth(usage._type);
           auto dstAccessMask = findWriteAccessMask(usage._type);

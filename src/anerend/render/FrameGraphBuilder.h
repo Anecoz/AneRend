@@ -143,6 +143,8 @@ struct ResourceUsage
   bool _bindless = false; // Currently only supported by combined image/samplers.
 
   bool _multiBuffered = false; // Filled in by frame graph builder
+
+  VkImageLayout _defaultLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 };
 
 struct RenderPassRegisterInfo

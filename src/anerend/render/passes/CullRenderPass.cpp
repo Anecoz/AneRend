@@ -203,24 +203,51 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       });
   }
 
-  // Add an initializer for the grass obj buffer
-  /*ResourceUsage grassObjBufInitUsage{};
-  grassObjBufInitUsage._type = Type::SSBO;
-  grassObjBufInitUsage._access.set((std::size_t)Access::Write);
-  grassObjBufInitUsage._stage.set((std::size_t)Stage::Transfer);
+  // Add initializers for count buffers for point light shadows
+  for (int i = 0; i < rc->getMaxNumPointLightShadows(); ++i) {
+    ResourceUsage initUsage{};
+    initUsage._type = Type::SSBO;
+    initUsage._access.set((std::size_t)Access::Write);
+    initUsage._stage.set((std::size_t)Stage::Transfer);
 
-  fgb.registerResourceInitExe("CullGrassObjBuf", std::move(grassObjBufInitUsage),
-    [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
-      // Just fill buffer with 0's
-      auto buf = (BufferRenderResource*)resource;
+    std::string name = "LightDrawCountBuf" + std::to_string(i);
 
-      vkCmdFillBuffer(
-        cmdBuffer,
-        buf->_buffer._buffer,
-        0,
-        VK_WHOLE_SIZE,
-        0);
-    });*/
+    fgb.registerResourceInitExe(name, std::move(initUsage),
+      [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
+        // Just fill buffer with 0's
+        auto buf = (BufferRenderResource*)resource;
+
+        vkCmdFillBuffer(
+          cmdBuffer,
+          buf->_buffer._buffer,
+          0,
+          VK_WHOLE_SIZE,
+          0);
+      });
+  }
+
+  // Add initializers for draw buffers for point light shadows
+  for (int i = 0; i < rc->getMaxNumPointLightShadows(); ++i) {
+    ResourceUsage initUsage{};
+    initUsage._type = Type::SSBO;
+    initUsage._access.set((std::size_t)Access::Write);
+    initUsage._stage.set((std::size_t)Stage::Transfer);
+
+    std::string name = "CullLightDrawBuf" + std::to_string(i);
+
+    fgb.registerResourceInitExe(name, std::move(initUsage),
+      [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
+        // Just fill buffer with 0's
+        auto buf = (BufferRenderResource*)resource;
+
+        vkCmdFillBuffer(
+          cmdBuffer,
+          buf->_buffer._buffer,
+          0,
+          VK_WHOLE_SIZE,
+          0);
+      });
+  }
 
   // Register the actual render pass
   RenderPassRegisterInfo regInfo{};
@@ -325,10 +352,57 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     regInfo._resourceUsages.emplace_back(std::move(usage));
   }
 
+  // Draw and count buffers for each point light shadow
+  for (int i = 0; i < rc->getMaxNumPointLightShadows(); ++i) {
+    // Draw buffer
+      ResourceUsage usage{};
+      usage._resourceName = "CullLightDrawBuf" + std::to_string(i);
+      usage._access.set((std::size_t)Access::Write);
+      usage._stage.set((std::size_t)Stage::Compute);
+      usage._type = Type::SSBO;
+      usage._arrayId = 0;
+      usage._arrayIdx = i;
+      BufferInitialCreateInfo createInfo{};
+      createInfo._multiBuffered = true;
+      createInfo._initialSize = rc->getMaxNumMeshes() * sizeof(gpu::GPUDrawCallCmd);
+      usage._bufferCreateInfo = createInfo;
+      regInfo._resourceUsages.emplace_back(std::move(usage));
+  }
+
+  // Count buffer for point light shadows
+  for (int i = 0; i < rc->getMaxNumPointLightShadows(); ++i) {
+    ResourceUsage usage{};
+    usage._resourceName = "LightDrawCountBuf" + std::to_string(i);
+    usage._access.set((std::size_t)Access::Write);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SSBO;
+    usage._arrayId = 1;
+    usage._arrayIdx = i;
+    BufferInitialCreateInfo ci{};
+    ci._multiBuffered = true;
+    ci._initialSize = sizeof(uint32_t);
+    usage._bufferCreateInfo = ci;
+    regInfo._resourceUsages.emplace_back(std::move(usage));
+  }
+
+  // Translation buffer for point light shadows
+  for (int i = 0; i < rc->getMaxNumPointLightShadows(); ++i) {
+    ResourceUsage usage{};
+    usage._resourceName = "LightTransBuf" + std::to_string(i);
+    usage._access.set((std::size_t)Access::Write);
+    usage._stage.set((std::size_t)Stage::Compute);
+    usage._type = Type::SSBO;
+    usage._arrayId = 2;
+    usage._arrayIdx = i;
+    BufferInitialCreateInfo ci{};
+    ci._multiBuffered = true;
+    ci._initialSize = rc->getMaxNumRenderables() * sizeof(gpu::GPUTranslationId);
+    usage._bufferCreateInfo = ci;
+    regInfo._resourceUsages.emplace_back(std::move(usage));
+  }
 
   ComputePipelineCreateParams pipeParam{};
   pipeParam.device = rc->device();
-  //pipeParam.pipelineLayout = _pipelineLayout;
   pipeParam.shader = "cull_comp.spv";
 
   regInfo._computeParams = pipeParam;

@@ -40,6 +40,8 @@ struct MaterialInfo
 
 struct MeshInfo
 {
+  vec4 minPos; // in model-space coordinate, i.e. need to multiply by model transform, w unused
+  vec4 maxPos; // in model-space coordinate, i.e. need to multiply by model transform, w unused
   uint vertexOffset; // in "number" of vertices, not bytes
   uint indexOffset; // in "number" of indices, not bytes
   uint64_t blasRef;
@@ -241,4 +243,23 @@ uint setVisibleBit(Renderable rend, bool val)
 {
   uint insert = val ? 1 : 0;
   return bitfieldInsert(rend.visible, insert, 0, 1);
+}
+
+vec3 getScale(mat4 model)
+{
+  vec3 size;
+  size.x = length(vec3(model[0])); // Basis vector X
+  size.y = length(vec3(model[1])); // Basis vector Y
+  size.z = length(vec3(model[2])); // Basis vector Z
+
+  return size;
+}
+
+// xyz is center, w is radius
+vec4 constructBoundingSphere(MeshInfo meshInfo)
+{
+  vec3 center = (meshInfo.minPos.xyz + meshInfo.maxPos.xyz) / 2.0;
+  float radius = distance(meshInfo.minPos.xyz, meshInfo.maxPos.xyz) / 2.0;
+
+  return vec4(center, radius);
 }

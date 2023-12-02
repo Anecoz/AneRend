@@ -159,91 +159,92 @@ void ShadowRenderPass::reigsterDirectionalShadowPass(FrameGraphBuilder& fgb, Ren
 
 void ShadowRenderPass::registerPointShadowPass(FrameGraphBuilder& fgb, RenderContext* rc)
 {
-  RenderPassRegisterInfo info{};
-  info._name = "PointShadow";
-  info._group = "PointShadow"; // TODO: Put in shadow group?
-
-  {
-    ResourceUsage usage{};
-    usage._resourceName = "CullTransBuf";
-    usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::Vertex);
-    usage._type = Type::SSBO;
-    usage._multiBuffered = true;
-    info._resourceUsages.emplace_back(std::move(usage));
-  }
   for (std::size_t i = 0; i < rc->getMaxNumPointLightShadows(); ++i) {
-    ResourceUsage usage{};
-    usage._resourceName = "PointShadowMap" + std::to_string(i);
-    usage._access.set((std::size_t)Access::Write);
-    usage._stage.set((std::size_t)Stage::Fragment);
-    usage._type = Type::DepthAttachment;
 
-    ImageInitialCreateInfo createInfo{};
-    createInfo._intialFormat = VK_FORMAT_D32_SFLOAT;
-    createInfo._initialHeight = 512;
-    createInfo._initialWidth = 512;
-    createInfo._arrayLayers = 6;
-    createInfo._cubeCompat = true;
-    usage._imageCreateInfo = createInfo;
+    RenderPassRegisterInfo info{};
+    std::string name = "PointShadow" + std::to_string(i);
+    info._name = name;
+    info._group = "PointShadow"; // TODO: Put in shadow group?
 
-    info._resourceUsages.emplace_back(std::move(usage));
-  }
-  {
-    ResourceUsage usage{};
-    usage._resourceName = "CompactedCullDrawBuf";
-    usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::IndirectDraw);
-    usage._type = Type::SSBO;
-    usage._multiBuffered = true;
-    info._resourceUsages.emplace_back(std::move(usage));
-  }
-  {
-    ResourceUsage usage{};
-    usage._resourceName = "CompactDrawCountBuf";
-    usage._access.set((std::size_t)Access::Read);
-    usage._stage.set((std::size_t)Stage::IndirectDraw);
-    usage._type = Type::SSBO;
-    usage._multiBuffered = true;
-    info._resourceUsages.emplace_back(std::move(usage));
-  }
-
-  GraphicsPipelineCreateParams params{};
-  params.device = rc->device();
-  params.vertShader = "standard_shadow_point_vert.spv";
-  params.fragShader = "standard_shadow_frag.spv";
-  params.colorLoc = -1;
-  params.normalLoc = -1;
-  params.jointLoc = 1;
-  params.jointWeightLoc = 2;
-  params.colorAttachment = false;
-  params.depthBiasEnable = true;
-  params.depthBiasConstant = 4.0f;
-  params.depthBiasSlope = 1.5f;
-  params.viewMask = (uint32_t)0b111111; // This enables multiview, the bitmask enables all 6 views of the cube
-  //params.cullMode = VK_CULL_MODE_FRONT_BIT;
-  info._graphicsParams = params;
-
-  fgb.registerRenderPass(std::move(info));
-
-  fgb.registerRenderPassExe("PointShadow",
-    [this](RenderExeParams exeParams)
     {
-      if (!exeParams.rc->getRenderOptions().pointShadows) return;
+      ResourceUsage usage{};
+      usage._resourceName = "LightTransBuf" + std::to_string(i);
+      usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::Vertex);
+      usage._type = Type::SSBO;
+      usage._multiBuffered = true;
+      info._resourceUsages.emplace_back(std::move(usage));
+    }
+    {
+      ResourceUsage usage{};
+      usage._resourceName = "PointShadowMap" + std::to_string(i);
+      usage._access.set((std::size_t)Access::Write);
+      usage._stage.set((std::size_t)Stage::Fragment);
+      usage._type = Type::DepthAttachment;
 
-      auto lightIndices = exeParams.rc->getShadowCasterLightIndices();
+      ImageInitialCreateInfo createInfo{};
+      createInfo._intialFormat = VK_FORMAT_D32_SFLOAT;
+      createInfo._initialHeight = 512;
+      createInfo._initialWidth = 512;
+      createInfo._arrayLayers = 6;
+      createInfo._cubeCompat = true;
+      usage._imageCreateInfo = createInfo;
 
-      for (std::size_t i = 0; i < lightIndices.size(); ++i) {
+      info._resourceUsages.emplace_back(std::move(usage));
+    }
+    {
+      ResourceUsage usage{};
+      usage._resourceName = "CullLightDrawBuf" + std::to_string(i);
+      usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::IndirectDraw);
+      usage._type = Type::SSBO;
+      usage._multiBuffered = true;
+      info._resourceUsages.emplace_back(std::move(usage));
+    }
+    {
+      ResourceUsage usage{};
+      usage._resourceName = "LightDrawCountBuf" + std::to_string(i);
+      usage._access.set((std::size_t)Access::Read);
+      usage._stage.set((std::size_t)Stage::IndirectDraw);
+      usage._type = Type::SSBO;
+      usage._multiBuffered = true;
+      info._resourceUsages.emplace_back(std::move(usage));
+    }
+
+    GraphicsPipelineCreateParams params{};
+    params.device = rc->device();
+    params.vertShader = "standard_shadow_point_vert.spv";
+    params.fragShader = "standard_shadow_frag.spv";
+    params.colorLoc = -1;
+    params.normalLoc = -1;
+    params.jointLoc = 1;
+    params.jointWeightLoc = 2;
+    params.colorAttachment = false;
+    params.depthBiasEnable = true;
+    params.depthBiasConstant = 4.0f;
+    params.depthBiasSlope = 1.5f;
+    params.viewMask = (uint32_t)0b111111; // This enables multiview, the bitmask enables all 6 views of the cube
+    //params.cullMode = VK_CULL_MODE_FRONT_BIT;
+    info._graphicsParams = params;
+
+    fgb.registerRenderPass(std::move(info));
+
+    fgb.registerRenderPassExe(name,
+      [this, i](RenderExeParams exeParams)
+      {
+        if (!exeParams.rc->getRenderOptions().pointShadows) return;
+
+        auto lightIndices = exeParams.rc->getShadowCasterLightIndices();
 
         if (lightIndices[i] == -1) {
-          continue;
+          return;
         }
 
         auto& light = exeParams.rc->getLights()[lightIndices[i]];
 
         // Use multiview rendering to just do 1 draw call per cube.
         // The first view in the attachment is the cube view.
-        auto& cubeView = exeParams.depthAttachmentCubeViews[7 * i];
+        auto& cubeView = exeParams.depthAttachmentCubeViews[0];
 
         VkExtent2D extent{};
         extent.width = 512;
@@ -325,8 +326,8 @@ void ShadowRenderPass::registerPointShadowPass(FrameGraphBuilder& fgb, RenderCon
 
         // Stop dynamic rendering
         vkCmdEndRendering(*exeParams.cmdBuffer);
-      }
-    });
+      });
+  }
 }
 
 }

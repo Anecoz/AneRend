@@ -38,6 +38,7 @@ namespace render
       usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::SampledDepthTexture;
       usage._useMaxSampler = true;
+      usage._defaultLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 
       info._resourceUsages.emplace_back(std::move(usage));
     }

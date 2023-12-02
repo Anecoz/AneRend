@@ -12,6 +12,9 @@ struct InternalMesh
   uint32_t _numIndices;
   uint32_t _numVertices;
 
+  glm::vec3 _minPos;
+  glm::vec3 _maxPos;
+
   // Offsets into fat buffers.
   BufferMemoryInterface::Handle _vertexHandle;
   BufferMemoryInterface::Handle _indexHandle;
