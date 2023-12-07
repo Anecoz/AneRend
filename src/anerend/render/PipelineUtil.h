@@ -103,7 +103,7 @@ struct SamplerCreateParams
   VkFilter minFilter = VK_FILTER_LINEAR;
   VkSamplerMipmapMode mipMapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
   float mipLodBias = 0.0f;
-  float maxAnisotropy = 8.0f;
+  float maxAnisotropy = 16.0f;
   float minLod = 0.0f;
   float maxLod = 10.0f;
   VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
