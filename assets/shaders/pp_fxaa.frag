@@ -98,7 +98,7 @@ vec4 apply(sampler2D tex, vec2 fragCoord, vec2 resolution) {
 }
 
 void main() {
-  if (ubo.fxaaEnabled == 1) {
+  if (checkUboFlag(UBO_FXAA_FLAG)) {
     vec2 resolution = textureSize(inputTex, 0);
     vec2 fragCoord = vec2(fragTexCoords.x * resolution.x, fragTexCoords.y * resolution.y);  
     outColor = apply(inputTex, fragCoord, resolution);    

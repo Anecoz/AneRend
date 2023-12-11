@@ -90,6 +90,21 @@ struct GPUCullPushConstants {
                                // Total: 164 bytes
 };
 
+enum SceneUboFlags : std::uint32_t
+{
+  UBO_SSAO_FLAG = 1,
+  UBO_FXAA_FLAG = 1 << 1,
+  UBO_DIRECTIONAL_SHADOWS_FLAG = 1 << 2,
+  UBO_RT_SHADOWS_FLAG = 1 << 3,
+  UBO_DDGI_FLAG = 1 << 4,
+  UBO_DDGI_MULTI_FLAG = 1 << 5,
+  UBO_SPECULAR_GI_FLAG = 1 << 6,
+  UBO_SS_PROBES_FLAG = 1 << 7,
+  UBO_BS_VIS_FLAG = 1 << 8,
+  UBO_HACK_FLAG = 1 << 9,
+  UBO_RT_ON_FLAG = 1 << 10
+};
+
 // This is used as a UBO and has follows std140 rules (use 4-byte things basically...)
 struct GPUSceneData {
   glm::mat4 view;
@@ -99,29 +114,17 @@ struct GPUSceneData {
   glm::mat4 invViewProj;
   glm::mat4 directionalShadowMatrixProj;
   glm::mat4 directionalShadowMatrixView;
-  glm::mat4 shadowMatrix[24];
   glm::vec4 cameraPos;
   glm::ivec4 cameraGridPos;
   glm::vec4 lightDir;
-  glm::vec4 viewVector;
   float time;
   float delta;
   uint32_t screenWidth;
   uint32_t screenHeight;
-  int32_t ssaoEnabled;
-  int32_t fxaaEnabled;
-  int32_t directionalShadowsEnabled;
-  int32_t rtShadowsEnabled;
-  int32_t ddgiEnabled;
-  int32_t multiBounceDdgiEnabled;
-  int32_t specularGiEnabled;
-  int32_t screenspaceProbesEnabled;
-  int32_t visualizeBoundingSpheresEnabled;
-  int32_t hack;
   float sunIntensity;
   float skyIntensity;
   float exposure;
-  int32_t rtEnabled;
+  uint32_t flags; // SceneUboFlags
 };
 
 struct GPUSSAOSampleUbo {

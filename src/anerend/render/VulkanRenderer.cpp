@@ -1557,31 +1557,24 @@ void VulkanRenderer::update(
   ubo.lightDir = lightDir;
   ubo.proj = proj;
   ubo.view = camera.getCamMatrix();
-  ubo.viewVector = glm::vec4(camera.getForward(), 1.0);
   ubo.time = static_cast<float>(time);
   ubo.delta = static_cast<float>(delta);
   ubo.screenHeight = swapChainExtent().height;
   ubo.screenWidth = swapChainExtent().width;
-  ubo.ssaoEnabled = _renderOptions.ssao;
-  ubo.fxaaEnabled = _renderOptions.fxaa;
-  ubo.directionalShadowsEnabled = _renderOptions.directionalShadows;
-  ubo.rtShadowsEnabled = _renderOptions.raytracedShadows;
-  ubo.ddgiEnabled = _renderOptions.ddgiEnabled;
-  ubo.multiBounceDdgiEnabled = _renderOptions.multiBounceDdgiEnabled;
-  ubo.specularGiEnabled = _renderOptions.specularGiEnabled;
-  ubo.screenspaceProbesEnabled = _renderOptions.screenspaceProbes;
-  ubo.visualizeBoundingSpheresEnabled = _renderOptions.visualizeBoundingSpheres;
-  ubo.hack = _renderOptions.hack;
   ubo.sunIntensity = _renderOptions.sunIntensity;
   ubo.skyIntensity = _renderOptions.skyIntensity;
   ubo.exposure = _renderOptions.exposure;
-  ubo.rtEnabled = _enableRayTracing;
-
-  /*for (int i = 0; i < _lights.size(); ++i) {
-    _lights[i].debugUpdatePos(delta);
-    //ubo.lightColor[i] = glm::vec4(_lights[i]._color, 1.0);
-    //ubo.lightPos[i] = glm::vec4(_lights[i]._pos, 0.0);
-  }*/
+  if (_renderOptions.ssao) ubo.flags |= gpu::UBO_SSAO_FLAG;
+  if (_renderOptions.fxaa) ubo.flags |= gpu::UBO_FXAA_FLAG;
+  if (_renderOptions.directionalShadows) ubo.flags |= gpu::UBO_DIRECTIONAL_SHADOWS_FLAG;
+  if (_renderOptions.raytracedShadows) ubo.flags |= gpu::UBO_RT_SHADOWS_FLAG;
+  if (_renderOptions.ddgiEnabled) ubo.flags |= gpu::UBO_DDGI_FLAG;
+  if (_renderOptions.multiBounceDdgiEnabled) ubo.flags |= gpu::UBO_DDGI_MULTI_FLAG;
+  if (_renderOptions.specularGiEnabled) ubo.flags |= gpu::UBO_SPECULAR_GI_FLAG;
+  if (_renderOptions.screenspaceProbes) ubo.flags |= gpu::UBO_SS_PROBES_FLAG;
+  if (_renderOptions.visualizeBoundingSpheres) ubo.flags |= gpu::UBO_BS_VIS_FLAG;
+  if (_renderOptions.hack) ubo.flags |= gpu::UBO_HACK_FLAG;
+  if (_enableRayTracing) ubo.flags |= gpu::UBO_RT_ON_FLAG;
 
   void* data;
   vmaMapMemory(_vmaAllocator, _gpuSceneDataBuffer[_currentFrame]._allocation, &data);

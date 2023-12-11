@@ -75,7 +75,7 @@ void main() {
   // If ray tracing is enabled, we need to write our verts to the dynamic mesh buffer (for creating BLASes)
   // But only if we are animated!
   uint dynamicModelOffset = renderableBuffer.renderables[renderableIndex].dynamicModelOffset;
-  if (ubo.rtEnabled == 1 && dynamicModelOffset != 0) {
+  if (checkUboFlag(UBO_RT_ON_FLAG) && dynamicModelOffset != 0) {
     uint meshIndex = rendModelBuffer.indices[meshOffset];
     uint dynamicIndex = rendModelBuffer.indices[materialOffset + dynamicModelOffset];
 

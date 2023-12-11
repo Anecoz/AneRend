@@ -182,16 +182,16 @@ void doLight(ivec2 pixel)
   float occlusion = 1.0f;
   vec3 emissive = im2Samp.rgb;
   
-  if (ubo.directionalShadowsEnabled == 1) {
+  if (checkUboFlag(UBO_DIRECTIONAL_SHADOWS_FLAG)) {
     shadow = inShadow(fragWorldPos);
     shadow = clamp(1.0 - shadow, 0.0, 1.0);
   }
-  else if (ubo.rtShadowsEnabled == 1) {
+  else if (checkUboFlag(UBO_RT_SHADOWS_FLAG)) {
     shadow = texture(rtShadowMask, texCoords).r;
     //shadow = clamp(1.0 - shadow, 0.0, 1.0);
   }
 
-  if (ubo.ssaoEnabled == 1) {
+  if (checkUboFlag(UBO_SSAO_FLAG)) {
     occlusion = texture(ssao, texCoords).r;  
   }
 
@@ -258,7 +258,7 @@ void doLight(ivec2 pixel)
     }
   }
 
-  if (ubo.ddgiEnabled == 1) {
+  if (checkUboFlag(UBO_DDGI_FLAG)) {
     if (distance(ubo.cameraPos.xyz, fragWorldPos) > NUM_PROBES_PER_PLANE * PROBE_STEP.x / 2.0) {
       ambient += ubo.skyIntensity * vec3(0.3) * albedo * clamp(shadow, 0.3, 1.0);
     }
@@ -277,7 +277,7 @@ void doLight(ivec2 pixel)
     ambient = vec3(0.3) * albedo * clamp(shadow, 0.3, 1.0);
   }
 
-  if (ubo.specularGiEnabled == 1) {
+  if (checkUboFlag(UBO_SPECULAR_GI_FLAG)) {
     ambient += calcIndirectSpecularLight(
       normal,
       albedo,

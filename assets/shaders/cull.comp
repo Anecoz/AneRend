@@ -381,7 +381,7 @@ void main()
                 translationBuffer.ids[instanceIndex].meshOffset = meshOffset;
 
                 // Also add debug sphere instances if it is enabled
-                if (ubo.visualizeBoundingSpheresEnabled == 1) {
+                if (checkUboFlag(UBO_BS_VIS_FLAG)) {
                   uint countBef = atomicAdd(debugSphereDrawBuffer.draw.instanceCount, 1);
                   debugSphereTransBuffer.ids[countBef].renderableIndex = gID;
                   debugSphereTransBuffer.ids[countBef].meshOffset = meshOffset;

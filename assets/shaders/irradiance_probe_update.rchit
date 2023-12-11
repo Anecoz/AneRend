@@ -97,7 +97,7 @@ void main()
   }
 
   // Always calculate indirect light
-  if (ubo.multiBounceDdgiEnabled == 1) {
+  if (checkUboFlag(UBO_DDGI_MULTI_FLAG)) {
     payload.irradiance += calcIndirectDiffuseLight(
       surfData.normal,
       surfData.color,
