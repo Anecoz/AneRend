@@ -319,6 +319,8 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     depthUsage._stage.set((std::size_t)Stage::Compute);
     depthUsage._multiBuffered = true; // TODO: This is not true, it isn't multi buffered.. but we have to specify since all the other buffers are
     depthUsage._useMaxSampler = true;
+    depthUsage._arrayId = 0;
+    depthUsage._arrayIdx = i;
     depthUsage._type = Type::SampledTexture;
     regInfo._resourceUsages.emplace_back(std::move(depthUsage));
     currSize = currSize >> 1;
@@ -360,7 +362,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       usage._access.set((std::size_t)Access::Write);
       usage._stage.set((std::size_t)Stage::Compute);
       usage._type = Type::SSBO;
-      usage._arrayId = 0;
+      usage._arrayId = 1;
       usage._arrayIdx = i;
       BufferInitialCreateInfo createInfo{};
       createInfo._multiBuffered = true;
@@ -376,7 +378,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SSBO;
-    usage._arrayId = 1;
+    usage._arrayId = 2;
     usage._arrayIdx = i;
     BufferInitialCreateInfo ci{};
     ci._multiBuffered = true;
@@ -392,7 +394,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     usage._access.set((std::size_t)Access::Write);
     usage._stage.set((std::size_t)Stage::Compute);
     usage._type = Type::SSBO;
-    usage._arrayId = 2;
+    usage._arrayId = 3;
     usage._arrayIdx = i;
     BufferInitialCreateInfo ci{};
     ci._multiBuffered = true;

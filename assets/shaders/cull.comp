@@ -54,30 +54,25 @@ layout(std430, set = 1, binding = 3) buffer GrassObjBuffer {
   GrassObj blades[];
 } grassObjBuffer;
 
-layout(set = 1, binding = 4) uniform sampler2D hiZ64;
-layout(set = 1, binding = 5) uniform sampler2D hiZ32;
-layout(set = 1, binding = 6) uniform sampler2D hiZ16;
-layout(set = 1, binding = 7) uniform sampler2D hiZ8;
-layout(set = 1, binding = 8) uniform sampler2D hiZ4;
-layout(set = 1, binding = 9) uniform sampler2D hiZ2;
+layout(set = 1, binding = 4) uniform sampler2D hiz[6];
 
-layout(std430, set = 1, binding = 10) buffer DebugSphereDrawBuffer {
+layout(std430, set = 1, binding = 5) buffer DebugSphereDrawBuffer {
   DrawCommand draw;
 } debugSphereDrawBuffer;
 
-layout(std430, set = 1, binding = 11) buffer DebugSphereTranslationBuffer {
+layout(std430, set = 1, binding = 6) buffer DebugSphereTranslationBuffer {
   TranslationId ids[];
 } debugSphereTransBuffer;
 
-layout(std430, set = 1, binding = 12) buffer PointLightShadowDrawBufs {
+layout(std430, set = 1, binding = 7) buffer PointLightShadowDrawBufs {
   DrawCommand draws[];
 } shadowDrawBufs[4];
 
-layout(std430, set = 1, binding = 13) buffer PointLightShadowCountBuf {
+layout(std430, set = 1, binding = 8) buffer PointLightShadowCountBuf {
   uint count;
 } shadowCountBufs[4];
 
-layout(std430, set = 1, binding = 14) buffer PointLightShadowTransBuf {
+layout(std430, set = 1, binding = 9) buffer PointLightShadowTransBuf {
   TranslationId ids[];
 } shadowTransBufs[4];
 
@@ -210,25 +205,8 @@ const vec3 up = vec3(0.0, 1.0, 0.0);
 float sampleHiZ(vec2 coords, uint level)
 {
   float ret = 1.0;
-
-  if (level == 0) {
-    ret = texture(hiZ64, coords).r;
-  }
-  else if (level == 1) {
-    ret = texture(hiZ32, coords).r;
-  }
-   else if (level == 2) {
-    ret = texture(hiZ16, coords).r;
-  }
-  else if (level == 3) {
-    ret = texture(hiZ8, coords).r;
-  }
-  else if (level == 4) {
-    ret = texture(hiZ4, coords).r;
-  }
-  else if (level == 5 || level == 6) {
-    ret = texture(hiZ2, coords).r;
-  }
+  uint clampedLevel = clamp(level, 0u, 5u);
+  ret = texture(hiz[clampedLevel], coords).r;
 
   return ret;
 }

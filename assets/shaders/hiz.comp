@@ -7,18 +7,8 @@ layout (local_size_x = 4, local_size_y = 4) in;
 #include "scene_ubo.glsl"
 
 layout(set = 1, binding = 0) uniform sampler2D depthTex;
-layout(set = 1, binding = 1) uniform sampler2D hiz64Samp;
-layout(set = 1, binding = 2, r32f) uniform writeonly image2D hiz64Im;
-layout(set = 1, binding = 3) uniform sampler2D hiz32Samp;
-layout(set = 1, binding = 4, r32f) uniform writeonly image2D hiz32Im;
-layout(set = 1, binding = 5) uniform sampler2D hiz16Samp;
-layout(set = 1, binding = 6, r32f) uniform writeonly image2D hiz16Im;
-layout(set = 1, binding = 7) uniform sampler2D hiz8Samp;
-layout(set = 1, binding = 8, r32f) uniform writeonly image2D hiz8Im;
-layout(set = 1, binding = 9) uniform sampler2D hiz4Samp;
-layout(set = 1, binding = 10, r32f) uniform writeonly image2D hiz4Im;
-layout(set = 1, binding = 11) uniform sampler2D hiz2Samp;
-layout(set = 1, binding = 12, r32f) uniform writeonly image2D hiz2Im;
+layout(set = 1, binding = 1) uniform sampler2D hizSamplers[6];
+layout(set = 1, binding = 2) uniform writeonly image2D hizImages[6];
 
 const uint MAX_SIZE = 64;
 
@@ -43,45 +33,12 @@ void main()
 
   vec2 sampleCoord = (vec2(pos) + 0.5) / float(pushConstants.outputSize);
 
-  // TODO: This is so shit... it should really be an array of inputs/outputs...
   if (pushConstants.inputIdx == 0) {
     depth = texture(depthTex, sampleCoord).r;
   }
-  else if (pushConstants.inputIdx == 1) {
-    depth = texture(hiz64Samp, sampleCoord).r;
-  }
-  else if (pushConstants.inputIdx == 3) {
-    depth = texture(hiz32Samp, sampleCoord).r;
-  }
-  else if (pushConstants.inputIdx == 5) {
-    depth = texture(hiz16Samp, sampleCoord).r;
-  }
-  else if (pushConstants.inputIdx == 7) {
-    depth = texture(hiz8Samp, sampleCoord).r;
-  }
-  else if (pushConstants.inputIdx == 9) {
-    depth = texture(hiz4Samp, sampleCoord).r;
-  }
-  else if (pushConstants.inputIdx == 11) {
-    depth = texture(hiz2Samp, sampleCoord).r;
+  else {
+    depth = texture(hizSamplers[(pushConstants.inputIdx - 1) / 2], sampleCoord).r;
   }
 
-  if (pushConstants.outputIdx == 2) {
-    imageStore(hiz64Im, ivec2(pos), vec4(depth));
-  }
-  else if (pushConstants.outputIdx == 4) {
-    imageStore(hiz32Im, ivec2(pos), vec4(depth));
-  }
-  else if (pushConstants.outputIdx == 6) {
-    imageStore(hiz16Im, ivec2(pos), vec4(depth));
-  }
-  else if (pushConstants.outputIdx == 8) {
-    imageStore(hiz8Im, ivec2(pos), vec4(depth));
-  }
-  else if (pushConstants.outputIdx == 10) {
-    imageStore(hiz4Im, ivec2(pos), vec4(depth));
-  }
-  else if (pushConstants.outputIdx == 12) {
-    imageStore(hiz2Im, ivec2(pos), vec4(depth));
-  }
+  imageStore(hizImages[(pushConstants.outputIdx - 2)/2], ivec2(pos), vec4(depth));
 }

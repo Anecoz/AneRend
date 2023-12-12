@@ -842,10 +842,16 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
         (isTypeImage(usage._type) && shouldBeDescriptor(usage._type)) && !bindlessAdded) {
 
           if (usage._arrayId >= 0) {
+            bool done = false;
             for (auto id : arrayIdsAdded) {
               if (id == usage._arrayId) {
-                continue;
+                done = true;
+                break;
               }
+            }
+
+            if (done) {
+              continue;
             }
           }
 
@@ -855,6 +861,7 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
           bindInfo.type = translateDescriptorType(usage._type);
           
           if (usage._arrayId >= 0) {
+            bindInfo.binding = arrayBindingMap[usage._arrayId];
             bindInfo.descriptorCount = arrayCountMap[usage._arrayId];
             arrayIdsAdded.emplace_back(usage._arrayId);
           }
@@ -887,6 +894,7 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
     // TODO: This shouldn't be needed...
     bool multiBuffered = false;
     currBinding = 0;
+    arrayIdsAdded.clear();
     for (int i = 0; i < node._resourceUsages.size(); ++i) {
       auto& usage = node._resourceUsages[i];
       if (usage._ownedByEngine) continue;
@@ -965,7 +973,24 @@ bool FrameGraphBuilder::createPipelines(RenderContext* renderContext, RenderReso
         samplers.emplace_back(sampler);
       }
 
-      if (advanceBinding) currBinding++;
+      // Some ugly meddling here to make sure binding gets advanced properly...
+      if (advanceBinding) {
+        if (usage._arrayId >= 0) {
+          bool found = false;
+          for (auto id : arrayIdsAdded) {
+            if (id == usage._arrayId) {
+              advanceBinding = false;
+              found = true;
+              break;
+            }
+          }
+
+          if (!found) {
+            arrayIdsAdded.emplace_back(usage._arrayId);
+          }
+        }
+        if (advanceBinding) currBinding++;
+      }
     }
 
     node._samplers = std::move(samplers);

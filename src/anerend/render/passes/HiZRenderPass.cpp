@@ -53,6 +53,8 @@ namespace render
         usage._type = Type::SampledTexture;
         usage._useMaxSampler = true;
         usage._imageAlwaysGeneral = true;
+        usage._arrayId = 0;
+        usage._arrayIdx = i;
 
         ImageInitialCreateInfo createInfo{};
         createInfo._initialHeight = currSize;
@@ -69,6 +71,8 @@ namespace render
         usage._access.set((std::size_t)Access::Write);
         usage._stage.set((std::size_t)Stage::Compute);
         usage._type = Type::ImageStorage;
+        usage._arrayId = 1;
+        usage._arrayIdx = i;
 
         info._resourceUsages.emplace_back(std::move(usage));
       }
