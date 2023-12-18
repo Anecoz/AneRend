@@ -1,6 +1,7 @@
 #version 450
 
 #extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_nonuniform_qualifier : enable
 
 layout (local_size_x = 32, local_size_y = 32) in;
 
@@ -258,19 +259,37 @@ void doLight(ivec2 pixel)
     }
   }
 
-  if (checkUboFlag(UBO_DDGI_FLAG)) {
-    if (distance(ubo.cameraPos.xyz, fragWorldPos) > NUM_PROBES_PER_PLANE * PROBE_STEP.x / 2.0) {
+  // Check if we have a DDGI atlas
+  ivec2 tIdx = ivec2(0, 0);
+  int tileBufIdx = worldPosToTileInfo(fragWorldPos, ubo.cameraPos.xyz, tIdx);
+  int atlasIdx = tileInfoBuffer.tiles[tileBufIdx].ddgiAtlasTex;
+  bool ddgiAtlas = tileBufIdx >= 0 && atlasIdx >= 0;
+
+  if (checkUboFlag(UBO_DDGI_FLAG) || ddgiAtlas) {
+    if (!ddgiAtlas && distance(ubo.cameraPos.xyz, fragWorldPos) > NUM_PROBES_PER_PLANE * PROBE_STEP.x / 2.0) {
       ambient += ubo.skyIntensity * vec3(0.3) * albedo * clamp(shadow, 0.3, 1.0);
     }
     else {
-      ambient += calcIndirectDiffuseLight(
-        normal,
-        albedo,
-        metallic,
-        roughness,
-        fragWorldPos,
-        ubo.cameraPos.xyz,
-        probeTex);
+      if (ddgiAtlas) {
+        ambient += calcIndirectDiffuseLight(
+          normal,
+          albedo,
+          metallic,
+          roughness,
+          fragWorldPos,
+          ubo.cameraPos.xyz,
+          textures[nonuniformEXT(atlasIdx)]);
+      }
+      else {
+        ambient += calcIndirectDiffuseLight(
+          normal,
+          albedo,
+          metallic,
+          roughness,
+          fragWorldPos,
+          ubo.cameraPos.xyz,
+          probeTex);
+      }
     }
   }
   else {

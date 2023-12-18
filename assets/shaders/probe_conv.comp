@@ -21,7 +21,7 @@ layout(push_constant) uniform constants {
 void main()
 {
   const int xs = NUM_PROBES_PER_PLANE * PROBE_CONV_PIX_SIZE;
-  const int ys = NUM_PROBES_PER_PLANE * PROBE_CONV_PIX_SIZE;//* NUM_PROBE_PLANES;
+  const int ys = NUM_PROBES_PER_PLANE * PROBE_CONV_PIX_SIZE;;
 
   if (gl_GlobalInvocationID.x > xs || gl_GlobalInvocationID.y > ys) {
     return;
@@ -36,11 +36,10 @@ void main()
   ivec2 probeStartPixel = (pixelPreLayer / PROBE_CONV_PIX_SIZE) * PROBE_IRR_DIR_PIX_SIZE; // in input image pixels
   ivec2 pixelWithinProbe = pixel - probeIdx * PROBE_CONV_PIX_SIZE;
 
-  // 16x16 kernel
+  // 8x8 kernel
   int kernelSize = PROBE_IRR_DIR_PIX_SIZE;
 
   ivec2 pixOffset = 2 * probeIdx + 1;
-  //vec2 octUv = vec2(float(pixelWithinProbe.x) + 0.5, float(pixelWithinProbe.y) + 0.5) / float(PROBE_CONV_PIX_SIZE);
   vec2 octUv = pixelToUv(pixelWithinProbe, ivec2(PROBE_CONV_PIX_SIZE));
 
   octUv = octUv * 2.0 - 1.0;
@@ -54,8 +53,6 @@ void main()
 
       vec3 irradiance = imageLoad(irrIm, currPix).rgb;
       vec3 dir = imageLoad(dirIm, currPix).rgb;
-      /*vec3 packedDir = imageLoad(dirIm, currPix).rgb;
-      vec3 dir = (packedDir * 2.0) - 1.0;*/
       float weight = max(0.0, dot(dir, octDir));
       if (weight > 1e-6) {
         result += vec4(weight * irradiance, weight);
@@ -65,14 +62,29 @@ void main()
 
   // Add old value
   vec4 oldVal = imageLoad(outputIm, pixOffset + pixel);
+  vec4 outRes = vec4(0.0);
 
-  if (result.w > 1e-6) {
-    result.rgb /= result.w;
+  if (checkUboFlag(UBO_BAKE_MODE_ON_FLAG)) {
+    vec3 preWeightOldVal = oldVal.rgb * oldVal.w;
+
+    float totalWeight = oldVal.w + result.w;
+
+    vec3 totalResult = result.rgb + preWeightOldVal;
+
+    if (totalWeight > 1e-6) {
+      totalResult /= totalWeight;
+    }
+
+    outRes = vec4(totalResult, totalWeight);
   }
+  else {
+    if (result.w > 1e-6) {
+      result.rgb /= result.w;
+    }
 
-  float hysteresis = 0.96;
-  vec4 outRes = result * (1.0 - hysteresis) + oldVal * hysteresis;
-  //vec4 outRes = result;
+    float hysteresis = 0.96;
+    outRes = result * (1.0 - hysteresis) + oldVal * hysteresis;
+  }
 
   imageStore(outputIm, pixOffset + pixel, outRes);
 }

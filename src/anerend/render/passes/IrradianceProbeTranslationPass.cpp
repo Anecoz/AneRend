@@ -56,6 +56,7 @@ void IrradianceProbeTranslationPass::registerToGraph(FrameGraphBuilder& fgb, Ren
   fgb.registerRenderPassExe("IrradianceProbeTrans",
     [this, width, height, numProbesPlane, numProbesHeight, octPixelSize](RenderExeParams exeParams) {
       if (!exeParams.rc->getRenderOptions().ddgiEnabled) return;
+      if (exeParams.rc->isBaking()) return;
 
       const glm::vec3 probeStep = { 1.0, 2.0, 1.0 };
 

@@ -89,7 +89,6 @@ void ScenePager::update(const glm::vec3& pos)
       if (std::find(_pagedTiles.begin(), _pagedTiles.end(), currIdx) != _pagedTiles.end()) {
 
         // Go through events to see if anything changed on this already paged tile
-        // (currently only renderables, but could be lots more)
         for (const auto& event : log._events) {
           if (event._tileIdx && event._tileIdx == currIdx) {
             if (event._type == SceneEventType::RenderableAdded) {
@@ -114,6 +113,12 @@ void ScenePager::update(const glm::vec3& pos)
             else if (event._type == SceneEventType::LightRemoved) {
               upd._removedLights.emplace_back(event._id);
             }
+            else if (event._type == SceneEventType::DDGIAtlasAdded) {
+              asset::TileInfo ti{};
+              ti._index = currIdx;
+              ti._ddgiAtlas = tile->getDDGIAtlas();
+              upd._addedTileInfos.emplace_back(std::move(ti));
+            }
           }
         }
 
@@ -129,6 +134,14 @@ void ScenePager::update(const glm::vec3& pos)
       for (const auto& lightId : tile->getLightIds()) {
         auto copy = *_scene->getLight(lightId);
         upd._addedLights.emplace_back(std::move(copy));
+      }
+
+      // Do DDGI Atlas if present
+      if (auto atlasId = tile->getDDGIAtlas()) {
+        asset::TileInfo ti{};
+        ti._index = currIdx;
+        ti._ddgiAtlas = atlasId;
+        upd._addedTileInfos.emplace_back(std::move(ti));
       }
 
       pagedTiles.emplace_back(currIdx);
@@ -155,6 +168,9 @@ void ScenePager::update(const glm::vec3& pos)
     for (const auto& lightId : tile->getLightIds()) {
       upd._removedLights.emplace_back(lightId);
     }
+
+    // Remove tile info
+    upd._removedTileInfos.emplace_back(idx);
   }
 
   _pagedTiles = std::move(pagedTiles);

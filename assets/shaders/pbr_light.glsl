@@ -177,27 +177,15 @@ vec3 sampleSingleProbe(sampler2D probeTex, ivec3 probeIndex, vec3 normal)
 
   ivec2 probePixelEnd = probePixelStart + PROBE_CONV_PIX_SIZE - 1;
 
-  /*vec2 probeTexStart = vec2(
-    (float(probePixelStart.x) + 0.5) / float(probeTexSize.x),
-    (float(probePixelStart.y) + 0.5) / float(probeTexSize.y));*/
-
   vec2 probeTexStart = pixelToUv(probePixelStart, probeTexSize);
-
-  /*vec2 probeTexEnd = vec2(
-    (float(probePixelEnd.x) + 0.5) / float(probeTexSize.x),
-    (float(probePixelEnd.y) + 0.5) / float(probeTexSize.y));*/
-
   vec2 probeTexEnd = pixelToUv(probePixelEnd, probeTexSize);
 
   // This returns on -1 to 1, so change to 0 to 1
   vec2 oct = octEncode(normalize(normal));
   oct = (oct + vec2(1.0)) * 0.5;
-  //oct = clamp(oct, vec2(0.05), vec2(0.95));
 
   vec2 octTexCoord = probeTexStart + (probeTexEnd - probeTexStart) * oct;
 
-  //vec4 irr = texture(probeTex, octTexCoord);
-  //return irr.rgb / irr.w;
   return texture(probeTex, octTexCoord).rgb;
 }
 
@@ -254,29 +242,78 @@ vec4 weightProbe(sampler2D probeTex, vec3 worldPos, vec3 probePos, vec3 normal, 
 vec3 sampleProbe(sampler2D probeTex, vec3 worldPos, vec3 normal)
 {
   // Find closest probe to worldPos
-  ivec2 camProbeIdx =
-    ivec2(int(ubo.cameraPos.x / PROBE_STEP.x), int(ubo.cameraPos.z / PROBE_STEP.z));
+  int probeX = 0;
+  int probeY = 0;
+  int probeZ = 0;
 
-  vec3 camOffset = vec3(
-    float(camProbeIdx.x) * PROBE_STEP.x - PROBE_STEP.x * float(NUM_PROBES_PER_PLANE) / 2.0,
-    0.0,
-    float(camProbeIdx.y) * PROBE_STEP.z - PROBE_STEP.z * float(NUM_PROBES_PER_PLANE) / 2.0);
-  //vec3 camOffset = vec3(ubo.cameraGridPos.x - PROBE_STEP.x * float(NUM_PROBES_PER_PLANE) / 2.0, 0.0, ubo.cameraGridPos.z - PROBE_STEP.z * float(NUM_PROBES_PER_PLANE) / 2.0);
-  //vec3 camOffset = vec3(0.0);
-  //vec3 camOffset = vec3(floor(ubo.cameraPos.x) - float(NUM_PROBES_PER_PLANE) / 2.0, 0.0, floor(ubo.cameraPos.z) - float(NUM_PROBES_PER_PLANE) / 2.0);
+  vec3 baseProbePos = vec3(0.0);
 
-  int probeX = clamp(int(floor((worldPos.x - camOffset.x) / PROBE_STEP.x)), 0, NUM_PROBES_PER_PLANE - 1);
-  int probeY = clamp(int(floor(worldPos.y / PROBE_STEP.y)), 0, NUM_PROBE_PLANES - 1);
-  int probeZ = clamp(int(floor((worldPos.z - camOffset.z) / PROBE_STEP.z)), 0, NUM_PROBES_PER_PLANE - 1);
+  vec3 probeStep = PROBE_STEP;
 
-  //vec3 baseProbePos = vec3(probeX + camOffset.x, probeY * 2.0, probeZ + camOffset.z);
-  vec3 baseProbePos = vec3(probeX, probeY, probeZ) * PROBE_STEP + camOffset;
+  // Do we have a baked atlas?
+  ivec2 tIdx = ivec2(0, 0);
+  int tileBufIdx = worldPosToTileInfo(worldPos, ubo.cameraPos.xyz, tIdx);
+  int atlasIdx = -1;
+  if (tileBufIdx >= 0) {
+    atlasIdx = tileInfoBuffer.tiles[tileBufIdx].ddgiAtlasTex;
+  }
+  bool ddgiAtlas = tileBufIdx >= 0 && atlasIdx >= 0;
+
+  if (ddgiAtlas) {
+    const int tSize = TILE_SIZE;
+    const vec3 tileOffset = vec3(float(tIdx.x) * float(tSize), 0.0, float(tIdx.y) * float(tSize));
+
+    probeStep = vec3(
+      float(tSize) / float(NUM_PROBES_PER_PLANE),
+      1.0,
+      float(tSize) / float(NUM_PROBES_PER_PLANE));
+
+    vec3 posInTile = worldPos - tileOffset;
+    probeX = clamp(int(floor(posInTile.x / probeStep.x)), 0, NUM_PROBES_PER_PLANE - 1);
+    probeY = clamp(int(floor(posInTile.y / probeStep.y)), 0, NUM_PROBE_PLANES - 1);
+    probeZ = clamp(int(floor(posInTile.z / probeStep.z)), 0, NUM_PROBES_PER_PLANE - 1);
+
+    baseProbePos = vec3(probeX, probeY, probeZ) * probeStep + tileOffset;
+  }
+  else if (checkUboFlag(UBO_BAKE_MODE_ON_FLAG)) {
+    // If we're baking, use the tile information to find the closest probe
+    const int tSize = ubo.bakeTileInfo.z;
+    const ivec2 tIdx = ubo.bakeTileInfo.xy;
+    const vec3 tileOffset = vec3(float(tIdx.x) * float(tSize), 0.0, float(tIdx.y) * float(tSize));
+
+    probeStep = vec3(
+      float(tSize) / float(NUM_PROBES_PER_PLANE),
+      1.0,
+      float(tSize) / float(NUM_PROBES_PER_PLANE));
+
+    vec3 posInTile = worldPos - tileOffset;
+    probeX = clamp(int(floor(posInTile.x / probeStep.x)), 0, NUM_PROBES_PER_PLANE - 1);
+    probeY = clamp(int(floor(posInTile.y / probeStep.y)), 0, NUM_PROBE_PLANES - 1);
+    probeZ = clamp(int(floor(posInTile.z / probeStep.z)), 0, NUM_PROBES_PER_PLANE - 1);
+
+    baseProbePos = vec3(probeX, probeY, probeZ) * probeStep + tileOffset;
+  }
+  else {
+    ivec2 camProbeIdx =
+      ivec2(int(ubo.cameraPos.x / PROBE_STEP.x), int(ubo.cameraPos.z / PROBE_STEP.z));
+
+    vec3 camOffset = vec3(
+      float(camProbeIdx.x) * PROBE_STEP.x - PROBE_STEP.x * float(NUM_PROBES_PER_PLANE) / 2.0,
+      0.0,
+      float(camProbeIdx.y) * PROBE_STEP.z - PROBE_STEP.z * float(NUM_PROBES_PER_PLANE) / 2.0);
+
+    probeX = clamp(int(floor((worldPos.x - camOffset.x) / PROBE_STEP.x)), 0, NUM_PROBES_PER_PLANE - 1);
+    probeY = clamp(int(floor(worldPos.y / PROBE_STEP.y)), 0, NUM_PROBE_PLANES - 1);
+    probeZ = clamp(int(floor((worldPos.z - camOffset.z) / PROBE_STEP.z)), 0, NUM_PROBES_PER_PLANE - 1);
+
+    baseProbePos = vec3(probeX, probeY, probeZ) * PROBE_STEP + camOffset;
+  }
 
   float sumWeight = 0.0;
   vec3 sumIrradiance = vec3(0.0);
 
   // alpha is how far from the floor(currentVertex) position. on [0, 1] for each axis.
-  vec3 alpha = clamp((worldPos - baseProbePos) / PROBE_STEP, vec3(0.0), vec3(1.0));
+  vec3 alpha = clamp((worldPos - baseProbePos) / probeStep, vec3(0.0), vec3(1.0));
 
   vec3 probePos = baseProbePos;
 
@@ -284,37 +321,37 @@ vec3 sampleProbe(sampler2D probeTex, vec3 worldPos, vec3 normal)
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(1.0, 1.0, 1.0) * PROBE_STEP;
+  probePos = baseProbePos + vec3(1.0, 1.0, 1.0) * probeStep;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY + 1, probeZ + 1), alpha, ivec3(1, 1, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(1.0, 1.0, 0.0) * PROBE_STEP;
+  probePos = baseProbePos + vec3(1.0, 1.0, 0.0) * probeStep;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY + 1, probeZ), alpha, ivec3(1, 1, 0));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(1.0, 0.0, 0.0) * PROBE_STEP;
+  probePos = baseProbePos + vec3(1.0, 0.0, 0.0) * probeStep;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY, probeZ), alpha, ivec3(1, 0, 0));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(0.0, 1.0, 1.0) * PROBE_STEP;
+  probePos = baseProbePos + vec3(0.0, 1.0, 1.0) * probeStep;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX, probeY + 1, probeZ + 1), alpha, ivec3(0, 1, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(0.0, 1.0, 0.0) * PROBE_STEP;
+  probePos = baseProbePos + vec3(0.0, 1.0, 0.0) * probeStep;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX, probeY + 1, probeZ), alpha, ivec3(0, 1, 0));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(0.0, 0.0, 1.0) * PROBE_STEP;
+  probePos = baseProbePos + vec3(0.0, 0.0, 1.0) * probeStep;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX, probeY, probeZ + 1), alpha, ivec3(0, 0, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;
 
-  probePos = baseProbePos + vec3(1.0, 0.0, 1.0) * PROBE_STEP;
+  probePos = baseProbePos + vec3(1.0, 0.0, 1.0) * probeStep;
   res = weightProbe(probeTex, worldPos, probePos, normal, ivec3(probeX + 1, probeY, probeZ + 1), alpha, ivec3(1, 0, 1));
   sumIrradiance += res.w * res.rgb;
   sumWeight += res.w;

@@ -1,6 +1,9 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
 
+#define TILE_PAGE_RADIUS 0
+#define TILE_SIZE 32
+
 struct Renderable
 {
   mat4 transform;
@@ -18,6 +21,11 @@ struct Light
 {
   vec4 worldPos; // w is range
   vec4 color; // w is enabled or not
+};
+
+struct TileInfo
+{
+  int ddgiAtlasTex;
 };
 
 struct PointLightShadowCube
@@ -160,7 +168,11 @@ layout(std430, set = 0, binding = 13) readonly buffer SkeletonBuffer {
   mat4 joints[];
 } skeletonBuffer;
 
-layout(set = 0, binding = 14) uniform sampler2D textures[];
+layout(std430, set = 0, binding = 14) readonly buffer TileInfoBuffer {
+  TileInfo tiles[];
+} tileInfoBuffer;
+
+layout(set = 0, binding = 15) uniform sampler2D textures[];
 
 SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, mat3 inTBN, vec3 inTangent, vec3 inColor)
 {
@@ -262,4 +274,24 @@ vec4 constructBoundingSphere(MeshInfo meshInfo)
   float radius = distance(meshInfo.minPos.xyz, meshInfo.maxPos.xyz) / 2.0;
 
   return vec4(center, radius);
+}
+
+// Returns -1 if there is no tile info for this pos, else an index into the tileinfo buffer
+int worldPosToTileInfo(vec3 worldPos, vec3 camPos, out ivec2 idx)
+{
+  const int w = TILE_PAGE_RADIUS * 2 + 1;
+  idx = ivec2(int(floor(worldPos.x/TILE_SIZE)), int(floor(worldPos.z/TILE_SIZE)));
+  ivec2 cameraIdx = ivec2(int(floor(camPos.x/TILE_SIZE)), int(floor(camPos.z/TILE_SIZE)));
+
+  // Are we outside of radius?
+  if (idx.x - cameraIdx.x > TILE_PAGE_RADIUS ||
+      idx.y - cameraIdx.y > TILE_PAGE_RADIUS) {
+    return -1;
+  }
+
+  // Else convert to cam-relative index
+  ivec2 camRelativeIdx = idx - cameraIdx;
+  ivec2 fixedIdx = camRelativeIdx + TILE_PAGE_RADIUS; // from 0 instead of -r
+
+  return fixedIdx.y * w + fixedIdx.x;
 }

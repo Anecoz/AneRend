@@ -67,6 +67,10 @@ struct GPULight {
   glm::vec4 _color; // w is enabled or not
 };
 
+struct GPUTileInfo {
+  int _ddgiAtlasTex;
+};
+
 struct GPUPointLightShadowCube
 {
   glm::mat4 _shadowMatrices[6];
@@ -102,7 +106,8 @@ enum SceneUboFlags : std::uint32_t
   UBO_SS_PROBES_FLAG = 1 << 7,
   UBO_BS_VIS_FLAG = 1 << 8,
   UBO_HACK_FLAG = 1 << 9,
-  UBO_RT_ON_FLAG = 1 << 10
+  UBO_RT_ON_FLAG = 1 << 10,
+  UBO_BAKE_MODE_ON_FLAG = 1 << 11
 };
 
 // This is used as a UBO and has follows std140 rules (use 4-byte things basically...)
@@ -117,6 +122,7 @@ struct GPUSceneData {
   glm::vec4 cameraPos;
   glm::ivec4 cameraGridPos;
   glm::vec4 lightDir;
+  glm::ivec4 bakeTileInfo; // x, y: tile idx, z: tile size
   float time;
   float delta;
   uint32_t screenWidth;

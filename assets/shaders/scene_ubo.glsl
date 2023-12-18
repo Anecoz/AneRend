@@ -9,6 +9,7 @@
 #define UBO_BS_VIS_FLAG 1 << 8
 #define UBO_HACK_FLAG 1 << 9
 #define UBO_RT_ON_FLAG 1 << 10
+#define UBO_BAKE_MODE_ON_FLAG 1 << 11
 
 layout(set = 0, binding = 0) uniform UniformBufferObject {
   mat4 view;
@@ -21,6 +22,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   vec4 cameraPos;
   ivec4 cameraGridPos;
   vec4 lightDir;
+  ivec4 bakeTileInfo; // x, y: tile idx, z: tile size
   float time;
   float delta;
   uint screenWidth;

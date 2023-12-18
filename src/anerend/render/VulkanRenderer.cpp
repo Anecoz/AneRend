@@ -6,6 +6,7 @@
 #include "GpuBuffers.h"
 #include "RenderResource.h"
 #include "VulkanExtensions.h"
+#include "scene/Tile.h"
 #include "passes/CullRenderPass.h"
 #include "passes/GeometryRenderPass.h"
 #include "passes/PresentationRenderPass.h"
@@ -254,6 +255,7 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _gpuStagingBuffer[i]._buffer, _gpuStagingBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSceneDataBuffer[i]._buffer, _gpuSceneDataBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuLightBuffer[i]._buffer, _gpuLightBuffer[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _gpuTileBuffer[i]._buffer, _gpuTileBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuPointLightShadowBuffer[i]._buffer, _gpuPointLightShadowBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuViewClusterBuffer[i]._buffer, _gpuViewClusterBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSkeletonBuffer[i]._buffer, _gpuSkeletonBuffer[i]._allocation);
@@ -284,6 +286,8 @@ bool VulkanRenderer::init()
   _lightsChanged.resize(MAX_FRAMES_IN_FLIGHT);
   _modelsChanged.resize(MAX_FRAMES_IN_FLIGHT);
   _materialsChanged.resize(MAX_FRAMES_IN_FLIGHT);
+  _texturesChanged.resize(MAX_FRAMES_IN_FLIGHT);
+  _tileInfosChanged.resize(MAX_FRAMES_IN_FLIGHT);
 
   uint32_t extensionCount = 0;
   vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
@@ -408,6 +412,12 @@ bool VulkanRenderer::init()
   for (auto& val : _materialsChanged) {
     val = false;
   }  
+  for (auto& val : _texturesChanged) {
+    val = false;
+  }
+  for (auto& val : _tileInfosChanged) {
+    val = true;
+  }
 
   std::vector<Vertex> vert;
   std::vector<std::uint32_t> inds;
@@ -521,6 +531,38 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   bool materialIdMapUpdate = !update._removedMaterials.empty();
   bool textureIdMapUpdate = !update._removedTextures.empty();
   bool forceModelChange = false;
+
+  // Start with tile infos
+  bool tileInfosChanged = false;
+
+  // Added tile infos
+  for (auto& ti : update._addedTileInfos) {
+    _currentTileInfos.emplace_back(std::move(ti));
+
+    tileInfosChanged = true;
+  }
+
+  // Updated tile infos
+  for (auto& ti : update._updatedTileInfos) {
+    for (auto& oldTi : _currentTileInfos) {
+      if (oldTi._index == ti._index) {
+        oldTi = ti;
+        tileInfosChanged = true;
+        break;
+      }
+    }
+  }
+
+  // Removed tile infos
+  for (auto& removedIdx : update._removedTileInfos) {
+    for (auto it = _currentTileInfos.begin(); it != _currentTileInfos.end(); ++it) {
+      if (it->_index == removedIdx) {
+        _currentTileInfos.erase(it);
+        tileInfosChanged = true;
+        break;
+      }
+    }
+  }
 
   // Removed models (forces id map to update, could be expensive)
   for (auto& removedModel : update._removedModels) {
@@ -1075,6 +1117,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   bool renderableChange = !update._addedRenderables.empty() || !update._removedRenderables.empty() || !update._updatedRenderables.empty();
   bool materialChange = !update._addedMaterials.empty() || !update._removedMaterials.empty() || !update._updatedMaterials.empty();
   bool lightChange = !update._addedLights.empty() || !update._updatedLights.empty() || !update._removedLights.empty();
+  bool texChange = textureIdMapUpdate;
 
   if (modelChange) {
     for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -1097,6 +1140,18 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   if (materialChange) {
     for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
       _materialsChanged[i] = true;
+    }
+  }
+
+  if (texChange) {
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      _texturesChanged[i] = true;
+    }
+  }
+
+  if (tileInfosChanged) {
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      _tileInfosChanged[i] = true;
     }
   }
 
@@ -1307,6 +1362,9 @@ void VulkanRenderer::uploadPendingTextures(VkCommandBuffer cmdBuffer)
     if (tex._format == asset::Texture::Format::RGBA8_SRGB) {
       format = VK_FORMAT_R8G8B8A8_SRGB;
     }
+    else if (tex._format == asset::Texture::Format::RGBA16F_SFLOAT) {
+      format = VK_FORMAT_R16G16B16A16_SFLOAT;
+    }
 
     internal::InternalTexture internalTex{};
     internalTex._id = tex._id;
@@ -1498,7 +1556,7 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
 }
 
 void VulkanRenderer::update(
-  const Camera& camera,
+  Camera& camera,
   const Camera& shadowCamera,
   const glm::vec4& lightDir,
   double delta,
@@ -1543,6 +1601,16 @@ void VulkanRenderer::update(
   shadowProj[1][1] *= -1;
   proj[1][1] *= -1;
 
+  // If we are baking, lock camera to middle of baking tile
+  if (_bakeInfo._bakingIndex) {
+    const auto ts = scene::Tile::_tileSize;
+    glm::vec3 pos{
+      (float)(_bakeInfo._bakingIndex._idx.x * ts + ts / 2),
+      5.0f,
+      (float)(_bakeInfo._bakingIndex._idx.y * ts + ts / 2) };
+    camera.setPosition(pos);
+  }
+
   auto invView = glm::inverse(camera.getCamMatrix());
   auto invProj = glm::inverse(proj);
 
@@ -1576,6 +1644,12 @@ void VulkanRenderer::update(
   if (_renderOptions.hack) ubo.flags |= gpu::UBO_HACK_FLAG;
   if (_enableRayTracing) ubo.flags |= gpu::UBO_RT_ON_FLAG;
 
+  // Are we baking?
+  if (_bakeInfo._bakingIndex) {
+    ubo.flags |= gpu::UBO_BAKE_MODE_ON_FLAG;
+    ubo.bakeTileInfo = glm::ivec4(_bakeInfo._bakingIndex._idx.x, _bakeInfo._bakingIndex._idx.y, (int)scene::Tile::_tileSize, 0);
+  }
+
   void* data;
   vmaMapMemory(_vmaAllocator, _gpuSceneDataBuffer[_currentFrame]._allocation, &data);
   memcpy(data, &ubo, sizeof(gpu::GPUSceneData));
@@ -1583,6 +1657,21 @@ void VulkanRenderer::update(
 
   if (!lockCulling) {
     _latestCamera = camera;
+  }
+
+  // Should we download a baked DDGI texture?
+  if (_bakeInfo._stopNextFrame) {
+    _bakeInfo._stopNextFrame = false;
+
+    // Wait for device idle
+    vkDeviceWaitIdle(_device);
+
+    auto tex = downloadDDGIAtlas();
+
+    assert(_bakeInfo._callback && "No callback in baking info!");
+    _bakeInfo._callback(tex);
+    _bakeInfo._callback = nullptr;
+    _bakeInfo._bakingIndex = scene::TileIndex();
   }
 }
 
@@ -2408,6 +2497,72 @@ VkPhysicalDeviceRayTracingPipelinePropertiesKHR VulkanRenderer::getRtPipeProps()
   return _rtPipeProps;
 }
 
+asset::Texture VulkanRenderer::downloadDDGIAtlas()
+{
+  // NOTE: This HAS to be called with the device idle!
+  auto* imRes = (ImageRenderResource*)_vault.getResource("ProbeRaysConvTex");
+  assert(imRes && "The DDGI atlas texture could not be retrieved!");
+
+  // Create a temporary staging buffer that is host visible
+  uint32_t width = (8 + 2) * (uint32_t)getNumIrradianceProbesXZ();
+  uint32_t height = (8 + 2) * (uint32_t)getNumIrradianceProbesXZ() * (uint32_t)getNumIrradianceProbesY();
+  size_t totalSize = width * height * 4 * 2; // 4 channels at 16 bits each
+  AllocatedBuffer stagingBuf;
+
+  bufferutil::createBuffer(
+    _vmaAllocator,
+    totalSize,
+    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+    stagingBuf);
+
+  auto cmdBuf = beginSingleTimeCommands();
+
+  // Transition atlas to transfer src optimal
+  imageutil::transitionImageLayout(
+    cmdBuf,
+    imRes->_image._image,
+    VK_FORMAT_R16G16B16A16_SFLOAT,
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+  // Copy atlas into staging buf
+  VkBufferImageCopy imCopy{};
+  imCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  imCopy.imageSubresource.layerCount = 1;
+  imCopy.imageExtent.depth = 1;
+  imCopy.imageExtent.height = height;
+  imCopy.imageExtent.width = width;
+
+  vkCmdCopyImageToBuffer(cmdBuf, imRes->_image._image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuf._buffer, 1, &imCopy);
+
+  // Transition back
+  imageutil::transitionImageLayout(
+    cmdBuf,
+    imRes->_image._image,
+    VK_FORMAT_R16G16B16A16_SFLOAT,
+    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+  endSingleTimeCommands(cmdBuf);
+
+  // Map staging buffer and download data
+  asset::Texture outTex;
+  outTex._width = width;
+  outTex._height = height;
+  outTex._format = asset::Texture::Format::RGBA16F_SFLOAT;
+  outTex._data.resize(totalSize);
+
+  void* data = nullptr;
+  vmaMapMemory(_vmaAllocator, stagingBuf._allocation, &data);
+  std::memcpy(outTex._data.data(), data, totalSize);
+  vmaUnmapMemory(_vmaAllocator, stagingBuf._allocation);
+
+  vmaDestroyBuffer(_vmaAllocator, stagingBuf._buffer, stagingBuf._allocation);
+
+  return outTex;
+}
+
 void VulkanRenderer::checkWorldPosCallback()
 {
   if (!_worldPosRequest._callback || !_worldPosRequest._recorded) return;
@@ -3182,6 +3337,76 @@ void VulkanRenderer::prefillGPUPointLightShadowCubeBuffer(VkCommandBuffer& comma
   _currentStagingOffset += dataSize;
 }
 
+void VulkanRenderer::prefillGPUTileInfoBuffer(VkCommandBuffer& commandBuffer)
+{
+  // This should fill the GPU buffer with the current available tile infos.
+  // The indices in the buffer need to be relative to the camera position.
+
+  std::size_t dataSize = (MAX_PAGE_TILE_RADIUS * 2 + 1) * sizeof(gpu::GPUTileInfo);
+  uint8_t* data;
+  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+
+  // Offset according to current staging buffer usage
+  data = data + _currentStagingOffset;
+
+  gpu::GPUTileInfo* mappedData = reinterpret_cast<gpu::GPUTileInfo*>(data);
+
+  // Figure out the camera index
+  const auto cameraIndex = scene::Tile::posToIdx(_latestCamera.getPosition());
+
+  // This is a weird loop, it is like this to guarantee sequential read/write access
+  const auto r = MAX_PAGE_TILE_RADIUS;
+  const auto w = 2 * r + 1;
+  for (int x = 0; x < w; ++x) {
+    for (int y = 0; y < w; ++y) {
+      
+      bool valueWritten = false;
+      for (auto& ti : _currentTileInfos) {
+        const auto& idx = ti._index._idx - cameraIndex._idx;
+        if (idx.x + r == x && idx.y + r == y) {
+          mappedData[y * w + x]._ddgiAtlasTex = (int)_textureIdMap[ti._ddgiAtlas];
+          valueWritten = true;
+          break;
+        }
+      }
+
+      if (!valueWritten) {
+        mappedData[y * w + x]._ddgiAtlasTex = -1;
+      }
+
+    }
+  }
+
+  VkBufferCopy copyRegion{};
+  copyRegion.dstOffset = 0;
+  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.size = dataSize;
+  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuTileBuffer[_currentFrame]._buffer, 1, &copyRegion);
+
+  VkBufferMemoryBarrier memBarr{};
+  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.buffer = _gpuTileBuffer[_currentFrame]._buffer;
+  memBarr.offset = 0;
+  memBarr.size = VK_WHOLE_SIZE;
+
+  vkCmdPipelineBarrier(
+    commandBuffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    0, 0, nullptr,
+    1, &memBarr,
+    0, nullptr);
+
+  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+
+  // Update staging offset
+  _currentStagingOffset += dataSize;
+}
+
 void VulkanRenderer::updateWindForceImage(VkCommandBuffer& commandBuffer)
 {
   /*std::size_t dataSize = _currentWindMap.height * _currentWindMap.width * 4;
@@ -3427,6 +3652,13 @@ bool VulkanRenderer::initBindless()
     skeletonLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     bindings.emplace_back(std::move(skeletonLayoutBinding));
 
+    VkDescriptorSetLayoutBinding tileLayoutBinding{};
+    tileLayoutBinding.binding = _tileBinding;
+    tileLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    tileLayoutBinding.descriptorCount = 1;
+    tileLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+    bindings.emplace_back(std::move(tileLayoutBinding));
+
     VkDescriptorSetLayoutBinding texLayoutBinding{};
     texLayoutBinding.binding = _bindlessTextureBinding;
     texLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -3565,6 +3797,24 @@ bool VulkanRenderer::initBindless()
       lightBufWrite.pBufferInfo = &lightBufferInfo;
 
       descriptorWrites.emplace_back(std::move(lightBufWrite));
+
+      // Tile Info SSBO
+      VkDescriptorBufferInfo tileBufferInfo{};
+      VkWriteDescriptorSet tileBufWrite{};
+
+      tileBufferInfo.buffer = _gpuTileBuffer[i]._buffer;
+      tileBufferInfo.offset = 0;
+      tileBufferInfo.range = VK_WHOLE_SIZE;
+
+      tileBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      tileBufWrite.dstSet = _bindlessDescriptorSets[i];
+      tileBufWrite.dstBinding = _tileBinding;
+      tileBufWrite.dstArrayElement = 0;
+      tileBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      tileBufWrite.descriptorCount = 1;
+      tileBufWrite.pBufferInfo = &tileBufferInfo;
+
+      descriptorWrites.emplace_back(std::move(tileBufWrite));
 
       // Point light shadow cube views UBO
       VkDescriptorBufferInfo pointLightShadowBufferInfo{};
@@ -3841,6 +4091,7 @@ bool VulkanRenderer::initGpuBuffers()
   _gpuWindForceImage.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuWindForceView.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuLightBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuTileBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuPointLightShadowBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuViewClusterBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuSkeletonBuffer.resize(MAX_FRAMES_IN_FLIGHT);
@@ -3922,6 +4173,15 @@ bool VulkanRenderer::initGpuBuffers()
       _gpuLightBuffer[i]);
     name = "_gpuLightBuffer" + std::to_string(i);
     setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuLightBuffer[i]._buffer, name.c_str());
+
+    bufferutil::createBuffer(
+      _vmaAllocator,
+      (2 * MAX_PAGE_TILE_RADIUS + 1) * sizeof(gpu::GPUTileInfo),
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+      0,
+      _gpuTileBuffer[i]);
+    name = "_gpuTileBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuTileBuffer[i]._buffer, name.c_str());
 
     bufferutil::createBuffer(
       _vmaAllocator,
@@ -4098,7 +4358,7 @@ void VulkanRenderer::prepare()
   ImGuizmo::BeginFrame();
 }
 
-void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
+void VulkanRenderer::drawFrame()
 {
   // At the start of the frame, we want to wait until the previous frame has finished, so that the command buffer and semaphores are available to use.
   vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
@@ -4123,7 +4383,7 @@ void VulkanRenderer::drawFrame(bool applyPostProcessing, bool debug)
     return;
   }
   else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-    printf("Failed to require swap chain image!\n");
+    printf("Failed to acquire swap chain image!\n");
     return;
   }
 
@@ -4428,6 +4688,24 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
       }
     }
 
+    // If textures changed, we need to re-do everything that depends on the texture indices
+    if (_texturesChanged[_currentFrame]) {
+      // Materials depend on texture indices
+      _materialsChanged[_currentFrame] = true;
+
+      // TODO: Tile-information (baked textures have new indices)
+      _tileInfosChanged[_currentFrame] = true;
+
+      _texturesChanged[_currentFrame] = false;
+    }
+
+    // Tile infos
+    if (_tileInfosChanged[_currentFrame]) {
+      prefillGPUTileInfoBuffer(commandBuffer);
+
+      _tileInfosChanged[_currentFrame] = false;
+    }
+
     // Models, i.e. meshes that need to be uploaded to giga buffers
     if (_modelsChanged[_currentFrame]) {
       // Upload to the giga vertex and index buffers. This will be a no-op if there is nothing to upload.
@@ -4455,7 +4733,6 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
   if (forceRenderableUpdate) {
     for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-      // renderables changed because there might be a new dynamicMeshId in the renderable
       _renderablesChanged[i] = true;
     }
   }
@@ -4559,6 +4836,32 @@ void VulkanRenderer::requestWorldPosition(glm::ivec2 viewportPos, WorldPosCallba
 
   _worldPosRequest._callback = callback;
   _worldPosRequest._viewportPos = viewportPos;
+}
+
+void VulkanRenderer::startBakeDDGI(scene::TileIndex tileIdx)
+{
+  // Start baking at the given idx.
+  // This means:
+  // - setting the camera at the middle of the tile at tileIdx
+  // - setting ubo params that will allow ddgi generation to accumulate instead of using hysteresis
+  _bakeInfo._bakingIndex = tileIdx;
+  _bakeInfo._originalCamPos = _latestCamera.getPosition();
+  _bakeInfo._stopNextFrame = false;
+}
+
+glm::vec3 VulkanRenderer::stopBake(BakeTextureCallback callback)
+{
+  // Stop baking means that we have to download the current DDGI probe atlas 
+  // from the GPU and return it as a asset::Texture object.
+  // We can't really do that synchronously here, so we have to defer it.
+  _bakeInfo._stopNextFrame = true;
+  _bakeInfo._callback = callback;
+  return _bakeInfo._originalCamPos;
+}
+
+bool VulkanRenderer::isBaking()
+{
+  return !!_bakeInfo._bakingIndex;
 }
 
 VkDevice& VulkanRenderer::device()

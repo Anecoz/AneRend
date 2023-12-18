@@ -82,6 +82,13 @@ void serialize(S& s, glm::i16vec4& v)
 }
 
 template <typename S>
+void serialize(S& s, glm::ivec2& v)
+{
+  s.value4b(v.x);
+  s.value4b(v.y);
+}
+
+template <typename S>
 void serialize(S& s, render::Vertex& v)
 {
   s.object(v.pos);
@@ -272,6 +279,26 @@ void serialize(S& s, std::vector<render::asset::Light>& v)
   s.container(v, 1024);
 }
 
+template <typename S>
+void serialize(S& s, render::scene::TileIndex& t)
+{
+  s.object(t._idx);
+  s.value1b(t._initialized);
+}
+
+template <typename S>
+void serialize(S& s, render::scene::Scene::TileInfo& t)
+{
+  s.object(t._idx);
+  s.object(t._ddgiAtlas);
+}
+
+template <typename S>
+void serialize(S& s, std::vector<render::scene::Scene::TileInfo>& t)
+{
+  s.container(t, 1024);
+}
+
 }
 
 namespace render::scene::internal {
@@ -290,7 +317,8 @@ std::uint32_t headerSize()
     4 + // skel idx
     4 + // animator idx
     4 + // rend idx
-    4;  // light idx
+    4 + // light idx
+    4;  // tile info idx
 }
 
 }
@@ -338,6 +366,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
         4 bytes animator idx    (uint32_t)
         4 bytes renderable idx  (uint32_t)
         4 bytes lights     idx  (uint32_t)
+        4 bytes tileInfo   idx  (uint32_t)
 
         -- prefabs --
 
@@ -357,6 +386,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
 
         -- lights --
 
+        -- tile infos --
+
         EOF
       */
 
@@ -372,6 +403,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       auto renderables = scene._renderables;
       auto animators = scene._animators;
       auto lights = scene._lights;
+      auto tileInfos = scene._tileInfos;
 
       std::ofstream file(path, std::ios::binary);
       if (file.bad()) {
@@ -392,6 +424,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       std::vector<std::uint8_t> serialisedAnimators;
       std::vector<std::uint8_t> serializedRenderables;
       std::vector<std::uint8_t> serialisedLights;
+      std::vector<std::uint8_t> serialisedTis;
 
       printf("Serialising prefabs...\n");
       auto prefabsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedPrefabs, prefabs);
@@ -411,6 +444,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       auto renderablesByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serializedRenderables, renderables);
       printf("Serialising lights...\n");
       auto lightsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedLights, lights);
+      printf("Serialising tile infos...\n");
+      auto tisByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedTis, tileInfos);
 
       auto headerSz = headerSize();
 
@@ -425,6 +460,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       auto animatorIdx = skeletonIdx + skeletonsByteSize;
       auto renderableIdx = animatorIdx + animatorsByteSize;
       auto lightsIdx = renderableIdx + renderablesByteSize;
+      auto tiIdx = lightsIdx + lightsByteSize;
 
       file.write((const char*)&version, 1);
       // prefab idx (where model info starts)
@@ -445,6 +481,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       file.write((const char*)&renderableIdx, 4);
       // lights idx
       file.write((const char*)&lightsIdx, 4);
+      // ti idx
+      file.write((const char*)&tiIdx, 4);
       
       // write the data
       file.write((const char*)serialisedPrefabs.data(), prefabsByteSize);
@@ -456,6 +494,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       file.write((const char*)serialisedAnimators.data(), animatorsByteSize);
       file.write((const char*)serializedRenderables.data(), renderablesByteSize);
       file.write((const char*)serialisedLights.data(), lightsByteSize);
+      file.write((const char*)serialisedTis.data(), tisByteSize);
 
       file.close();
 
@@ -520,6 +559,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         4 bytes animator idx    (uint32_t)
         4 bytes renderable idx  (uint32_t)
         4 bytes lights idx      (uint32_t)
+        4 bytes tile info idx   (uint32_t)
 
         -- prefabs --
 
@@ -538,6 +578,8 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         -- renderables --
 
         -- lights --
+
+        -- tile infos --
 
         EOF
       */
@@ -571,6 +613,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       uint32_t animatorIdx = header4BytePtr[6];
       uint32_t rendIdx = header4BytePtr[7];
       uint32_t lightIdx = header4BytePtr[8];
+      uint32_t tiIdx = header4BytePtr[9];
 
       std::vector<std::uint8_t> serialisedPrefabs(textureIdx - prefabIdx);
       std::vector<std::uint8_t> serialisedTextures(modelIdx - textureIdx);
@@ -580,7 +623,8 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       std::vector<std::uint8_t> serialisedSkeletons(animatorIdx - skeletonIdx);
       std::vector<std::uint8_t> serialisedAnimators(rendIdx - animatorIdx);
       std::vector<std::uint8_t> serialisedRenderables(lightIdx - rendIdx);
-      std::vector<std::uint8_t> serialisedLights(fileSize - lightIdx);
+      std::vector<std::uint8_t> serialisedLights(tiIdx - lightIdx);
+      std::vector<std::uint8_t> serialisedTis(fileSize - tiIdx);
 
       // We need these here so that we can add them properly to the scene.
       std::vector<render::asset::Prefab> prefabs;
@@ -592,6 +636,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       std::vector<render::asset::Animator> animators;
       std::vector<render::asset::Renderable> rends;
       std::vector<render::asset::Light> lights;
+      std::vector<render::scene::Scene::TileInfo> tis;
 
       // Read prefabs
       if (!desHelper(file, prefabIdx, serialisedPrefabs, prefabs)) {
@@ -641,8 +686,14 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         return;
       }
 
-      // Read renderables
+      // Read lights
       if (!desHelper(file, lightIdx, serialisedLights, lights)) {
+        p.set_value(DeserialisedSceneData());
+        return;
+      }
+
+      // Read tile infos
+      if (!desHelper(file, tiIdx, serialisedTis, tis)) {
         p.set_value(DeserialisedSceneData());
         return;
       }
@@ -673,6 +724,11 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       }
       for (auto& l : lights) {
         outputData._scene->addLight(std::move(l));
+      }
+      for (auto& ti : tis) {
+        if (ti._ddgiAtlas) {
+          outputData._scene->setDDGIAtlas(ti._ddgiAtlas, ti._idx);
+        }
       }
 
       p.set_value(std::move(outputData));

@@ -18,7 +18,8 @@ struct Texture
   enum class Format : std::uint8_t
   {
     RGBA8_UNORM,
-    RGBA8_SRGB
+    RGBA8_SRGB,
+    RGBA16F_SFLOAT
   } _format;
 
   std::vector<std::uint8_t> _data;

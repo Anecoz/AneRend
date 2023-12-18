@@ -55,9 +55,7 @@ AneditApplication::~AneditApplication()
   NFD_Quit();
 }
 
-static bool g_DebugShadow = true;
 static bool g_LockFrustumCulling = false;
-static bool g_PP = true;
 
 bool AneditApplication::init()
 {
@@ -158,7 +156,7 @@ void AneditApplication::render()
 
   oldUI();
 
-  _vkRenderer.drawFrame(g_PP, g_DebugShadow);
+  _vkRenderer.drawFrame();
 }
 
 void AneditApplication::setupGuis()
@@ -220,10 +218,31 @@ void AneditApplication::oldUI()
       _renderDebugOptions.debugViewResource = std::string(debugResStr);
     }
     ImGui::InputInt("Debug view mip", &_renderDebugOptions.debugMip);
-    /*ImGui::Slider2DFloat("Sun dir", &_sunDir.x, &_sunDir.z, -1.0f, 1.0f, -1.0f, 1.0f);
-    ImGui::Slider2DFloat("Wind dir", &_windDir.x, &_windDir.y, -1.0f, 1.0f, -1.0f, 1.0f);*/
     ImGui::Checkbox("Texture Debug View", &_renderDebugOptions.debugView);
-    //ImGui::Checkbox("Apply post processing", &g_PP);
+
+    // Test bake
+    static int idxX = 0;
+    static int idxY = 0;
+    ImGui::InputInt("Bake tile idx X", &idxX);
+    ImGui::InputInt("Bake tile idx Z", &idxY);
+    if (ImGui::Checkbox("Test bake", &_baking)) {
+      if (_baking) {
+        render::scene::TileIndex idx(idxX, idxY);
+        _vkRenderer.startBakeDDGI(idx);
+      }
+      else {
+        auto origPos = _vkRenderer.stopBake(
+          [this](render::asset::Texture bakedDDGITex) {
+            // Add to the scene
+            auto id = _scene.addTexture(std::move(bakedDDGITex));
+
+            render::scene::TileIndex idx(idxX, idxY);
+            _scene.setDDGIAtlas(id, idx);
+          });
+        _camera.setPosition(origPos);
+      }
+    }
+
     ImGui::End();
   }
   {

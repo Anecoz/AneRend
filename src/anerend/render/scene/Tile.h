@@ -33,6 +33,9 @@ public:
   void removeLight(util::Uuid id);
   const std::vector<util::Uuid>& getLightIds() const { return _lights; }
 
+  void setDDGIAtlas(util::Uuid id) { _ddgiAtlas = id; }
+  util::Uuid getDDGIAtlas() { return _ddgiAtlas; }
+
   static const unsigned _tileSize = 32; // in world space
   static TileIndex posToIdx(const glm::vec3& pos);
 
@@ -43,6 +46,7 @@ private:
   // TODO: particles
   std::vector<util::Uuid> _renderables;
   std::vector<util::Uuid> _lights;
+  util::Uuid _ddgiAtlas;
 
 };
 

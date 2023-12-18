@@ -33,6 +33,7 @@
 #include "internal/DeletionQueue.h"
 #include "internal/InternalTexture.h"
 #include "AccelerationStructure.h"
+#include "scene/TileIndex.h"
 
 //#include "../logic/WindSystem.h"
 
@@ -45,6 +46,7 @@
 namespace render {
 
 typedef std::function<void(glm::vec3)> WorldPosCallback;
+typedef std::function<void(asset::Texture)> BakeTextureCallback;
 
 struct PerFrameTimer
 {
@@ -81,7 +83,7 @@ public:
   void assetUpdate(AssetUpdate&& update) override final;
 
   void update(
-    const Camera& camera,
+    Camera& camera,
     const Camera& shadowCamera,
     const glm::vec4& lightDir,
     double delta,
@@ -97,7 +99,7 @@ public:
 
   // Goes through all registered renderables, updates any resource descriptor sets (like UBOs),
   // updates push constants, renders and queues for presentation.
-  void drawFrame(bool applyPostProcessing, bool debug);
+  void drawFrame();
 
   // Will recreate swapchain to accomodate the new window size.
   void notifyFramebufferResized();
@@ -105,7 +107,15 @@ public:
   // Request a world position for a given viewport 2D position.
   void requestWorldPosition(glm::ivec2 viewportPos, WorldPosCallback callback);
 
+  // Sets the renderer in "baking" mode, baking diffuse GI at the given tile index.
+  void startBakeDDGI(scene::TileIndex tileIdx);
+
+  // Immediately returns the original camera position. Callback will be called after next update() has finished.
+  glm::vec3 stopBake(BakeTextureCallback callback);
+
   // Render Context interface
+  bool isBaking() override final;
+
   VkDevice& device() override final;
   VkDescriptorPool& descriptorPool() override final;
   VmaAllocator vmaAllocator() override final;
@@ -205,8 +215,20 @@ private:
   static const std::size_t MAX_NUM_JOINTS = 50;
   static const std::size_t MAX_NUM_SKINNED_MODELS = 1000;
   static const std::size_t MAX_NUM_POINT_LIGHT_SHADOWS = 4;
+  static const std::size_t MAX_PAGE_TILE_RADIUS = 0;
 
   std::unordered_map<std::string, std::any> _blackboard;
+
+  // Baking stuff
+  struct DDGIBakeInfo
+  {
+    bool _stopNextFrame = false;
+    scene::TileIndex _bakingIndex;
+    glm::vec3 _originalCamPos;
+    BakeTextureCallback _callback;
+  } _bakeInfo;
+
+  asset::Texture downloadDDGIAtlas();
 
   // Pending world position request
   struct WorldPosRequest
@@ -276,6 +298,8 @@ private:
   std::vector<bool> _renderablesChanged;
   std::vector<bool> _lightsChanged;
   std::vector<bool> _materialsChanged;
+  std::vector<bool> _texturesChanged;
+  std::vector<bool> _tileInfosChanged;
 
   std::vector<asset::Model> _modelsToUpload;
   std::vector<asset::Material> _materialsToUpload;
@@ -333,11 +357,11 @@ private:
   uint32_t _meshBinding = _gigaVtxBinding + 1;
   uint32_t _tlasBinding = _meshBinding + 1;
   uint32_t _skeletonBinding = _tlasBinding + 1;
-  uint32_t _bindlessTextureBinding = _skeletonBinding + 1;
+  uint32_t _tileBinding = _skeletonBinding + 1;
+  uint32_t _bindlessTextureBinding = _tileBinding + 1;
 
   // Use a mem interface to select empty bindless indices.
   internal::BufferMemoryInterface _bindlessTextureMemIf;
-  //uint32_t _currentBindlessTextureIndex = 0;
 
   void createTexture(
     VkCommandBuffer cmdBuffer,
@@ -401,6 +425,9 @@ private:
   // SSBO for light information.
   std::vector<AllocatedBuffer> _gpuLightBuffer;
 
+  // SSBO for per-tile information.
+  std::vector<AllocatedBuffer> _gpuTileBuffer;
+
   // UBO for point light shadow cube views, used in multiview rendering.
   std::vector<AllocatedBuffer> _gpuPointLightShadowBuffer;
 
@@ -440,8 +467,14 @@ private:
   // Fills GPU buffer containing current point light shadow cube views.
   void prefillGPUPointLightShadowCubeBuffer(VkCommandBuffer& commandBuffer);
 
+  // Fills GPU tile info buffer with the current tile infos (camera relative).
+  void prefillGPUTileInfoBuffer(VkCommandBuffer& commandBuffer);
+
   // Update wind force image
   void updateWindForceImage(VkCommandBuffer& commandBuffer);
+
+  // Current tile infos
+  std::vector<asset::TileInfo> _currentTileInfos;
 
   // View space clusters for the light assignment
   struct ViewCluster

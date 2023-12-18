@@ -49,7 +49,8 @@ enum class SceneEventType
   RenderableRemoved,
   LightAdded,
   LightUpdated,
-  LightRemoved
+  LightRemoved,
+  DDGIAtlasAdded
 };
 
 struct SceneEvent
@@ -164,12 +165,20 @@ public:
   void removeRenderable(util::Uuid id);
   const asset::Renderable* getRenderable(util::Uuid id);
 
+  void setDDGIAtlas(util::Uuid texId, scene::TileIndex idx);
+
   // TODO: Decide if the Scene class really is the correct place to access/modify renderables.
   void setRenderableTint(util::Uuid id, const glm::vec3& tint);
   void setRenderableTransform(util::Uuid id, const glm::mat4& transform);
   void setRenderableName(util::Uuid id, std::string name);
   void setRenderableBoundingSphere(util::Uuid id, const glm::vec4& boundingSphere);
   void setRenderableVisible(util::Uuid id, bool val);
+
+  struct TileInfo
+  {
+    TileIndex _idx;
+    util::Uuid _ddgiAtlas;
+  };
 
 private:
   friend struct internal::SceneSerializer;
@@ -191,6 +200,8 @@ private:
   std::vector<asset::Texture> _textures;
   std::vector<asset::Renderable> _renderables;
   std::vector<asset::Light> _lights;
+
+  std::vector<TileInfo> _tileInfos;
 
   SceneEventLog _eventLog;
   internal::SceneSerializer _serialiser;

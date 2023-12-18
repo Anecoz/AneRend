@@ -459,6 +459,38 @@ const asset::Renderable* Scene::getRenderable(util::Uuid id)
   return rend;
 }
 
+void Scene::setDDGIAtlas(util::Uuid texId, scene::TileIndex idx)
+{
+  if (_tiles.find(idx) != _tiles.end()) {
+    _tiles[idx].setDDGIAtlas(texId);
+  }
+  else {
+    // Add a new tile here
+    Tile tile(idx);
+    tile.setDDGIAtlas(texId);
+    _tiles[idx] = std::move(tile);
+  }
+
+  // add to tile infos (could be more in here in the future)
+  bool found = false;
+  for (auto& ti : _tileInfos) {
+    if (ti._idx == idx) {
+      ti._ddgiAtlas = texId;
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    TileInfo ti{};
+    ti._ddgiAtlas = texId;
+    ti._idx = idx;
+    _tileInfos.emplace_back(std::move(ti));
+  }
+
+  addEvent(SceneEventType::DDGIAtlasAdded, util::Uuid(), idx);
+}
+
 void Scene::setRenderableTint(util::Uuid id, const glm::vec3& tint)
 {
   for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {

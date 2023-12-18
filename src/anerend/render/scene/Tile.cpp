@@ -18,6 +18,8 @@ Tile::~Tile()
 Tile::Tile(Tile&& rhs)
 {
   std::swap(_renderables, rhs._renderables);
+  std::swap(_lights, rhs._lights);
+  std::swap(_ddgiAtlas, rhs._ddgiAtlas);
   std::swap(_index, rhs._index);
   _initialized = true;
   rhs._initialized = false;
@@ -27,6 +29,8 @@ Tile& Tile::operator=(Tile&& rhs)
 {
   if (this != &rhs) {
     std::swap(_renderables, rhs._renderables);
+    std::swap(_lights, rhs._lights);
+    std::swap(_ddgiAtlas, rhs._ddgiAtlas);
     std::swap(_index, rhs._index);
     _initialized = true;
     rhs._initialized = false;

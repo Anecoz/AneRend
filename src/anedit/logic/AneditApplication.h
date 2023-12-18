@@ -117,4 +117,7 @@ private:
   render::scene::Scene _scene;
   std::future<render::scene::DeserialisedSceneData> _sceneFut;
   render::scene::ScenePager _scenePager;
+
+  // Test bake
+  bool _baking = false;
 };

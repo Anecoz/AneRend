@@ -65,15 +65,12 @@ void main()
           1               // payload (location = 1)
   );
 
-  //payload.irradiance = shadowPayload.shadow < 0.5 ? vec3(0.0) : vec3(1.0);
-
   // proceed to calculate our radiance
   MaterialInfo matInfo = materialBuffer.infos[materialIndex];
   vec2 uv = v0.uv.xy * barycentrics.x + v1.uv.xy * barycentrics.y + v2.uv.xy * barycentrics.z;
   vec3 normal = normalize(v0.normal.xyz * barycentrics.x + v1.normal.xyz * barycentrics.y + v2.normal.xyz * barycentrics.z);
   normal = normalize(vec3(normal.xyz * gl_WorldToObjectEXT));
   vec3 color = v0.color.xyz * barycentrics.x + v1.color.xyz * barycentrics.y + v2.color.xyz * barycentrics.z;
-  //vec3 tangent = v0.tangent.xyz * barycentrics.x + v1.tangent.xyz * barycentrics.y + v2.tangent.xyz * barycentrics.z;
   color = toLinear(vec4(color, 1.0)).rgb;
 
   SurfaceData surfData = getSurfaceDataFromMat(matInfo, uv, normal, mat3(0.0), vec3(0.0), color);

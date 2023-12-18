@@ -10,6 +10,7 @@
 #include "asset/Texture.h"
 #include "asset/Animator.h"
 #include "asset/Light.h"
+#include "asset/TileInfo.h"
 #include "animation/Animation.h"
 #include "animation/Skeleton.h"
 #include "internal/InternalMesh.h"
@@ -50,7 +51,10 @@ struct AssetUpdate
       !_removedRenderables.empty() ||
       !_addedLights.empty() ||
       !_updatedLights.empty() ||
-      !_removedLights.empty();
+      !_removedLights.empty() ||
+      !_addedTileInfos.empty() ||
+      !_updatedTileInfos.empty() ||
+      !_removedTileInfos.empty();
   }
 
   std::vector<asset::Model> _addedModels;
@@ -80,12 +84,18 @@ struct AssetUpdate
   std::vector<asset::Light> _addedLights;
   std::vector<asset::Light> _updatedLights;
   std::vector<util::Uuid> _removedLights;
+
+  std::vector<asset::TileInfo> _addedTileInfos;
+  std::vector<asset::TileInfo> _updatedTileInfos;
+  std::vector<scene::TileIndex> _removedTileInfos;
 };
 
 class RenderContext
 {
 public:
   virtual ~RenderContext() {}
+
+  virtual bool isBaking() = 0;
 
   virtual VkDevice& device() = 0;
   virtual VkDescriptorPool& descriptorPool() = 0;
