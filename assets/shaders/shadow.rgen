@@ -29,7 +29,7 @@ vec3 calcWorldPos(vec2 texCoord, float depthSamp)
 
 void main()
 {
-  if (checkUboFlag(UBO_RT_SHADOWS_FLAG)) {
+  if (!checkUboFlag(UBO_RT_SHADOWS_FLAG)) {
     return;
   }
 
