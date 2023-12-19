@@ -252,7 +252,7 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _gpuRenderableMaterialIndexBuffer[i]._buffer, _gpuRenderableMaterialIndexBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuModelBuffer[i]._buffer, _gpuModelBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuMeshInfoBuffer[i]._buffer, _gpuMeshInfoBuffer[i]._allocation);
-    vmaDestroyBuffer(_vmaAllocator, _gpuStagingBuffer[i]._buffer, _gpuStagingBuffer[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _gpuStagingBuffer[i]._buf._buffer, _gpuStagingBuffer[i]._buf._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSceneDataBuffer[i]._buffer, _gpuSceneDataBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuLightBuffer[i]._buffer, _gpuLightBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuTileBuffer[i]._buffer, _gpuTileBuffer[i]._allocation);
@@ -650,27 +650,16 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
       modelBytes += mesh._indices.size() * sizeof(uint32_t);
       numMeshes++;
 
-      internal::InternalMesh internalMesh{};
-      internalMesh._id = mesh._id;
-      internalMesh._numIndices = static_cast<uint32_t>(mesh._indices.size());
-      internalMesh._numVertices = static_cast<uint32_t>(mesh._vertices.size());
-      internalMesh._minPos = mesh._minPos;
-      internalMesh._maxPos = mesh._maxPos;
-
       internalModel._meshes.push_back(mesh._id);
 
-      // vertex and index offset will be set once uploaded.
-
-      _currentMeshes.push_back(internalMesh);
-      auto internalId = _currentMeshes.size() - 1;
-      _meshIdMap[mesh._id] = internalId;
+      // internal mesh will be set once uploaded.
     }
 
     _currentModels.push_back(std::move(internalModel));
     auto internalId = _currentModels.size() - 1;
     _modelIdMap[model._id] = internalId;
 
-    _modelsToUpload.emplace_back(std::move(model));
+    _uploadQ.add(std::move(model));
   }
 
   // Removed textures
@@ -715,7 +704,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     }
 
     textureBytes += tex._data.size();
-    _texturesToUpload.emplace_back(std::move(tex));
+    _uploadQ.add(std::move(tex));
   }
 
   // Removed materials
@@ -1167,149 +1156,28 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     update._addedRenderables.size(),
     update._updatedRenderables.size(),
     update._removedRenderables.size());
-  //printf("Asset update, %zu mesh bytes and %zu material bytes to upload\n", modelBytes, materialBytes);
-}
-
-void VulkanRenderer::uploadPendingModels(VkCommandBuffer cmdBuffer)
-{
-  for (auto& model : _modelsToUpload) {
-
-    for (auto& mesh : model._meshes) {
-      std::size_t vertSize = mesh._vertices.size() * sizeof(Vertex);
-      std::size_t indSize = mesh._indices.size() * sizeof(std::uint32_t);
-      std::size_t stagingBufSize = vertSize + indSize;
-
-      uint8_t* data = nullptr;
-      vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
-
-      // Offset according to current staging buffer usage
-      data = data + _currentStagingOffset;
-
-      internal::BufferMemoryInterface::Handle vertexHandle;
-      internal::BufferMemoryInterface::Handle indexHandle;
-
-      // Vertices first
-      {
-        // Find where to copy data in the fat buffer
-        vertexHandle = _gigaVtxBuffer._memInterface.addData(vertSize);
-
-        if (!vertexHandle) {
-          printf("Could not add %zu bytes of vertex data! Make buffer bigger! Things won't work now!\n", vertSize);
-          continue;
-        }
-
-        memcpy(data, mesh._vertices.data(), vertSize);
-
-        VkBufferCopy copyRegion{};
-        copyRegion.srcOffset = _currentStagingOffset;
-        copyRegion.dstOffset = vertexHandle._offset;
-        copyRegion.size = vertSize;
-        vkCmdCopyBuffer(cmdBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gigaVtxBuffer._buffer._buffer, 1, &copyRegion);
-
-        VkBufferMemoryBarrier memBarr{};
-        memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-        memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        memBarr.buffer = _gigaVtxBuffer._buffer._buffer;
-        memBarr.offset = vertexHandle._offset;
-        memBarr.size = vertSize;
-
-        vkCmdPipelineBarrier(
-          cmdBuffer,
-          VK_PIPELINE_STAGE_TRANSFER_BIT,
-          VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-          0, 0, nullptr,
-          1, &memBarr,
-          0, nullptr);
-      }
-
-      // Now indices
-      if (indSize > 0) {
-        // Find where to copy data in the fat buffer
-        indexHandle = _gigaIdxBuffer._memInterface.addData(indSize);
-
-        if (!indexHandle) {
-          printf("Could not add %zu bytes of index data! Make buffer bigger! Things won't work now!\n", indSize);
-          continue;
-        }
-
-        memcpy(data + vertSize, mesh._indices.data(), indSize);
-
-        VkBufferCopy copyRegion{};
-        copyRegion.srcOffset = _currentStagingOffset + vertSize;
-        copyRegion.dstOffset = indexHandle._offset;
-        copyRegion.size = indSize;
-        vkCmdCopyBuffer(cmdBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gigaIdxBuffer._buffer._buffer, 1, &copyRegion);
-
-        VkBufferMemoryBarrier memBarr{};
-        memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDEX_READ_BIT;
-        memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        memBarr.buffer = _gigaIdxBuffer._buffer._buffer;
-        memBarr.offset = indexHandle._offset;
-        memBarr.size = indSize;
-
-        vkCmdPipelineBarrier(
-          cmdBuffer,
-          VK_PIPELINE_STAGE_TRANSFER_BIT,
-          VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-          0, 0, nullptr,
-          1, &memBarr,
-          0, nullptr);
-      }
-
-      // Update internal mesh
-      auto idx = _meshIdMap[mesh._id];
-      auto& internalMesh = _currentMeshes[idx];
-      internalMesh._vertexHandle = vertexHandle;
-      internalMesh._indexHandle = indexHandle;
-      internalMesh._vertexOffset = static_cast<uint32_t>(vertexHandle._offset / sizeof(Vertex));
-      internalMesh._indexOffset = indexHandle._offset == -1 ? -1 : static_cast<int64_t>(indexHandle._offset / sizeof(uint32_t));
-
-      if (_enableRayTracing) {
-        auto blas = registerBottomLevelAS(cmdBuffer, mesh._id);
-        if (blas) {
-          _blases[mesh._id] = std::move(blas);
-        }
-
-        // Retrieve device address of BLAS for use in TLAS update pass.
-        if (_blases.find(mesh._id) != _blases.end()) {
-          auto& blas = _blases[mesh._id];
-          VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
-          addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
-          addressInfo.accelerationStructure = blas._as;
-          VkDeviceAddress blasAddress = GetAccelerationStructureDeviceAddressKHR(_device, &addressInfo);
-
-          internalMesh._blasRef = blasAddress;
-        }
-      }
-
-      _currentStagingOffset += stagingBufSize;
-      vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
-    }
-  }
-
-  _modelsToUpload.clear();
 }
 
 void VulkanRenderer::uploadPendingMaterials(VkCommandBuffer cmdBuffer)
 {
+  auto& sb = getStagingBuffer();
+
   // Do upload to GPU buffer. Do all current materials.
   std::size_t dataSize = _currentMaterials.size() * sizeof(gpu::GPUMaterialInfo);
   uint8_t* data;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+  vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
   // Offset according to current staging buffer usage
-  data = data + _currentStagingOffset;
+  data = data + sb._currentOffset;
 
   gpu::GPUMaterialInfo* mappedData = reinterpret_cast<gpu::GPUMaterialInfo*>(data);
 
   for (std::size_t i = 0; i < _currentMaterials.size(); ++i) {
     auto& mat = _currentMaterials[i];
+
+    if (!arePrerequisitesUploaded(mat)) {
+      continue;
+    }
 
     mappedData[i]._baseColFac = glm::vec4(mat._baseColFactor.x, mat._baseColFactor.y, mat._baseColFactor.z, 0.0f);
     mappedData[i]._emissive = mat._emissive;
@@ -1323,9 +1191,9 @@ void VulkanRenderer::uploadPendingMaterials(VkCommandBuffer cmdBuffer)
 
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
-  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.srcOffset = sb._currentOffset;
   copyRegion.size = dataSize;
-  vkCmdCopyBuffer(cmdBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuMaterialBuffer[_currentFrame]._buffer, 1, &copyRegion);
+  vkCmdCopyBuffer(cmdBuffer, sb._buf._buffer, _gpuMaterialBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
   VkBufferMemoryBarrier memBarr{};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -1345,50 +1213,12 @@ void VulkanRenderer::uploadPendingMaterials(VkCommandBuffer cmdBuffer)
     1, &memBarr,
     0, nullptr);
 
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+  vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
 
   // Update staging offset
-  _currentStagingOffset += dataSize;
+  sb.advance(dataSize);
 
   _materialsToUpload.clear();
-}
-
-void VulkanRenderer::uploadPendingTextures(VkCommandBuffer cmdBuffer)
-{
-  // TODO: Issue 29, upload queue
-  for (auto& tex : _texturesToUpload) {
-    VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-
-    if (tex._format == asset::Texture::Format::RGBA8_SRGB) {
-      format = VK_FORMAT_R8G8B8A8_SRGB;
-    }
-    else if (tex._format == asset::Texture::Format::RGBA16F_SFLOAT) {
-      format = VK_FORMAT_R16G16B16A16_SFLOAT;
-    }
-
-    internal::InternalTexture internalTex{};
-    internalTex._id = tex._id;
-
-    createTexture(
-      cmdBuffer,
-      format,
-      tex._width,
-      tex._height,
-      tex._data,
-      internalTex._bindlessInfo._sampler,
-      internalTex._bindlessInfo._image,
-      internalTex._bindlessInfo._view);
-
-    internalTex._bindlessInfo._bindlessIndexHandle = addTextureToBindless(
-      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-      internalTex._bindlessInfo._view, 
-      internalTex._bindlessInfo._sampler);
-
-    _textureIdMap[internalTex._id] = _currentTextures.size();
-    _currentTextures.emplace_back(std::move(internalTex));
-  }
-
-  _texturesToUpload.clear();
 }
 
 void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
@@ -1404,6 +1234,10 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
 
     // Copy all meshes and BLASes
     auto& model = _currentModels[_modelIdMap[internalRend._renderable._model]];
+
+    if (!arePrerequisitesUploaded(model)) {
+      continue;
+    }
 
     if (model._meshes.size() + _currentMeshes.size() >= MAX_NUM_MESHES) {
       printf("Cannot add dynamic mesh, max size reached!\n");
@@ -2269,16 +2103,6 @@ bool VulkanRenderer::createLogicalDevice()
 
   dynamicRenderingFeature.pNext = &atomicFloatFeature;
 
-  // Bindless
-  /*VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};
-  indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-  indexingFeatures.descriptorBindingPartiallyBound = VK_TRUE;
-  indexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
-  indexingFeatures.runtimeDescriptorArray = VK_TRUE;
-  indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
-
-  dynamicRenderingFeature.pNext = &indexingFeatures;*/
-
   // filter min max and bindless
   VkPhysicalDeviceVulkan12Features vulkan12Features{};
   vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
@@ -2495,6 +2319,76 @@ void VulkanRenderer::endSingleTimeCommands(VkCommandBuffer commandBuffer)
 VkPhysicalDeviceRayTracingPipelinePropertiesKHR VulkanRenderer::getRtPipeProps()
 {
   return _rtPipeProps;
+}
+
+bool VulkanRenderer::arePrerequisitesUploaded(internal::InternalModel& model)
+{
+  // Check that model is uploaded (by checking that it has an internal id)
+  if (_modelIdMap.find(model._id) == _modelIdMap.end()) {
+    return false;
+  }
+
+  // Check that all meshes of the model are uploaded
+  for (auto& mesh : model._meshes) {
+    if (_meshIdMap.find(mesh) == _meshIdMap.end()) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool VulkanRenderer::arePrerequisitesUploaded(internal::InternalRenderable& rend)
+{
+  // Check that model is uploaded (by checking that it has an internal id)
+  if (_modelIdMap.find(rend._renderable._model) == _modelIdMap.end()) {
+    return false;
+  }
+
+  // Check that all meshes of the model are uploaded
+  if (!arePrerequisitesUploaded(_currentModels[_modelIdMap[rend._renderable._model]])) {
+    return false;
+  }
+
+  // Material
+  for (auto& mat : rend._renderable._materials) {
+    if (_materialIdMap.find(mat) == _materialIdMap.end()) {
+      return false;
+    }
+
+    auto& material = _currentMaterials[_materialIdMap[mat]];
+
+    if (!arePrerequisitesUploaded(material)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool VulkanRenderer::arePrerequisitesUploaded(internal::InternalMaterial& mat)
+{
+  if (_materialIdMap.find(mat._id) == _materialIdMap.end()) {
+    return false;
+  }
+
+  auto& material = _currentMaterials[_materialIdMap[mat._id]];
+  // Check that all textures are uploaded
+
+  if (material._albedoTex && _textureIdMap.find(material._albedoTex) == _textureIdMap.end()) {
+    return false;
+  }
+  if (material._metRoughTex && _textureIdMap.find(material._metRoughTex) == _textureIdMap.end()) {
+    return false;
+  }
+  if (material._normalTex && _textureIdMap.find(material._normalTex) == _textureIdMap.end()) {
+    return false;
+  }
+  if (material._emissiveTex && _textureIdMap.find(material._emissiveTex) == _textureIdMap.end()) {
+    return false;
+  }
+
+  return true;
 }
 
 asset::Texture VulkanRenderer::downloadDDGIAtlas()
@@ -2922,16 +2816,23 @@ void VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
 
   if (_currentRenderables.empty()) return;
 
+  auto& sb = getStagingBuffer();
+
   uint8_t* data;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+  vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
   // Offset according to current staging buffer usage
-  data = data + _currentStagingOffset;
+  data = data + sb._currentOffset;
   uint32_t* mappedData = reinterpret_cast<uint32_t*>(data);
 
   uint32_t currentIndex = 0;
   for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
     auto& renderable = _currentRenderables[i];
+
+    if (!arePrerequisitesUploaded(renderable)) {
+      continue;
+    }
+
     renderable._materialIndexBufferIndex = currentIndex;
 
     for (auto& mat : renderable._renderable._materials) {
@@ -2945,9 +2846,9 @@ void VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
   std::size_t dataSize = (currentIndex + 1) * sizeof(uint32_t);
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
-  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.srcOffset = sb._currentOffset;
   copyRegion.size = dataSize;
-  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuRenderableMaterialIndexBuffer[_currentFrame]._buffer, 1, &copyRegion);
+  vkCmdCopyBuffer(commandBuffer, sb._buf._buffer, _gpuRenderableMaterialIndexBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
   VkBufferMemoryBarrier memBarr{};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -2967,10 +2868,10 @@ void VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
     1, &memBarr,
     0, nullptr);
 
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+  vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
 
   // Update staging offset
-  _currentStagingOffset += dataSize;
+  sb.advance(dataSize);
 }
 
 void VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
@@ -2978,17 +2879,24 @@ void VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
   if (_currentModels.empty()) return;
   if (_currentRenderables.empty()) return;
 
+  auto& sb = getStagingBuffer();
+
   uint8_t* data;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+  vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
   // Offset according to current staging buffer usage
-  data = data + _currentStagingOffset;
+  data = data + sb._currentOffset;
 
   std::uint32_t* mappedData = reinterpret_cast<std::uint32_t*>(data);
 
   uint32_t currIdx = 0;
   for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
     auto& rend = _currentRenderables[i];
+
+    if (!arePrerequisitesUploaded(rend)) {
+      continue;
+    }
+
     rend._modelBufferOffset = currIdx;
 
     for (auto& mesh: rend._meshes) {
@@ -3011,9 +2919,9 @@ void VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
   std::size_t dataSize = (currIdx + 1) * sizeof(uint32_t);
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
-  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.srcOffset = sb._currentOffset;
   copyRegion.size = dataSize;
-  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuModelBuffer[_currentFrame]._buffer, 1, &copyRegion);
+  vkCmdCopyBuffer(commandBuffer, sb._buf._buffer, _gpuModelBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
   VkBufferMemoryBarrier memBarr{};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -3033,23 +2941,25 @@ void VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
     1, &memBarr,
     0, nullptr);
 
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+  vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
 
   // Update staging offset
-  _currentStagingOffset += dataSize;
+  sb.advance(dataSize);
 }
 
 void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 {
   if (_currentRenderables.empty()) return;
 
+  auto& sb = getStagingBuffer();
+
   // Each renderable that we currently have on the CPU needs to be udpated for the GPU buffer.
   std::size_t dataSize = _currentRenderables.size() * sizeof(gpu::GPURenderable);
   uint8_t* data;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+  vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
   // Offset according to current staging buffer usage
-  data = data + _currentStagingOffset;
+  data = data + sb._currentOffset;
 
   gpu::GPURenderable* mappedData = reinterpret_cast<gpu::GPURenderable*>(data);
 
@@ -3058,6 +2968,11 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 
   for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
     auto& renderable = _currentRenderables[i]._renderable;
+
+    if (!arePrerequisitesUploaded(_currentRenderables[i])) {
+      continue;
+    }
+
     auto internalModelIdx = _modelIdMap[renderable._model];
     auto& model = _currentModels[internalModelIdx];
 
@@ -3078,9 +2993,9 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
-  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.srcOffset = sb._currentOffset;
   copyRegion.size = dataSize;
-  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuRenderableBuffer[_currentFrame]._buffer, 1, &copyRegion);
+  vkCmdCopyBuffer(commandBuffer, sb._buf._buffer, _gpuRenderableBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
   VkBufferMemoryBarrier memBarr{};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -3100,21 +3015,23 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     1, &memBarr,
     0, nullptr);
 
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+  vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
 
   // Update staging offset
-  _currentStagingOffset += dataSize;
+  sb.advance(dataSize);
 }
 
 void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
 {
+  auto& sb = getStagingBuffer();
+
   // Go through each mesh of each model and update corresponding spot in the buffer
   std::size_t dataSize = _currentMeshes.size() * sizeof(gpu::GPUMeshInfo);
   uint8_t* data;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+  vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
   // Offset according to current staging buffer usage
-  data = data + _currentStagingOffset;
+  data = data + sb._currentOffset;
 
   gpu::GPUMeshInfo* mappedData = reinterpret_cast<gpu::GPUMeshInfo*>(data);
 
@@ -3130,9 +3047,9 @@ void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
 
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
-  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.srcOffset = sb._currentOffset;
   copyRegion.size = dataSize;
-  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuMeshInfoBuffer[_currentFrame]._buffer, 1, &copyRegion);
+  vkCmdCopyBuffer(commandBuffer, sb._buf._buffer, _gpuMeshInfoBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
   VkBufferMemoryBarrier memBarr{};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -3152,15 +3069,17 @@ void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
     1, &memBarr,
     0, nullptr);
 
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+  vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
 
   // Update staging offset
-  _currentStagingOffset += dataSize;
+  sb.advance(dataSize);
 }
 
 void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, std::vector<anim::Skeleton>& skeletons)
 {
   if (skeletons.empty()) return;
+
+  auto& sb = getStagingBuffer();
 
   std::size_t dataSize = 0;
   for (auto& skel : skeletons) {
@@ -3168,10 +3087,10 @@ void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, st
   }
 
   uint8_t* data;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+  vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
   // Offset according to current staging buffer usage
-  data = data + _currentStagingOffset;
+  data = data + sb._currentOffset;
 
   glm::mat4* mappedData = reinterpret_cast<glm::mat4*>(data);
 
@@ -3192,9 +3111,9 @@ void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, st
 
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
-  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.srcOffset = sb._currentOffset;
   copyRegion.size = dataSize;
-  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuSkeletonBuffer[_currentFrame]._buffer, 1, &copyRegion);
+  vkCmdCopyBuffer(commandBuffer, sb._buf._buffer, _gpuSkeletonBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
   VkBufferMemoryBarrier memBarr{};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -3214,20 +3133,22 @@ void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, st
     1, &memBarr,
     0, nullptr);
 
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+  vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
 
   // Update staging offset
-  _currentStagingOffset += dataSize;
+  sb.advance(dataSize);
 }
 
 void VulkanRenderer::prefillGPULightBuffer(VkCommandBuffer& commandBuffer)
 {
+  auto& sb = getStagingBuffer();
+
   std::size_t dataSize = MAX_NUM_LIGHTS * sizeof(gpu::GPULight);
   uint8_t* data;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+  vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
   // Offset according to current staging buffer usage
-  data = data + _currentStagingOffset;
+  data = data + sb._currentOffset;
 
   gpu::GPULight* mappedData = reinterpret_cast<gpu::GPULight*>(data);
 
@@ -3243,9 +3164,9 @@ void VulkanRenderer::prefillGPULightBuffer(VkCommandBuffer& commandBuffer)
 
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
-  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.srcOffset = sb._currentOffset;
   copyRegion.size = dataSize;
-  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuLightBuffer[_currentFrame]._buffer, 1, &copyRegion);
+  vkCmdCopyBuffer(commandBuffer, sb._buf._buffer, _gpuLightBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
   VkBufferMemoryBarrier memBarr{};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -3265,20 +3186,22 @@ void VulkanRenderer::prefillGPULightBuffer(VkCommandBuffer& commandBuffer)
     1, &memBarr,
     0, nullptr);
 
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+  vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
 
   // Update staging offset
-  _currentStagingOffset += dataSize;
+  sb.advance(dataSize);
 }
 
 void VulkanRenderer::prefillGPUPointLightShadowCubeBuffer(VkCommandBuffer& commandBuffer)
 {
+  auto& sb = getStagingBuffer();
+
   std::size_t dataSize = MAX_NUM_POINT_LIGHT_SHADOWS * sizeof(gpu::GPUPointLightShadowCube);
   uint8_t* data;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+  vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
   // Offset according to current staging buffer usage
-  data = data + _currentStagingOffset;
+  data = data + sb._currentOffset;
 
   gpu::GPUPointLightShadowCube* mappedData = reinterpret_cast<gpu::GPUPointLightShadowCube*>(data);
 
@@ -3309,9 +3232,9 @@ void VulkanRenderer::prefillGPUPointLightShadowCubeBuffer(VkCommandBuffer& comma
 
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
-  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.srcOffset = sb._currentOffset;
   copyRegion.size = dataSize;
-  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuPointLightShadowBuffer[_currentFrame]._buffer, 1, &copyRegion);
+  vkCmdCopyBuffer(commandBuffer, sb._buf._buffer, _gpuPointLightShadowBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
   VkBufferMemoryBarrier memBarr{};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -3331,10 +3254,10 @@ void VulkanRenderer::prefillGPUPointLightShadowCubeBuffer(VkCommandBuffer& comma
     1, &memBarr,
     0, nullptr);
 
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+  vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
 
   // Update staging offset
-  _currentStagingOffset += dataSize;
+  sb.advance(dataSize);
 }
 
 void VulkanRenderer::prefillGPUTileInfoBuffer(VkCommandBuffer& commandBuffer)
@@ -3342,12 +3265,14 @@ void VulkanRenderer::prefillGPUTileInfoBuffer(VkCommandBuffer& commandBuffer)
   // This should fill the GPU buffer with the current available tile infos.
   // The indices in the buffer need to be relative to the camera position.
 
+  auto& sb = getStagingBuffer();
+
   std::size_t dataSize = (MAX_PAGE_TILE_RADIUS * 2 + 1) * sizeof(gpu::GPUTileInfo);
   uint8_t* data;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
+  vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
   // Offset according to current staging buffer usage
-  data = data + _currentStagingOffset;
+  data = data + sb._currentOffset;
 
   gpu::GPUTileInfo* mappedData = reinterpret_cast<gpu::GPUTileInfo*>(data);
 
@@ -3379,9 +3304,9 @@ void VulkanRenderer::prefillGPUTileInfoBuffer(VkCommandBuffer& commandBuffer)
 
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
-  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.srcOffset = sb._currentOffset;
   copyRegion.size = dataSize;
-  vkCmdCopyBuffer(commandBuffer, _gpuStagingBuffer[_currentFrame]._buffer, _gpuTileBuffer[_currentFrame]._buffer, 1, &copyRegion);
+  vkCmdCopyBuffer(commandBuffer, sb._buf._buffer, _gpuTileBuffer[_currentFrame]._buffer, 1, &copyRegion);
 
   VkBufferMemoryBarrier memBarr{};
   memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -3401,10 +3326,10 @@ void VulkanRenderer::prefillGPUTileInfoBuffer(VkCommandBuffer& commandBuffer)
     1, &memBarr,
     0, nullptr);
 
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
+  vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
 
   // Update staging offset
-  _currentStagingOffset += dataSize;
+  sb.advance(dataSize);
 }
 
 void VulkanRenderer::updateWindForceImage(VkCommandBuffer& commandBuffer)
@@ -3497,46 +3422,6 @@ bool VulkanRenderer::createSyncObjects()
 
   return true;
 }
-
-/*bool VulkanRenderer::initLights()
-{
-  //_lights.resize(MAX_NUM_LIGHTS);
-
-  std::random_device dev;
-  std::mt19937 rng(dev());
-  std::uniform_real_distribution<> col(0.0, 1.0);
-  std::uniform_real_distribution<> pos(0.0, 100.0);
-  std::uniform_real_distribution<> rad(0.0, 10.0);
-  std::uniform_real_distribution<> speed(.1, .2);
-
-  for (std::size_t i = 0; i < _lights.size(); ++i) {
-    auto& light = _lights[i];
-    float zNear = 0.1f;
-    float zFar = 50.0f;
-
-    light._type = Light::Point;
-
-    glm::vec3 randomPos{
-      pos(rng),
-      2.0f,
-      pos(rng)
-    };
-
-    light._color = glm::normalize(glm::vec3(col(rng), col(rng), col(rng)));
-    light._pos = randomPos;// glm::vec3(1.0f * i, 5.0f, 0.0f);
-    light._proj = glm::perspective(glm::radians(90.0f), 1.0f, zNear, zFar);
-    light._debugCircleRadius = rad(rng);
-    light._debugSpeed = speed(rng);
-    light._debugOrigX = light._pos.x;
-    light._debugOrigZ = light._pos.z;
-    light._range = 5.0;
-
-    // Construct view matrices
-    light.updateViewMatrices();
-  }
-
-  return true;
-}*/
 
 bool VulkanRenderer::initBindless()
 {
@@ -4098,14 +3983,17 @@ bool VulkanRenderer::initGpuBuffers()
 
   for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     // Create a staging buffer that will be used to temporarily hold data that is to be copied to the gpu buffers.
+    _gpuStagingBuffer[i]._currentOffset = 0;
+    _gpuStagingBuffer[i]._size = STAGING_BUFFER_SIZE_MB * 1024 * 1024;
+
     bufferutil::createBuffer(
       _vmaAllocator,
-      STAGING_BUFFER_SIZE_MB * 1024 * 1024,
+      _gpuStagingBuffer[i]._size,
       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
       VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-      _gpuStagingBuffer[i]);
+      _gpuStagingBuffer[i]._buf);
     std::string name = "gpuStagingBuffer_" + std::to_string(i);
-    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuStagingBuffer[i]._buffer, name.c_str());
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuStagingBuffer[i]._buf._buffer, name.c_str());
 
     // Create a buffer that will contain renderable information for use by the frustum culling compute shader.
     bufferutil::createBuffer(
@@ -4375,7 +4263,7 @@ void VulkanRenderer::drawFrame()
   _currentSwapChainIndex = imageIndex;
 
   // Reset staging buffer usage
-  _currentStagingOffset = 0;
+  getStagingBuffer().reset();
 
   // Window has resized for instance
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -4452,166 +4340,6 @@ void VulkanRenderer::drawFrame()
   _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void VulkanRenderer::createTexture(
-  VkCommandBuffer cmdBuffer,
-  VkFormat format,
-  int width,
-  int height,
-  const std::vector<uint8_t>& data,
-  VkSampler& samplerOut,
-  AllocatedImage& imageOut,
-  VkImageView& viewOut)
-{
-  uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
-
-  AllocatedImage image;
-
-  imageutil::createImage(
-    width, height,
-    format,
-    VK_IMAGE_TILING_OPTIMAL,
-    _vmaAllocator,
-    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    image,
-    mipLevels);
-
-  auto view = imageutil::createImageView(
-    _device,
-    image._image,
-    format,
-    VK_IMAGE_ASPECT_COLOR_BIT,
-    0,
-    mipLevels);
-
-  std::size_t dataSize = data.size();
-
-  glm::uint8_t* mappedData;
-  vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, &(void*)mappedData);
-  // Offset according to current staging buffer usage
-  mappedData = mappedData + _currentStagingOffset;
-  std::memcpy(mappedData, data.data(), data.size());
-  vmaUnmapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation);
-
-  // Transition image to dst optimal
-  imageutil::transitionImageLayout(
-    cmdBuffer,
-    image._image,
-    format,
-    VK_IMAGE_LAYOUT_UNDEFINED,
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    0,
-    mipLevels);
-
-  VkExtent3D extent{};
-  extent.depth = 1;
-  extent.height = height;
-  extent.width = width;
-
-  VkOffset3D offset{};
-
-  VkBufferImageCopy imCopy{};
-  imCopy.bufferOffset = _currentStagingOffset;
-  imCopy.imageExtent = extent;
-  imCopy.imageOffset = offset;
-  imCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  imCopy.imageSubresource.layerCount = 1;
-
-  vkCmdCopyBufferToImage(
-    cmdBuffer,
-    _gpuStagingBuffer[_currentFrame]._buffer,
-    image._image,
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    1,
-    &imCopy);
-
-  _currentStagingOffset += data.size();
-
-  generateMipmaps(cmdBuffer, image._image, format, width, height, mipLevels);
-
-  SamplerCreateParams params{};
-  params.renderContext = this;
-
-  imageOut = image;
-  viewOut = view;
-  samplerOut = createSampler(params);
-}
-
-void VulkanRenderer::generateMipmaps(VkCommandBuffer cmdBuffer, VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels)
-{
-  VkImageMemoryBarrier barrier{};
-  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  barrier.image = image;
-  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount = 1;
-  barrier.subresourceRange.levelCount = 1;
-
-  int32_t mipWidth = texWidth;
-  int32_t mipHeight = texHeight;
-
-  for (uint32_t i = 1; i < mipLevels; i++) {
-    barrier.subresourceRange.baseMipLevel = i - 1;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-    vkCmdPipelineBarrier(cmdBuffer,
-      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-      0, nullptr,
-      0, nullptr,
-      1, &barrier);
-
-    VkImageBlit blit{};
-    blit.srcOffsets[0] = { 0, 0, 0 };
-    blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
-    blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    blit.srcSubresource.mipLevel = i - 1;
-    blit.srcSubresource.baseArrayLayer = 0;
-    blit.srcSubresource.layerCount = 1;
-    blit.dstOffsets[0] = { 0, 0, 0 };
-    blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
-    blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    blit.dstSubresource.mipLevel = i;
-    blit.dstSubresource.baseArrayLayer = 0;
-    blit.dstSubresource.layerCount = 1;
-
-    vkCmdBlitImage(cmdBuffer,
-      image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-      image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-      1, &blit,
-      VK_FILTER_LINEAR);
-
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-    vkCmdPipelineBarrier(cmdBuffer,
-      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-      0, nullptr,
-      0, nullptr,
-      1, &barrier);
-
-    if (mipWidth > 1) mipWidth /= 2;
-    if (mipHeight > 1) mipHeight /= 2;
-  }
-
-  barrier.subresourceRange.baseMipLevel = mipLevels - 1;
-  barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-  vkCmdPipelineBarrier(cmdBuffer,
-    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-    0, nullptr,
-    0, nullptr,
-    1, &barrier);
-}
-
 internal::BufferMemoryInterface::Handle VulkanRenderer::addTextureToBindless(VkImageLayout layout, VkImageView view, VkSampler sampler)
 {
   VkWriteDescriptorSet descriptorWrite{};
@@ -4678,22 +4406,15 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
   // Uploads
   {
-    // Textures
-    if (!_texturesToUpload.empty()) {
-      uploadPendingTextures(commandBuffer);
-
-      // Force material update, since they rely on the indices just created in the upload
-      for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-        _materialsChanged[i] = true;
-      }
-    }
+    // Upload q deals with texture and model uploads
+    _uploadQ.execute(this, commandBuffer);
 
     // If textures changed, we need to re-do everything that depends on the texture indices
     if (_texturesChanged[_currentFrame]) {
       // Materials depend on texture indices
       _materialsChanged[_currentFrame] = true;
 
-      // TODO: Tile-information (baked textures have new indices)
+      // Tile-information (baked textures have new indices)
       _tileInfosChanged[_currentFrame] = true;
 
       _texturesChanged[_currentFrame] = false;
@@ -4708,8 +4429,6 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
     // Models, i.e. meshes that need to be uploaded to giga buffers
     if (_modelsChanged[_currentFrame]) {
-      // Upload to the giga vertex and index buffers. This will be a no-op if there is nothing to upload.
-      uploadPendingModels(commandBuffer);
 
       // Fill the mesh info buffers used on the GPU in the ray tracing pipelines
       prefillGPUMeshBuffer(commandBuffer);
@@ -4857,6 +4576,76 @@ glm::vec3 VulkanRenderer::stopBake(BakeTextureCallback callback)
   _bakeInfo._stopNextFrame = true;
   _bakeInfo._callback = callback;
   return _bakeInfo._originalCamPos;
+}
+
+internal::StagingBuffer& VulkanRenderer::getStagingBuffer()
+{
+  return _gpuStagingBuffer[_currentFrame];
+}
+
+internal::GigaBuffer& VulkanRenderer::getVtxBuffer()
+{
+  return _gigaVtxBuffer;
+}
+
+internal::GigaBuffer& VulkanRenderer::getIdxBuffer()
+{
+  return _gigaIdxBuffer;
+}
+
+RenderContext* VulkanRenderer::getRC()
+{
+  return this;
+}
+
+void VulkanRenderer::textureUploadedCB(internal::InternalTexture tex)
+{
+  tex._bindlessInfo._bindlessIndexHandle = addTextureToBindless(
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    tex._bindlessInfo._view,
+    tex._bindlessInfo._sampler);
+
+  _textureIdMap[tex._id] = _currentTextures.size();
+  _currentTextures.emplace_back(std::move(tex));
+
+  // Force material and renderable update, since they rely on the indices just created in the upload
+  for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    _materialsChanged[i] = true;
+    _renderablesChanged[i] = true;
+    _texturesChanged[i] = true;
+  }
+}
+
+void VulkanRenderer::modelMeshUploadedCB(internal::InternalMesh mesh, VkCommandBuffer cmdBuf)
+{
+  // Update internal mesh
+  _currentMeshes.emplace_back(std::move(mesh));
+
+  auto& addedMesh = _currentMeshes.back();
+  auto internalId = _currentMeshes.size() - 1;
+  _meshIdMap[addedMesh._id] = internalId;
+
+  if (_enableRayTracing) {
+    auto blas = registerBottomLevelAS(cmdBuf, addedMesh._id);
+    if (blas) {
+      _blases[addedMesh._id] = std::move(blas);
+    }
+
+    // Retrieve device address of BLAS for use in TLAS update pass.
+    if (_blases.find(addedMesh._id) != _blases.end()) {
+      auto& blas = _blases[addedMesh._id];
+      VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
+      addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+      addressInfo.accelerationStructure = blas._as;
+      VkDeviceAddress blasAddress = GetAccelerationStructureDeviceAddressKHR(_device, &addressInfo);
+
+      addedMesh._blasRef = blasAddress;
+    }
+  }
+
+  for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    _modelsChanged[i] = true;
+  }
 }
 
 bool VulkanRenderer::isBaking()

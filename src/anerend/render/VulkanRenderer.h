@@ -32,6 +32,9 @@
 #include "internal/BufferMemoryInterface.h"
 #include "internal/DeletionQueue.h"
 #include "internal/InternalTexture.h"
+#include "internal/UploadContext.h"
+#include "internal/UploadQueue.h"
+#include "internal/StagingBuffer.h"
 #include "AccelerationStructure.h"
 #include "scene/TileIndex.h"
 
@@ -66,7 +69,7 @@ struct PerFrameTimer
   std::vector<float> _buf;
 };
 
-class VulkanRenderer : public RenderContext
+class VulkanRenderer : public RenderContext, public internal::UploadContext
 {
 public:
   VulkanRenderer(GLFWwindow* window, const Camera& initialCamera);
@@ -112,6 +115,15 @@ public:
 
   // Immediately returns the original camera position. Callback will be called after next update() has finished.
   glm::vec3 stopBake(BakeTextureCallback callback);
+
+  // Upload context interface
+  internal::StagingBuffer& getStagingBuffer() override final;
+  internal::GigaBuffer& getVtxBuffer() override final;
+  internal::GigaBuffer& getIdxBuffer() override final;
+  RenderContext* getRC() override final;
+
+  void textureUploadedCB(internal::InternalTexture tex) override final;
+  void modelMeshUploadedCB(internal::InternalMesh mesh, VkCommandBuffer cmdBuf) override final;
 
   // Render Context interface
   bool isBaking() override final;
@@ -200,10 +212,10 @@ private:
   static const std::size_t MAX_FRAMES_IN_FLIGHT = 2;
   static const std::size_t MAX_PUSH_CONSTANT_SIZE = 128;
   static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 512;
-  static const std::size_t STAGING_BUFFER_SIZE_MB = 1024;
+  static const std::size_t STAGING_BUFFER_SIZE_MB = 128;
   static const std::size_t MAX_NUM_RENDERABLES = std::size_t(1e5);
-  static const std::size_t MAX_NUM_MESHES = std::size_t(1e3);
-  static const std::size_t MAX_NUM_MATERIALS = 10000;
+  static const std::size_t MAX_NUM_MESHES = std::size_t(2048);
+  static const std::size_t MAX_NUM_MATERIALS = 500;
   static const std::size_t NUM_PIXELS_CLUSTER_X = 16;
   static const std::size_t NUM_PIXELS_CLUSTER_Y = 9;
   static const std::size_t NUM_CLUSTER_DEPTH_SLIZES = 7;
@@ -216,6 +228,10 @@ private:
   static const std::size_t MAX_NUM_SKINNED_MODELS = 1000;
   static const std::size_t MAX_NUM_POINT_LIGHT_SHADOWS = 4;
   static const std::size_t MAX_PAGE_TILE_RADIUS = 0;
+
+  bool arePrerequisitesUploaded(internal::InternalModel& model);
+  bool arePrerequisitesUploaded(internal::InternalRenderable& rend);
+  bool arePrerequisitesUploaded(internal::InternalMaterial& mat);
 
   std::unordered_map<std::string, std::any> _blackboard;
 
@@ -301,13 +317,9 @@ private:
   std::vector<bool> _texturesChanged;
   std::vector<bool> _tileInfosChanged;
 
-  std::vector<asset::Model> _modelsToUpload;
   std::vector<asset::Material> _materialsToUpload;
-  std::vector<asset::Texture> _texturesToUpload;
 
-  void uploadPendingModels(VkCommandBuffer cmdBuffer);
   void uploadPendingMaterials(VkCommandBuffer cmdBuffer);
-  void uploadPendingTextures(VkCommandBuffer cmdBuffer);
 
   // Ray tracing related
   AccelerationStructure registerBottomLevelAS(VkCommandBuffer cmdBuffer, util::Uuid meshId, bool dynamic = false, bool doBarrier = true);
@@ -363,7 +375,7 @@ private:
   // Use a mem interface to select empty bindless indices.
   internal::BufferMemoryInterface _bindlessTextureMemIf;
 
-  void createTexture(
+  /*void createTexture(
     VkCommandBuffer cmdBuffer,
     VkFormat format, 
     int width, 
@@ -379,7 +391,7 @@ private:
     VkFormat imageFormat,
     int32_t texWidth,
     int32_t texHeight,
-    uint32_t mipLevels);
+    uint32_t mipLevels);*/
 
   internal::BufferMemoryInterface::Handle addTextureToBindless(VkImageLayout layout, VkImageView view, VkSampler sampler);
 
@@ -401,8 +413,7 @@ private:
   VkDeviceAddress _gigaIdxAddr;
 
   // Staging buffer for copying data to the gpu buffers.
-  std::vector<AllocatedBuffer> _gpuStagingBuffer;
-  std::size_t _currentStagingOffset = 0;
+  std::vector<internal::StagingBuffer> _gpuStagingBuffer;
 
   // Contains renderable info for compute culling shader.
   std::vector<AllocatedBuffer> _gpuRenderableBuffer;
@@ -578,5 +589,6 @@ private:
 
   std::uint32_t _currentFrame = 0;
   internal::DeletionQueue _delQ;
+  internal::UploadQueue _uploadQ;
 };
 }

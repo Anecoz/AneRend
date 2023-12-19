@@ -23,7 +23,6 @@ struct InternalRenderable
   // Only used for ray tracing: Offset where to write animated vertices
   std::vector<util::Uuid> _dynamicMeshes;
   std::uint32_t _dynamicModelBufferOffset = 0;
-  //MeshId _rtFirstDynamicMeshId = INVALID_ID;
 };
 
 }
