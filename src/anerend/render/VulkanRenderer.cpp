@@ -1239,11 +1239,13 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
     auto& model = _currentModels[_modelIdMap[internalRend._renderable._model]];
 
     if (!arePrerequisitesUploaded(model)) {
+      ++it;
       continue;
     }
 
     if (model._meshes.size() + _currentMeshes.size() >= MAX_NUM_MESHES) {
       printf("Cannot add dynamic mesh, max size reached!\n");
+      ++it;
       continue;
     }
 
@@ -1338,6 +1340,7 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
 
       if (!blas) {
         printf("Something went horribly wrong!\n");
+        ++it;
         continue;
       }
 
