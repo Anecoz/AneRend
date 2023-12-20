@@ -3,6 +3,8 @@
 #include "../../common/input/KeyInput.h"
 #include "../../common/input/MousePosInput.h"
 #include <util/GLTFLoader.h>
+#include <util/TextureHelpers.h>
+#include <render/ImageHelpers.h>
 
 #include "../gui/SceneAssetGUI.h"
 #include "../gui/SceneListGUI.h"
@@ -177,6 +179,19 @@ void AneditApplication::updateConfig()
 
 void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData> data)
 {
+  for (auto& tex : data->_textures) {
+    // Generate mips for all textures using renderContext (unless they specifically ask not to maybe?)
+    _vkRenderer.generateMipMaps(tex);
+
+    // And then compress all mips here using TextureHelpers
+    if (render::imageutil::numDimensions(tex._format) >= 3) {
+      util::TextureHelpers::convertRGBA8ToBC7(tex);
+    }
+    else if (render::imageutil::numDimensions(tex._format) == 2) {
+      util::TextureHelpers::convertRG8ToBC5(tex);
+    }
+  }
+
   _scene.addModel(std::move(data->_model));
   _scene.addPrefab(std::move(data->_prefab));
 

@@ -41,6 +41,7 @@
 #include "passes/LuminanceAveragePass.h"
 #include "passes/UpdateBlasPass.h"
 #include "passes/CompactDrawsPass.h"
+#include "internal/MipMapGenerator.h"
 
 #include "../../common/util/Utils.h"
 #include  "../util/GraphicsUtils.h"
@@ -703,7 +704,9 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
       continue;
     }
 
-    textureBytes += tex._data.size();
+    for (auto& dat : tex._data) {
+      textureBytes += dat.size();
+    }
     _uploadQ.add(std::move(tex));
   }
 
@@ -1610,7 +1613,7 @@ AccelerationStructure VulkanRenderer::registerBottomLevelAS(
   AllocatedBuffer scratchBuffer{};
   bufferutil::createBuffer(
     _vmaAllocator,
-    sizeInfo.buildScratchSize,
+    sizeInfo.buildScratchSize + _rtScratchAlignment,
     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     0,
     scratchBuffer);
@@ -1620,6 +1623,8 @@ AccelerationStructure VulkanRenderer::registerBottomLevelAS(
   scratchAddrInfo.buffer = scratchBuffer._buffer;
 
   VkDeviceAddress scratchAddr = vkGetBufferDeviceAddress(_device, &scratchAddrInfo);
+  // Align
+  scratchAddr = (scratchAddr + (_rtScratchAlignment - 1)) & ~(_rtScratchAlignment - 1);
   buildInfo.scratchData.deviceAddress = scratchAddr;
 
   // Do the build
@@ -2147,10 +2152,19 @@ bool VulkanRenderer::createLogicalDevice()
   // Get RT props
   _rtPipeProps = VkPhysicalDeviceRayTracingPipelinePropertiesKHR{};
   _rtPipeProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+
+  VkPhysicalDeviceAccelerationStructurePropertiesKHR asProps{};
+  asProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
+  _rtPipeProps.pNext = &asProps;
+
   VkPhysicalDeviceProperties2 deviceProps{};
   deviceProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
   deviceProps.pNext = &_rtPipeProps;
   vkGetPhysicalDeviceProperties2(_physicalDevice, &deviceProps);
+
+  if (_enableRayTracing) {
+    _rtScratchAlignment = asProps.minAccelerationStructureScratchOffsetAlignment;
+  }
 
   // TS period for interpreting timestamp queries
   _timestampPeriod = deviceProps.properties.limits.timestampPeriod;
@@ -4651,6 +4665,11 @@ void VulkanRenderer::modelMeshUploadedCB(internal::InternalMesh mesh, VkCommandB
 bool VulkanRenderer::isBaking()
 {
   return !!_bakeInfo._bakingIndex;
+}
+
+void VulkanRenderer::generateMipMaps(asset::Texture& tex)
+{
+  internal::MipMapGenerator::generateMipMaps(tex, this);
 }
 
 VkDevice& VulkanRenderer::device()

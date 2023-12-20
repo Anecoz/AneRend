@@ -19,10 +19,17 @@ struct Texture
   {
     RGBA8_UNORM,
     RGBA8_SRGB,
-    RGBA16F_SFLOAT
+    RGB8_SRGB,
+    RGB8_UNORM,
+    RG8_UNORM,
+    RGBA16F_SFLOAT,
+    RGBA_SRGB_BC7,
+    RGBA_UNORM_BC7,
+    RG_UNORM_BC5
   } _format;
 
-  std::vector<std::uint8_t> _data;
+  unsigned _numMips = 1; // Needed so we know how to deserialise
+  std::vector<std::vector<std::uint8_t>> _data; // One entry for each mip, _data[0] is most hi-res and so on
   unsigned _width;
   unsigned _height;
 };

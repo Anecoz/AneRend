@@ -43,22 +43,10 @@ private:
   bool createTexture(
     VkCommandBuffer cmdBuffer,
     UploadContext* uc,
-    VkFormat format,
-    int width,
-    int height,
-    const std::vector<uint8_t>& data,
+    render::asset::Texture& tex,
     VkSampler& samplerOut,
     AllocatedImage& imageOut,
     VkImageView& viewOut);
-
-  void generateMipmaps(
-    VkCommandBuffer cmdBuffer,
-    UploadContext* uc,
-    VkImage image,
-    VkFormat imageFormat,
-    int32_t texWidth,
-    int32_t texHeight,
-    uint32_t mipLevels);
 };
 
 }

@@ -166,7 +166,16 @@ void serialize(S& s, render::asset::Texture& t)
   s.value1b(t._format);
   s.value4b(t._width);
   s.value4b(t._height);
-  s.container1b(t._data, 100'000'000); // 100MB
+  s.value4b(t._numMips);
+  // For deserialisation
+  if (t._data.empty()) {
+    for (unsigned i = 0; i < t._numMips; ++i) {
+      t._data.emplace_back();
+    }
+  }
+  for (unsigned i = 0; i < t._numMips; ++i) {
+    s.container1b(t._data[i], 100'000'000); // 100MB
+  }
 }
 
 template <typename S>

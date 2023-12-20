@@ -205,8 +205,8 @@ SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, 
   }
   if (metRoughIdx != -1) {
     vec4 samp = texture(textures[nonuniformEXT(metRoughIdx)], uv);
-    outData.metallic = samp.b;
-    outData.roughness = samp.g;
+    outData.metallic = samp.g;
+    outData.roughness = samp.r;
   }
   if (normalIdx != -1 && inTangent.xyz != vec3(0.0f)) {
     outData.normal = normalize(texture(textures[nonuniformEXT(normalIdx)], uv).rgb * 2.0 - 1.0);

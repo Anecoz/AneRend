@@ -128,6 +128,8 @@ public:
   // Render Context interface
   bool isBaking() override final;
 
+  void generateMipMaps(asset::Texture& tex) override final;
+
   VkDevice& device() override final;
   VkDescriptorPool& descriptorPool() override final;
   VmaAllocator vmaAllocator() override final;
@@ -352,6 +354,7 @@ private:
   AccelerationStructure _tlas;
 
   VkPhysicalDeviceRayTracingPipelinePropertiesKHR _rtPipeProps;
+  std::size_t _rtScratchAlignment = 0;
 
   /* 
   * "Bindless" descriptor set layout and pipeline layout, used for every render pass.

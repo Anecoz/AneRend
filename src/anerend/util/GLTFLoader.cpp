@@ -2,6 +2,7 @@
 
 #include "../render/asset/Mesh.h"
 #include "../render/animation/Skeleton.h"
+#include "TextureHelpers.h"
 
 #include <limits>
 #include <filesystem>
@@ -490,7 +491,6 @@ bool GLTFLoader::loadFromFile(
           render::asset::Material mat{};
           mat._name = material.name;
 
-          // TODO: Copying image data down here is naive... the same texture can be reused multiple times, a cache would be good
           int baseColIdx = material.pbrMetallicRoughness.baseColorTexture.index;
           if (baseColIdx >= 0) {
             int imageIdx = model.textures[baseColIdx].source;
@@ -504,7 +504,9 @@ bool GLTFLoader::loadFromFile(
               render::asset::Texture tex{};
               mat._albedoTex = tex._id;
 
-              tex._data = std::move(image.image);
+              auto w = image.width;
+              auto h = image.height;
+              tex._data.emplace_back(std::move(image.image));
               tex._format = render::asset::Texture::Format::RGBA8_SRGB;
               tex._width = image.width;
               tex._height = image.height;
@@ -527,10 +529,12 @@ bool GLTFLoader::loadFromFile(
               render::asset::Texture tex{};
               mat._metallicRoughnessTex = tex._id;
 
-              tex._data = std::move(image.image);
-              tex._format = render::asset::Texture::Format::RGBA8_UNORM;
-              tex._width = image.width;
-              tex._height = image.height;
+              auto w = image.width;
+              auto h = image.height;
+              tex._data.emplace_back(TextureHelpers::convertRGBA8ToRG8(std::move(image.image)));
+              tex._format = render::asset::Texture::Format::RG8_UNORM;
+              tex._width = w;
+              tex._height = h;
               parsedTextures[imageIdx] = tex._id;
 
               texturesOut.emplace_back(std::move(tex));
@@ -550,10 +554,12 @@ bool GLTFLoader::loadFromFile(
               render::asset::Texture tex{};
               mat._normalTex = tex._id;
 
-              tex._data = std::move(image.image);
+              auto w = image.width;
+              auto h = image.height;
+              tex._data.emplace_back(std::move(image.image));
               tex._format = render::asset::Texture::Format::RGBA8_UNORM;
-              tex._width = image.width;
-              tex._height = image.height;
+              tex._width = w;
+              tex._height = h;
               parsedTextures[imageIdx] = tex._id;
 
               texturesOut.emplace_back(std::move(tex));
@@ -573,10 +579,12 @@ bool GLTFLoader::loadFromFile(
               render::asset::Texture tex{};
               mat._emissiveTex = tex._id;
 
-              tex._data = std::move(image.image);
+              auto w = image.width;
+              auto h = image.height;
+              tex._data.emplace_back(std::move(image.image));
               tex._format = render::asset::Texture::Format::RGBA8_SRGB;
-              tex._width = image.width;
-              tex._height = image.height;
+              tex._width = w;
+              tex._height = h;
               parsedTextures[imageIdx] = tex._id;
 
               texturesOut.emplace_back(std::move(tex));

@@ -97,6 +97,9 @@ public:
 
   virtual bool isBaking() = 0;
 
+  // Thread-safe but NOT performant. Meant to be used when importing.
+  virtual void generateMipMaps(asset::Texture& tex) = 0;
+
   virtual VkDevice& device() = 0;
   virtual VkDescriptorPool& descriptorPool() = 0;
   virtual VmaAllocator vmaAllocator() = 0;

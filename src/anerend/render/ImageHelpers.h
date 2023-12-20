@@ -7,6 +7,7 @@
 #include <vulkan/vulkan.h>
 
 #include "AllocatedImage.h"
+#include "asset/Texture.h"
 
 #include "../../common/util/nanojpeg.h"
 #include <lodepng.h>
@@ -19,6 +20,96 @@ static bool hasStencilComponent(VkFormat format)
   return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
+static VkFormat texFormatToVk(render::asset::Texture::Format format)
+{
+  if (format == asset::Texture::Format::RGBA8_SRGB) {
+    return VK_FORMAT_R8G8B8A8_SRGB;
+  }
+  else if (format == asset::Texture::Format::RGBA16F_SFLOAT) {
+    return VK_FORMAT_R16G16B16A16_SFLOAT;
+  }
+  else if (format == asset::Texture::Format::RGB8_SRGB) {
+    return VK_FORMAT_R8G8B8_SRGB;
+  }
+  else if (format == asset::Texture::Format::RG8_UNORM) {
+    return VK_FORMAT_R8G8_UNORM;
+  }
+  else if (format == asset::Texture::Format::RGB8_UNORM) {
+    return VK_FORMAT_R8G8B8_UNORM;
+  }
+  else if (format == asset::Texture::Format::RGBA_SRGB_BC7) {
+    return VK_FORMAT_BC7_SRGB_BLOCK;
+  }
+  else if (format == asset::Texture::Format::RGBA_UNORM_BC7) {
+    return VK_FORMAT_BC7_UNORM_BLOCK;
+  }
+  else if (format == asset::Texture::Format::RG_UNORM_BC5) {
+    return VK_FORMAT_BC5_UNORM_BLOCK;
+  }
+
+  return VK_FORMAT_R8G8B8A8_UNORM;
+}
+
+static unsigned numDimensions(render::asset::Texture::Format format)
+{
+  if (format == asset::Texture::Format::RGBA8_SRGB) {
+    return 3;
+  }
+  else if (format == asset::Texture::Format::RGBA16F_SFLOAT) {
+    return 3;
+  }
+  else if (format == asset::Texture::Format::RGB8_SRGB) {
+    return 3;
+  }
+  else if (format == asset::Texture::Format::RG8_UNORM) {
+    return 2;
+  }
+  else if (format == asset::Texture::Format::RGB8_UNORM) {
+    return 3;
+  }
+  else if (format == asset::Texture::Format::RGBA_SRGB_BC7) {
+    return 3;
+  }
+  else if (format == asset::Texture::Format::RGBA_UNORM_BC7) {
+    return 3;
+  }
+  else if (format == asset::Texture::Format::RG_UNORM_BC5) {
+    return 2;
+  }
+
+  return 3;
+}
+
+static std::size_t texSize(int w, int h, render::asset::Texture::Format format)
+{
+  if (format == asset::Texture::Format::RGBA8_SRGB) {
+    return w * h * 1 * 4;
+  }
+  else if (format == asset::Texture::Format::RGBA16F_SFLOAT) {
+    return w * h * 2 * 4;
+  }
+  else if (format == asset::Texture::Format::RGB8_SRGB) {
+    return w * h * 1 * 3;
+  }
+  else if (format == asset::Texture::Format::RG8_UNORM) {
+    return w * h * 1 * 2;
+  }
+  else if (format == asset::Texture::Format::RGB8_UNORM) {
+    return w * h * 1 * 3;
+  }
+  else if (format == asset::Texture::Format::RGBA_SRGB_BC7) {
+    return w * h * 1;
+  }
+  else if (format == asset::Texture::Format::RGBA_UNORM_BC7) {
+    return w * h * 1;
+  }
+  else if (format == asset::Texture::Format::RG_UNORM_BC5) {
+    return w * h * 1;
+  }
+
+  return w * h * 1 * 4;
+}
+
 static void createImage(
   uint32_t width,
   uint32_t height,
@@ -29,7 +120,8 @@ static void createImage(
   AllocatedImage& image,
   uint32_t mipLevels = 1,
   uint32_t arrayLayers = 1,
-  VkImageCreateFlags flags = 0)
+  VkImageCreateFlags flags = 0,
+  bool hostAccess = false)
 {
   //uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
 
@@ -51,6 +143,9 @@ static void createImage(
 
   VmaAllocationCreateInfo vmaAllocInfo{};
   vmaAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+  if (hostAccess) {
+    vmaAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+  }
 
   if (vmaCreateImage(allocator, &imageInfo, &vmaAllocInfo, &image._image, &image._allocation, nullptr) != VK_SUCCESS) {
     printf("Failed to create image!\n");

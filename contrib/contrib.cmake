@@ -35,5 +35,15 @@ if (WIN32)
   # NativeFileDialog_extended (nfd)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/nativefiledialog-extended)
 
+  # libktx
+  set(KTX_FEATURE_STATIC_LIBRARY ON)
+  set(KTX_FEATURE_TOOLS OFF CACHE BOOL "Create KTX tools" FORCE)
+  set(KTX_FEATURE_TESTS OFF CACHE BOOL "Create KTX unit tests" FORCE)
+  set(KTX_FEATURE_GL_UPLOAD OFF CACHE BOOL "Enable OpenGL texture upload" FORCE)
+  set(KTX_FEATURE_VK_UPLOAD OFF CACHE BOOL "Enable Vulkan texture upload" FORCE)
+  set(KTX_FEATURE_LOADTEST_APPS "" CACHE STRING  "Load test apps test the upload feature by displaying various KTX textures. Select which to create. \"OpenGL\" includes OpenGL ES." FORCE)
+  add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS)
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/KTX-Software)
+
 else()  
 endif()
