@@ -7,3 +7,6 @@
 [submodule "contrib/nativefiledialog-extended"]
 	path = contrib/nativefiledialog-extended
 	url = https://github.com/btzy/nativefiledialog-extended.git
+[submodule "contrib/KTX-Software"]
+	path = contrib/KTX-Software
+	url = https://github.com/KhronosGroup/KTX-Software.git
