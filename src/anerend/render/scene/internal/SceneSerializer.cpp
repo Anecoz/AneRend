@@ -104,10 +104,10 @@ template <typename S>
 void serialize(S& s, render::asset::Prefab& p)
 {
   s.object(p._id);
-  s.text1b(p._name, 40);
+  s.text1b(p._name, 100);
   s.object(p._model);
   s.object(p._skeleton);
-  s.container(p._materials, 200);
+  s.container(p._materials, 2048);
 }
 
 template <typename S>
@@ -130,8 +130,8 @@ template <typename S>
 void serialize(S& s, render::asset::Model& m)
 {
   s.object(m._id);
-  s.text1b(m._name, 40);
-  s.container(m._meshes, 200);
+  s.text1b(m._name, 100);
+  s.container(m._meshes, 2048);
 }
 
 template <typename S>
@@ -144,7 +144,7 @@ template <typename S>
 void serialize(S& s, render::asset::Material& m)
 {
   s.object(m._id);
-  s.text1b(m._name, 40);
+  s.text1b(m._name, 100);
   s.object(m._baseColFactor);
   s.object(m._emissive);
   s.object(m._metallicRoughnessTex);
@@ -189,15 +189,15 @@ void serialize(S& s, render::anim::Channel& c)
 {
   s.value4b(c._internalId);
   s.value1b(c._path);
-  s.container4b(c._inputTimes, 2000);
-  s.container(c._outputs, 2000);
+  s.container4b(c._inputTimes, 10000);
+  s.container(c._outputs, 10000);
 }
 
 template <typename S>
 void serialize(S& s, render::anim::Animation& a)
 {
   s.object(a._id);
-  s.text1b(a._name, 40);
+  s.text1b(a._name, 100);
   s.container(a._channels, 100);
 }
 
@@ -211,7 +211,7 @@ template <typename S>
 void serialize(S& s, render::asset::Animator& a)
 {
   s.object(a._id);
-  s.text1b(a._name, 40);
+  s.text1b(a._name, 100);
   s.value1b(a._state);
   s.object(a._skeleId);
   s.object(a._animId);
@@ -239,7 +239,7 @@ template <typename S>
 void serialize(S& s, render::anim::Skeleton& skel)
 {
   s.object(skel._id);
-  s.text1b(skel._name, 40);
+  s.text1b(skel._name, 100);
   s.value1b(skel._nonJointRoot);
   s.container(skel._joints, 100);
 }
@@ -254,10 +254,10 @@ template <typename S>
 void serialize(S& s, render::asset::Renderable& r)
 {
   s.object(r._id);
-  s.text1b(r._name, 40);
+  s.text1b(r._name, 100);
   s.object(r._model);
   s.object(r._skeleton);
-  s.container(r._materials, 200);
+  s.container(r._materials, 2048);
   s.object(r._transform);
   s.object(r._tint);
   s.object(r._boundingSphere);
@@ -274,7 +274,7 @@ template <typename S>
 void serialize(S& s, render::asset::Light& l)
 {
   s.object(l._id);
-  s.text1b(l._name, 40);
+  s.text1b(l._name, 100);
   s.object(l._pos);
   s.object(l._color);
   s.value4b(l._range);
