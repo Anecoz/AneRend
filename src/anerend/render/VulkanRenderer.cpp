@@ -981,9 +981,10 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
       }
     }
 
-    _currentRenderables.push_back(internalRend);
+    _pendingFirstUploadRenderables.emplace_back(std::move(internalRend));
+    /*_currentRenderables.push_back(internalRend);
     auto internalId = _currentRenderables.size() - 1;
-    _renderableIdMap[rend._id] = internalId;
+    _renderableIdMap[rend._id] = internalId;*/
   }
 
   // Updated renderables
@@ -1233,6 +1234,13 @@ void VulkanRenderer::copyDynamicModels(VkCommandBuffer cmdBuffer)
   std::vector<VkBufferMemoryBarrier> vtxBarrs;
   for (auto it = _dynamicModelsToCopy.begin(); it != _dynamicModelsToCopy.end();) {
     auto rend = it->_renderableId;
+
+    // Maybe rend is still uploading
+    if (_renderableIdMap.find(rend) == _renderableIdMap.end()) {
+      ++it;
+      continue;
+    }
+
     auto& internalRend = _currentRenderables[_renderableIdMap[rend]];
 
     // Copy all meshes and BLASes
@@ -2823,7 +2831,7 @@ bool VulkanRenderer::createCommandBuffers()
   return true;
 }
 
-void VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
+bool VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
 {
   // Each renderable references a material ID, one for each mesh its model uses.
   // However, some of the meshes may (and usually do) reference the same ID.
@@ -2831,7 +2839,7 @@ void VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
   // look at the renderable which will reference a "start point" in this buffer,
   // and then go to this buffer to actually find the material indices.
 
-  if (_currentRenderables.empty()) return;
+  if (_currentRenderables.empty()) return true;
 
   auto& sb = getStagingBuffer();
 
@@ -2861,6 +2869,11 @@ void VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
   }
 
   std::size_t dataSize = (currentIndex + 1) * sizeof(uint32_t);
+
+  if (!sb.canFit(dataSize, true)) {
+    return false;
+  }
+
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
   copyRegion.srcOffset = sb._currentOffset;
@@ -2889,12 +2902,14 @@ void VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
 
   // Update staging offset
   sb.advance(dataSize);
+
+  return true;
 }
 
-void VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
+bool VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
 {
-  if (_currentModels.empty()) return;
-  if (_currentRenderables.empty()) return;
+  if (_currentModels.empty()) return true;
+  if (_currentRenderables.empty()) return true;
 
   auto& sb = getStagingBuffer();
 
@@ -2934,6 +2949,11 @@ void VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
   }
 
   std::size_t dataSize = (currIdx + 1) * sizeof(uint32_t);
+
+  if (!sb.canFit(dataSize, true)) {
+    return false;
+  }
+
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
   copyRegion.srcOffset = sb._currentOffset;
@@ -2962,16 +2982,40 @@ void VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
 
   // Update staging offset
   sb.advance(dataSize);
+
+  return true;
 }
 
-void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
+bool VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 {
-  if (_currentRenderables.empty()) return;
+  if (_currentRenderables.empty() && _pendingFirstUploadRenderables.empty()) return true;
 
   auto& sb = getStagingBuffer();
 
   // Each renderable that we currently have on the CPU needs to be udpated for the GPU buffer.
-  std::size_t dataSize = _currentRenderables.size() * sizeof(gpu::GPURenderable);
+  std::size_t dataSize = (_currentRenderables.size() + _pendingFirstUploadRenderables.size()) * sizeof(gpu::GPURenderable);
+
+  if (!sb.canFit(dataSize, true)) {
+    return false;
+  }
+
+  // If we can fit all data, we will also put all pending rends in current rends
+  if (!_pendingFirstUploadRenderables.empty()) {
+    for (auto it = _pendingFirstUploadRenderables.begin(); it != _pendingFirstUploadRenderables.end();) {
+
+      if (arePrerequisitesUploaded(*it)) {
+        _currentRenderables.emplace_back(*it);
+        auto internalId = _currentRenderables.size() - 1;
+        _renderableIdMap[it->_renderable._id] = internalId;
+
+        it = _pendingFirstUploadRenderables.erase(it);
+      }
+      else {
+        ++it;
+      }
+    }
+  }
+
   uint8_t* data;
   vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
@@ -2997,7 +3041,7 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
       _currentMeshUsage[model._meshes[i]]++;
     }
     
-    mappedData[i]._transform = renderable._transform;
+    mappedData[i]._transform = renderable._globalTransform;
     mappedData[i]._tint = glm::vec4(renderable._tint, 1.0f);
     mappedData[i]._modelOffset = _currentRenderables[i]._modelBufferOffset;
     mappedData[i]._numMeshes = (uint32_t)model._meshes.size();
@@ -3036,14 +3080,21 @@ void VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
 
   // Update staging offset
   sb.advance(dataSize);
+
+  return true;
 }
 
-void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
+bool VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
 {
   auto& sb = getStagingBuffer();
 
   // Go through each mesh of each model and update corresponding spot in the buffer
   std::size_t dataSize = _currentMeshes.size() * sizeof(gpu::GPUMeshInfo);
+
+  if (!sb.canFit(dataSize)) {
+    return false;
+  }
+
   uint8_t* data;
   vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
@@ -3090,6 +3141,8 @@ void VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
 
   // Update staging offset
   sb.advance(dataSize);
+
+  return true;
 }
 
 void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, std::vector<anim::Skeleton>& skeletons)
@@ -4001,6 +4054,7 @@ bool VulkanRenderer::initGpuBuffers()
   for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     // Create a staging buffer that will be used to temporarily hold data that is to be copied to the gpu buffers.
     _gpuStagingBuffer[i]._currentOffset = 0;
+    _gpuStagingBuffer[i].setEmergencyReserve(5000 * sizeof(gpu::GPURenderable)); // So that we always can fit some renderables
     _gpuStagingBuffer[i]._size = STAGING_BUFFER_SIZE_MB * 1024 * 1024;
 
     bufferutil::createBuffer(
@@ -4448,12 +4502,14 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
     if (_modelsChanged[_currentFrame]) {
 
       // Fill the mesh info buffers used on the GPU in the ray tracing pipelines
-      prefillGPUMeshBuffer(commandBuffer);
+      auto ok = prefillGPUMeshBuffer(commandBuffer);
 
       // force rend update because they need a model buffer update
       forceRenderableUpdate = true;
 
-      _modelsChanged[_currentFrame] = false;
+      if (ok) {
+        _modelsChanged[_currentFrame] = false;
+      }
     }
 
     // Materials
@@ -4475,10 +4531,14 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
 
   // Prefill renderable buffer
   if (_renderablesChanged[_currentFrame]) {
-    prefillGPUModelBuffer(commandBuffer);
-    prefillGPURendMatIdxBuffer(commandBuffer);
-    prefillGPURenderableBuffer(commandBuffer);
-    _renderablesChanged[_currentFrame] = false;
+    bool ok = true;
+    ok &= prefillGPUModelBuffer(commandBuffer);
+    ok &= prefillGPURendMatIdxBuffer(commandBuffer);
+    ok &= prefillGPURenderableBuffer(commandBuffer);
+
+    if (ok) {
+      _renderablesChanged[_currentFrame] = false;
+    }
   }
 
   if (_lightsChanged[_currentFrame]) {

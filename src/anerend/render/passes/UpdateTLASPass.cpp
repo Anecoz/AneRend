@@ -129,6 +129,7 @@ void UpdateTLASPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     [this](RenderExeParams exeParams) {
       if (!exeParams.rc->getRenderOptions().raytracingEnabled) return;
 
+
       vkCmdBindPipeline(*exeParams.cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, *exeParams.pipeline);
 
       vkCmdBindDescriptorSets(

@@ -192,11 +192,19 @@ void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData
     }
   }
 
-  _scene.addModel(std::move(data->_model));
-  _scene.addPrefab(std::move(data->_prefab));
+  // TEMP
+  auto prefabsCopy = data->_prefabs;
+  
+  for (auto& model : data->_models) {
+    _scene.addModel(std::move(model));
+  }
 
-  if (data->_skeleton) {
-    _scene.addSkeleton(std::move(data->_skeleton));
+  for (auto& prefab : data->_prefabs) {
+    _scene.addPrefab(std::move(prefab));
+  }
+
+  for (auto& skeleton : data->_skeletons) {
+    _scene.addSkeleton(std::move(skeleton));
   }
 
   for (auto& anim : data->_animations) {
@@ -210,6 +218,14 @@ void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData
   for (auto& mat : data->_materials) {
     _scene.addMaterial(std::move(mat));
   }
+
+  // TESTING: Instantiate _everything_
+  /*for (auto& prefab : prefabsCopy) {
+    // Only instantiate if no parent
+    if (!prefab._parent) {
+      instantiate(prefab, util::Uuid(), glm::mat4(1.0f));
+    }
+  }*/
 }
 
 void AneditApplication::oldUI()
@@ -421,6 +437,38 @@ void AneditApplication::calculateShadowMatrix()
   _shadowCamera.setProjection(lpMatrix, minZ, maxZ);
 }
 
+util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, util::Uuid parentRendUuid, glm::mat4 parentGlobalTransform)
+{
+  //auto s = glm::scale(glm::mat4(1.0f), glm::vec3(0.005f));
+  //auto r = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+  render::asset::Renderable rend{};
+  rend._materials = prefab._materials;
+  rend._model = prefab._model;
+  rend._skeleton = prefab._skeleton;
+  rend._name = prefab._name.empty() ? "" : prefab._name;
+
+  //rend._localTransform = r * s * prefab._transform;
+  rend._localTransform = prefab._transform;
+  rend._globalTransform = parentGlobalTransform * rend._localTransform;
+  rend._boundingSphere = prefab._boundingSphere;
+  rend._visible = true;
+  rend._tint = prefab._tint;
+  rend._parent = parentRendUuid;
+
+  auto& prefabs = _scene.getPrefabs();
+  for (auto& childPrefabId : prefab._children) {
+    for (auto& p : prefabs) {
+      if (p._id == childPrefabId) {
+        rend._children.emplace_back(instantiate(p, rend._id, rend._globalTransform));
+        break;
+      }
+    }
+  }
+
+  return _scene.addRenderable(std::move(rend));
+}
+
 void AneditApplication::notifyFramebufferResized()
 {
   _vkRenderer.notifyFramebufferResized();
@@ -474,7 +522,29 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
       temp.y = worldPos.y;
       temp.z = worldPos.z;
       pMat[3] = temp;
-      rend._transform = std::move(pMat);
+      rend._globalTransform = std::move(pMat);
+      rend._localTransform = rend._globalTransform;
+
+      // Set and spawn children renderables
+      // TODO: Should be recursive!
+      for (auto& childId : p->_children) {
+        auto* childPrefab = _scene.getPrefab(childId);
+        render::asset::Renderable childRend{};
+        childRend._materials = childPrefab->_materials;
+        childRend._model = childPrefab->_model;
+        childRend._skeleton = childPrefab->_skeleton;
+        childRend._name = childPrefab->_name.empty() ? "" : childPrefab->_name;
+
+        childRend._localTransform = childPrefab->_transform;
+        childRend._globalTransform = rend._globalTransform * childRend._localTransform;
+        childRend._boundingSphere = childPrefab->_boundingSphere;
+        childRend._visible = true;
+        childRend._tint = childPrefab->_tint;
+        childRend._parent = rend._id;
+
+        rend._children.emplace_back(childRend._id);
+        _scene.addRenderable(std::move(childRend));
+      }
 
       // Also select it
       _selectedRenderable = rend._id;

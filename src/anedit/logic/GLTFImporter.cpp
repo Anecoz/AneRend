@@ -17,16 +17,14 @@ void GLTFImporter::startLoad(const std::filesystem::path& path)
   _loadingFuture = std::async(std::launch::async, [path] {
 
     LoadedGLTFData data{};
-    std::vector<int> materialIndices;
 
     util::GLTFLoader::loadFromFile(
       path.string(),
-      data._prefab,
-      data._model,
+      data._prefabs,
+      data._models,
       data._textures,
       data._materials,
-      materialIndices,
-      data._skeleton,
+      data._skeletons,
       data._animations);
 
     return data;

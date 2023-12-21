@@ -16,14 +16,14 @@ namespace logic {
 
 struct LoadedGLTFData
 {
-  // This prefab will be pre-filled with the correct model, materials and skeleton id.
-  render::asset::Prefab _prefab;
+  // These prefabs will be pre-filled with the correct model, materials and skeleton id.
+  std::vector<render::asset::Prefab> _prefabs;
 
-  render::asset::Model _model;
+  std::vector<render::asset::Model> _models;
   std::vector<render::asset::Texture> _textures;
-  std::vector<render::asset::Material> _materials; // one per mesh in the model
+  std::vector<render::asset::Material> _materials;
 
-  render::anim::Skeleton _skeleton;
+  std::vector<render::anim::Skeleton> _skeletons;
   std::vector<render::anim::Animation> _animations;
 };
 

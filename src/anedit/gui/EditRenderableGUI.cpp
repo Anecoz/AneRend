@@ -33,7 +33,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
 
   bool visible = false;
 
-  char name[32];
+  char name[100];
   name[0] = '\0';
 
   ImGui::Begin("EditRenderable");
@@ -45,7 +45,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     else {
       auto* rend = c->scene().getRenderable(id);
 
-      auto oldTrans = rend->_transform;
+      auto oldTrans = rend->_localTransform;
       strcpy_s(name, rend->_name.c_str());
       tint = rend->_tint;
       boundingSphereCenter = glm::vec3(rend->_boundingSphere.x, rend->_boundingSphere.y, rend->_boundingSphere.z);
@@ -142,14 +142,22 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
 
   // Do gizmo (transform) editing with ImGuizmo
   if (id && c->latestSelection() == id) {
-    glm::vec3 modelTrans = c->scene().getRenderable(id)->_transform[3];
+    glm::vec3 modelTrans = c->scene().getRenderable(id)->_localTransform[3];
+    glm::mat4 globalTransform = c->scene().getRenderable(id)->_globalTransform;
+
+    glm::vec3 globalTranslationBefore = globalTransform[3];
+    glm::vec3 parent = globalTranslationBefore - modelTrans;
+    glm::vec3 parentLocalDiff = modelTrans - parent;
     glm::mat4 m{ 1.0f };
 
     if (_currentGuizmoOp == _bsGuizmoOp) {
       m = glm::translate(m, boundingSphereCenter + modelTrans);
     }
     else {
-      m = c->scene().getRenderable(id)->_transform;
+      m = c->scene().getRenderable(id)->_localTransform;
+
+      // Set translation to global trans, just for visual purposes
+      m[3] = globalTransform[3];
     }
     
     auto& viewMatrix = c->camera().getCamMatrix();
@@ -173,6 +181,12 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
         c->scene().setRenderableBoundingSphere(id, glm::vec4(t, boundingSphereRadius));
       }
       else {
+        // Calc new local translation from new global and old global translation
+        glm::vec3 newGlobalTrans = m[3];
+        glm::vec3 newLocalTrans = newGlobalTrans - globalTranslationBefore + parentLocalDiff + parent;
+        glm::mat4 temp = glm::translate(glm::mat4(1.0f), newLocalTrans);
+
+        m[3] = temp[3];
         c->scene().setRenderableTransform(id, m);
       }
     }

@@ -10,6 +10,11 @@ struct StagingBuffer
 
   std::size_t _size = 0;
   std::size_t _currentOffset = 0;
+  std::size_t _emergencyReserve = 0;
+
+  void setEmergencyReserve(std::size_t bytes) {
+    _emergencyReserve = bytes;
+  }
 
   void advance(std::size_t bytes) {
     _currentOffset += bytes;
@@ -19,8 +24,12 @@ struct StagingBuffer
     _currentOffset = 0;
   }
 
-  bool canFit(std::size_t bytes) {
-    return _currentOffset + bytes <= _size;
+  bool canFit(std::size_t bytes, bool useReserve = false) {
+    if (useReserve) {
+      return _currentOffset + bytes <= _size;
+    }
+
+    return _currentOffset + bytes <= _size - _emergencyReserve;
   }
 };
 

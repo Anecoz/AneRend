@@ -207,6 +207,8 @@ private:
   internal::SceneSerializer _serialiser;
 
   void addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx = TileIndex());
+  void updateDependentTransforms(render::asset::Renderable& rend);
+  void updateChildrenTransforms(render::asset::Renderable& rend);
 };
 
 }

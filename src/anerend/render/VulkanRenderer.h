@@ -301,6 +301,7 @@ private:
   std::vector<internal::InternalMaterial> _currentMaterials;
   std::vector<internal::InternalTexture> _currentTextures;
   std::vector<internal::InternalRenderable> _currentRenderables;
+  std::vector<internal::InternalRenderable> _pendingFirstUploadRenderables;
 
   // Maps engine-wide IDs to internal buffer ids.
   std::unordered_map<util::Uuid, std::size_t> _modelIdMap;
@@ -461,16 +462,16 @@ private:
   std::vector<VkSampler> _gpuWindForceSampler;
 
   // Fills gpu renderable buffer with current renderable information (could be done async)
-  void prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer);
+  bool prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer);
 
   // Fill info about which material index each renderable references.
-  void prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer);
+  bool prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer);
 
   // Fill buffer with mesh indices of currently used models.
-  void prefillGPUModelBuffer(VkCommandBuffer& commandBuffer);
+  bool prefillGPUModelBuffer(VkCommandBuffer& commandBuffer);
 
   // Fill gpu mesh info.
-  void prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer);
+  bool prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer);
 
   // Fill gpu skeleton info.
   void prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, std::vector<anim::Skeleton>& skeletons);

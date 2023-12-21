@@ -11,7 +11,7 @@ namespace {
 
 TileIndex findRenderableTile(const asset::Renderable& renderable, unsigned tileSize)
 {
-  glm::vec3 t = renderable._transform[3];
+  glm::vec3 t = renderable._globalTransform[3];
   return Tile::posToIdx(t);
 }
 
@@ -509,10 +509,9 @@ void Scene::setRenderableTransform(util::Uuid id, const glm::mat4& transform)
 {
   for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
     if (it->_id == id) {
-      it->_transform = transform;
+      it->_localTransform = transform;
 
-      auto tileIdx = findRenderableTile(*it, Tile::_tileSize);
-      addEvent(SceneEventType::RenderableUpdated, id, tileIdx);
+      updateDependentTransforms(*it);
       return;
     }
   }
@@ -572,6 +571,49 @@ void Scene::addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx)
   event._type = type;
   event._tileIdx = tileIdx;
   _eventLog._events.emplace_back(std::move(event));
+}
+
+void Scene::updateChildrenTransforms(render::asset::Renderable& rend)
+{
+  for (auto& childId : rend._children) {
+    for (auto& child : _renderables) {
+      if (child._id == childId) {
+        child._globalTransform = rend._globalTransform * child._localTransform;
+        auto tileIdx = findRenderableTile(child, Tile::_tileSize);
+        addEvent(SceneEventType::RenderableUpdated, childId, tileIdx);
+
+        if (!child._children.empty()) {
+          updateChildrenTransforms(child);
+        }
+      }
+    }
+  }
+}
+
+void Scene::updateDependentTransforms(render::asset::Renderable& rend)
+{
+  // Figure out which renderables are involved
+  if (!rend._parent) {
+    rend._globalTransform = rend._localTransform;
+
+    auto tileIdx = findRenderableTile(rend, Tile::_tileSize);
+    addEvent(SceneEventType::RenderableUpdated, rend._id, tileIdx);
+
+    if (rend._children.empty()) {
+      return;
+    }
+
+    // Will recursively take care of all children
+    updateChildrenTransforms(rend);
+  }
+  else {
+    for (auto& r : _renderables) {
+      if (r._id == rend._parent) {
+        updateDependentTransforms(r);
+        break;
+      }
+    }
+  }
 }
 
 }

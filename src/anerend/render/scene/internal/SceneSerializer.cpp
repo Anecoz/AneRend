@@ -108,6 +108,8 @@ void serialize(S& s, render::asset::Prefab& p)
   s.object(p._model);
   s.object(p._skeleton);
   s.container(p._materials, 2048);
+  s.object(p._parent);
+  s.container(p._children, 100);
 }
 
 template <typename S>
@@ -258,10 +260,13 @@ void serialize(S& s, render::asset::Renderable& r)
   s.object(r._model);
   s.object(r._skeleton);
   s.container(r._materials, 2048);
-  s.object(r._transform);
+  s.object(r._localTransform);
+  s.object(r._globalTransform);
   s.object(r._tint);
   s.object(r._boundingSphere);
   s.value1b(r._visible);
+  s.object(r._parent);
+  s.container(r._children, 100);
 }
 
 template <typename S>

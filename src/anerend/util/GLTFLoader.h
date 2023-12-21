@@ -22,12 +22,11 @@ public:
 
   static bool loadFromFile(
     const std::string& path,
-    render::asset::Prefab& prefabOut,
-    render::asset::Model& modelOut,
+    std::vector<render::asset::Prefab>& prefabsOut,
+    std::vector<render::asset::Model>& modeslOut,
     std::vector<render::asset::Texture>& texturesOut,
     std::vector<render::asset::Material>& materialsOut,
-    std::vector<int>& materialIndicesOut,
-    render::anim::Skeleton& skeletonOut,
+    std::vector<render::anim::Skeleton>& skeletonsOut,
     std::vector<render::anim::Animation>& animationsOut);
 };
 

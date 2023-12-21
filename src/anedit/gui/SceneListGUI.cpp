@@ -118,7 +118,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 
 void SceneListGUI::addFromPrefab(logic::AneditContext* c)
 {
-  if (ImGui::BeginPopupModal("Add from prefab")) {
+  /*if (ImGui::BeginPopupModal("Add from prefab")) {
     
     // List all prefabs as selectable
     auto& prefabs = c->scene().getPrefabs();
@@ -152,7 +152,7 @@ void SceneListGUI::addFromPrefab(logic::AneditContext* c)
     }
 
     ImGui::EndPopup();
-  }
+  }*/
 }
 
 void SceneListGUI::loadSceneClicked(logic::AneditContext* c)
