@@ -220,12 +220,12 @@ void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData
   }
 
   // TESTING: Instantiate _everything_
-  /*for (auto& prefab : prefabsCopy) {
+  for (auto& prefab : prefabsCopy) {
     // Only instantiate if no parent
     if (!prefab._parent) {
       instantiate(prefab, util::Uuid(), glm::mat4(1.0f));
     }
-  }*/
+  }
 }
 
 void AneditApplication::oldUI()
@@ -439,8 +439,8 @@ void AneditApplication::calculateShadowMatrix()
 
 util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, util::Uuid parentRendUuid, glm::mat4 parentGlobalTransform)
 {
-  //auto s = glm::scale(glm::mat4(1.0f), glm::vec3(0.005f));
-  //auto r = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+  auto s = glm::scale(glm::mat4(1.0f), glm::vec3(0.005f));
+  auto r = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 
   render::asset::Renderable rend{};
   rend._materials = prefab._materials;
@@ -448,8 +448,8 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, u
   rend._skeleton = prefab._skeleton;
   rend._name = prefab._name.empty() ? "" : prefab._name;
 
-  //rend._localTransform = r * s * prefab._transform;
-  rend._localTransform = prefab._transform;
+  rend._localTransform = r * s * prefab._transform;
+  //rend._localTransform = prefab._transform;
   rend._globalTransform = parentGlobalTransform * rend._localTransform;
   rend._boundingSphere = prefab._boundingSphere;
   rend._visible = true;

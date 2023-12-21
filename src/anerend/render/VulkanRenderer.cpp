@@ -1514,10 +1514,8 @@ void VulkanRenderer::update(
     // Wait for device idle
     vkDeviceWaitIdle(_device);
 
-    auto tex = downloadDDGIAtlas();
-
     assert(_bakeInfo._callback && "No callback in baking info!");
-    _bakeInfo._callback(tex);
+    _bakeInfo._callback(downloadDDGIAtlas());
     _bakeInfo._callback = nullptr;
     _bakeInfo._bakingIndex = scene::TileIndex();
   }
@@ -2470,11 +2468,12 @@ asset::Texture VulkanRenderer::downloadDDGIAtlas()
   outTex._width = width;
   outTex._height = height;
   outTex._format = asset::Texture::Format::RGBA16F_SFLOAT;
-  outTex._data.resize(totalSize);
+  outTex._data.emplace_back();
+  outTex._data[0].resize(totalSize);
 
   void* data = nullptr;
   vmaMapMemory(_vmaAllocator, stagingBuf._allocation, &data);
-  std::memcpy(outTex._data.data(), data, totalSize);
+  std::memcpy(outTex._data[0].data(), data, totalSize);
   vmaUnmapMemory(_vmaAllocator, stagingBuf._allocation);
 
   vmaDestroyBuffer(_vmaAllocator, stagingBuf._buffer, stagingBuf._allocation);

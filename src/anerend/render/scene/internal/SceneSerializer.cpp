@@ -109,13 +109,13 @@ void serialize(S& s, render::asset::Prefab& p)
   s.object(p._skeleton);
   s.container(p._materials, 2048);
   s.object(p._parent);
-  s.container(p._children, 100);
+  s.container(p._children, 1000);
 }
 
 template <typename S>
 void serialize(S& s, std::vector<render::asset::Prefab>& v)
 {
-  s.container(v, 100);
+  s.container(v, 2048);
 }
 
 template <typename S>
@@ -139,7 +139,7 @@ void serialize(S& s, render::asset::Model& m)
 template <typename S>
 void serialize(S& s, std::vector<render::asset::Model>& v)
 {
-  s.container(v, 100);
+  s.container(v, 2048);
 }
 
 template <typename S>
