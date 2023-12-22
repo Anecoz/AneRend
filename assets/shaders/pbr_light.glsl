@@ -120,7 +120,7 @@ vec3 calcLight(
   // Reflectance equation
   vec3 Lo = vec3(0.0);
 
-  const float brightness = 5.0;
+  const float brightness = 1.0;
 
   float attenuation = 0.0;
   vec3 L = vec3(0.0);
