@@ -23,6 +23,8 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
 
   glm::vec4 emissive;
   glm::vec3 baseColFac;
+  float roughness = 1.0f;
+  float metallic = 1.0f;
 
   bool changed = false;
 
@@ -34,6 +36,8 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
 
     emissive = mat->_emissive;
     baseColFac = mat->_baseColFactor;
+    roughness = mat->_roughnessFactor;
+    metallic = mat->_metallicFactor;
   }
 
   ImGui::Text("Emissive");
@@ -47,6 +51,18 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
     changed = true;
   }
 
+  ImGui::Separator();
+  ImGui::Text("Roughness");
+  if (ImGui::InputFloat("##roughness", &roughness)) {
+    changed = true;
+  }
+
+  ImGui::Separator();
+  ImGui::Text("Metallic");
+  if (ImGui::InputFloat("##metallic", &metallic)) {
+    changed = true;
+  }
+
   if (!id) {
     ImGui::EndDisabled();
   }
@@ -57,6 +73,8 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
     auto matCopy = *c->scene().getMaterial(id);
     matCopy._emissive = emissive;
     matCopy._baseColFactor = baseColFac;
+    matCopy._metallicFactor = metallic;
+    matCopy._roughnessFactor = roughness;
     c->scene().updateMaterial(std::move(matCopy));
   }
 }

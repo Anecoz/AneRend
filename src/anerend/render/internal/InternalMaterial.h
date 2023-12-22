@@ -17,6 +17,8 @@ struct InternalMaterial
 
   glm::vec3 _baseColFactor;
   glm::vec4 _emissive;
+  float _metallicFactor;
+  float _roughnessFactor;
 };
 
 }

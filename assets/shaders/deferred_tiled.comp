@@ -37,7 +37,7 @@ shared uint groupLocalNumIndices;
 
 void doLight(ivec2 pixel);
 
-const vec3 clearColor = vec3(0.2, 0.5, 0.7);
+const vec3 clearColor = 0.01 * vec3(0.2, 0.5, 1.0);//ubo.skyIntensity * ubo.skyColor.xyz;
 
 void main()
 {
@@ -58,6 +58,8 @@ void main()
   float depthSamp = texture(depth, texCoords).r;
 
   barrier();
+
+  vec3 clearColor = toLinear(ubo.skyIntensity * ubo.skyColor).rgb;
 
   // Project a light into screen space and check if it is in our current invocation tile.
   uint lightIndex = gl_LocalInvocationID.x * gl_WorkGroupSize.y + gl_LocalInvocationID.y;

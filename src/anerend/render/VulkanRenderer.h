@@ -216,7 +216,7 @@ private:
   static const std::size_t GIGA_MESH_BUFFER_SIZE_MB = 512;
   static const std::size_t STAGING_BUFFER_SIZE_MB = 128;
   static const std::size_t MAX_NUM_RENDERABLES = std::size_t(1e5);
-  static const std::size_t MAX_NUM_MESHES = std::size_t(2048);
+  static const std::size_t MAX_NUM_MESHES = std::size_t(2500);
   static const std::size_t MAX_NUM_MATERIALS = 500;
   static const std::size_t NUM_PIXELS_CLUSTER_X = 16;
   static const std::size_t NUM_PIXELS_CLUSTER_Y = 9;

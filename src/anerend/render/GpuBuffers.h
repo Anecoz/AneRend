@@ -29,6 +29,9 @@ struct GPUMaterialInfo {
   glm::vec4 _baseColFac; // w unused
   glm::vec4 _emissive;
   glm::ivec4 _bindlessIndices; // metRough, albedo, normal, emissive
+  glm::vec4 _metRough; // r metallic, g roughness
+  //float _metallicFactor;
+  //float _roughnessFactor;
 };
 
 struct GPUMeshInfo {
@@ -123,6 +126,7 @@ struct GPUSceneData {
   glm::ivec4 cameraGridPos;
   glm::vec4 lightDir;
   glm::ivec4 bakeTileInfo; // x, y: tile idx, z: tile size
+  glm::vec4 skyColor;
   float time;
   float delta;
   uint32_t screenWidth;
@@ -131,6 +135,8 @@ struct GPUSceneData {
   float skyIntensity;
   float exposure;
   uint32_t flags; // SceneUboFlags
+  float bloomThresh;
+  float bloomKnee;
 };
 
 struct GPUSSAOSampleUbo {

@@ -292,6 +292,9 @@ void AneditApplication::oldUI()
     ImGui::SliderFloat("Sun intensity", &_renderOptions.sunIntensity, 0.0f, 200.0f);
     ImGui::SliderFloat("Sky intensity", &_renderOptions.skyIntensity, 0.0f, 20.0f);
     ImGui::SliderFloat("Exposure", &_renderOptions.exposure, 0.0f, 5.0f);
+    ImGui::SliderFloat("Bloom threshold", &_renderOptions.bloomThresh, 0.1f, 20.0f);
+    ImGui::SliderFloat("Bloom knee", &_renderOptions.bloomKnee, 0.0f, 10.0f);
+    ImGui::ColorEdit3("Sky color", (float*) &_renderOptions.skyColor);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
     ImGui::End();
   }
@@ -448,8 +451,8 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, u
   rend._skeleton = prefab._skeleton;
   rend._name = prefab._name.empty() ? "" : prefab._name;
 
-  rend._localTransform = r * s * prefab._transform;
-  //rend._localTransform = prefab._transform;
+  //rend._localTransform = r * s * prefab._transform;
+  rend._localTransform = prefab._transform;
   rend._globalTransform = parentGlobalTransform * rend._localTransform;
   rend._boundingSphere = prefab._boundingSphere;
   rend._visible = true;

@@ -21,6 +21,9 @@ struct Material
   // RGB is the color and W is the strength. If an emissive texture is present, the RGB are treated as multipliers.
   glm::vec4 _emissive = glm::vec4(0.0f);
 
+  float _metallicFactor = 1.0f;
+  float _roughnessFactor = 1.0f;
+
   // G-channel roughness, B-channel metallic.
   util::Uuid _metallicRoughnessTex;
 

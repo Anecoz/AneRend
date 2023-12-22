@@ -105,7 +105,7 @@ struct SamplerCreateParams
   float mipLodBias = 0.0f;
   float maxAnisotropy = 16.0f;
   float minLod = 0.0f;
-  float maxLod = 10.0f;
+  float maxLod = 12.0f;
   VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
   bool useMaxFilter = false;
 };

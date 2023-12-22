@@ -44,6 +44,9 @@ struct MaterialInfo
   vec4 baseColFac; // w unused
   vec4 emissive; // factor or RGB depending on if emissive texture present
   ivec4 bindlessIndices; // metallicRoughness, albedo, normal, emissive
+  vec4 metRough; // r metallic, g roughness
+  //float metallicFactor;
+  //float roughnessFactor;
 };
 
 struct MeshInfo
@@ -179,8 +182,9 @@ SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, 
   SurfaceData outData;
 
   outData.normal = inNormal;
-  outData.metallic = 0.1;
-  outData.roughness = 0.9;
+  // Defaults according to GLTF 2.0 spec
+  outData.metallic = 1.0;
+  outData.roughness = 1.0;
   outData.color = inColor;
   outData.emissive = vec3(0.0);
 
@@ -195,7 +199,6 @@ SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, 
       discard;
     }*/
     outData.color = vec3(matInfo.baseColFac.r * samp.r, matInfo.baseColFac.g * samp.g, matInfo.baseColFac.b * samp.b);
-    //color = samp.rgb;
   }
   else {
     // If no albedo texture, but baseColFactor is present, use the factor as linear RGB values
@@ -207,6 +210,13 @@ SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, 
     vec4 samp = texture(textures[nonuniformEXT(metRoughIdx)], uv);
     outData.metallic = samp.g;
     outData.roughness = samp.r;
+  }
+  else {
+    // If no metRough texture, use material values directly
+    outData.metallic = matInfo.metRough.r;
+    outData.roughness = matInfo.metRough.g;
+    //outData.metallic = matInfo.metallicFactor;
+    //outData.roughness = matInfo.roughnessFactor;
   }
   if (normalIdx != -1 && inTangent.xyz != vec3(0.0f)) {
     outData.normal = normalize(texture(textures[nonuniformEXT(normalIdx)], uv).rgb * 2.0 - 1.0);

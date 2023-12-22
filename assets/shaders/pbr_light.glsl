@@ -157,6 +157,7 @@ vec3 calcLight(
   vec3 numerator    = NDF * G * F;
   float denominator = 4.0 * NdotV * NdotL + 0.0001;
   vec3 specular     = clamp(numerator / denominator, 0.0, 1.0);
+  //vec3 specular     = numerator / denominator;
 
   // Add to outgoing radiance Lo
   if (!useSpecular) {

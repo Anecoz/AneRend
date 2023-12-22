@@ -754,6 +754,8 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     internalMat._metRoughTex = mat._metallicRoughnessTex;
     internalMat._normalTex = mat._normalTex;
     internalMat._emissiveTex = mat._emissiveTex;
+    internalMat._roughnessFactor = mat._roughnessFactor;
+    internalMat._metallicFactor = mat._metallicFactor;
 
     materialBytes += 4 * 4 + 3 * 4; // basecol and emissive
 
@@ -781,6 +783,10 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     // TODO: Currently only support updating basecolfac and emissive (not the textures)
     _currentMaterials[it->second]._baseColFactor = mat._baseColFactor;
     _currentMaterials[it->second]._emissive = mat._emissive;
+    _currentMaterials[it->second]._metallicFactor = mat._metallicFactor;
+    _currentMaterials[it->second]._roughnessFactor = mat._roughnessFactor;
+
+
   }
 
   // Removed animations
@@ -1185,12 +1191,16 @@ void VulkanRenderer::uploadPendingMaterials(VkCommandBuffer cmdBuffer)
 
     mappedData[i]._baseColFac = glm::vec4(mat._baseColFactor.x, mat._baseColFactor.y, mat._baseColFactor.z, 0.0f);
     mappedData[i]._emissive = mat._emissive;
+    mappedData[i]._metRough = glm::vec4(mat._metallicFactor, mat._roughnessFactor, 0.0f, 0.0f);
     mappedData[i]._bindlessIndices = glm::ivec4(-1, -1, -1, -1);
 
     if (mat._metRoughTex) mappedData[i]._bindlessIndices.x = (int32_t)_currentTextures[_textureIdMap[mat._metRoughTex]]._bindlessInfo._bindlessIndexHandle._offset;
     if (mat._albedoTex) mappedData[i]._bindlessIndices.y = (int32_t)_currentTextures[_textureIdMap[mat._albedoTex]]._bindlessInfo._bindlessIndexHandle._offset;
     if (mat._normalTex) mappedData[i]._bindlessIndices.z = (int32_t)_currentTextures[_textureIdMap[mat._normalTex]]._bindlessInfo._bindlessIndexHandle._offset;
     if (mat._emissiveTex) mappedData[i]._bindlessIndices.w = (int32_t)_currentTextures[_textureIdMap[mat._emissiveTex]]._bindlessInfo._bindlessIndexHandle._offset;
+
+    //mappedData[i]._metallicFactor = mat._metallicFactor;
+    //mappedData[i]._roughnessFactor = mat._roughnessFactor;
   }
 
   VkBufferCopy copyRegion{};
@@ -1480,6 +1490,9 @@ void VulkanRenderer::update(
   ubo.sunIntensity = _renderOptions.sunIntensity;
   ubo.skyIntensity = _renderOptions.skyIntensity;
   ubo.exposure = _renderOptions.exposure;
+  ubo.skyColor = glm::vec4(_renderOptions.skyColor, 1.0f);
+  ubo.bloomKnee = _renderOptions.bloomKnee;
+  ubo.bloomThresh = _renderOptions.bloomThresh;
   if (_renderOptions.ssao) ubo.flags |= gpu::UBO_SSAO_FLAG;
   if (_renderOptions.fxaa) ubo.flags |= gpu::UBO_FXAA_FLAG;
   if (_renderOptions.directionalShadows) ubo.flags |= gpu::UBO_DIRECTIONAL_SHADOWS_FLAG;

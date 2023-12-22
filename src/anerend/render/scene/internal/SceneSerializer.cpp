@@ -107,7 +107,7 @@ void serialize(S& s, render::asset::Prefab& p)
   s.text1b(p._name, 100);
   s.object(p._model);
   s.object(p._skeleton);
-  s.container(p._materials, 2048);
+  s.container(p._materials, 2500);
   s.object(p._parent);
   s.container(p._children, 1000);
 }
@@ -115,10 +115,11 @@ void serialize(S& s, render::asset::Prefab& p)
 template <typename S>
 void serialize(S& s, std::vector<render::asset::Prefab>& v)
 {
-  s.container(v, 2048);
+  s.container(v, 2500);
 }
 
 template <typename S>
+
 void serialize(S& s, render::asset::Mesh& m)
 {
   s.object(m._id);
@@ -133,13 +134,13 @@ void serialize(S& s, render::asset::Model& m)
 {
   s.object(m._id);
   s.text1b(m._name, 100);
-  s.container(m._meshes, 2048);
+  s.container(m._meshes, 2500);
 }
 
 template <typename S>
 void serialize(S& s, std::vector<render::asset::Model>& v)
 {
-  s.container(v, 2048);
+  s.container(v, 2500);
 }
 
 template <typename S>
@@ -148,6 +149,8 @@ void serialize(S& s, render::asset::Material& m)
   s.object(m._id);
   s.text1b(m._name, 100);
   s.object(m._baseColFactor);
+  s.value4b(m._roughnessFactor);
+  s.value4b(m._metallicFactor);
   s.object(m._emissive);
   s.object(m._metallicRoughnessTex);
   s.object(m._albedoTex);

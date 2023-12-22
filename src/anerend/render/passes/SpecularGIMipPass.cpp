@@ -76,8 +76,8 @@ void SpecularGIMipPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
           1, 1, &(*exeParams.descriptorSets)[0],
           0, nullptr);
 
-        uint32_t width = (exeParams.rc->swapChainExtent().width / 2) / static_cast<uint32_t>(std::pow(2, i + 1));
-        uint32_t height = (exeParams.rc->swapChainExtent().height / 2) / static_cast<uint32_t>(std::pow(2, i + 1));
+        uint32_t width = (exeParams.rc->swapChainExtent().width) / static_cast<uint32_t>(std::pow(2, i + 1));
+        uint32_t height = (exeParams.rc->swapChainExtent().height) / static_cast<uint32_t>(std::pow(2, i + 1));
 
         vkCmdDispatch(*exeParams.cmdBuffer, width, height, 1);
       });

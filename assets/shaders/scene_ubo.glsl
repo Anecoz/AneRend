@@ -23,6 +23,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   ivec4 cameraGridPos;
   vec4 lightDir;
   ivec4 bakeTileInfo; // x, y: tile idx, z: tile size
+  vec4 skyColor;
   float time;
   float delta;
   uint screenWidth;
@@ -31,6 +32,8 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
   float skyIntensity;
   float exposure;
   uint flags;
+  float bloomThresh;
+  float bloomKnee;
 } ubo;
 
 bool checkUboFlag(uint flag)

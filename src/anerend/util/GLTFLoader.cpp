@@ -493,6 +493,8 @@ bool GLTFLoader::loadFromFile(
             auto& material = model.materials[primitive.material];
             render::asset::Material mat{};
             mat._name = material.name;
+            mat._roughnessFactor = (float)material.pbrMetallicRoughness.roughnessFactor;
+            mat._metallicFactor = (float)material.pbrMetallicRoughness.metallicFactor;
 
             int baseColIdx = material.pbrMetallicRoughness.baseColorTexture.index;
             if (baseColIdx >= 0) {

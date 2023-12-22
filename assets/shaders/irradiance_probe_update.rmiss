@@ -3,6 +3,7 @@
 #extension GL_GOOGLE_include_directive : enable
 
 #include "scene_ubo.glsl"
+#include "bindless.glsl"
 
 struct hitPayload
 {
@@ -16,5 +17,5 @@ layout(location = 1) rayPayloadInEXT hitPayload payload;
 void main()
 {
   payload.shadow = 0.0;
-  payload.irradiance = ubo.skyIntensity * vec3(0.2, 0.5, 0.7);
+  payload.irradiance = toLinear(ubo.skyIntensity * ubo.skyColor).rgb;
 }

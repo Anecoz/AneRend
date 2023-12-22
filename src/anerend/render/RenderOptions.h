@@ -1,5 +1,7 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 namespace render {
 
 struct RenderOptions
@@ -20,6 +22,9 @@ struct RenderOptions
   float sunIntensity = 5.0;
   float skyIntensity = 1.0;
   float exposure = 1.0;
+  glm::vec3 skyColor{ 0.2f, 0.5f, 0.7f };
+  float bloomThresh = 1.2f;
+  float bloomKnee = 0.1f;
 };
 
 }
