@@ -127,14 +127,12 @@ vec3 calcLight(
 
   if (directional == 1) {
     attenuation = 1.0; // Directional light
-    L = normalize(-ubo.lightDir.xyz);// * vec3(-1.0, 1.0, -1.0));
+    L = normalize(-ubo.lightDir.xyz);
   }
   else {
     vec3 lightWorldPos = light.worldPos.xyz;
     float d = min(distance(lightWorldPos, worldPos), light.worldPos.w);
     attenuation = (1.0 - d / light.worldPos.w)*(1.0 - d/light.worldPos.w) * brightness;
-    //float d = distance(lightWorldPos, worldPos);
-    //attenuation = clamp(brightness - d/(1.0/brightness * light.worldPos.w), 0.0, brightness);//1.0 / (d * d);
     L = normalize(lightWorldPos - worldPos);
     lightColor = light.color.rgb;
   }
@@ -157,7 +155,6 @@ vec3 calcLight(
   vec3 numerator    = NDF * G * F;
   float denominator = 4.0 * NdotV * NdotL + 0.0001;
   vec3 specular     = clamp(numerator / denominator, 0.0, 1.0);
-  //vec3 specular     = numerator / denominator;
 
   // Add to outgoing radiance Lo
   if (!useSpecular) {
@@ -595,15 +592,6 @@ vec3 calcIndirectSpecularLight(
   sampler2D lutTex,
   sampler2D probeTex)
 {
-  // Should there be specular light here? (Attempt to minimize bleed from smaller mips)
-  /*vec3 lod0Refl = textureLod(specTex, texCoords, 0).rgb;
-  if (length(lod0Refl) < .1) {
-    return vec3(0.0);
-  }*/
-  /*if (roughness > 0.5) {
-    return vec3(0.0);
-  }*/
-
   vec3 V = normalize(ubo.cameraPos.xyz - worldPos);
   vec3 F0 = vec3(0.04);
   F0 = mix(F0, albedo, metallic);
@@ -611,32 +599,10 @@ vec3 calcIndirectSpecularLight(
   vec3 kS = fresnelSchlickRoughness(max(dot(normal, V), 0.0), F0, roughness);
   const float MAX_REFLECTION_LOD = 4.0;
 
-  // Mip bias for camera
-  float d = distance(ubo.cameraPos.xyz, worldPos);
-  float mipBias = 0.0;
+  float finalLod = clamp(roughness * MAX_REFLECTION_LOD, 0.0, MAX_REFLECTION_LOD);
 
-  /*if (d > 15.0) {
-    mipBias = 3.0;
-  }
-  else if (d > 10.0) {
-    mipBias = 2.0;
-  }
-  else if (d > 5.0) {
-    mipBias = 1.0;
-  }*/
+  vec3 refl = textureLod(specTex, texCoords, finalLod).rgb;
 
-  float finalLod = clamp(roughness * MAX_REFLECTION_LOD + mipBias, 0.0, MAX_REFLECTION_LOD);
-
-  vec3 refl = vec3(0.0);
-
-  /*if (roughness > 0.8 && ubo.ddgiEnabled == 1) {
-    vec3 dir = reflect(-V, normal);
-    refl = sampleProbe(probeTex, worldPos, dir);
-  }
-  else {*/
-    refl = textureLod(specTex, texCoords, finalLod).rgb;
-  //}
-  
   vec2 envBRDF = texture(lutTex, vec2(max(dot(normal, V), 0.0), 1.01 - roughness)).rg;
   vec3 specular = refl * (kS *envBRDF.x + envBRDF.y);
 
