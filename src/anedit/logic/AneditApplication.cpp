@@ -8,11 +8,7 @@
 
 #include "../gui/SceneAssetGUI.h"
 #include "../gui/SceneListGUI.h"
-#include "../gui/EditRenderableGUI.h"
-#include "../gui/EditMaterialGUI.h"
-#include "../gui/EditPrefabGUI.h"
-#include "../gui/EditAnimatorGUI.h"
-#include "../gui/EditLightGUI.h"
+#include "../gui/EditSelectionGUI.h"
 
 #include <imgui.h>
 #include <nfd.hpp>
@@ -165,11 +161,7 @@ void AneditApplication::setupGuis()
 {
   _guis.emplace_back(new gui::SceneAssetGUI());
   _guis.emplace_back(new gui::SceneListGUI());
-  _guis.emplace_back(new gui::EditRenderableGUI());
-  _guis.emplace_back(new gui::EditMaterialGUI());
-  _guis.emplace_back(new gui::EditPrefabGUI());
-  _guis.emplace_back(new gui::EditAnimatorGUI());
-  _guis.emplace_back(new gui::EditLightGUI());
+  _guis.emplace_back(new gui::EditSelectionGUI());
 }
 
 void AneditApplication::updateConfig()
@@ -550,40 +542,16 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
       }
 
       // Also select it
-      _selectedRenderable = rend._id;
-      _latestSelection = rend._id;
+      _selection.clear();
+      _selection.emplace_back(rend._id);
+      _selectionType = AneditContext::SelectionType::Renderable;
       _scene.addRenderable(std::move(rend));
     });
 }
 
-util::Uuid& AneditApplication::latestSelection()
+std::vector<util::Uuid>& AneditApplication::selection()
 {
-  return _latestSelection;
-}
-
-util::Uuid& AneditApplication::selectedRenderable()
-{
-  return _selectedRenderable;
-}
-
-util::Uuid& AneditApplication::selectedMaterial()
-{
-  return _selectedMaterial;
-}
-
-util::Uuid& AneditApplication::selectedPrefab()
-{
-  return _selectedPrefab;
-}
-
-util::Uuid& AneditApplication::selectedAnimator()
-{
-  return _selectedAnimator;
-}
-
-util::Uuid& AneditApplication::selectedLight()
-{
-  return _selectedLight;
+  return _selection;
 }
 
 render::Camera& AneditApplication::camera()

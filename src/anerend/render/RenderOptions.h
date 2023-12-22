@@ -10,12 +10,12 @@ struct RenderOptions
   bool fxaa = false;
   bool directionalShadows = false;
   bool pointShadows = true;
-  bool raytracedShadows = false;
+  bool raytracedShadows = true;
   bool visualizeBoundingSpheres = false;
   bool raytracingEnabled = true;
-  bool ddgiEnabled = false;
-  bool multiBounceDdgiEnabled = false;
-  bool specularGiEnabled = false;
+  bool ddgiEnabled = true;
+  bool multiBounceDdgiEnabled = true;
+  bool specularGiEnabled = true;
   bool screenspaceProbes = false;
   bool probesDebug = false;
   bool hack = false;

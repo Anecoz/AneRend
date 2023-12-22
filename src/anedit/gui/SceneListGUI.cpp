@@ -68,10 +68,10 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
     for (const auto& r : renderables) {
       std::string label = std::string("Renderable ") + (r._name.empty()? r._id.str() : r._name);
       label += "##" + r._id.str();
-      if (ImGui::Selectable(label.c_str(), _selectedRenderable == r._id)) {
-        _selectedRenderable = r._id;
-        c->selectedRenderable() = _selectedRenderable;
-        c->latestSelection() = _selectedRenderable;
+      if (ImGui::Selectable(label.c_str(), c->getFirstSelection() == r._id)) {
+        c->selection().clear();
+        c->selection().emplace_back(r._id);
+        c->selectionType() = logic::AneditContext::SelectionType::Renderable;
       }
     }
   }
@@ -87,9 +87,10 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
     for (const auto& a : animators) {
       std::string label = std::string("Animator ") + (a._name.empty() ? a._id.str() : a._name);
       label += "##" + a._id.str();
-      if (ImGui::Selectable(label.c_str(), _selectedAnimator == a._id)) {
-        _selectedAnimator = a._id;
-        c->selectedAnimator() = _selectedAnimator;
+      if (ImGui::Selectable(label.c_str(), c->getFirstSelection() == a._id)) {
+        c->selection().clear();
+        c->selection().emplace_back(a._id);
+        c->selectionType() = logic::AneditContext::SelectionType::Animator;
       }
     }
   }
@@ -105,10 +106,10 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
     for (const auto& a : lights) {
       std::string label = std::string("Light ") + (a._name.empty() ? a._id.str() : a._name);
       label += "##" + a._id.str();
-      if (ImGui::Selectable(label.c_str(), _selectedLight == a._id)) {
-        _selectedLight = a._id;
-        c->selectedLight() = _selectedLight;
-        c->latestSelection() = _selectedLight;
+      if (ImGui::Selectable(label.c_str(), c->getFirstSelection() == a._id)) {
+        c->selection().clear();
+        c->selection().emplace_back(a._id);
+        c->selectionType() = logic::AneditContext::SelectionType::Light;
       }
     }
   }

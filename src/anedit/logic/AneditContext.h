@@ -22,22 +22,30 @@ struct AneditContext
 
   virtual void spawnFromPrefabAtMouse(const util::Uuid& prefab) = 0;
 
-  virtual util::Uuid& latestSelection() = 0;
-  virtual util::Uuid& selectedRenderable() = 0;
-  virtual util::Uuid& selectedMaterial() = 0;
-  virtual util::Uuid& selectedPrefab() = 0;
-  virtual util::Uuid& selectedAnimator() = 0;
-  virtual util::Uuid& selectedLight() = 0;
+  enum class SelectionType
+  {
+    Renderable,
+    Material,
+    Prefab,
+    Animator,
+    Light
+  };
+
+  virtual std::vector<util::Uuid>& selection() = 0;
+  virtual util::Uuid getFirstSelection() {
+    if (_selection.empty()) {
+      return util::Uuid();
+    }
+
+    return _selection[0];
+  }
+  virtual SelectionType& selectionType() { return _selectionType; }
 
   virtual render::Camera& camera() = 0;
 
 protected:
-  util::Uuid _latestSelection;
-  util::Uuid _selectedRenderable;
-  util::Uuid _selectedMaterial;
-  util::Uuid _selectedPrefab;
-  util::Uuid _selectedAnimator;
-  util::Uuid _selectedLight;
+  std::vector<util::Uuid> _selection;
+  SelectionType _selectionType = SelectionType::Renderable;
 };
 
 }

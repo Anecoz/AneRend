@@ -18,7 +18,7 @@ EditPrefabGUI::~EditPrefabGUI()
 
 void EditPrefabGUI::immediateDraw(logic::AneditContext* c)
 {
-  auto& id = c->selectedPrefab();
+  auto& id = c->getFirstSelection();
   bool changed = false;
   glm::vec3 translation{ 0.0f };
   glm::vec3 scale{ 0.0f };
@@ -31,8 +31,6 @@ void EditPrefabGUI::immediateDraw(logic::AneditContext* c)
 
   char name[32];
   name[0] = '\0';
-
-  ImGui::Begin("EditPrefab");
 
   {
     if (!id) {
@@ -109,8 +107,6 @@ void EditPrefabGUI::immediateDraw(logic::AneditContext* c)
       c->scene().updatePrefab(std::move(prefabCopy));
     }
   }
-
-  ImGui::End();
 }
 
 }

@@ -107,28 +107,31 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
   // Materials
   bool dummy;
   util::Uuid dummyUuid;
-  if (drawAssetList(size, _matFilter, "Materials", c->scene().getMaterials(), _selectedMaterial, dummyUuid, dummy)) {
-    c->selectedMaterial() = _selectedMaterial;
+  auto currSelection = c->getFirstSelection();
+  if (drawAssetList(size, _matFilter, "Materials", c->scene().getMaterials(), currSelection, dummyUuid, dummy)) {
+    c->selection().clear();
+    c->selection().emplace_back(currSelection);
+    c->selectionType() = logic::AneditContext::SelectionType::Material;
   }
 
   ImGui::SameLine();
 
   // Models
-  if (drawAssetList(size, _modelFilter, "Models", c->scene().getModels(), _selectedModel, dummyUuid, dummy)) {
+  if (drawAssetList(size, _modelFilter, "Models", c->scene().getModels(), currSelection, dummyUuid, dummy)) {
     // select model in context
   }
 
   ImGui::SameLine();
 
   // Animations
-  if (drawAssetList(size, _animationFilter, "Animations", c->scene().getAnimations(), _selectedAnimation, dummyUuid, dummy)) {
+  if (drawAssetList(size, _animationFilter, "Animations", c->scene().getAnimations(), currSelection, dummyUuid, dummy)) {
 
   }
 
   ImGui::SameLine();
 
   // Skeletons
-  if (drawAssetList(size, _skeletonFilter, "Skeletons", c->scene().getSkeletons(), _selectedSkeleton, dummyUuid, dummy)) {
+  if (drawAssetList(size, _skeletonFilter, "Skeletons", c->scene().getSkeletons(), currSelection, dummyUuid, dummy)) {
 
   }
 
@@ -137,8 +140,10 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
   // Prefabs
   {
     bool draggedThisFrame = false;
-    if (drawAssetList(size, _prefabFilter, "Prefabs", c->scene().getPrefabs(), _selectedPrefab, _draggedPrefab, draggedThisFrame)) {
-      c->selectedPrefab() = _selectedPrefab;
+    if (drawAssetList(size, _prefabFilter, "Prefabs", c->scene().getPrefabs(), currSelection, _draggedPrefab, draggedThisFrame)) {
+      c->selection().clear();
+      c->selection().emplace_back(currSelection);
+      c->selectionType() = logic::AneditContext::SelectionType::Prefab;
     }
 
     // Did drag status change?

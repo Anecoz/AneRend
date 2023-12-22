@@ -20,7 +20,7 @@ EditRenderableGUI::~EditRenderableGUI()
 
 void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
 {
-  auto id = c->selectedRenderable();
+  auto id = c->getFirstSelection();
   bool changed = false;
   glm::vec3 translation{ 0.0f };
   glm::vec3 scale{ 0.0f };
@@ -35,8 +35,6 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
 
   char name[100];
   name[0] = '\0';
-
-  ImGui::Begin("EditRenderable");
 
   {
     if (!id) {
@@ -138,10 +136,8 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     }
   }
 
-  ImGui::End();
-
   // Do gizmo (transform) editing with ImGuizmo
-  if (id && c->latestSelection() == id) {
+  if (id) {
     glm::vec3 modelTrans = c->scene().getRenderable(id)->_localTransform[3];
     glm::mat4 globalTransform = c->scene().getRenderable(id)->_globalTransform;
 

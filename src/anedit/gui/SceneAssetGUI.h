@@ -16,13 +16,6 @@ public:
 private:
   void loadGLTFClicked(logic::AneditContext* c);
 
-  util::Uuid _selectedMaterial;
-  util::Uuid _selectedModel;
-  util::Uuid _selectedAnimation;
-  util::Uuid _selectedAnimator;
-  util::Uuid _selectedSkeleton;
-  util::Uuid _selectedPrefab;
-
   bool _draggingPrefab = false;
   util::Uuid _draggedPrefab;
 

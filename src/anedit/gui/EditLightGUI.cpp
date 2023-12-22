@@ -18,7 +18,7 @@ EditLightGUI::~EditLightGUI()
 
 void EditLightGUI::immediateDraw(logic::AneditContext* c)
 {
-  auto id = c->selectedLight();
+  auto id = c->getFirstSelection();
   bool changed = false;
   glm::vec3 pos{ 0.0f };
   glm::vec3 color{ 0.0f };
@@ -29,7 +29,7 @@ void EditLightGUI::immediateDraw(logic::AneditContext* c)
   char name[32];
   name[0] = '\0';
 
-  ImGui::Begin("EditLight");
+  //ImGui::Begin("EditLight");
 
   {
     if (!id) {
@@ -103,10 +103,10 @@ void EditLightGUI::immediateDraw(logic::AneditContext* c)
     }
   }
 
-  ImGui::End();
+  //ImGui::End();
 
   // Do gizmo (transform) editing with ImGuizmo
-  if (id && c->latestSelection() == id) {
+  if (id) {
     auto* light = c->scene().getLight(id);
 
     glm::mat4 m = glm::translate(glm::mat4(1.0f), light->_pos);

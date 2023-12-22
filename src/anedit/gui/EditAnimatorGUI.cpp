@@ -16,9 +16,7 @@ EditAnimatorGUI::~EditAnimatorGUI()
 
 void EditAnimatorGUI::immediateDraw(logic::AneditContext* c)
 {
-  auto id = c->selectedAnimator();
-
-  ImGui::Begin("EditAnimator");
+  auto id = c->getFirstSelection();
 
   std::string name;
   util::Uuid skele;
@@ -90,8 +88,6 @@ void EditAnimatorGUI::immediateDraw(logic::AneditContext* c)
   if (!id) {
     ImGui::EndDisabled();
   }
-
-  ImGui::End();
 
   if (changed && id) {
     auto animCopy = *c->scene().getAnimator(id);

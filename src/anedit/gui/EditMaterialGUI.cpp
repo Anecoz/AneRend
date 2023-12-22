@@ -17,9 +17,7 @@ EditMaterialGUI::~EditMaterialGUI()
 
 void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
 {
-  auto& id = c->selectedMaterial();
-
-  ImGui::Begin("EditMaterial");
+  auto& id = c->getFirstSelection();
 
   glm::vec4 emissive;
   glm::vec3 baseColFac;
@@ -66,8 +64,6 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   if (!id) {
     ImGui::EndDisabled();
   }
-
-  ImGui::End();
 
   if (changed && id) {
     auto matCopy = *c->scene().getMaterial(id);
