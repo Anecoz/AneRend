@@ -73,7 +73,8 @@ void main()
   vec3 color = v0.color.xyz * barycentrics.x + v1.color.xyz * barycentrics.y + v2.color.xyz * barycentrics.z;
   color = toLinear(vec4(color, 1.0)).rgb;
 
-  SurfaceData surfData = getSurfaceDataFromMat(matInfo, uv, normal, mat3(0.0), vec3(0.0), color);
+  bool unused;
+  SurfaceData surfData = getSurfaceDataFromMat(matInfo, uv, normal, mat3(0.0), vec3(0.0), color, unused);
 
   Light dummyLight;
 

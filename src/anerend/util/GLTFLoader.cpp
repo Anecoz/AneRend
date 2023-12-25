@@ -256,6 +256,11 @@ bool GLTFLoader::loadFromFile(
     // Is there a transform to apply?
     glm::mat4 m = transformFromNode(node);
 
+    // TODO: (Issue #47 and #45) Don't condition reading skeletons etc. on if there's a mesh.
+    // Remember what meshes (asset::Model)s have been parsed and refer to them by uuid when generating prefabs.
+    // For instance the chessboard GLTF contains a reference to the same pawn mesh several times, but they have
+    // different parents each time. So the prefabs out should correspond to nodes containing meshes in the
+    // gltf basically.
     if (node.mesh != -1) {
       render::asset::Model assetModel{};
       assetModel._name = baseName;

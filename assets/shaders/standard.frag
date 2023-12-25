@@ -25,7 +25,12 @@ void main() {
   uint matIndex = rendMatIndexBuffer.indices[fragMaterialIdx];
   MaterialInfo matInfo = materialBuffer.infos[matIndex];
 
-  SurfaceData surfData = getSurfaceDataFromMat(matInfo, fragUV, normal, fragTBN, fragTangent, fragColor);
+  bool discardPixel;
+  SurfaceData surfData = getSurfaceDataFromMat(matInfo, fragUV, normal, fragTBN, fragTangent, fragColor, discardPixel);
+
+  if (discardPixel) {
+    discard;
+  }
 
   vec3 color = surfData.color;
   if (length(fragTint) > 0.01) {
@@ -35,8 +40,4 @@ void main() {
   outCol0 = vec4(surfData.normal, color.x);
   outCol1 = vec4(color.yz, surfData.metallic, surfData.roughness);
   outCol2 = vec4(surfData.emissive, 0.0);
-
-  /*outCol0 = vec4(fragNormal, fragColor.x);
-  outCol1 = vec4(fragColor.yz, 0.5, 0.5);
-  outCol2 = vec4(0.0);*/
 }

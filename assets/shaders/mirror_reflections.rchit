@@ -82,7 +82,8 @@ void main()
   mat3 TBN = mat3(T, B, normal);*/
 
   //SurfaceData surfData = getSurfaceDataFromMat(matInfo, uv, normal, TBN, tangent, color);
-  SurfaceData surfData = getSurfaceDataFromMat(matInfo, uv, normal, mat3(0.0), vec3(0.0), color);
+  bool unused;
+  SurfaceData surfData = getSurfaceDataFromMat(matInfo, uv, normal, mat3(0.0), vec3(0.0), color, unused);
 
   Light dummyLight;
 

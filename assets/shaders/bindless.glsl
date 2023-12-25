@@ -177,9 +177,10 @@ layout(std430, set = 0, binding = 14) readonly buffer TileInfoBuffer {
 
 layout(set = 0, binding = 15) uniform sampler2D textures[];
 
-SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, mat3 inTBN, vec3 inTangent, vec3 inColor)
+SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, mat3 inTBN, vec3 inTangent, vec3 inColor, out bool discardPixel)
 {
   SurfaceData outData;
+  discardPixel = false;
 
   outData.normal = inNormal;
   // Defaults according to GLTF 2.0 spec
@@ -195,9 +196,9 @@ SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, 
 
   if (albedoIdx != -1) {
     vec4 samp = texture(textures[nonuniformEXT(albedoIdx)], uv);
-    /*if (samp.a < 0.1) {
-      discard;
-    }*/
+    if (samp.a < 0.1) {
+      discardPixel = true;;
+    }
     outData.color = vec3(matInfo.baseColFac.r * samp.r, matInfo.baseColFac.g * samp.g, matInfo.baseColFac.b * samp.b);
   }
   else {
@@ -215,8 +216,6 @@ SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, 
     // If no metRough texture, use material values directly
     outData.metallic = matInfo.metRough.r;
     outData.roughness = matInfo.metRough.g;
-    //outData.metallic = matInfo.metallicFactor;
-    //outData.roughness = matInfo.roughnessFactor;
   }
   if (normalIdx != -1 && inTangent.xyz != vec3(0.0f)) {
     outData.normal = normalize(texture(textures[nonuniformEXT(normalIdx)], uv).rgb * 2.0 - 1.0);
