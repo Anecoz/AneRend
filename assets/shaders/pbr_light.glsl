@@ -377,7 +377,7 @@ vec3 calcIndirectDiffuseLight(
   vec3 F0 = vec3(0.04);
   F0 = mix(F0, albedo, metallic);
 
-  vec3 kS = fresnelSchlickRoughness(max(dot(normal, V), 0.0), F0, roughness);
+  vec3 kS = fresnelSchlickRoughness(max(dot(normal, V), 0.0), F0, roughness * roughness);
   vec3 kD = 1.0 - kS;
   kD *= 1.0 - metallic;
   vec3 irradiance = sampleProbe(probeTex, worldPos, normal);
@@ -597,13 +597,18 @@ vec3 calcIndirectSpecularLight(
   F0 = mix(F0, albedo, metallic);
 
   vec3 kS = fresnelSchlickRoughness(max(dot(normal, V), 0.0), F0, roughness);
-  const float MAX_REFLECTION_LOD = 4.0;
+  const float MAX_REFLECTION_LOD = 5.0;
 
   float finalLod = clamp(roughness * MAX_REFLECTION_LOD, 0.0, MAX_REFLECTION_LOD);
 
   vec3 refl = textureLod(specTex, texCoords, finalLod).rgb;
 
-  vec2 envBRDF = texture(lutTex, vec2(max(dot(normal, V), 0.0), 1.01 - roughness)).rg;
+  // TODO: The higher lods (more blurred versions) are too bright.
+  // The energy should become more dispersed with a bigger specular lobe, but that isn't happening as of now.
+  // This is an ugly fix for that issue.
+  refl /= (finalLod*2.0 + 1.0);
+
+  vec2 envBRDF = texture(lutTex, vec2(max(dot(normal, V), 0.0), 1.0 - roughness)).rg;
   vec3 specular = refl * (kS *envBRDF.x + envBRDF.y);
 
   return specular;

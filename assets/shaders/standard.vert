@@ -29,7 +29,7 @@ layout(location = 3) out vec3 fragPos;
 layout(location = 4) out vec2 fragUV;
 layout(location = 5) out flat uint fragMaterialIdx;
 layout(location = 6) out vec3 fragTangent;
-layout(location = 7) out mat3 fragTBN;
+layout(location = 7) out float fragTangentSign;
 
 void main() {
   uint renderableIndex = translationBuffer.ids[gl_InstanceIndex].renderableIndex;
@@ -65,12 +65,8 @@ void main() {
   uint materialOffset = meshOffset - firstMeshOffset;
   fragMaterialIdx = renderableBuffer.renderables[renderableIndex].firstMaterialIndex + materialOffset;
 
-  vec3 bitangentL = cross(normal, inTangent.xyz);
-  vec3 T = normalize(mat3(model) * inTangent.xyz);
-  vec3 B = normalize(mat3(model) * bitangentL);
-  vec3 N = fragNormal;
-  fragTBN = mat3(T, B, N);
-  fragTangent = inTangent.xyz;
+  fragTangent = mat3(model) * inTangent.xyz;
+  fragTangentSign = inTangent.w;
 
   // If ray tracing is enabled, we need to write our verts to the dynamic mesh buffer (for creating BLASes)
   // But only if we are animated!

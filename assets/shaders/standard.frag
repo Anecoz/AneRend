@@ -13,7 +13,7 @@ layout(location = 3) in vec3 fragPos;
 layout(location = 4) in vec2 fragUV;
 layout(location = 5) in flat uint fragMaterialIdx;
 layout(location = 6) in vec3 fragTangent;
-layout(location = 7) in mat3 fragTBN;
+layout(location = 7) in float fragTangentSign;
 
 layout(location = 0) out vec4 outCol0;
 layout(location = 1) out vec4 outCol1;
@@ -21,12 +21,20 @@ layout(location = 2) out vec4 outCol2;
 
 void main() {
   vec3 normal = normalize(fragNormal);
+  vec3 tangent = vec3(0.0);
+  vec3 B = vec3(0.0);
+  mat3 TBN = mat3(0.0);
+  if (fragTangent != vec3(0.0)) {
+    tangent = normalize(fragTangent);
+    B = normalize(cross(normal, tangent) * fragTangentSign);
+    TBN = mat3(tangent, B, normal);
+  }  
 
   uint matIndex = rendMatIndexBuffer.indices[fragMaterialIdx];
   MaterialInfo matInfo = materialBuffer.infos[matIndex];
 
   bool discardPixel;
-  SurfaceData surfData = getSurfaceDataFromMat(matInfo, fragUV, normal, fragTBN, fragTangent, fragColor, discardPixel);
+  SurfaceData surfData = getSurfaceDataFromMat(matInfo, fragUV, normal, TBN, tangent, fragColor, discardPixel);
 
   if (discardPixel) {
     discard;

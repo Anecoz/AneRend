@@ -226,6 +226,7 @@ SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, 
     outData.emissive.r *= matInfo.emissive.r;
     outData.emissive.g *= matInfo.emissive.g;
     outData.emissive.b *= matInfo.emissive.b;
+    outData.emissive *= matInfo.emissive.a;
   }
   else {
     outData.emissive = matInfo.emissive.rgb * matInfo.emissive.w;

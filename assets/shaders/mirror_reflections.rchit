@@ -71,18 +71,18 @@ void main()
   MaterialInfo matInfo = materialBuffer.infos[materialIndex];
   vec2 uv = v0.uv.xy * barycentrics.x + v1.uv.xy * barycentrics.y + v2.uv.xy * barycentrics.z;
   vec3 normal = normalize(v0.normal.xyz * barycentrics.x + v1.normal.xyz * barycentrics.y + v2.normal.xyz * barycentrics.z);
-  normal = normalize(vec3(normal.xyz * gl_WorldToObjectEXT));
+  normal = normalize(mat3(gl_ObjectToWorldEXT) * normal.xyz);
   vec3 color = v0.color.xyz * barycentrics.x + v1.color.xyz * barycentrics.y + v2.color.xyz * barycentrics.z;
   color = toLinear(vec4(color, 1.0)).rgb;
-  //vec3 tangent = v0.tangent.xyz * barycentrics.x + v1.tangent.xyz * barycentrics.y + v2.tangent.xyz * barycentrics.z;
+  //vec4 tangent = v0.tangent * barycentrics.x + v1.tangent * barycentrics.y + v2.tangent * barycentrics.z;
 
-  /*vec3 bitangentL = cross(normal, tangent);
-  vec3 T = normalize(mat3(gl_ObjectToWorldEXT) * tangent);
-  vec3 B = normalize(mat3(gl_ObjectToWorldEXT) * bitangentL);
+  //vec3 bitangentL = cross(normal, tangent);
+  /*vec3 T = normalize(mat3(gl_ObjectToWorldEXT) * tangent.xyz);
+  vec3 B = cross(normal, tangent);
   mat3 TBN = mat3(T, B, normal);*/
 
-  //SurfaceData surfData = getSurfaceDataFromMat(matInfo, uv, normal, TBN, tangent, color);
   bool unused;
+  //SurfaceData surfData = getSurfaceDataFromMat(matInfo, uv, normal, TBN, tangent, color, unused);
   SurfaceData surfData = getSurfaceDataFromMat(matInfo, uv, normal, mat3(0.0), vec3(0.0), color, unused);
 
   Light dummyLight;
@@ -116,9 +116,4 @@ void main()
   }
 
   payload.irradiance += surfData.emissive;
-
-  //payload.irradiance = vec3(uv.x, uv.y, 0.0);
-  //payload.irradiance = normal;
-  //payload.irradiance = color;
-  //payload.irradiance = pos;
 }

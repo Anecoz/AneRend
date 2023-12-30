@@ -19,7 +19,7 @@ struct Material
   glm::vec3 _baseColFactor = glm::vec3(1.0f);
 
   // RGB is the color and W is the strength. If an emissive texture is present, the RGB are treated as multipliers.
-  glm::vec4 _emissive = glm::vec4(0.0f);
+  glm::vec4 _emissive = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
   float _metallicFactor = 1.0f;
   float _roughnessFactor = 1.0f;

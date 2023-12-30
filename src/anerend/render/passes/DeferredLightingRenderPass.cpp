@@ -210,6 +210,7 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
     usage._resourceName = "SpecularBRDFLutTex";
     usage._access.set((std::size_t)Access::Read);
     usage._stage.set((std::size_t)Stage::Compute);
+    usage._samplerClampToEdge = true;
     usage._type = Type::SampledTexture;
 
     ImageInitialCreateInfo createInfo{};
