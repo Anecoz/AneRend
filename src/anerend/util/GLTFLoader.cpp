@@ -3,6 +3,7 @@
 #include "../render/asset/Mesh.h"
 #include "../render/animation/Skeleton.h"
 #include "TextureHelpers.h"
+#include "TangentGenerator.h"
 
 #include <limits>
 #include <filesystem>
@@ -283,6 +284,8 @@ bool GLTFLoader::loadFromFile(
         auto& primitive = model.meshes[node.mesh].primitives[j];
         render::asset::Mesh mesh{};
 
+        bool tangentsSet = false;
+
         // Do indices
         auto& idxAccessor = model.accessors[primitive.indices];
         auto& idxBufferView = model.bufferViews[idxAccessor.bufferView];
@@ -361,6 +364,7 @@ bool GLTFLoader::loadFromFile(
           const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("TANGENT")->second];
           const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
           tangentBuffer = reinterpret_cast<const float*>(&(model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+          tangentsSet = true;
         }
         if (primitive.attributes.find("JOINTS_0") != primitive.attributes.end()) {
           const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("JOINTS_0")->second];
@@ -571,6 +575,11 @@ bool GLTFLoader::loadFromFile(
                 tex._width = w;
                 tex._height = h;
                 parsedTextures[imageIdx] = tex._id;
+
+                // Generate tangents if not present
+                if (!tangentsSet) {
+                  TangentGenerator::generateTangents(assetModel._meshes.back());
+                }
 
                 texturesOut.emplace_back(std::move(tex));
               }

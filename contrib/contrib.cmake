@@ -45,5 +45,13 @@ if (WIN32)
   add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/KTX-Software)
 
+  # MikkTSpace
+  add_library(mikktspace STATIC 
+    ${CMAKE_CURRENT_LIST_DIR}/MikkTSpace/mikktspace.c
+    ${CMAKE_CURRENT_LIST_DIR}/MikkTSpace/mikktspace.h)
+
+  target_include_directories(mikktspace INTERFACE 
+    ${CMAKE_CURRENT_LIST_DIR}/MikkTSpace/)
+
 else()  
 endif()
