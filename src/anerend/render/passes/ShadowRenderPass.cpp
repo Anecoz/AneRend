@@ -307,7 +307,7 @@ void ShadowRenderPass::registerPointShadowPass(FrameGraphBuilder& fgb, RenderCon
         } push;
 
         push.index = (unsigned)i;
-        push.params = glm::vec4(light._pos, light._range);
+        push.params = glm::vec4(light._pos, light._lightComp._range);
 
         vkCmdPushConstants(
           *exeParams.cmdBuffer,

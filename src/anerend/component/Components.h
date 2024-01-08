@@ -1,11 +1,40 @@
 #pragma once
 
-#include "../../util/Uuid.h"
+#include "../util/Uuid.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-namespace render::asset {
+#include <string>
+#include <vector>
+
+namespace component {
+
+struct Transform
+{
+  glm::mat4 _globalTransform;
+  glm::mat4 _localTransform;
+};
+
+struct Renderable
+{
+  util::Uuid _id = util::Uuid::generate();
+
+  std::string _name; // for debugging
+
+  util::Uuid _model;
+  util::Uuid _skeleton;
+  std::vector<util::Uuid> _materials; // one for each mesh in the model (could be same ID for multiple meshes tho)
+
+  glm::vec3 _tint;
+  glm::vec4 _boundingSphere; // xyz sphere center, w radius
+  bool _visible = true;
+};
+
+struct PageStatus
+{
+  bool _paged = true;
+};
 
 struct Light
 {
@@ -13,7 +42,6 @@ struct Light
 
   std::string _name;
 
-  glm::vec3 _pos = glm::vec3(0.0f);
   glm::vec3 _color = glm::vec3(1.0f, 0.0f, 0.0f);
   float _range = 2.0f;
   bool _enabled = true;
@@ -23,14 +51,14 @@ struct Light
   glm::mat4 _proj;
   std::vector<glm::mat4> _views;
 
-  void updateViewMatrices()
+  void updateViewMatrices(const glm::vec3& pos)
   {
     // Also do projection matrix here...
     _proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, _range);
 
     _views.clear();
     // Construct view matrices
-    glm::mat4 trans = glm::translate(glm::mat4(1.0f), _pos);
+    glm::mat4 trans = glm::translate(glm::mat4(1.0f), pos);
     glm::mat4 view(1.0f);
     glm::mat4 rot(1.0f);
     glm::mat4 scale(1.0f);
@@ -77,5 +105,6 @@ struct Light
   // TODO:
   // Type, i.e. directional, point, spot
 };
+
 
 }

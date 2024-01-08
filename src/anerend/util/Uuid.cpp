@@ -58,7 +58,7 @@ bool Uuid::operator!=(const Uuid& rhs)
 Uuid Uuid::generate()
 {
   Uuid id;
-  auto& bytes = uuids::uuid_system_generator{}().as_bytes();
+  auto bytes = uuids::uuid_system_generator{}().as_bytes();
   std::memcpy(id._data.data(), bytes.data(), 16);
   return id;
 }

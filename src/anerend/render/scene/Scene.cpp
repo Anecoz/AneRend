@@ -4,20 +4,13 @@
 
 #include <glm/gtx/matrix_decompose.hpp>
 
-namespace render::scene
-{
+namespace render::scene {
 
 namespace {
 
-TileIndex findRenderableTile(const asset::Renderable& renderable, unsigned tileSize)
+TileIndex findTransformTile(const component::Transform& transform, unsigned tileSize)
 {
-  glm::vec3 t = renderable._globalTransform[3];
-  return Tile::posToIdx(t);
-}
-
-TileIndex findLightTile(const asset::Light& light, unsigned tileSize)
-{
-  glm::vec3 t = light._pos;
+  glm::vec3 t = transform._globalTransform[3];
   return Tile::posToIdx(t);
 }
 
@@ -36,12 +29,14 @@ bool getAsset(std::vector<T>& vec, IDType id, T** tOut)
 }
 
 Scene::Scene()
+  : _transformObserver(_registry.getEnttRegistry(), entt::collector.update<component::Transform>())
 {}
 
 Scene::~Scene()
 {}
 
 Scene::Scene(Scene&& rhs)
+  : _transformObserver(_registry.getEnttRegistry(), entt::collector.update<component::Transform>())
 {
   std::swap(_tiles, rhs._tiles);
   std::swap(_materials, rhs._materials);
@@ -49,11 +44,12 @@ Scene::Scene(Scene&& rhs)
   std::swap(_skeletons, rhs._skeletons);
   std::swap(_models, rhs._models);
   std::swap(_animators, rhs._animators);
-  std::swap(_renderables, rhs._renderables);
+  //std::swap(_renderables, rhs._renderables);
   std::swap(_prefabs, rhs._prefabs);
   std::swap(_textures, rhs._textures);
   std::swap(_eventLog, rhs._eventLog);
-  std::swap(_lights, rhs._lights);
+  //std::swap(_lights, rhs._lights);
+  std::swap(_nodes, rhs._nodes);
 }
 
 Scene& Scene::operator=(Scene&& rhs)
@@ -65,14 +61,52 @@ Scene& Scene::operator=(Scene&& rhs)
     std::swap(_skeletons, rhs._skeletons);
     std::swap(_models, rhs._models);
     std::swap(_animators, rhs._animators);
-    std::swap(_renderables, rhs._renderables);
+    //std::swap(_renderables, rhs._renderables);
     std::swap(_prefabs, rhs._prefabs);
     std::swap(_textures, rhs._textures);
     std::swap(_eventLog, rhs._eventLog);
-    std::swap(_lights, rhs._lights);
+    //std::swap(_lights, rhs._lights);
+    std::swap(_nodes, rhs._nodes);
   }
 
   return *this;
+}
+
+void Scene::update()
+{
+  // Check if any transforms have been updated
+  for (const auto entity : _transformObserver) {
+    auto& trans = _registry.getEnttRegistry().get<component::Transform>(entity);
+
+    // Update the transform hierarchy
+    auto id = _registry.reverseLookup(entity);
+    auto& node = _nodes[id];
+    updateDependentTransforms(node, trans);
+
+    _registry.patchComponent<component::Transform>(id);
+
+    // Add to correct tile
+    auto tileIdx = findTransformTile(trans, Tile::_tileSize);
+
+    // Is it already added to a tile?
+    if (_nodeTileMap.find(id) != _nodeTileMap.end()) {
+      auto& oldIdx = _nodeTileMap[id];
+      _tiles[oldIdx].removeNode(id);
+    }
+
+    if (_tiles.find(tileIdx) != _tiles.end()) {
+      _tiles[tileIdx].addNode(id);
+      _nodeTileMap[id] = tileIdx;
+    }
+    else {
+      Tile tile(tileIdx);
+      tile.addNode(id);
+      _tiles[tileIdx] = std::move(tile);
+      _nodeTileMap[id] = tileIdx;
+    }
+  }
+
+  _transformObserver.clear();
 }
 
 void Scene::serializeAsync(const std::filesystem::path& path)
@@ -341,7 +375,32 @@ const asset::Animator* Scene::getAnimator(util::Uuid id)
   return animator;
 }
 
-util::Uuid Scene::addLight(asset::Light&& l)
+util::Uuid Scene::addNode(Node node)
+{
+  auto id = node._id;
+  _registry.registerNode(id);
+  _nodes[id] = std::move(node);
+  return id;
+}
+
+void Scene::removeNode(util::Uuid id)
+{
+  if (_nodes.find(id) != _nodes.end()) {
+    _nodes.erase(id);
+  }
+}
+
+const Node* Scene::getNode(util::Uuid id)
+{
+  if (_nodes.find(id) != _nodes.end()) {
+    return &_nodes[id];
+  }
+
+  return nullptr;
+}
+
+/*
+util::Uuid Scene::addLight(component::Light&& l)
 {
   auto id = l._id;
 
@@ -364,7 +423,7 @@ util::Uuid Scene::addLight(asset::Light&& l)
   return id;
 }
 
-void Scene::updateLight(asset::Light l)
+void Scene::updateLight(component::Light l)
 {
   for (auto it = _lights.begin(); it != _lights.end(); ++it) {
     if (it->_id == l._id) {
@@ -400,14 +459,14 @@ void Scene::removeLight(util::Uuid id)
   printf("Could not remove light with id %s, doesn't exist!\n", id.str().c_str());
 }
 
-const asset::Light* Scene::getLight(util::Uuid id)
+const component::Light* Scene::getLight(util::Uuid id)
 {
-  asset::Light* l = nullptr;
+  component::Light* l = nullptr;
   getAsset(_lights, id, &l);
   return l;
 }
 
-util::Uuid Scene::addRenderable(asset::Renderable&& renderable)
+util::Uuid Scene::addRenderable(component::Renderable&& renderable)
 {
   auto id = renderable._id;
 
@@ -452,13 +511,13 @@ void Scene::removeRenderable(util::Uuid id)
   printf("Could not remove renderable %s, doesn't exist!\n", id.str().c_str());
 }
 
-const asset::Renderable* Scene::getRenderable(util::Uuid id)
+const component::Renderable* Scene::getRenderable(util::Uuid id)
 {
-  asset::Renderable* rend = nullptr;
+  component::Renderable* rend = nullptr;
   getAsset(_renderables, id, &rend);
   return rend;
 }
-
+*/
 void Scene::setDDGIAtlas(util::Uuid texId, scene::TileIndex idx)
 {
   if (_tiles.find(idx) != _tiles.end()) {
@@ -491,6 +550,7 @@ void Scene::setDDGIAtlas(util::Uuid texId, scene::TileIndex idx)
   addEvent(SceneEventType::DDGIAtlasAdded, util::Uuid(), idx);
 }
 
+/*
 void Scene::setRenderableTint(util::Uuid id, const glm::vec3& tint)
 {
   for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
@@ -563,6 +623,7 @@ void Scene::setRenderableVisible(util::Uuid id, bool val)
 
   printf("Cannot update visibility for renderable %s, doesn't exist!\n", id.str().c_str());
 }
+*/
 
 void Scene::addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx)
 {
@@ -573,39 +634,36 @@ void Scene::addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx)
   _eventLog._events.emplace_back(std::move(event));
 }
 
-void Scene::updateChildrenTransforms(render::asset::Renderable& rend)
+void Scene::updateChildrenTransforms(Node& node, component::Transform& transform)
 {
-  for (auto& childId : rend._children) {
-    for (auto& child : _renderables) {
-      if (child._id == childId) {
-        child._globalTransform = rend._globalTransform * child._localTransform;
-        auto tileIdx = findRenderableTile(child, Tile::_tileSize);
-        addEvent(SceneEventType::RenderableUpdated, childId, tileIdx);
+  for (auto& childId : node._children) {
+    auto& child = _nodes[childId];
+    auto& childTransform = _registry.getComponent<component::Transform>(childId);
 
-        if (!child._children.empty()) {
-          updateChildrenTransforms(child);
-        }
-      }
+    childTransform._globalTransform = transform._globalTransform * childTransform._localTransform;
+    _registry.patchComponent<component::Transform>(childId);
+
+    if (!child._children.empty()) {
+      updateChildrenTransforms(child, childTransform);
     }
   }
 }
 
-void Scene::updateDependentTransforms(render::asset::Renderable& rend)
+void Scene::updateDependentTransforms(Node& node, component::Transform& transform)
 {
   // Figure out which renderables are involved
-  if (!rend._parent) {
-    rend._globalTransform = rend._localTransform;
+  //if (!node._parent) {
+    transform._globalTransform = transform._localTransform;
 
-    auto tileIdx = findRenderableTile(rend, Tile::_tileSize);
-    addEvent(SceneEventType::RenderableUpdated, rend._id, tileIdx);
-
-    if (rend._children.empty()) {
+    if (node._children.empty()) {
       return;
     }
 
     // Will recursively take care of all children
-    updateChildrenTransforms(rend);
-  }
+    updateChildrenTransforms(node, transform);
+  //}
+  // I don't think this is ever needed...?
+#if 0
   else {
     for (auto& r : _renderables) {
       if (r._id == rend._parent) {
@@ -614,6 +672,7 @@ void Scene::updateDependentTransforms(render::asset::Renderable& rend)
       }
     }
   }
+#endif
 }
 
 }

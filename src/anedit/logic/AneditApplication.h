@@ -15,7 +15,6 @@
 #include <render/RenderDebugOptions.h>
 #include <render/RenderOptions.h>
 #include <render/asset/Model.h>
-#include <render/asset/Renderable.h>
 #include <render/scene/Scene.h>
 #include <render/scene/ScenePager.h>
 #include "WindSystem.h"
@@ -79,8 +78,6 @@ private:
   render::Camera _camera;
   render::Camera _shadowCamera;
 
-  render::VulkanRenderer _vkRenderer;
-
   util::Uuid _lanternModelId;
   std::vector<util::Uuid> _lanternMaterials;
 
@@ -101,7 +98,7 @@ private:
   std::vector<util::Uuid> _foxMaterials;
   std::vector<util::Uuid> _foxAnims;
   util::Uuid _foxSkeleId;
-  render::asset::Renderable _cachedFoxRenderable;
+  component::Renderable _cachedFoxRenderable;
   render::asset::Animator _foxAnimator;
   int _foxAnimIdx = 0;
 
@@ -111,8 +108,10 @@ private:
   util::Uuid _dummySkele;
 
   render::scene::Scene _scene;
+  render::VulkanRenderer _vkRenderer;
   std::future<render::scene::DeserialisedSceneData> _sceneFut;
   render::scene::ScenePager _scenePager;
+
 
   // Test bake
   bool _baking = false;

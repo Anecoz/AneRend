@@ -240,9 +240,11 @@ bool UploadQueue::createTexture(
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     0,
     tex._numMips);
-
+  
+  void* data;
   glm::uint8_t* mappedData = nullptr;
-  vmaMapMemory(uc->getRC()->vmaAllocator(), sb._buf._allocation, &(void*)mappedData);
+  vmaMapMemory(uc->getRC()->vmaAllocator(), sb._buf._allocation, &data);
+  mappedData = (glm::uint8_t*)data;
   mappedData = mappedData + sb._currentOffset;
 
   // Copy each mip to staging buffer and then to image

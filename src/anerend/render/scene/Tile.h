@@ -25,13 +25,9 @@ public:
 
   explicit operator bool() const;
 
-  void addRenderable(util::Uuid id);
-  void removeRenderable(util::Uuid id);
-  const std::vector<util::Uuid>& getRenderableIds() const { return _renderables; }
-
-  void addLight(util::Uuid id);
-  void removeLight(util::Uuid id);
-  const std::vector<util::Uuid>& getLightIds() const { return _lights; }
+  void addNode(util::Uuid id);
+  void removeNode(util::Uuid id);
+  const std::vector<util::Uuid>& getNodes() const { return _nodes; }
 
   void setDDGIAtlas(util::Uuid id) { _ddgiAtlas = id; }
   util::Uuid getDDGIAtlas() { return _ddgiAtlas; }
@@ -43,9 +39,7 @@ private:
   TileIndex _index;
   bool _initialized = false;
 
-  // TODO: particles
-  std::vector<util::Uuid> _renderables;
-  std::vector<util::Uuid> _lights;
+  std::vector<util::Uuid> _nodes;
   util::Uuid _ddgiAtlas;
 
 };

@@ -1,15 +1,17 @@
 #pragma once
 
-#include "../asset/Renderable.h"
+#include "../../component/Components.h"
 
 namespace render::internal {
 
 struct InternalRenderable
 {
-  render::asset::Renderable _renderable;
+  component::Renderable _renderable;
 
   // Convenience
   std::vector<util::Uuid> _meshes;
+
+  glm::mat4 _globalTransform;
 
   // Index into the renderable material index buffer
   std::uint32_t _materialIndexBufferIndex = 0;

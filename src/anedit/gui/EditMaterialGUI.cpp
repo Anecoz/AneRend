@@ -17,7 +17,7 @@ EditMaterialGUI::~EditMaterialGUI()
 
 void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
 {
-  auto& id = c->getFirstSelection();
+  auto id = c->getFirstSelection();
 
   glm::vec4 emissive;
   glm::vec3 baseColFac;

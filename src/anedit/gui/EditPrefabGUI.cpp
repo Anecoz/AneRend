@@ -18,7 +18,7 @@ EditPrefabGUI::~EditPrefabGUI()
 
 void EditPrefabGUI::immediateDraw(logic::AneditContext* c)
 {
-  auto& id = c->getFirstSelection();
+  auto id = c->getFirstSelection();
   bool changed = false;
   glm::vec3 translation{ 0.0f };
   glm::vec3 scale{ 0.0f };

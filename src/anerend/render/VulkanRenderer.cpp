@@ -42,6 +42,7 @@
 #include "passes/UpdateBlasPass.h"
 #include "passes/CompactDrawsPass.h"
 #include "internal/MipMapGenerator.h"
+#include "../component/Components.h"
 
 #include "../../common/util/Utils.h"
 #include  "../util/GraphicsUtils.h"
@@ -161,8 +162,14 @@ VKAPI_ATTR VkDeviceAddress VKAPI_CALL GetAccelerationStructureDeviceAddressKHR(
 
 namespace render {
 
-VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera)
-  : _currentSwapChainIndex(0)
+VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera, component::Registry* registry)
+  : _registry(registry)
+  , _nodeObserver(_registry->getEnttRegistry(), entt::collector
+    .update<component::PageStatus>()
+    .update<component::Light>()
+    .update<component::Renderable>()
+    .update<component::Transform>())
+  , _currentSwapChainIndex(0)
   , _vault(MAX_FRAMES_IN_FLIGHT)
   , _gigaVtxBuffer(1024 * 1024 * GIGA_MESH_BUFFER_SIZE_MB)
   , _gigaIdxBuffer(1024 * 1024 * GIGA_MESH_BUFFER_SIZE_MB)
@@ -401,22 +408,22 @@ bool VulkanRenderer::init()
   if (!res) return false;
   printf("Done!\n");  
 
-  for (auto& val : _renderablesChanged) {
+  for (auto&& val : _renderablesChanged) {
     val = false;
   }
-  for (auto& val : _lightsChanged) {
+  for (auto&& val : _lightsChanged) {
     val = false;
   }
-  for (auto& val : _modelsChanged) {
+  for (auto&& val : _modelsChanged) {
     val = false;
   }
-  for (auto& val : _materialsChanged) {
+  for (auto&& val : _materialsChanged) {
     val = false;
   }  
-  for (auto& val : _texturesChanged) {
+  for (auto&& val : _texturesChanged) {
     val = false;
   }
-  for (auto& val : _tileInfosChanged) {
+  for (auto&& val : _tileInfosChanged) {
     val = true;
   }
 
@@ -453,7 +460,7 @@ bool VulkanRenderer::init()
 // Stolen from here: https://gist.github.com/dgoguerra/7194777
 std::string bytesToFormattedString(std::size_t bytes)
 {
-  char* suffix[] = { "B", "KB", "MB", "GB", "TB" };
+  std::string suffix[] = { "B", "KB", "MB", "GB", "TB" };
   char length = sizeof(suffix) / sizeof(suffix[0]);
 
   int i = 0;
@@ -465,7 +472,7 @@ std::string bytesToFormattedString(std::size_t bytes)
   }
 
   static char output[200];
-  sprintf_s(output, "%.02lf %s", dblBytes, suffix[i]);
+  sprintf_s(output, "%.02lf %s", dblBytes, suffix[i].c_str());
   return output;
 }
 
@@ -988,9 +995,6 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     }
 
     _pendingFirstUploadRenderables.emplace_back(std::move(internalRend));
-    /*_currentRenderables.push_back(internalRend);
-    auto internalId = _currentRenderables.size() - 1;
-    _renderableIdMap[rend._id] = internalId;*/
   }
 
   // Updated renderables
@@ -1018,13 +1022,13 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   // Removed lights
   for (auto& l : update._removedLights) {
     for (auto it = _lights.begin(); it != _lights.end(); ++it) {
-      if (it->_id == l) {
+      if (it->_lightComp._id == l) {
 
-        if (it->_shadowCaster) {
+        if (it->_lightComp._shadowCaster) {
           // Remove from caster list (if there)
 
           for (auto& id : _shadowCasters) {
-            if (id == it->_id) {
+            if (id == it->_lightComp._id) {
               id = util::Uuid();
               break;
             }
@@ -1050,7 +1054,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
       }
     }
 
-    l.updateViewMatrices();
+    //l.updateViewMatrices();
     _lights.emplace_back(std::move(l));
   }
 
@@ -1058,19 +1062,19 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   for (auto& l : update._updatedLights) {
     int idx = 0;
     for (auto& oldLight : _lights) {
-      if (oldLight._id == l._id) {
+      if (oldLight._lightComp._id == l._id) {
 
         // Did shadow caster status change?
-        if (oldLight._shadowCaster && !l._shadowCaster) {
+        if (oldLight._lightComp._shadowCaster && !l._shadowCaster) {
           // it was shadow caster but not anymore, remove from list
           for (auto& id : _shadowCasters) {
-            if (id == oldLight._id) {
+            if (id == oldLight._lightComp._id) {
               id = util::Uuid();
               break;
             }
           }
         }
-        else if (!oldLight._shadowCaster && l._shadowCaster) {
+        else if (!oldLight._lightComp._shadowCaster && l._shadowCaster) {
           // wasn't shadow caster but now is, add to list if possible
           for (auto& id : _shadowCasters) {
             if (!id) {
@@ -1080,8 +1084,8 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
           }
         }
 
-        l.updateViewMatrices();
-        oldLight = l;
+        //l.updateViewMatrices();
+        oldLight._lightComp = l;
         break;
       }
       idx++;
@@ -1424,10 +1428,7 @@ void VulkanRenderer::update(
   RenderDebugOptions debugOptions)
   //logic::WindMap windMap)
 {
-  // TODO: We can't write to this frames UBO's until the GPU is finished with it.
-  // If we run unlimited FPS we are quite likely to end up doing just that.
-  // The ubo memory write _will_ be visible by the next queueSubmit, so that isn't the issue.
-  // but we might be writing into memory that is currently accessed by the GPU.
+  // TODO: Fix
   vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
 
   // TODO: Fix
@@ -1532,6 +1533,8 @@ void VulkanRenderer::update(
     _bakeInfo._callback = nullptr;
     _bakeInfo._bakingIndex = scene::TileIndex();
   }
+
+  updateNodes();
 }
 
 AccelerationStructure VulkanRenderer::registerBottomLevelAS(
@@ -2357,6 +2360,306 @@ VkPhysicalDeviceRayTracingPipelinePropertiesKHR VulkanRenderer::getRtPipeProps()
   return _rtPipeProps;
 }
 
+void VulkanRenderer::updateNodes()
+{
+  bool modelIdMapUpdate = false;
+  bool modelChange = false;
+  bool rendIdMapUpdate = false;
+  bool renderablesChanged = false;
+  bool lightsChanged = false;
+
+  for (const auto entity : _nodeObserver) {
+    auto internalId = _registry->reverseLookup(entity);
+    bool paged = _registry->getComponent<component::PageStatus>(internalId)._paged;
+
+    // If there is no transform, something weird is going on and we don't particularly care
+    if (!_registry->hasComponent<component::Transform>(internalId)) {
+      return;
+    }
+
+    auto& transComp = _registry->getComponent<component::Transform>(internalId);
+
+    // renderables
+    if (_registry->hasComponent<component::Renderable>(internalId)) {
+      auto& rend = _registry->getComponent<component::Renderable>(internalId);
+      renderablesChanged = true;
+      // Added renderables
+      if (paged) {
+        if (_renderableIdMap.find(rend._id) == _renderableIdMap.end()) {
+          if (!rend._id) {
+            printf("Asset update fail: cannot add renderable with invalid id\n");
+            continue;
+          }
+
+          if (!rend._model) {
+            printf("Asset update fail: cannot add renderable with invalid model id\n");
+            continue;
+          }
+
+          if (_currentRenderables.size() == MAX_NUM_RENDERABLES) {
+            printf("Cannot add renderable, max size reached!\n");
+            continue;
+          }
+
+          internal::InternalRenderable internalRend{};
+          internalRend._renderable = rend;
+          internalRend._globalTransform = transComp._globalTransform;
+
+          // Fill in meshids
+          auto& model = _currentModels[_modelIdMap[rend._model]];
+          internalRend._meshes = model._meshes;
+
+          if (rend._skeleton) {
+            internalRend._skeletonOffset = (uint32_t)_skeletonOffsets[rend._skeleton]._offset;
+
+            // If ray tracing is enabled, we need to write individual BLAS:es for each renderable that is animated.
+            if (_enableRayTracing) {
+              if (_currentMeshes.size() == MAX_NUM_MESHES) {
+                printf("Cannot add dynamic BLAS for renderable, max num meshes reached!\n");
+                continue;
+              }
+
+              // TODO: Don't do this if we already have this skeleton + model combination copied
+              //       In that case, just point to the dynamic model already present
+              DynamicModelCopyInfo copyInfo{};
+              copyInfo._renderableId = internalRend._renderable._id;
+              _dynamicModelsToCopy.emplace_back(std::move(copyInfo));
+
+              for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+                _modelsChanged[i] = true;
+              }
+            }
+          }
+
+          _pendingFirstUploadRenderables.emplace_back(std::move(internalRend));
+        }
+        else {
+          // Updated renderable
+          if (!rend._id) {
+            printf("Asset update fail: cannot update renderable with invalid id\n");
+            continue;
+          }
+
+          if (!rend._model) {
+            printf("Asset update fail: cannot update renderable with invalid model id\n");
+            continue;
+          }
+
+          auto it = _renderableIdMap.find(rend._id);
+
+          if (it == _renderableIdMap.end()) {
+            printf("Could not update renderable %s, doesn't exist!\n", rend._id.str().c_str());
+            break;
+          }
+
+          _currentRenderables[it->second]._renderable = rend;
+          _currentRenderables[it->second]._globalTransform = transComp._globalTransform;
+        }
+      }
+      else {
+        // not paged, removed
+        rendIdMapUpdate = true;
+        auto remId = rend._id;
+        for (auto it = _currentRenderables.begin(); it != _currentRenderables.end(); ++it) {
+          if (it->_renderable._id == remId) {
+            if (_enableRayTracing && !it->_dynamicMeshes.empty()) {
+
+              modelIdMapUpdate = true;
+              modelChange = true;
+
+              if (_dynamicBlases.count(remId) > 0) {
+                auto& dynamicBlas = _dynamicBlases[remId];
+
+                for (std::size_t i = 0; i < it->_meshes.size(); ++i) {
+                  auto& mesh = it->_dynamicMeshes[i];
+
+                  for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
+                    if (meshIt->_id == mesh) {
+                      // Put blas on deletion q
+                      auto& blas = dynamicBlas[i];
+                      _delQ.add(blas); // copy
+
+                      // Remove meshes so that nothing uses the blas anymore
+                      _gigaVtxBuffer._memInterface.removeData(meshIt->_vertexHandle);
+                      _gigaIdxBuffer._memInterface.removeData(meshIt->_indexHandle);
+                      meshIt = _currentMeshes.erase(meshIt);
+                      break;
+                    }
+                    else {
+                      ++meshIt;
+                    }
+                  }
+                }
+
+                _dynamicBlases.erase(remId);
+                printf("erased id %s from dynamic blases\n", remId.str().c_str());
+              }
+            }
+            else if (_enableRayTracing) {
+              // If we're still in the process of adding this dynamic rend, remove it from the processing list
+              for (auto it = _dynamicModelsToCopy.begin(); it != _dynamicModelsToCopy.end(); ++it) {
+                if (it->_renderableId == remId) {
+
+                  // Add any potentially added blases to delQ
+                  for (auto& blas : it->_currentBlases) {
+                    _delQ.add(blas);
+                  }
+
+                  // Also give back potential meshes that have already been added
+                  for (std::size_t i = 0; i < it->_currentBlases.size(); ++i) {
+                    auto& meshId = it->_generatedDynamicIds[i];
+                    for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
+                      if (meshIt->_id == meshId) {
+
+                        // Remove meshes so that nothing uses the blas anymore
+                        _gigaVtxBuffer._memInterface.removeData(meshIt->_vertexHandle);
+                        _gigaIdxBuffer._memInterface.removeData(meshIt->_indexHandle);
+                        meshIt = _currentMeshes.erase(meshIt);
+                        break;
+                      }
+                      else {
+                        ++meshIt;
+                      }
+                    }
+                  }
+
+                  _dynamicModelsToCopy.erase(it);
+                  break;
+                }
+              }
+            }
+            _currentRenderables.erase(it);
+            break;
+          }
+        }
+      } 
+    }
+    
+    // lights
+    if (_registry->hasComponent<component::Light>(internalId)) {
+      auto& l = _registry->getComponent<component::Light>(internalId);
+      glm::vec3 lightPos = transComp._globalTransform[3];
+      lightsChanged = true;
+
+      // Removed lights
+      if (!paged) {
+        for (auto it = _lights.begin(); it != _lights.end(); ++it) {
+          if (it->_lightComp._id == l._id) {
+
+            if (it->_lightComp._shadowCaster) {
+              // Remove from caster list (if there)
+
+              for (auto& id : _shadowCasters) {
+                if (id == it->_lightComp._id) {
+                  id = util::Uuid();
+                  break;
+                }
+              }
+            }
+
+            _lights.erase(it);
+            break;
+          }
+        }
+      }
+      else {
+        bool found = false;
+        // Updated light
+        for (auto& oldLight : _lights) {
+          if (oldLight._lightComp._id == l._id) {
+            found = true;
+
+            // Did shadow caster status change?
+            if (oldLight._lightComp._shadowCaster && !l._shadowCaster) {
+              // it was shadow caster but not anymore, remove from list
+              for (auto& id : _shadowCasters) {
+                if (id == oldLight._lightComp._id) {
+                  id = util::Uuid();
+                  break;
+                }
+              }
+            }
+            else if (!oldLight._lightComp._shadowCaster && l._shadowCaster) {
+              // wasn't shadow caster but now is, add to list if possible
+              for (auto& id : _shadowCasters) {
+                if (!id) {
+                  id = l._id;
+                  break;
+                }
+              }
+            }
+
+            l.updateViewMatrices(lightPos);
+            oldLight._lightComp = l;
+            break;
+          }
+        }
+
+        // Added lights
+        if (!found) {
+
+          // add to shadow caster index list (if possible)
+          if (l._shadowCaster) {
+            for (auto& id : _shadowCasters) {
+              if (!id) {
+                id = l._id;
+                break;
+              }
+            }
+          }
+
+          l.updateViewMatrices(lightPos);
+          _lights.emplace_back(std::move(l));
+        }
+      }
+    }
+  }
+
+  // Model/mesh id map update
+  if (modelIdMapUpdate) {
+    _modelIdMap.clear();
+    _meshIdMap.clear();
+
+    for (std::size_t i = 0; i < _currentModels.size(); ++i) {
+      _modelIdMap[_currentModels[i]._id] = i;
+    }
+    for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
+      _meshIdMap[_currentMeshes[i]._id] = i;
+    }
+  }
+
+  // Rend id map update
+  if (rendIdMapUpdate) {
+    _renderableIdMap.clear();
+
+    for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
+      _renderableIdMap[_currentRenderables[i]._renderable._id] = i;
+    }
+  }
+
+  // Did we update any renderables
+  if (renderablesChanged) {
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      _renderablesChanged[i] = true;
+    }
+  }
+
+  if (lightsChanged) {
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      _lightsChanged[i] = true;
+    }
+  }
+
+  // Some changes may have forced a model update
+  if (modelChange) {
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      _modelsChanged[i] = true;
+    }
+  }
+
+  _nodeObserver.clear();
+}
+
 bool VulkanRenderer::arePrerequisitesUploaded(internal::InternalModel& model)
 {
   // Check that model is uploaded (by checking that it has an internal id)
@@ -3053,7 +3356,7 @@ bool VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
       _currentMeshUsage[model._meshes[i]]++;
     }
     
-    mappedData[i]._transform = renderable._globalTransform;
+    mappedData[i]._transform = _currentRenderables[i]._globalTransform;
     mappedData[i]._tint = glm::vec4(renderable._tint, 1.0f);
     mappedData[i]._modelOffset = _currentRenderables[i]._modelBufferOffset;
     mappedData[i]._numMeshes = (uint32_t)model._meshes.size();
@@ -3157,7 +3460,7 @@ bool VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
   return true;
 }
 
-void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, std::vector<anim::Skeleton>& skeletons)
+void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, std::vector<anim::Skeleton> skeletons)
 {
   if (skeletons.empty()) return;
 
@@ -3239,8 +3542,8 @@ void VulkanRenderer::prefillGPULightBuffer(VkCommandBuffer& commandBuffer)
     if (_lights.size() > i) {
       auto& light = _lights[i];
 
-      mappedData[i]._worldPos = glm::vec4(light._pos, light._range);
-      mappedData[i]._color = glm::vec4(light._color, light._enabled ? 1.0 : 0.0);
+      mappedData[i]._worldPos = glm::vec4(light._pos, light._lightComp._range);
+      mappedData[i]._color = glm::vec4(light._lightComp._color, light._lightComp._enabled ? 1.0 : 0.0);
     }
   }
 
@@ -3289,10 +3592,10 @@ void VulkanRenderer::prefillGPUPointLightShadowCubeBuffer(VkCommandBuffer& comma
 
   for (std::size_t i = 0; i < MAX_NUM_POINT_LIGHT_SHADOWS; ++i) {
     if (_shadowCasters[i]) {
-      asset::Light* light = nullptr;
+      component::Light* light = nullptr;
       for (auto& l : _lights) {
-        if (l._id == _shadowCasters[i]) {
-          light = &l;
+        if (l._lightComp._id == _shadowCasters[i]) {
+          light = &l._lightComp;
           break;
         }
       }
@@ -4849,7 +5152,7 @@ size_t VulkanRenderer::getMaxNumPointLightShadows()
   return MAX_NUM_POINT_LIGHT_SHADOWS;
 }
 
-const std::vector<render::asset::Light>& VulkanRenderer::getLights()
+const std::vector<internal::InternalLight>& VulkanRenderer::getLights()
 {
   return _lights;
 }
@@ -4861,7 +5164,7 @@ std::vector<int> VulkanRenderer::getShadowCasterLightIndices()
   for (auto& id : _shadowCasters) {
     if (id) {
       for (int i = 0; i < _lights.size(); ++i) {
-        if (_lights[i]._id == id) {
+        if (_lights[i]._lightComp._id == id) {
           out.emplace_back(i);
           break;
         }

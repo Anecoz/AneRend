@@ -91,29 +91,7 @@ void ScenePager::update(const glm::vec3& pos)
         // Go through events to see if anything changed on this already paged tile
         for (const auto& event : log._events) {
           if (event._tileIdx && event._tileIdx == currIdx) {
-            if (event._type == SceneEventType::RenderableAdded) {
-              auto rendCopy = *_scene->getRenderable(event._id);
-              upd._addedRenderables.emplace_back(std::move(rendCopy));
-            }
-            else if (event._type == SceneEventType::RenderableUpdated) {
-              auto rendCopy = *_scene->getRenderable(event._id);
-              upd._updatedRenderables.emplace_back(std::move(rendCopy));
-            }
-            else if (event._type == SceneEventType::RenderableRemoved) {
-              upd._removedRenderables.emplace_back(event._id);
-            }
-            else if (event._type == SceneEventType::LightAdded) {
-              auto lightCopy = *_scene->getLight(event._id);
-              upd._addedLights.emplace_back(std::move(lightCopy));
-            }
-            else if (event._type == SceneEventType::LightUpdated) {
-              auto c = *_scene->getLight(event._id);
-              upd._updatedLights.emplace_back(std::move(c));
-            }
-            else if (event._type == SceneEventType::LightRemoved) {
-              upd._removedLights.emplace_back(event._id);
-            }
-            else if (event._type == SceneEventType::DDGIAtlasAdded) {
+            if (event._type == SceneEventType::DDGIAtlasAdded) {
               asset::TileInfo ti{};
               ti._index = currIdx;
               ti._ddgiAtlas = tile->getDDGIAtlas();
@@ -126,17 +104,21 @@ void ScenePager::update(const glm::vec3& pos)
         continue;
       }
 
-      // Page renderables, lights etc
-      for (const auto& rendId : tile->getRenderableIds()) {
-        auto copy = *_scene->getRenderable(rendId);
-        upd._addedRenderables.emplace_back(std::move(copy));
-      }
-      for (const auto& lightId : tile->getLightIds()) {
-        auto copy = *_scene->getLight(lightId);
-        upd._addedLights.emplace_back(std::move(copy));
+      // Page nodes
+      for (const auto& nodeId : tile->getNodes()) {
+        if (!_scene->registry().hasComponent<component::PageStatus>(nodeId)) {
+          _scene->registry().addComponent<component::PageStatus>(nodeId, true);
+        }
+        else {
+          auto& pagedComp = _scene->registry().getComponent<component::PageStatus>(nodeId);
+          pagedComp._paged = true;
+          _scene->registry().patchComponent<component::PageStatus>(nodeId);
+        }
       }
 
       // Do DDGI Atlas if present
+      // TODO: All these should probably be in the TileInfo thing?
+      // event::TileInfoUpdated etc instead of individual like the DDGIAtlas?
       if (auto atlasId = tile->getDDGIAtlas()) {
         asset::TileInfo ti{};
         ti._index = currIdx;
@@ -160,13 +142,11 @@ void ScenePager::update(const glm::vec3& pos)
   for (auto& idx : diff) {
     if (!_scene->getTile(idx, &tile)) continue;
 
-    // Remove renderables contained in tile
-    for (const auto& rendId : tile->getRenderableIds()) {
-      upd._removedRenderables.emplace_back(rendId);
-    }
-    // Remove lights
-    for (const auto& lightId : tile->getLightIds()) {
-      upd._removedLights.emplace_back(lightId);
+    // Remove paged component
+    for (const auto& nodeId : tile->getNodes()) {
+      auto& pagedComp = _scene->registry().getComponent<component::PageStatus>(nodeId);
+      pagedComp._paged = false;
+      _scene->registry().patchComponent<component::PageStatus>(nodeId);
     }
 
     // Remove tile info
@@ -174,15 +154,6 @@ void ScenePager::update(const glm::vec3& pos)
   }
 
   _pagedTiles = std::move(pagedTiles);
-
-  // Filter out copies of the same renderable update
-  if (upd._updatedRenderables.size() > 1) {
-    upd._updatedRenderables.erase(
-      std::unique(upd._updatedRenderables.begin(), upd._updatedRenderables.end(),
-        [](const render::asset::Renderable& a, const render::asset::Renderable& b) {
-          return a._id == b._id;
-        }), upd._updatedRenderables.end());
-  }
 
   // Do the asset update via rc
   if (upd) {

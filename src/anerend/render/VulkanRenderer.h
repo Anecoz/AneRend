@@ -27,6 +27,7 @@
 #include "internal/InternalModel.h"
 #include "internal/InternalMaterial.h"
 #include "internal/InternalRenderable.h"
+#include "internal/InternalLight.h"
 #include "internal/GigaBuffer.h"
 #include "internal/AnimationThread.h"
 #include "internal/BufferMemoryInterface.h"
@@ -37,6 +38,7 @@
 #include "internal/StagingBuffer.h"
 #include "AccelerationStructure.h"
 #include "scene/TileIndex.h"
+#include "../component/Registry.h"
 
 //#include "../logic/WindSystem.h"
 
@@ -72,7 +74,7 @@ struct PerFrameTimer
 class VulkanRenderer : public RenderContext, public internal::UploadContext
 {
 public:
-  VulkanRenderer(GLFWwindow* window, const Camera& initialCamera);
+  VulkanRenderer(GLFWwindow* window, const Camera& initialCamera, component::Registry* registry);
   ~VulkanRenderer();
 
   VulkanRenderer(const VulkanRenderer&) = delete;
@@ -157,7 +159,7 @@ public:
   size_t getMaxBindlessResources() override final;
   size_t getMaxNumPointLightShadows() override final;
 
-  const std::vector<render::asset::Light>& getLights() override final;
+  const std::vector<internal::InternalLight>& getLights() override final;
   std::vector<int> getShadowCasterLightIndices() override final;
 
   std::vector<internal::InternalMesh>& getCurrentMeshes() override final;
@@ -230,6 +232,11 @@ private:
   static const std::size_t MAX_NUM_SKINNED_MODELS = 1000;
   static const std::size_t MAX_NUM_POINT_LIGHT_SHADOWS = 4;
   static const std::size_t MAX_PAGE_TILE_RADIUS = 0;
+
+  component::Registry* _registry = nullptr;
+  entt::observer _nodeObserver;
+
+  void updateNodes();
 
   bool arePrerequisitesUploaded(internal::InternalModel& model);
   bool arePrerequisitesUploaded(internal::InternalRenderable& rend);
@@ -474,7 +481,7 @@ private:
   bool prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer);
 
   // Fill gpu skeleton info.
-  void prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, std::vector<anim::Skeleton>& skeletons);
+  void prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, std::vector<anim::Skeleton> skeletons);
 
   // Fills GPU light buffer with current light information.
   void prefillGPULightBuffer(VkCommandBuffer& commandBuffer);
@@ -501,7 +508,7 @@ private:
 
   std::vector<ViewCluster> _viewClusters;
 
-  std::vector<asset::Light> _lights;
+  std::vector<internal::InternalLight> _lights;
   std::array<util::Uuid, MAX_NUM_POINT_LIGHT_SHADOWS> _shadowCasters;
 
   VmaAllocator _vmaAllocator;

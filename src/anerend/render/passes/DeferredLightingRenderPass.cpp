@@ -23,8 +23,10 @@ void loadLutTex(RenderContext* renderContext, VkImage& image)
 
   bufferutil::createBuffer(vmaAllocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
 
+  void* data;
   glm::uint8_t* mappedData;
-  vmaMapMemory(vmaAllocator, stagingBuffer._allocation, &(void*)mappedData);
+  vmaMapMemory(vmaAllocator, stagingBuffer._allocation, &data);
+  mappedData = (glm::uint8_t*)data;
   std::memcpy(mappedData, texData.data.data(), texData.data.size());
   vmaUnmapMemory(vmaAllocator, stagingBuffer._allocation);
 
@@ -281,7 +283,7 @@ void DeferredLightingRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderC
         unsigned height;
       } push;
 
-      auto& lightIndices = exeParams.rc->getShadowCasterLightIndices();
+      auto lightIndices = exeParams.rc->getShadowCasterLightIndices();
       push.lightIndices = glm::ivec4(lightIndices[0], lightIndices[1], lightIndices[2], lightIndices[3]);
       push.width = extent.width;
       push.height = extent.height;

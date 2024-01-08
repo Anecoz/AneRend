@@ -13,31 +13,6 @@
 #include <string>
 #include <vector>
 
-namespace logic { struct AneditConfig; }
-
-namespace bitsery {
-
-
-template <typename S>
-void serialize(S& s, glm::vec3& v)
-{
-  s.value4b(v.x);
-  s.value4b(v.y);
-  s.value4b(v.z);
-}
-
-template <typename S>
-void serialize(S& s, logic::AneditConfig& conf)
-{
-  auto& string = conf._scenePath.string();
-  s.text1b(string, 40);
-  conf._scenePath = std::filesystem::path(string);
-
-  s.object(conf._lastCamPos);
-}
-
-}
-
 namespace logic {
 
 struct AneditConfig
@@ -104,5 +79,28 @@ struct AneditConfig
   }
 
 };
+
+}
+
+
+namespace bitsery {
+
+  template <typename S>
+  void serialize(S& s, glm::vec3& v)
+  {
+    s.value4b(v.x);
+    s.value4b(v.y);
+    s.value4b(v.z);
+  }
+
+  template <typename S>
+  void serialize(S& s, logic::AneditConfig& conf)
+  {
+    auto string = conf._scenePath.string();
+    s.text1b(string, 40);
+    conf._scenePath = std::filesystem::path(string);
+
+    s.object(conf._lastCamPos);
+  }
 
 }

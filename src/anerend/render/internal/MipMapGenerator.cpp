@@ -130,8 +130,10 @@ void MipMapGenerator::generateMipMaps(render::asset::Texture& tex, render::Rende
     stagingBuf);
 
   // 2. Map and write data to staging buf
+  void* data;
   uint8_t* mappedData;
-  vmaMapMemory(rc->vmaAllocator(), stagingBuf._allocation, &(void*)mappedData);
+  vmaMapMemory(rc->vmaAllocator(), stagingBuf._allocation, &data);
+  mappedData = (uint8_t*)data;
   std::memcpy(mappedData, tex._data[0].data(), tex._data[0].size());
   vmaUnmapMemory(rc->vmaAllocator(), stagingBuf._allocation);
 
@@ -195,7 +197,7 @@ void MipMapGenerator::generateMipMaps(render::asset::Texture& tex, render::Rende
     rc->endSingleTimeCommands(cmdBuf);
 
     void* mappedData = nullptr;
-    vmaMapMemory(rc->vmaAllocator(), stagingBuf._allocation, &(void*)mappedData);
+    vmaMapMemory(rc->vmaAllocator(), stagingBuf._allocation, &mappedData);
     std::memcpy(currTexData.data(), mappedData, size);
     vmaUnmapMemory(rc->vmaAllocator(), stagingBuf._allocation);
 

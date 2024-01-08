@@ -43,7 +43,9 @@ if (WIN32)
   set(KTX_FEATURE_VK_UPLOAD OFF CACHE BOOL "Enable Vulkan texture upload" FORCE)
   set(KTX_FEATURE_LOADTEST_APPS "" CACHE STRING  "Load test apps test the upload feature by displaying various KTX textures. Select which to create. \"OpenGL\" includes OpenGL ES." FORCE)
   add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS)
+  add_compile_options(/Wv:18)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/KTX-Software)
+  #target_compile_definitions(ktx PUBLIC /Wv:18)
 
   # MikkTSpace
   add_library(mikktspace STATIC 
@@ -52,6 +54,9 @@ if (WIN32)
 
   target_include_directories(mikktspace INTERFACE 
     ${CMAKE_CURRENT_LIST_DIR}/MikkTSpace/)
+
+  # entt
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/entt)
 
 else()  
 endif()

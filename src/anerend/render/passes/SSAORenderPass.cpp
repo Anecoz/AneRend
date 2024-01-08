@@ -46,8 +46,10 @@ void fillSampleUBO(RenderContext* renderContext, AllocatedBuffer& ubo)
   auto allocator = renderContext->vmaAllocator();
   bufferutil::createBuffer(allocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
 
+  void* data;
   glm::vec4* mappedData;
-  vmaMapMemory(allocator, stagingBuffer._allocation, &(void*)mappedData);
+  vmaMapMemory(allocator, stagingBuffer._allocation, &data);
+  mappedData = (glm::vec4*)data;
 
   for (std::size_t i = 0; i < ssaoKernel.size(); ++i) {
     mappedData[i] = ssaoKernel[i];
@@ -100,8 +102,10 @@ void fillNoiseTex(RenderContext* renderContext, VkImage& image)
   auto allocator = renderContext->vmaAllocator();
   bufferutil::createBuffer(allocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
 
+  void* data;
   glm::vec4* mappedData;
-  vmaMapMemory(allocator, stagingBuffer._allocation, &(void*)mappedData);
+  vmaMapMemory(allocator, stagingBuffer._allocation, &data);
+  mappedData = (glm::vec4*)data;
 
   for (std::size_t i = 0; i < ssaoNoise.size(); ++i) {
     mappedData[i] = ssaoNoise[i];

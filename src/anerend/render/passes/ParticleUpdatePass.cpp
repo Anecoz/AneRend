@@ -21,8 +21,10 @@ void prefillParticleBuffer(RenderContext* rc, AllocatedBuffer& buffer)
 
   bufferutil::createBuffer(allocator, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, stagingBuffer);
 
+  void* data;
   gpu::GPUParticle* mappedData;
-  vmaMapMemory(allocator, stagingBuffer._allocation, &(void*)mappedData);
+  vmaMapMemory(allocator, stagingBuffer._allocation, &data);
+  mappedData = (gpu::GPUParticle*)data;
 
   for (std::size_t i = 0; i < particles.size(); ++i) {
     auto& cpuParticle = particles[i];

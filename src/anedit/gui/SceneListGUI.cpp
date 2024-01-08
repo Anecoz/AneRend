@@ -18,9 +18,9 @@ SceneListGUI::~SceneListGUI()
 void SceneListGUI::immediateDraw(logic::AneditContext* c)
 {
   // Draw list of current renderables, animators, lights, particle emitters etc
-  const auto& renderables = c->scene().getRenderables();
+  //const auto& renderables = c->scene().getRenderables();
   const auto& animators = c->scene().getAnimators();
-  const auto& lights = c->scene().getLights();
+  //const auto& lights = c->scene().getLights();
 
   ImGui::Begin("Scene list", NULL, ImGuiWindowFlags_MenuBar);
 
@@ -65,6 +65,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 
     ImGui::Separator();
 
+#if 0
     for (const auto& r : renderables) {
       std::string label = std::string("Renderable ") + (r._name.empty()? r._id.str() : r._name);
       label += "##" + r._id.str();
@@ -74,6 +75,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
         c->selectionType() = logic::AneditContext::SelectionType::Renderable;
       }
     }
+#endif
   }
 
   ImGui::Separator();
@@ -103,6 +105,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 
     ImGui::Separator();
 
+#if 0
     for (const auto& a : lights) {
       std::string label = std::string("Light ") + (a._name.empty() ? a._id.str() : a._name);
       label += "##" + a._id.str();
@@ -112,6 +115,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
         c->selectionType() = logic::AneditContext::SelectionType::Light;
       }
     }
+#endif
   }
 
   ImGui::End();
@@ -136,7 +140,7 @@ void SceneListGUI::addFromPrefab(logic::AneditContext* c)
       // Create a renderable from prefab
       if (_selectedPrefab) {
         auto* p = c->scene().getPrefab(_selectedPrefab);
-        render::asset::Renderable rend{};
+        component::Renderable rend{};
         rend._materials = p->_materials;
         rend._model = p->_model;
         rend._skeleton = p->_skeleton;
@@ -187,9 +191,11 @@ void SceneListGUI::addAnimatorClicked(logic::AneditContext* c)
 void SceneListGUI::addLightClicked(logic::AneditContext* c)
 {
   // Add a default light
-  render::asset::Light light{};
+#if 0
+  component::Light light{};
   light._name = "New light";
   c->scene().addLight(std::move(light));
+#endif
 }
 
 void SceneListGUI::saveSceneClicked(logic::AneditContext* c)

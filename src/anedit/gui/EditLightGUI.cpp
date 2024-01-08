@@ -36,14 +36,14 @@ void EditLightGUI::immediateDraw(logic::AneditContext* c)
       ImGui::BeginDisabled();
     }
     else {
-      auto* light = c->scene().getLight(id);
+      /*auto* light = c->scene().getLight(id);
 
       strcpy_s(name, light->_name.c_str());
       pos = light->_pos;
       color = light->_color;
       range = light->_range;
       enabled = light->_enabled;
-      shadowCaster = light->_shadowCaster;
+      shadowCaster = light->_shadowCaster;*/
     }
 
     // Input for pos
@@ -91,7 +91,7 @@ void EditLightGUI::immediateDraw(logic::AneditContext* c)
       ImGui::EndDisabled();
     }
     else if (changed) {
-      auto oldLight = *c->scene().getLight(id);
+      /*auto oldLight = *c->scene().getLight(id);
       oldLight._name = std::string(name);
       oldLight._color = color;
       oldLight._pos = pos;
@@ -99,7 +99,7 @@ void EditLightGUI::immediateDraw(logic::AneditContext* c)
       oldLight._range = range;
       oldLight._shadowCaster = shadowCaster;
 
-      c->scene().updateLight(std::move(oldLight));
+      c->scene().updateLight(std::move(oldLight));*/
     }
   }
 
@@ -107,7 +107,7 @@ void EditLightGUI::immediateDraw(logic::AneditContext* c)
 
   // Do gizmo (transform) editing with ImGuizmo
   if (id) {
-    auto* light = c->scene().getLight(id);
+    /*auto* light = c->scene().getLight(id);
 
     glm::mat4 m = glm::translate(glm::mat4(1.0f), light->_pos);
 
@@ -130,7 +130,7 @@ void EditLightGUI::immediateDraw(logic::AneditContext* c)
       copy._pos = t;
 
       c->scene().updateLight(std::move(copy));
-    }
+    }*/
   }
 
 }

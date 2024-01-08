@@ -1,5 +1,6 @@
 #include "SceneSerializer.h"
 
+#include "../../../component/Components.h"
 #include "../Scene.h"
 
 #include <bitsery/bitsery.h>
@@ -256,34 +257,34 @@ void serialize(S& s, std::vector<render::anim::Skeleton>& skel)
 }
 
 template <typename S>
-void serialize(S& s, render::asset::Renderable& r)
+void serialize(S& s, component::Renderable& r)
 {
   s.object(r._id);
   s.text1b(r._name, 100);
   s.object(r._model);
   s.object(r._skeleton);
   s.container(r._materials, 2048);
-  s.object(r._localTransform);
-  s.object(r._globalTransform);
+  //s.object(r._localTransform);
+  //s.object(r._globalTransform);
   s.object(r._tint);
   s.object(r._boundingSphere);
   s.value1b(r._visible);
-  s.object(r._parent);
-  s.container(r._children, 100);
+  //s.object(r._parent);
+  //s.container(r._children, 100);
 }
 
 template <typename S>
-void serialize(S& s, std::vector<render::asset::Renderable>& r)
+void serialize(S& s, std::vector<component::Renderable>& r)
 {
   s.container(r, 100'000);
 }
 
 template <typename S>
-void serialize(S& s, render::asset::Light& l)
+void serialize(S& s, component::Light& l)
 {
   s.object(l._id);
   s.text1b(l._name, 100);
-  s.object(l._pos);
+  //s.object(l._pos);
   s.object(l._color);
   s.value4b(l._range);
   s.value1b(l._enabled);
@@ -291,7 +292,7 @@ void serialize(S& s, render::asset::Light& l)
 }
 
 template <typename S>
-void serialize(S& s, std::vector<render::asset::Light>& v)
+void serialize(S& s, std::vector<component::Light>& v)
 {
   s.container(v, 1024);
 }
@@ -651,8 +652,8 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       std::vector<render::anim::Animation> animations;
       std::vector<render::anim::Skeleton> skeletons;
       std::vector<render::asset::Animator> animators;
-      std::vector<render::asset::Renderable> rends;
-      std::vector<render::asset::Light> lights;
+      std::vector<component::Renderable> rends;
+      std::vector<component::Light> lights;
       std::vector<render::scene::Scene::TileInfo> tis;
 
       // Read prefabs
@@ -737,10 +738,10 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         outputData._scene->addAnimator(std::move(animator));
       }
       for (auto& r : rends) {
-        outputData._scene->addRenderable(std::move(r));
+        //outputData._scene->addRenderable(std::move(r));
       }
       for (auto& l : lights) {
-        outputData._scene->addLight(std::move(l));
+        //outputData._scene->addLight(std::move(l));
       }
       for (auto& ti : tis) {
         if (ti._ddgiAtlas) {

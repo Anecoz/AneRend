@@ -13,3 +13,6 @@
 [submodule "contrib/MikkTSpace"]
 	path = contrib/MikkTSpace
 	url = https://github.com/mmikk/MikkTSpace.git
+[submodule "contrib/entt"]
+	path = contrib/entt
+	url = https://github.com/skypjack/entt.git

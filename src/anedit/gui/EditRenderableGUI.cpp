@@ -41,6 +41,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       ImGui::BeginDisabled();
     }
     else {
+#if 0
       auto* rend = c->scene().getRenderable(id);
 
       auto oldTrans = rend->_localTransform;
@@ -51,6 +52,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       visible = rend->_visible;
 
       ImGuizmo::DecomposeMatrixToComponents(&oldTrans[0][0], &translation[0], &rot[0], &scale[0]);
+#endif
     }
 
     // Radio buttons for choosing guizmo mode
@@ -125,6 +127,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       ImGui::EndDisabled();
     }
     else if (changed) {
+#if 0
       // recompose
       glm::mat4 m;
       ImGuizmo::RecomposeMatrixFromComponents(&translation[0], &rot[0], &scale[0], &m[0][0]);
@@ -133,11 +136,13 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       c->scene().setRenderableTint(id, tint);
       c->scene().setRenderableBoundingSphere(id, glm::vec4(boundingSphereCenter, boundingSphereRadius));
       c->scene().setRenderableVisible(id, visible);
+#endif
     }
   }
 
   // Do gizmo (transform) editing with ImGuizmo
   if (id) {
+#if 0
     glm::vec3 modelTrans = c->scene().getRenderable(id)->_localTransform[3];
     glm::mat4 globalTransform = c->scene().getRenderable(id)->_globalTransform;
 
@@ -186,6 +191,7 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
         c->scene().setRenderableTransform(id, m);
       }
     }
+#endif
   }
 
 }

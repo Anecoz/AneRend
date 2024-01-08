@@ -3,15 +3,17 @@
 #include "Tile.h"
 #include "TileIndex.h"
 #include "DeserialisedSceneData.h"
+#include "Node.h"
+
+#include "../../component/Components.h"
+#include "../../component/Registry.h"
 
 #include "../../util/Uuid.h"
 #include "../asset/Model.h"
-#include "../asset/Renderable.h"
 #include "../asset/Material.h"
 #include "../asset/Animator.h"
 #include "../asset/Prefab.h"
 #include "../asset/Texture.h"
-#include "../asset/Light.h"
 
 #include "../animation/Skeleton.h"
 #include "../animation/Animation.h"
@@ -44,12 +46,6 @@ enum class SceneEventType
   MaterialAdded,
   MaterialUpdated,
   MaterialRemoved,
-  RenderableAdded,
-  RenderableUpdated,
-  RenderableRemoved,
-  LightAdded,
-  LightUpdated,
-  LightRemoved,
   DDGIAtlasAdded
 };
 
@@ -78,6 +74,8 @@ public:
   Scene(const Scene&) = delete;
   Scene& operator=(const Scene&) = delete;
 
+  void update();
+
   // This will take a snapshot of the scene as it is at call time,
   // and then asynchronously serialize to path.
   void serializeAsync(const std::filesystem::path& path);
@@ -88,6 +86,8 @@ public:
   void resetEvents();
 
   bool getTile(TileIndex idx, Tile** tileOut);
+
+  component::Registry& registry() { return _registry; }
 
   const std::vector<asset::Material>& getMaterials() const {
     return _materials;
@@ -117,13 +117,13 @@ public:
     return _textures;
   }
 
-  const std::vector<asset::Renderable>& getRenderables() const {
+  /*const std::vector<component::Renderable>& getRenderables() const {
     return _renderables;
   }
 
-  const std::vector<asset::Light>& getLights() const {
+  const std::vector<component::Light>& getLights() const {
     return _lights;
-  }
+  }*/
 
   util::Uuid addPrefab(asset::Prefab&& prefab);
   void updatePrefab(asset::Prefab prefab);
@@ -156,23 +156,27 @@ public:
   void removeAnimator(util::Uuid id);
   const asset::Animator* getAnimator(util::Uuid id);
 
-  util::Uuid addLight(asset::Light&& l);
-  void updateLight(asset::Light l);
-  void removeLight(util::Uuid id);
-  const asset::Light* getLight(util::Uuid id);
+  util::Uuid addNode(Node node);
+  void removeNode(util::Uuid id);
+  const Node* getNode(util::Uuid id);
 
-  util::Uuid addRenderable(asset::Renderable&& renderable);
+  /*util::Uuid addLight(component::Light&& l);
+  void updateLight(component::Light l);
+  void removeLight(util::Uuid id);
+  const component::Light* getLight(util::Uuid id);
+
+  util::Uuid addRenderable(component::Renderable&& renderable);
   void removeRenderable(util::Uuid id);
-  const asset::Renderable* getRenderable(util::Uuid id);
+  const component::Renderable* getRenderable(util::Uuid id);*/
 
   void setDDGIAtlas(util::Uuid texId, scene::TileIndex idx);
 
   // TODO: Decide if the Scene class really is the correct place to access/modify renderables.
-  void setRenderableTint(util::Uuid id, const glm::vec3& tint);
+  /*void setRenderableTint(util::Uuid id, const glm::vec3& tint);
   void setRenderableTransform(util::Uuid id, const glm::mat4& transform);
   void setRenderableName(util::Uuid id, std::string name);
   void setRenderableBoundingSphere(util::Uuid id, const glm::vec4& boundingSphere);
-  void setRenderableVisible(util::Uuid id, bool val);
+  void setRenderableVisible(util::Uuid id, bool val);*/
 
   struct TileInfo
   {
@@ -184,6 +188,8 @@ private:
   friend struct internal::SceneSerializer;
 
   std::unordered_map<TileIndex, Tile> _tiles;
+  std::vector<TileInfo> _tileInfos;
+  std::unordered_map<util::Uuid, TileIndex> _nodeTileMap; // Helper to know which tile a node has been added
 
   /*
   * TODO: In the future maybe these need to be tile - based aswell.
@@ -198,17 +204,22 @@ private:
   std::vector<asset::Animator> _animators;
   std::vector<asset::Prefab> _prefabs;
   std::vector<asset::Texture> _textures;
-  std::vector<asset::Renderable> _renderables;
-  std::vector<asset::Light> _lights;
+  std::vector<component::Renderable> _renderables;
+  std::vector<component::Light> _lights;
 
-  std::vector<TileInfo> _tileInfos;
+  std::unordered_map<util::Uuid, scene::Node> _nodes;
+  //std::vector<scene::Node> _nodes;
+
+  component::Registry _registry;
 
   SceneEventLog _eventLog;
   internal::SceneSerializer _serialiser;
 
+  entt::observer _transformObserver;
+
   void addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx = TileIndex());
-  void updateDependentTransforms(render::asset::Renderable& rend);
-  void updateChildrenTransforms(render::asset::Renderable& rend);
+  void updateDependentTransforms(Node& node, component::Transform& transform);
+  void updateChildrenTransforms(Node& node, component::Transform& transform);
 };
 
 }

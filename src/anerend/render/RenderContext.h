@@ -5,17 +5,17 @@
 #include "vma/vk_mem_alloc.h"
 
 #include "asset/Model.h"
-#include "asset/Renderable.h"
+#include "../component/Components.h"
 #include "asset/Material.h"
 #include "asset/Texture.h"
 #include "asset/Animator.h"
-#include "asset/Light.h"
 #include "asset/TileInfo.h"
 #include "animation/Animation.h"
 #include "animation/Skeleton.h"
 #include "internal/InternalMesh.h"
 #include "internal/InternalRenderable.h"
 #include "internal/BufferMemoryInterface.h"
+#include "internal/InternalLight.h"
 #include "Vertex.h"
 #include "GpuBuffers.h"
 #include "RenderDebugOptions.h"
@@ -77,12 +77,12 @@ struct AssetUpdate
   std::vector<anim::Skeleton> _addedSkeletons;
   std::vector<util::Uuid> _removedSkeletons;
 
-  std::vector<asset::Renderable> _addedRenderables;
-  std::vector<asset::Renderable> _updatedRenderables;
+  std::vector<component::Renderable> _addedRenderables;
+  std::vector<component::Renderable> _updatedRenderables;
   std::vector<util::Uuid> _removedRenderables;
 
-  std::vector<asset::Light> _addedLights;
-  std::vector<asset::Light> _updatedLights;
+  std::vector<component::Light> _addedLights;
+  std::vector<component::Light> _updatedLights;
   std::vector<util::Uuid> _removedLights;
 
   std::vector<asset::TileInfo> _addedTileInfos;
@@ -129,7 +129,7 @@ public:
   virtual size_t getMaxBindlessResources() = 0;
   virtual size_t getMaxNumPointLightShadows() = 0;
 
-  virtual const std::vector<render::asset::Light>& getLights() = 0;
+  virtual const std::vector<internal::InternalLight>& getLights() = 0;
   virtual std::vector<int> getShadowCasterLightIndices() = 0;
 
   virtual std::vector<internal::InternalMesh>& getCurrentMeshes() = 0;

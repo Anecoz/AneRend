@@ -28,10 +28,10 @@ AneditApplication::AneditApplication(std::string title)
   : Application(std::move(title))
   , _sunDir(glm::vec3(0.7f, -0.7f, 0.7f))
   , _camera(glm::vec3(-17.0, 6.0, 4.0), render::ProjectionType::Perspective)
-  , _vkRenderer(_window, _camera)
   , _windDir(glm::vec2(-1.0, 0.0))
   , _shadowCamera(glm::vec3(-20.0f, 15.0f, -20.0f), render::ProjectionType::Orthogonal)
   , _scene()
+  , _vkRenderer(_window, _camera, &_scene.registry())
   , _scenePager(&_vkRenderer)
 {
   _scenePager.setScene(&_scene);
@@ -115,6 +115,7 @@ void AneditApplication::update(double delta)
   }
 
   _camera.update(delta);
+  _scene.update();
   _scenePager.update(_camera.getPosition());
   _scene.resetEvents();
 
@@ -434,10 +435,27 @@ void AneditApplication::calculateShadowMatrix()
 
 util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, util::Uuid parentRendUuid, glm::mat4 parentGlobalTransform)
 {
+  // CRUDE TESTING
+  auto nodeId = _scene.addNode({});  
+
+  _scene.registry().addComponent<component::Transform>(nodeId, prefab._transform, prefab._transform);
+  auto& rend = _scene.registry().addComponent<component::Renderable>(nodeId);
+  rend._materials = prefab._materials;
+  rend._model = prefab._model;
+  rend._skeleton = prefab._skeleton;
+  rend._name = prefab._name.empty() ? "" : prefab._name;
+  rend._boundingSphere = prefab._boundingSphere;
+  rend._visible = true;
+  rend._tint = prefab._tint;
+
+  _scene.registry().patchComponent<component::Transform>(nodeId);
+  _scene.registry().patchComponent<component::Renderable>(nodeId);
+
+#if 0
   auto s = glm::scale(glm::mat4(1.0f), glm::vec3(0.005f));
   auto r = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 
-  render::asset::Renderable rend{};
+  component::Renderable rend{};
   rend._materials = prefab._materials;
   rend._model = prefab._model;
   rend._skeleton = prefab._skeleton;
@@ -462,6 +480,8 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, u
   }
 
   return _scene.addRenderable(std::move(rend));
+#endif
+  return util::Uuid();
 }
 
 void AneditApplication::notifyFramebufferResized()
@@ -497,10 +517,11 @@ void AneditApplication::startLoadGLTF(std::filesystem::path p)
 
 void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
 {
+#if 0
   _vkRenderer.requestWorldPosition(MousePosInput::getPosition(),
     [prefab, this](glm::vec3 worldPos) {
       auto* p = _scene.getPrefab(prefab);
-      render::asset::Renderable rend{};
+      component::Renderable rend{};
       rend._materials = p->_materials;
       rend._model = p->_model;
       rend._skeleton = p->_skeleton;
@@ -524,7 +545,7 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
       // TODO: Should be recursive!
       for (auto& childId : p->_children) {
         auto* childPrefab = _scene.getPrefab(childId);
-        render::asset::Renderable childRend{};
+        component::Renderable childRend{};
         childRend._materials = childPrefab->_materials;
         childRend._model = childPrefab->_model;
         childRend._skeleton = childPrefab->_skeleton;
@@ -547,6 +568,7 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
       _selectionType = AneditContext::SelectionType::Renderable;
       _scene.addRenderable(std::move(rend));
     });
+#endif
 }
 
 std::vector<util::Uuid>& AneditApplication::selection()

@@ -17,8 +17,7 @@ Tile::~Tile()
 
 Tile::Tile(Tile&& rhs)
 {
-  std::swap(_renderables, rhs._renderables);
-  std::swap(_lights, rhs._lights);
+  std::swap(_nodes, rhs._nodes);
   std::swap(_ddgiAtlas, rhs._ddgiAtlas);
   std::swap(_index, rhs._index);
   _initialized = true;
@@ -28,8 +27,7 @@ Tile::Tile(Tile&& rhs)
 Tile& Tile::operator=(Tile&& rhs)
 {
   if (this != &rhs) {
-    std::swap(_renderables, rhs._renderables);
-    std::swap(_lights, rhs._lights);
+    std::swap(_nodes, rhs._nodes);
     std::swap(_ddgiAtlas, rhs._ddgiAtlas);
     std::swap(_index, rhs._index);
     _initialized = true;
@@ -44,24 +42,14 @@ Tile::operator bool() const
   return _initialized;
 }
 
-void Tile::addRenderable(util::Uuid id)
+void Tile::addNode(util::Uuid id)
 {
-  _renderables.emplace_back(id);
+  _nodes.emplace_back(id);
 }
 
-void Tile::removeRenderable(util::Uuid id)
+void Tile::removeNode(util::Uuid id)
 {
-  _renderables.erase(std::remove(_renderables.begin(), _renderables.end(), id), _renderables.end());
-}
-
-void Tile::addLight(util::Uuid id)
-{
-  _lights.emplace_back(id);
-}
-
-void Tile::removeLight(util::Uuid id)
-{
-  _lights.erase(std::remove(_lights.begin(), _lights.end(), id), _lights.end());
+  _nodes.erase(std::remove(_nodes.begin(), _nodes.end(), id), _nodes.end());
 }
 
 TileIndex Tile::posToIdx(const glm::vec3& pos)
