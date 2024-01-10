@@ -435,21 +435,116 @@ void AneditApplication::calculateShadowMatrix()
 
 util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, util::Uuid parentRendUuid, glm::mat4 parentGlobalTransform)
 {
-  // CRUDE TESTING
-  auto nodeId = _scene.addNode({});  
+#if 1
+  render::scene::Node node{};
+  node._name = prefab._name;
+  node._parent = parentRendUuid;
 
-  _scene.registry().addComponent<component::Transform>(nodeId, prefab._transform, prefab._transform);
-  auto& rend = _scene.registry().addComponent<component::Renderable>(nodeId);
-  rend._materials = prefab._materials;
-  rend._model = prefab._model;
-  rend._skeleton = prefab._skeleton;
-  rend._name = prefab._name.empty() ? "" : prefab._name;
-  rend._boundingSphere = prefab._boundingSphere;
-  rend._visible = true;
-  rend._tint = prefab._tint;
+  // There should always be a transform component
+  auto id = node._id;
+  auto globalTransform = parentGlobalTransform * prefab._comps._trans._localTransform;
+
+  // Instantiate children
+  auto& prefabs = _scene.getPrefabs();
+  for (auto& childPrefabId : prefab._children) {
+    for (auto& p : prefabs) {
+      if (p._id == childPrefabId) {
+        node._children.emplace_back(instantiate(p, id, globalTransform));
+        break;
+      }
+    }
+  }
+
+  _scene.addNode(std::move(node));
+  auto* nodePtr = _scene.getNode(id);
+  _scene.registry().addComponent<component::Transform>(nodePtr->_id, globalTransform, prefab._comps._trans._localTransform);
+  _scene.registry().patchComponent<component::Transform>(nodePtr->_id);
+
+  if (prefab._comps._rend) {
+    auto& prefabRend = prefab._comps._rend.value();
+    auto& rendComp = _scene.registry().addComponent<component::Renderable>(nodePtr->_id);
+    rendComp = prefabRend;
+    _scene.registry().patchComponent<component::Renderable>(nodePtr->_id);
+  }
+  if (prefab._comps._light) {
+    auto& prefabComp = prefab._comps._light.value();
+    auto& comp = _scene.registry().addComponent<component::Light>(nodePtr->_id);
+    comp = prefabComp;
+    _scene.registry().patchComponent<component::Light>(nodePtr->_id);
+  }
+
+  printf("Instantiating node id %s\n", id.str().c_str());
+
+  return id;
+#endif
+#if 0
+  // CRUDE TESTING
+  render::scene::Node node{};
+  node._name = prefab._name + " (main)";
+
+  //render::scene::Node childNode0{};
+  //childNode0._name = prefab._name + " (child 0)";
+  //childNode0._parent = node._id;
+
+  //render::scene::Node childNode1{};
+  //childNode1._name = prefab._name + " (child 1)";
+  //childNode1._parent = node._id;
+
+  //node._children.emplace_back(childNode0._id);
+  //childNode0._children.emplace_back(childNode1._id);
+  //node._children.emplace_back(childNode1._id);
+
+  auto nodeId = _scene.addNode(std::move(node));
+  //auto childNode0Id = _scene.addNode(std::move(childNode0));
+  //auto childNode1Id = _scene.addNode(std::move(childNode1));
+
+  _scene.registry().addComponent<component::Transform>(nodeId, parentGlobalTransform, parentGlobalTransform);
+  if (prefab._comps._rend) {
+    auto& prefabRend = prefab._comps._rend.value();
+    auto& rendComp = _scene.registry().addComponent<component::Renderable>(nodeId);
+    rendComp = prefabRend;
+    _scene.registry().patchComponent<component::Renderable>(nodeId);
+  }
 
   _scene.registry().patchComponent<component::Transform>(nodeId);
-  _scene.registry().patchComponent<component::Renderable>(nodeId);
+  //_scene.registry().patchComponent<component::Renderable>(nodeId);
+
+  // Just test having a child node
+  /* {
+    _scene.registry().addComponent<component::Transform>(childNode0Id, prefab._transform, prefab._transform);
+    //_scene.registry().addComponent<component::Light>(lightNodeId);
+
+    auto& rend = _scene.registry().addComponent<component::Renderable>(childNode0Id);
+    rend._materials = prefab._materials;
+    rend._model = prefab._model;
+    rend._skeleton = prefab._skeleton;
+    rend._name = prefab._name.empty() ? "" : prefab._name;
+    rend._boundingSphere = prefab._boundingSphere;
+    rend._visible = true;
+    rend._tint = prefab._tint;
+
+    _scene.registry().patchComponent<component::Transform>(childNode0Id);
+    _scene.registry().patchComponent<component::Renderable>(childNode0Id);
+    //_scene.registry().patchComponent<component::Light>(lightNodeId);
+  }
+  {
+    _scene.registry().addComponent<component::Transform>(childNode1Id, prefab._transform, prefab._transform);
+    //_scene.registry().addComponent<component::Light>(lightNodeId);
+
+    auto& rend = _scene.registry().addComponent<component::Renderable>(childNode1Id);
+    rend._materials = prefab._materials;
+    rend._model = prefab._model;
+    rend._skeleton = prefab._skeleton;
+    rend._name = prefab._name.empty() ? "" : prefab._name;
+    rend._boundingSphere = prefab._boundingSphere;
+    rend._visible = true;
+    rend._tint = prefab._tint;
+
+    _scene.registry().patchComponent<component::Transform>(childNode1Id);
+    _scene.registry().patchComponent<component::Renderable>(childNode1Id);
+    //_scene.registry().patchComponent<component::Light>(lightNodeId);
+  }*/
+#endif
 
 #if 0
   auto s = glm::scale(glm::mat4(1.0f), glm::vec3(0.005f));
@@ -481,7 +576,6 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, u
 
   return _scene.addRenderable(std::move(rend));
 #endif
-  return util::Uuid();
 }
 
 void AneditApplication::notifyFramebufferResized()

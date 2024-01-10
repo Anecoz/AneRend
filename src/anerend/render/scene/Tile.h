@@ -25,9 +25,12 @@ public:
 
   explicit operator bool() const;
 
+  bool& dirty() { return _dirty; }
+  std::vector<util::Uuid>& getDirtyNodes() { return _dirtyNodes; }
+
   void addNode(util::Uuid id);
   void removeNode(util::Uuid id);
-  const std::vector<util::Uuid>& getNodes() const { return _nodes; }
+  std::vector<util::Uuid>& getNodes() { return _nodes; }
 
   void setDDGIAtlas(util::Uuid id) { _ddgiAtlas = id; }
   util::Uuid getDDGIAtlas() { return _ddgiAtlas; }
@@ -36,10 +39,12 @@ public:
   static TileIndex posToIdx(const glm::vec3& pos);
 
 private:
+  bool _dirty = true;
   TileIndex _index;
   bool _initialized = false;
 
   std::vector<util::Uuid> _nodes;
+  std::vector<util::Uuid> _dirtyNodes; // These are also located in _nodes
   util::Uuid _ddgiAtlas;
 
 };

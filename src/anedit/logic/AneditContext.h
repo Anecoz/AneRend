@@ -24,11 +24,10 @@ struct AneditContext
 
   enum class SelectionType
   {
-    Renderable,
     Material,
     Prefab,
     Animator,
-    Light
+    Node
   };
 
   virtual std::vector<util::Uuid>& selection() = 0;
@@ -45,7 +44,7 @@ struct AneditContext
 
 protected:
   std::vector<util::Uuid> _selection;
-  SelectionType _selectionType = SelectionType::Renderable;
+  SelectionType _selectionType = SelectionType::Node;
 };
 
 }

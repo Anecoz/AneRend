@@ -167,8 +167,11 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera, 
   , _nodeObserver(_registry->getEnttRegistry(), entt::collector
     .update<component::PageStatus>()
     .update<component::Light>()
+    .where<component::PageStatus>()
     .update<component::Renderable>()
-    .update<component::Transform>())
+    .where<component::PageStatus>()
+    .update<component::Transform>()
+    .where<component::PageStatus>()) 
   , _currentSwapChainIndex(0)
   , _vault(MAX_FRAMES_IN_FLIGHT)
   , _gigaVtxBuffer(1024 * 1024 * GIGA_MESH_BUFFER_SIZE_MB)
@@ -2590,6 +2593,7 @@ void VulkanRenderer::updateNodes()
             }
 
             l.updateViewMatrices(lightPos);
+            oldLight._pos = lightPos;
             oldLight._lightComp = l;
             break;
           }

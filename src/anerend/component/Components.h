@@ -5,10 +5,15 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace component {
+
+/*
+* If you add a new component, update the PotentialComponent struct below aswell!
+*/
 
 struct Transform
 {
@@ -106,5 +111,12 @@ struct Light
   // Type, i.e. directional, point, spot
 };
 
+// Struct that holds potential components used by e.g. prefabs
+struct PotentialComponents
+{
+  Transform _trans; // not optional
+  std::optional<Renderable> _rend;
+  std::optional<Light> _light;
+};
 
 }

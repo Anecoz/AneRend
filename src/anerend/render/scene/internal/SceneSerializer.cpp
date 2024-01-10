@@ -106,9 +106,9 @@ void serialize(S& s, render::asset::Prefab& p)
 {
   s.object(p._id);
   s.text1b(p._name, 100);
-  s.object(p._model);
-  s.object(p._skeleton);
-  s.container(p._materials, 2500);
+  //s.object(p._model);
+  //s.object(p._skeleton);
+  //s.container(p._materials, 2500);
   s.object(p._parent);
   s.container(p._children, 1000);
 }

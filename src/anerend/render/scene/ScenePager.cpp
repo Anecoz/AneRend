@@ -86,6 +86,7 @@ void ScenePager::update(const glm::vec3& pos)
       }
 
       // Is this tile already paged?
+      bool onlyPageDirtyNodes = false;
       if (std::find(_pagedTiles.begin(), _pagedTiles.end(), currIdx) != _pagedTiles.end()) {
 
         // Go through events to see if anything changed on this already paged tile
@@ -100,20 +101,38 @@ void ScenePager::update(const glm::vec3& pos)
           }
         }
 
-        pagedTiles.emplace_back(currIdx);
-        continue;
+        // If tile is dirty, redo the nodes. If not dirty, be happy here
+        if (!tile->dirty()) {
+          pagedTiles.emplace_back(currIdx);
+          continue;
+        }
+        
+        onlyPageDirtyNodes = true;
       }
 
       // Page nodes
-      for (const auto& nodeId : tile->getNodes()) {
+      std::vector<util::Uuid>* nodes = nullptr;
+      if (onlyPageDirtyNodes) {
+        nodes = &tile->getDirtyNodes();
+      }
+      else {
+        nodes = &tile->getNodes();
+      }
+
+      for (auto& nodeId : *nodes) {
         if (!_scene->registry().hasComponent<component::PageStatus>(nodeId)) {
           _scene->registry().addComponent<component::PageStatus>(nodeId, true);
         }
         else {
           auto& pagedComp = _scene->registry().getComponent<component::PageStatus>(nodeId);
           pagedComp._paged = true;
-          _scene->registry().patchComponent<component::PageStatus>(nodeId);
         }
+        _scene->registry().patchComponent<component::PageStatus>(nodeId);
+      }
+
+      if (onlyPageDirtyNodes) {
+        // Clear dirty nodes
+        tile->getDirtyNodes().clear();
       }
 
       // Do DDGI Atlas if present
@@ -126,6 +145,8 @@ void ScenePager::update(const glm::vec3& pos)
         upd._addedTileInfos.emplace_back(std::move(ti));
       }
 
+      // Reset dirty and add it to the currently paged tiles
+      tile->dirty() = false;
       pagedTiles.emplace_back(currIdx);
     }
   }  

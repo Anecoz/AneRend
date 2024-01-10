@@ -12,6 +12,8 @@ struct Node
 {
   util::Uuid _id = util::Uuid::generate();
 
+  std::string _name;
+
   util::Uuid _parent;
   std::vector<util::Uuid> _children;
 };

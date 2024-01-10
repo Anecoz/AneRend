@@ -44,12 +44,11 @@ Scene::Scene(Scene&& rhs)
   std::swap(_skeletons, rhs._skeletons);
   std::swap(_models, rhs._models);
   std::swap(_animators, rhs._animators);
-  //std::swap(_renderables, rhs._renderables);
   std::swap(_prefabs, rhs._prefabs);
   std::swap(_textures, rhs._textures);
   std::swap(_eventLog, rhs._eventLog);
-  //std::swap(_lights, rhs._lights);
   std::swap(_nodes, rhs._nodes);
+  std::swap(_nodeVec, rhs._nodeVec);
 }
 
 Scene& Scene::operator=(Scene&& rhs)
@@ -61,12 +60,11 @@ Scene& Scene::operator=(Scene&& rhs)
     std::swap(_skeletons, rhs._skeletons);
     std::swap(_models, rhs._models);
     std::swap(_animators, rhs._animators);
-    //std::swap(_renderables, rhs._renderables);
     std::swap(_prefabs, rhs._prefabs);
     std::swap(_textures, rhs._textures);
     std::swap(_eventLog, rhs._eventLog);
-    //std::swap(_lights, rhs._lights);
     std::swap(_nodes, rhs._nodes);
+    std::swap(_nodeVec, rhs._nodeVec);
   }
 
   return *this;
@@ -76,16 +74,14 @@ void Scene::update()
 {
   // Check if any transforms have been updated
   for (const auto entity : _transformObserver) {
-    auto& trans = _registry.getEnttRegistry().get<component::Transform>(entity);
 
     // Update the transform hierarchy
     auto id = _registry.reverseLookup(entity);
-    auto& node = _nodes[id];
-    updateDependentTransforms(node, trans);
-
-    _registry.patchComponent<component::Transform>(id);
+    auto& node = _nodeVec[_nodes[id]];
+    updateDependentTransforms(node);
 
     // Add to correct tile
+    auto& trans = _registry.getEnttRegistry().get<component::Transform>(entity);
     auto tileIdx = findTransformTile(trans, Tile::_tileSize);
 
     // Is it already added to a tile?
@@ -96,12 +92,14 @@ void Scene::update()
 
     if (_tiles.find(tileIdx) != _tiles.end()) {
       _tiles[tileIdx].addNode(id);
+      _tiles[tileIdx].dirty() = true;
       _nodeTileMap[id] = tileIdx;
     }
     else {
       Tile tile(tileIdx);
       tile.addNode(id);
       _tiles[tileIdx] = std::move(tile);
+      _tiles[tileIdx].dirty() = true;
       _nodeTileMap[id] = tileIdx;
     }
   }
@@ -379,7 +377,8 @@ util::Uuid Scene::addNode(Node node)
 {
   auto id = node._id;
   _registry.registerNode(id);
-  _nodes[id] = std::move(node);
+  _nodeVec.emplace_back(node);
+  _nodes[id] = _nodeVec.size() - 1;
   return id;
 }
 
@@ -388,12 +387,28 @@ void Scene::removeNode(util::Uuid id)
   if (_nodes.find(id) != _nodes.end()) {
     _nodes.erase(id);
   }
+
+  for (auto it = _nodeVec.begin(); it != _nodeVec.end(); ++it) {
+    if (it->_id == id) {
+      _nodeVec.erase(it);
+      return;
+    }
+  }
 }
 
-const Node* Scene::getNode(util::Uuid id)
+const Node* Scene::getNodeConst(util::Uuid id)
 {
   if (_nodes.find(id) != _nodes.end()) {
-    return &_nodes[id];
+    return &_nodeVec[_nodes[id]];
+  }
+
+  return nullptr;
+}
+
+Node* Scene::getNode(util::Uuid id)
+{
+  if (_nodes.find(id) != _nodes.end()) {
+    return &_nodeVec[_nodes[id]];
   }
 
   return nullptr;
@@ -634,45 +649,42 @@ void Scene::addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx)
   _eventLog._events.emplace_back(std::move(event));
 }
 
-void Scene::updateChildrenTransforms(Node& node, component::Transform& transform)
+void Scene::updateChildrenTransforms(Node& node)
 {
+  auto& nodeTrans = _registry.getComponent<component::Transform>(node._id);
   for (auto& childId : node._children) {
-    auto& child = _nodes[childId];
+    auto& child = _nodeVec[_nodes[childId]];
     auto& childTransform = _registry.getComponent<component::Transform>(childId);
 
-    childTransform._globalTransform = transform._globalTransform * childTransform._localTransform;
+    childTransform._globalTransform = nodeTrans._globalTransform * childTransform._localTransform;
     _registry.patchComponent<component::Transform>(childId);
 
     if (!child._children.empty()) {
-      updateChildrenTransforms(child, childTransform);
+      updateChildrenTransforms(child);
     }
   }
 }
 
-void Scene::updateDependentTransforms(Node& node, component::Transform& transform)
+void Scene::updateDependentTransforms(Node& node)
 {
   // Figure out which renderables are involved
-  //if (!node._parent) {
-    transform._globalTransform = transform._localTransform;
+  if (!node._parent) {
+    auto& nodeTrans = _registry.getComponent<component::Transform>(node._id);
+    nodeTrans._globalTransform = nodeTrans._localTransform;
+    _registry.patchComponent<component::Transform>(node._id);
 
     if (node._children.empty()) {
       return;
     }
 
     // Will recursively take care of all children
-    updateChildrenTransforms(node, transform);
-  //}
-  // I don't think this is ever needed...?
-#if 0
-  else {
-    for (auto& r : _renderables) {
-      if (r._id == rend._parent) {
-        updateDependentTransforms(r);
-        break;
-      }
-    }
+    updateChildrenTransforms(node);
   }
-#endif
+  else {
+    auto& parentTrans = _registry.getComponent<component::Transform>(node._parent);
+    updateDependentTransforms(_nodeVec[_nodes[node._parent]]);
+    _registry.patchComponent<component::Transform>(node._parent);
+  }
 }
 
 }

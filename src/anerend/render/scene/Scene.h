@@ -117,6 +117,10 @@ public:
     return _textures;
   }
 
+  const std::vector<Node>& getNodes() const {
+    return _nodeVec;
+  }
+
   /*const std::vector<component::Renderable>& getRenderables() const {
     return _renderables;
   }
@@ -158,7 +162,8 @@ public:
 
   util::Uuid addNode(Node node);
   void removeNode(util::Uuid id);
-  const Node* getNode(util::Uuid id);
+  const Node* getNodeConst(util::Uuid id);
+  Node* getNode(util::Uuid id);
 
   /*util::Uuid addLight(component::Light&& l);
   void updateLight(component::Light l);
@@ -207,8 +212,8 @@ private:
   std::vector<component::Renderable> _renderables;
   std::vector<component::Light> _lights;
 
-  std::unordered_map<util::Uuid, scene::Node> _nodes;
-  //std::vector<scene::Node> _nodes;
+  std::unordered_map<util::Uuid, std::size_t> _nodes; // Index into _nodeVec
+  std::vector<scene::Node> _nodeVec;
 
   component::Registry _registry;
 
@@ -218,8 +223,8 @@ private:
   entt::observer _transformObserver;
 
   void addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx = TileIndex());
-  void updateDependentTransforms(Node& node, component::Transform& transform);
-  void updateChildrenTransforms(Node& node, component::Transform& transform);
+  void updateDependentTransforms(Node& node);
+  void updateChildrenTransforms(Node& node);
 };
 
 }

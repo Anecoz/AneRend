@@ -17,10 +17,9 @@ SceneListGUI::~SceneListGUI()
 
 void SceneListGUI::immediateDraw(logic::AneditContext* c)
 {
-  // Draw list of current renderables, animators, lights, particle emitters etc
-  //const auto& renderables = c->scene().getRenderables();
+  // Draw list of current nodes
   const auto& animators = c->scene().getAnimators();
-  //const auto& lights = c->scene().getLights();
+  const auto& nodes = c->scene().getNodes();
 
   ImGui::Begin("Scene list", NULL, ImGuiWindowFlags_MenuBar);
 
@@ -54,9 +53,9 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
     ImGui::EndMenuBar();
   }
 
-  // renderables
+  // nodes
   {
-    ImGui::Text("Renderables");
+    ImGui::Text("Nodes");
 
     if (menuAction == "AddRenderable") {
       ImGui::OpenPopup("Add from prefab");
@@ -65,14 +64,24 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 
     ImGui::Separator();
 
+    for (const auto& n : nodes) {
+      // Only do top-level nodes, children will be rendered when their parents are rendered
+      if (n._parent) {
+        continue;
+      }
+
+      auto id = n._id;
+      renderNodeTree(id, c);
+    }
+
 #if 0
-    for (const auto& r : renderables) {
-      std::string label = std::string("Renderable ") + (r._name.empty()? r._id.str() : r._name);
-      label += "##" + r._id.str();
-      if (ImGui::Selectable(label.c_str(), c->getFirstSelection() == r._id)) {
+    for (const auto& n : nodes) {
+      std::string label = std::string("Node ") + (n._name.empty()? n._id.str() : n._name);
+      label += "##" + n._id.str();
+      if (ImGui::Selectable(label.c_str(), c->getFirstSelection() == n._id)) {
         c->selection().clear();
-        c->selection().emplace_back(r._id);
-        c->selectionType() = logic::AneditContext::SelectionType::Renderable;
+        c->selection().emplace_back(n._id);
+        c->selectionType() = logic::AneditContext::SelectionType::Node;
       }
     }
 #endif
@@ -99,13 +108,12 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 
   ImGui::Separator();
 
+#if 0
   // lights
   {
     ImGui::Text("Lights");
 
     ImGui::Separator();
-
-#if 0
     for (const auto& a : lights) {
       std::string label = std::string("Light ") + (a._name.empty() ? a._id.str() : a._name);
       label += "##" + a._id.str();
@@ -115,10 +123,46 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
         c->selectionType() = logic::AneditContext::SelectionType::Light;
       }
     }
-#endif
   }
+#endif
 
   ImGui::End();
+}
+
+void SceneListGUI::renderNodeTree(util::Uuid& node, logic::AneditContext* c)
+{
+  auto* n = c->scene().getNode(node);
+
+  std::string label = std::string("Node ") + (n->_name.empty() ? n->_id.str() : n->_name);
+  label += "##" + n->_id.str();
+
+  ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
+
+  if (n->_children.empty()) {
+    flags |= ImGuiTreeNodeFlags_Leaf;
+  }
+
+  // Are we selected?
+  if (node == c->getFirstSelection()) {
+    flags |= ImGuiTreeNodeFlags_Selected;
+  }
+
+  bool open = ImGui::TreeNodeEx(label.c_str(), flags);
+  bool clicked = ImGui::IsItemClicked();
+
+  if (clicked) {
+    c->selection().clear();
+    c->selection().emplace_back(node);
+    c->selectionType() = logic::AneditContext::SelectionType::Node;
+  }
+
+  if (open) {
+    for (auto& childId : n->_children) {
+      renderNodeTree(childId, c);
+    }
+
+    ImGui::TreePop();
+  }
 }
 
 void SceneListGUI::addFromPrefab(logic::AneditContext* c)

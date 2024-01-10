@@ -15,6 +15,7 @@ public:
   void immediateDraw(logic::AneditContext* c) override final;
 
 private:
+  void renderNodeTree(util::Uuid& node, logic::AneditContext* c);
 
   void addFromPrefab(logic::AneditContext* c);
   void saveSceneAsClicked(logic::AneditContext* c);

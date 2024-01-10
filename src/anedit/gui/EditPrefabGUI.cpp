@@ -37,6 +37,7 @@ void EditPrefabGUI::immediateDraw(logic::AneditContext* c)
       ImGui::BeginDisabled();
     }
     else {
+#if 0
       auto* prefab = c->scene().getPrefab(id);
 
       auto oldTrans = prefab->_transform;
@@ -46,6 +47,7 @@ void EditPrefabGUI::immediateDraw(logic::AneditContext* c)
       boundingSphereRadius = prefab->_boundingSphere.w;
 
       ImGuizmo::DecomposeMatrixToComponents(&oldTrans[0][0], &translation[0], &rot[0], &scale[0]);
+#endif
     }
 
     // Inputs for transform
@@ -99,10 +101,12 @@ void EditPrefabGUI::immediateDraw(logic::AneditContext* c)
 
       auto prefabCopy = *c->scene().getPrefab(id);
 
+#if 0
       prefabCopy._boundingSphere = glm::vec4(boundingSphereCenter, boundingSphereRadius);
       prefabCopy._name = name;
       prefabCopy._tint = tint;
       prefabCopy._transform = m;
+#endif
 
       c->scene().updatePrefab(std::move(prefabCopy));
     }

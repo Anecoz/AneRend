@@ -40,9 +40,6 @@ public:
     }
   }
 
-  /*template <typename T>
-  void */
-
   template<typename T, typename... Args>
   T& addComponent(util::Uuid& node, Args&&... args)
   {

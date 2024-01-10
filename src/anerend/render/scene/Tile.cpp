@@ -45,6 +45,7 @@ Tile::operator bool() const
 void Tile::addNode(util::Uuid id)
 {
   _nodes.emplace_back(id);
+  _dirtyNodes.emplace_back(id);
 }
 
 void Tile::removeNode(util::Uuid id)
