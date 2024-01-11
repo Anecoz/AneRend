@@ -23,6 +23,7 @@ private:
   void loadSceneClicked(logic::AneditContext* c);
   void addAnimatorClicked(logic::AneditContext* c);
   void addLightClicked(logic::AneditContext* c);
+  void deleteNodeClicked(logic::AneditContext* c, util::Uuid& node);
 };
 
 }

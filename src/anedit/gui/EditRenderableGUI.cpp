@@ -11,7 +11,6 @@ namespace gui {
 
 EditRenderableGUI::EditRenderableGUI()
   : IGUI()
-  , _currentGuizmoOp(ImGuizmo::OPERATION::TRANSLATE)
   , _bsGuizmoOp(ImGuizmo::OPERATION::UNIVERSAL + 1)
 {}
 
@@ -22,9 +21,6 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
 {
   auto id = c->getFirstSelection();
   bool changed = false;
-  glm::vec3 translation{ 0.0f };
-  glm::vec3 scale{ 0.0f };
-  glm::vec3 rot{ 0.0f };
 
   glm::vec3 tint{ 0.0f };
 
@@ -41,55 +37,22 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       ImGui::BeginDisabled();
     }
     else {
+      auto& rendComp = c->scene().registry().getComponent<component::Renderable>(id);
+
+      strcpy_s(name, rendComp._name.c_str());
+      tint = rendComp._tint;
+      boundingSphereCenter = glm::vec3(rendComp._boundingSphere.x, rendComp._boundingSphere.y, rendComp._boundingSphere.z);
+      boundingSphereRadius = rendComp._boundingSphere.w;
+      visible = rendComp._visible;
+    }
+
 #if 0
-      auto* rend = c->scene().getRenderable(id);
-
-      auto oldTrans = rend->_localTransform;
-      strcpy_s(name, rend->_name.c_str());
-      tint = rend->_tint;
-      boundingSphereCenter = glm::vec3(rend->_boundingSphere.x, rend->_boundingSphere.y, rend->_boundingSphere.z);
-      boundingSphereRadius = rend->_boundingSphere.w;
-      visible = rend->_visible;
-
-      ImGuizmo::DecomposeMatrixToComponents(&oldTrans[0][0], &translation[0], &rot[0], &scale[0]);
-#endif
-    }
-
     // Radio buttons for choosing guizmo mode
-    if (ImGui::RadioButton("Translate", _currentGuizmoOp == ImGuizmo::TRANSLATE)) {
-      _currentGuizmoOp = ImGuizmo::TRANSLATE;
-    }
-      
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Rotate", _currentGuizmoOp == ImGuizmo::ROTATE)) {
-      _currentGuizmoOp = ImGuizmo::ROTATE;
-    }
-      
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Scale", _currentGuizmoOp == ImGuizmo::SCALE)) {
-      _currentGuizmoOp = ImGuizmo::SCALE;
-    }
-
     ImGui::SameLine();
     if (ImGui::RadioButton("BS", _currentGuizmoOp == _bsGuizmoOp)) {
       _currentGuizmoOp = _bsGuizmoOp;
     }
-    
-    // Inputs for transform
-    ImGui::Text("Translation");
-    if (ImGui::InputFloat3("##translation", &translation[0], "%.3f", ImGuiInputTextFlags_EnterReturnsTrue) && id) {
-      changed = true;
-    }
-
-    ImGui::Text("Scale");
-    if (ImGui::InputFloat3("##scale", &scale[0], "%.3f", ImGuiInputTextFlags_EnterReturnsTrue) && id) {
-      changed = true;
-    }
-
-    ImGui::Text("Rotation");
-    if (ImGui::InputFloat3("##rot", &rot[0], "%.3f", ImGuiInputTextFlags_EnterReturnsTrue) && id) {
-      changed = true;
-    }
+#endif
 
     // Name
     ImGui::Separator();
@@ -127,16 +90,13 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       ImGui::EndDisabled();
     }
     else if (changed) {
-#if 0
-      // recompose
-      glm::mat4 m;
-      ImGuizmo::RecomposeMatrixFromComponents(&translation[0], &rot[0], &scale[0], &m[0][0]);
-      c->scene().setRenderableTransform(id, m);
-      c->scene().setRenderableName(id, name);
-      c->scene().setRenderableTint(id, tint);
-      c->scene().setRenderableBoundingSphere(id, glm::vec4(boundingSphereCenter, boundingSphereRadius));
-      c->scene().setRenderableVisible(id, visible);
-#endif
+      auto& rendComp = c->scene().registry().getComponent<component::Renderable>(id);
+      rendComp._boundingSphere = glm::vec4(glm::vec4(boundingSphereCenter, boundingSphereRadius));
+      rendComp._name = name;
+      rendComp._tint = tint;
+      rendComp._visible = visible;
+
+      c->scene().registry().patchComponent<component::Renderable>(id);
     }
   }
 

@@ -12,7 +12,6 @@ public:
 
   void immediateDraw(logic::AneditContext* c) override final;
 private:
-  int _currentGuizmoOp;
   const int _bsGuizmoOp;
 };
 

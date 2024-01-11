@@ -72,6 +72,44 @@ Scene& Scene::operator=(Scene&& rhs)
 
 void Scene::update()
 {
+  // Update state of nodes pending removal
+  for (auto it = _nodesPendingRemoval.begin(); it != _nodesPendingRemoval.end();) {
+    if (it->_counter >= 1) {
+      // Remove any hanging parent-child relationship
+      auto& node = _nodeVec[_nodes[it->_node]];
+      if (node._parent && _nodes.find(node._parent) != _nodes.end()) {
+        auto& pChildVec = _nodeVec[_nodes[node._parent]]._children;
+        for (auto it = pChildVec.begin(); it != pChildVec.end(); ++it) {
+          if ((*it) == node._id) {
+            pChildVec.erase(it);
+            break;
+          }
+        }
+      }
+
+      // Everything should have had the chance to page out and disassociate itself with the node by now (one full update cycle)
+      _nodes.erase(it->_node);
+      _nodeVec.erase(std::remove_if(_nodeVec.begin(), _nodeVec.end(), [id = it->_node](auto& a) {return a._id == id; }), _nodeVec.end());
+      _nodeTileMap.erase(it->_node);
+
+      // Update map (TODO: Make a static array?)
+      _nodes.clear();
+      for (std::size_t i = 0; i < _nodeVec.size(); ++i) {
+        _nodes[_nodeVec[i]._id] = i;
+      }
+
+      it = _nodesPendingRemoval.erase(it);
+    }
+    else {
+      // Remove from tiles so that they can page out
+      auto& tileIndex = _nodeTileMap[it->_node];
+      _tiles[tileIndex].removeNode(it->_node);
+
+      it->_counter++;
+      it++;
+    }
+  }
+
   // Check if any transforms have been updated
   for (const auto entity : _transformObserver) {
 
@@ -385,18 +423,16 @@ util::Uuid Scene::addNode(Node node)
 void Scene::removeNode(util::Uuid id)
 {
   if (_nodes.find(id) != _nodes.end()) {
-    _nodes.erase(id);
-  }
+    auto& node = _nodeVec[_nodes[id]];
+    _nodesPendingRemoval.emplace_back(id, 0);
 
-  for (auto it = _nodeVec.begin(); it != _nodeVec.end(); ++it) {
-    if (it->_id == id) {
-      _nodeVec.erase(it);
-      return;
+    for (auto& childId : node._children) {
+      removeNode(childId);
     }
   }
 }
 
-const Node* Scene::getNodeConst(util::Uuid id)
+const Node* Scene::getNode(util::Uuid id)
 {
   if (_nodes.find(id) != _nodes.end()) {
     return &_nodeVec[_nodes[id]];
@@ -405,134 +441,47 @@ const Node* Scene::getNodeConst(util::Uuid id)
   return nullptr;
 }
 
-Node* Scene::getNode(util::Uuid id)
+void Scene::setNodeName(util::Uuid& node, std::string name)
 {
-  if (_nodes.find(id) != _nodes.end()) {
-    return &_nodeVec[_nodes[id]];
+  if (_nodes.find(node) != _nodes.end()) {
+    _nodeVec[_nodes[node]]._name = std::move(name);
   }
-
-  return nullptr;
 }
 
-/*
-util::Uuid Scene::addLight(component::Light&& l)
+void Scene::addNodeChild(util::Uuid& node, util::Uuid& child)
 {
-  auto id = l._id;
+  // UB if child was already added as a child to another node
+  if (_nodes.find(node) != _nodes.end()) {
+    if (_nodes.find(child) != _nodes.end()) {
+      assert(!_nodeVec[_nodes[child]]._parent && "Cannot set node to child, it already has a parent!");
 
-  // Find which tile this light belongs to
-  auto tileIdx = findLightTile(l, Tile::_tileSize);
-  _lights.emplace_back(std::move(l));
-
-  auto it = _tiles.find(tileIdx);
-
-  if (it == _tiles.end()) {
-    // Add a new tile here
-    Tile tile(tileIdx);
-    _tiles[tileIdx] = std::move(tile);
-  }
-
-  _tiles[tileIdx].addLight(id);
-
-  addEvent(SceneEventType::LightAdded, id, tileIdx);
-
-  return id;
-}
-
-void Scene::updateLight(component::Light l)
-{
-  for (auto it = _lights.begin(); it != _lights.end(); ++it) {
-    if (it->_id == l._id) {
-      *it = std::move(l);
-
-      auto tileIdx = findLightTile(*it, Tile::_tileSize);
-      addEvent(SceneEventType::LightUpdated, it->_id, tileIdx);
-      return;
+      _nodeVec[_nodes[node]]._children.emplace_back(child);
+      _nodeVec[_nodes[child]]._parent = node;
     }
   }
-
-  printf("Could not update light with id %s, doesn't exist!\n", l._id.str().c_str());
 }
 
-void Scene::removeLight(util::Uuid id)
+void Scene::removeNodeChild(util::Uuid& node, util::Uuid& child)
 {
-  for (auto it = _lights.begin(); it != _lights.end(); ++it) {
-    if (it->_id == id) {
-      auto tileIdx = findLightTile(*it, Tile::_tileSize);
-      auto tileIt = _tiles.find(tileIdx);
+  if (_nodes.find(node) != _nodes.end()) {
+    if (_nodes.find(child) != _nodes.end()) {
+      assert(_nodeVec[_nodes[child]]._parent == node && "Cannot remove parent from node, ids don't match!");
 
-      if (tileIt != _tiles.end()) {
-        tileIt->second.removeLight(id);
-      }
+      auto& childVec = _nodeVec[_nodes[node]]._children;
 
-      _lights.erase(it);
-
-      addEvent(SceneEventType::LightRemoved, id, tileIdx);
-      return;
+      childVec.erase(std::remove(childVec.begin(), childVec.end(), child), childVec.end());
+      _nodeVec[_nodes[child]]._parent = util::Uuid();
     }
   }
-
-  printf("Could not remove light with id %s, doesn't exist!\n", id.str().c_str());
 }
 
-const component::Light* Scene::getLight(util::Uuid id)
+std::vector<util::Uuid> Scene::getNodeChildren(util::Uuid& node)
 {
-  component::Light* l = nullptr;
-  getAsset(_lights, id, &l);
-  return l;
-}
-
-util::Uuid Scene::addRenderable(component::Renderable&& renderable)
-{
-  auto id = renderable._id;
-
-  // Find which tile this renderable belongs to
-  auto tileIdx = findRenderableTile(renderable, Tile::_tileSize);
-  renderable._id = id;
-  _renderables.emplace_back(std::move(renderable));
-
-  auto it = _tiles.find(tileIdx);
-
-  if (it == _tiles.end()) {
-    // Add a new tile here
-    Tile tile(tileIdx);
-    _tiles[tileIdx] = std::move(tile);
+  if (_nodes.find(node) != _nodes.end()) {
+    return _nodeVec[_nodes[node]]._children;
   }
-
-  _tiles[tileIdx].addRenderable(id);
-
-  addEvent(SceneEventType::RenderableAdded, id, tileIdx);
-
-  return id;
 }
 
-void Scene::removeRenderable(util::Uuid id)
-{
-  for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
-    if (it->_id == id) {
-      auto tileIdx = findRenderableTile(*it, Tile::_tileSize);
-      auto tileIt = _tiles.find(tileIdx);
-
-      if (tileIt != _tiles.end()) {
-        tileIt->second.removeRenderable(id);
-      }
-
-      _renderables.erase(it);
-
-      addEvent(SceneEventType::RenderableRemoved, id, tileIdx);
-      return;
-    }
-  }
-
-  printf("Could not remove renderable %s, doesn't exist!\n", id.str().c_str());
-}
-
-const component::Renderable* Scene::getRenderable(util::Uuid id)
-{
-  component::Renderable* rend = nullptr;
-  getAsset(_renderables, id, &rend);
-  return rend;
-}
-*/
 void Scene::setDDGIAtlas(util::Uuid texId, scene::TileIndex idx)
 {
   if (_tiles.find(idx) != _tiles.end()) {
@@ -564,81 +513,6 @@ void Scene::setDDGIAtlas(util::Uuid texId, scene::TileIndex idx)
 
   addEvent(SceneEventType::DDGIAtlasAdded, util::Uuid(), idx);
 }
-
-/*
-void Scene::setRenderableTint(util::Uuid id, const glm::vec3& tint)
-{
-  for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
-    if (it->_id == id) {
-      it->_tint = tint;
-      auto tileIdx = findRenderableTile(*it, Tile::_tileSize);
-      addEvent(SceneEventType::RenderableUpdated, id, tileIdx);
-      return;
-    }
-  }
-
-  printf("Cannot set tint for renderable %s, doesn't exist!\n", id.str().c_str());
-}
-
-void Scene::setRenderableTransform(util::Uuid id, const glm::mat4& transform)
-{
-  for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
-    if (it->_id == id) {
-      it->_localTransform = transform;
-
-      updateDependentTransforms(*it);
-      return;
-    }
-  }
-
-  printf("Cannot set transform for renderable %s, doesn't exist!\n", id.str().c_str());
-}
-
-void Scene::setRenderableName(util::Uuid id, std::string name)
-{
-  for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
-    if (it->_id == id) {
-      it->_name = std::move(name);
-
-      auto tileIdx = findRenderableTile(*it, Tile::_tileSize);
-      addEvent(SceneEventType::RenderableUpdated, id, tileIdx);
-      return;
-    }
-  }
-
-  printf("Cannot set name for renderable %s, doesn't exist!\n", id.str().c_str());
-}
-
-void Scene::setRenderableBoundingSphere(util::Uuid id, const glm::vec4& boundingSphere)
-{
-  for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
-    if (it->_id == id) {
-      it->_boundingSphere = boundingSphere;
-
-      auto tileIdx = findRenderableTile(*it, Tile::_tileSize);
-      addEvent(SceneEventType::RenderableUpdated, id, tileIdx);
-      return;
-    }
-  }
-
-  printf("Cannot set bounding sphere for renderable %s, doesn't exist!\n", id.str().c_str());
-}
-
-void Scene::setRenderableVisible(util::Uuid id, bool val)
-{
-  for (auto it = _renderables.begin(); it != _renderables.end(); ++it) {
-    if (it->_id == id) {
-      it->_visible = val;
-
-      auto tileIdx = findRenderableTile(*it, Tile::_tileSize);
-      addEvent(SceneEventType::RenderableUpdated, id, tileIdx);
-      return;
-    }
-  }
-
-  printf("Cannot update visibility for renderable %s, doesn't exist!\n", id.str().c_str());
-}
-*/
 
 void Scene::addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx)
 {

@@ -216,7 +216,7 @@ void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData
   for (auto& prefab : prefabsCopy) {
     // Only instantiate if no parent
     if (!prefab._parent) {
-      instantiate(prefab, util::Uuid(), glm::mat4(1.0f));
+      instantiate(prefab, glm::mat4(1.0f));
     }
   }
 }
@@ -433,15 +433,13 @@ void AneditApplication::calculateShadowMatrix()
   _shadowCamera.setProjection(lpMatrix, minZ, maxZ);
 }
 
-util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, util::Uuid parentRendUuid, glm::mat4 parentGlobalTransform)
+util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, glm::mat4 parentGlobalTransform)
 {
-#if 1
   render::scene::Node node{};
   node._name = prefab._name;
-  node._parent = parentRendUuid;
+  auto id = _scene.addNode(std::move(node));
 
   // There should always be a transform component
-  auto id = node._id;
   auto globalTransform = parentGlobalTransform * prefab._comps._trans._localTransform;
 
   // Instantiate children
@@ -449,133 +447,30 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, u
   for (auto& childPrefabId : prefab._children) {
     for (auto& p : prefabs) {
       if (p._id == childPrefabId) {
-        node._children.emplace_back(instantiate(p, id, globalTransform));
+        auto childId = instantiate(p, globalTransform);
+        _scene.addNodeChild(id, childId);
         break;
       }
     }
   }
 
-  _scene.addNode(std::move(node));
-  auto* nodePtr = _scene.getNode(id);
-  _scene.registry().addComponent<component::Transform>(nodePtr->_id, globalTransform, prefab._comps._trans._localTransform);
-  _scene.registry().patchComponent<component::Transform>(nodePtr->_id);
+  _scene.registry().addComponent<component::Transform>(id, globalTransform, prefab._comps._trans._localTransform);
+  _scene.registry().patchComponent<component::Transform>(id);
 
   if (prefab._comps._rend) {
     auto& prefabRend = prefab._comps._rend.value();
-    auto& rendComp = _scene.registry().addComponent<component::Renderable>(nodePtr->_id);
+    auto& rendComp = _scene.registry().addComponent<component::Renderable>(id);
     rendComp = prefabRend;
-    _scene.registry().patchComponent<component::Renderable>(nodePtr->_id);
+    _scene.registry().patchComponent<component::Renderable>(id);
   }
   if (prefab._comps._light) {
     auto& prefabComp = prefab._comps._light.value();
-    auto& comp = _scene.registry().addComponent<component::Light>(nodePtr->_id);
+    auto& comp = _scene.registry().addComponent<component::Light>(id);
     comp = prefabComp;
-    _scene.registry().patchComponent<component::Light>(nodePtr->_id);
+    _scene.registry().patchComponent<component::Light>(id);
   }
-
-  printf("Instantiating node id %s\n", id.str().c_str());
 
   return id;
-#endif
-#if 0
-  // CRUDE TESTING
-  render::scene::Node node{};
-  node._name = prefab._name + " (main)";
-
-  //render::scene::Node childNode0{};
-  //childNode0._name = prefab._name + " (child 0)";
-  //childNode0._parent = node._id;
-
-  //render::scene::Node childNode1{};
-  //childNode1._name = prefab._name + " (child 1)";
-  //childNode1._parent = node._id;
-
-  //node._children.emplace_back(childNode0._id);
-  //childNode0._children.emplace_back(childNode1._id);
-  //node._children.emplace_back(childNode1._id);
-
-  auto nodeId = _scene.addNode(std::move(node));
-  //auto childNode0Id = _scene.addNode(std::move(childNode0));
-  //auto childNode1Id = _scene.addNode(std::move(childNode1));
-
-  _scene.registry().addComponent<component::Transform>(nodeId, parentGlobalTransform, parentGlobalTransform);
-  if (prefab._comps._rend) {
-    auto& prefabRend = prefab._comps._rend.value();
-    auto& rendComp = _scene.registry().addComponent<component::Renderable>(nodeId);
-    rendComp = prefabRend;
-    _scene.registry().patchComponent<component::Renderable>(nodeId);
-  }
-
-  _scene.registry().patchComponent<component::Transform>(nodeId);
-  //_scene.registry().patchComponent<component::Renderable>(nodeId);
-
-  // Just test having a child node
-  /* {
-    _scene.registry().addComponent<component::Transform>(childNode0Id, prefab._transform, prefab._transform);
-    //_scene.registry().addComponent<component::Light>(lightNodeId);
-
-    auto& rend = _scene.registry().addComponent<component::Renderable>(childNode0Id);
-    rend._materials = prefab._materials;
-    rend._model = prefab._model;
-    rend._skeleton = prefab._skeleton;
-    rend._name = prefab._name.empty() ? "" : prefab._name;
-    rend._boundingSphere = prefab._boundingSphere;
-    rend._visible = true;
-    rend._tint = prefab._tint;
-
-    _scene.registry().patchComponent<component::Transform>(childNode0Id);
-    _scene.registry().patchComponent<component::Renderable>(childNode0Id);
-    //_scene.registry().patchComponent<component::Light>(lightNodeId);
-  }
-  {
-    _scene.registry().addComponent<component::Transform>(childNode1Id, prefab._transform, prefab._transform);
-    //_scene.registry().addComponent<component::Light>(lightNodeId);
-
-    auto& rend = _scene.registry().addComponent<component::Renderable>(childNode1Id);
-    rend._materials = prefab._materials;
-    rend._model = prefab._model;
-    rend._skeleton = prefab._skeleton;
-    rend._name = prefab._name.empty() ? "" : prefab._name;
-    rend._boundingSphere = prefab._boundingSphere;
-    rend._visible = true;
-    rend._tint = prefab._tint;
-
-    _scene.registry().patchComponent<component::Transform>(childNode1Id);
-    _scene.registry().patchComponent<component::Renderable>(childNode1Id);
-    //_scene.registry().patchComponent<component::Light>(lightNodeId);
-  }*/
-#endif
-
-#if 0
-  auto s = glm::scale(glm::mat4(1.0f), glm::vec3(0.005f));
-  auto r = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-
-  component::Renderable rend{};
-  rend._materials = prefab._materials;
-  rend._model = prefab._model;
-  rend._skeleton = prefab._skeleton;
-  rend._name = prefab._name.empty() ? "" : prefab._name;
-
-  //rend._localTransform = r * s * prefab._transform;
-  rend._localTransform = prefab._transform;
-  rend._globalTransform = parentGlobalTransform * rend._localTransform;
-  rend._boundingSphere = prefab._boundingSphere;
-  rend._visible = true;
-  rend._tint = prefab._tint;
-  rend._parent = parentRendUuid;
-
-  auto& prefabs = _scene.getPrefabs();
-  for (auto& childPrefabId : prefab._children) {
-    for (auto& p : prefabs) {
-      if (p._id == childPrefabId) {
-        rend._children.emplace_back(instantiate(p, rend._id, rend._globalTransform));
-        break;
-      }
-    }
-  }
-
-  return _scene.addRenderable(std::move(rend));
-#endif
 }
 
 void AneditApplication::notifyFramebufferResized()

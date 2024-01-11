@@ -2613,31 +2613,34 @@ void VulkanRenderer::updateNodes()
           }
 
           l.updateViewMatrices(lightPos);
-          _lights.emplace_back(std::move(l));
+          internal::InternalLight internalLight{};
+          internalLight._lightComp = l;
+          internalLight._pos = std::move(lightPos);
+          _lights.emplace_back(std::move(internalLight));
         }
       }
     }
-  }
 
-  // Model/mesh id map update
-  if (modelIdMapUpdate) {
-    _modelIdMap.clear();
-    _meshIdMap.clear();
+    // Model/mesh id map update
+    if (modelIdMapUpdate) {
+      _modelIdMap.clear();
+      _meshIdMap.clear();
 
-    for (std::size_t i = 0; i < _currentModels.size(); ++i) {
-      _modelIdMap[_currentModels[i]._id] = i;
+      for (std::size_t i = 0; i < _currentModels.size(); ++i) {
+        _modelIdMap[_currentModels[i]._id] = i;
+      }
+      for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
+        _meshIdMap[_currentMeshes[i]._id] = i;
+      }
     }
-    for (std::size_t i = 0; i < _currentMeshes.size(); ++i) {
-      _meshIdMap[_currentMeshes[i]._id] = i;
-    }
-  }
 
-  // Rend id map update
-  if (rendIdMapUpdate) {
-    _renderableIdMap.clear();
+    // Rend id map update
+    if (rendIdMapUpdate) {
+      _renderableIdMap.clear();
 
-    for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
-      _renderableIdMap[_currentRenderables[i]._renderable._id] = i;
+      for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
+        _renderableIdMap[_currentRenderables[i]._renderable._id] = i;
+      }
     }
   }
 
@@ -3158,7 +3161,7 @@ bool VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
   // look at the renderable which will reference a "start point" in this buffer,
   // and then go to this buffer to actually find the material indices.
 
-  if (_currentRenderables.empty()) return true;
+  if (_currentRenderables.empty() && _pendingFirstUploadRenderables.empty()) return true;
 
   auto& sb = getStagingBuffer();
 
@@ -3170,6 +3173,24 @@ bool VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
   uint32_t* mappedData = reinterpret_cast<uint32_t*>(data);
 
   uint32_t currentIndex = 0;
+  // Do the pending ones first
+  for (std::size_t i = 0; i < _pendingFirstUploadRenderables.size(); ++i) {
+    auto& renderable = _pendingFirstUploadRenderables[i];
+
+    if (!arePrerequisitesUploaded(renderable)) {
+      continue;
+    }
+
+    renderable._materialIndexBufferIndex = currentIndex;
+
+    for (auto& mat : renderable._renderable._materials) {
+      auto idx = _materialIdMap[mat];
+      mappedData[currentIndex] = static_cast<uint32_t>(idx);
+
+      currentIndex++;
+    }
+  }
+
   for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
     auto& renderable = _currentRenderables[i];
 
@@ -3228,7 +3249,7 @@ bool VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
 bool VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
 {
   if (_currentModels.empty()) return true;
-  if (_currentRenderables.empty()) return true;
+  if (_currentRenderables.empty() && _pendingFirstUploadRenderables.empty()) return true;
 
   auto& sb = getStagingBuffer();
 
@@ -3241,6 +3262,34 @@ bool VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
   std::uint32_t* mappedData = reinterpret_cast<std::uint32_t*>(data);
 
   uint32_t currIdx = 0;
+
+  // Do the pending ones first
+  for (std::size_t i = 0; i < _pendingFirstUploadRenderables.size(); ++i) {
+    auto& rend = _pendingFirstUploadRenderables[i];
+
+    if (!arePrerequisitesUploaded(rend)) {
+      continue;
+    }
+
+    rend._modelBufferOffset = currIdx;
+
+    for (auto& mesh : rend._meshes) {
+      auto idx = _meshIdMap[mesh];
+      mappedData[currIdx] = (uint32_t)idx;
+      currIdx++;
+    }
+
+    if (_enableRayTracing && !rend._dynamicMeshes.empty()) {
+      rend._dynamicModelBufferOffset = currIdx;
+
+      for (auto& mesh : rend._dynamicMeshes) {
+        auto idx = _meshIdMap[mesh];
+        mappedData[currIdx] = (uint32_t)idx;
+        currIdx++;
+      }
+    }
+  }
+
   for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
     auto& rend = _currentRenderables[i];
 

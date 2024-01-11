@@ -27,6 +27,7 @@ public:
 
   bool& dirty() { return _dirty; }
   std::vector<util::Uuid>& getDirtyNodes() { return _dirtyNodes; }
+  std::vector<util::Uuid>& getRemovedNodes() { return _removedNodes; }
 
   void addNode(util::Uuid id);
   void removeNode(util::Uuid id);
@@ -45,6 +46,7 @@ private:
 
   std::vector<util::Uuid> _nodes;
   std::vector<util::Uuid> _dirtyNodes; // These are also located in _nodes
+  std::vector<util::Uuid> _removedNodes;
   util::Uuid _ddgiAtlas;
 
 };

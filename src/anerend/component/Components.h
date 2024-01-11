@@ -48,7 +48,7 @@ struct Light
   std::string _name;
 
   glm::vec3 _color = glm::vec3(1.0f, 0.0f, 0.0f);
-  float _range = 2.0f;
+  float _range = 5.0f;
   bool _enabled = true;
   bool _shadowCaster = true;
 

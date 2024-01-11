@@ -121,14 +121,6 @@ public:
     return _nodeVec;
   }
 
-  /*const std::vector<component::Renderable>& getRenderables() const {
-    return _renderables;
-  }
-
-  const std::vector<component::Light>& getLights() const {
-    return _lights;
-  }*/
-
   util::Uuid addPrefab(asset::Prefab&& prefab);
   void updatePrefab(asset::Prefab prefab);
   void removePrefab(util::Uuid id);
@@ -161,27 +153,16 @@ public:
   const asset::Animator* getAnimator(util::Uuid id);
 
   util::Uuid addNode(Node node);
-  void removeNode(util::Uuid id);
-  const Node* getNodeConst(util::Uuid id);
-  Node* getNode(util::Uuid id);
+  void removeNode(util::Uuid id); // Will recursively remove all (potential) children
+  const Node* getNode(util::Uuid id);
 
-  /*util::Uuid addLight(component::Light&& l);
-  void updateLight(component::Light l);
-  void removeLight(util::Uuid id);
-  const component::Light* getLight(util::Uuid id);
-
-  util::Uuid addRenderable(component::Renderable&& renderable);
-  void removeRenderable(util::Uuid id);
-  const component::Renderable* getRenderable(util::Uuid id);*/
+  // Node interface
+  void setNodeName(util::Uuid& node, std::string name);
+  void addNodeChild(util::Uuid& node, util::Uuid& child);
+  void removeNodeChild(util::Uuid& node, util::Uuid& child);
+  std::vector<util::Uuid> getNodeChildren(util::Uuid& node);
 
   void setDDGIAtlas(util::Uuid texId, scene::TileIndex idx);
-
-  // TODO: Decide if the Scene class really is the correct place to access/modify renderables.
-  /*void setRenderableTint(util::Uuid id, const glm::vec3& tint);
-  void setRenderableTransform(util::Uuid id, const glm::mat4& transform);
-  void setRenderableName(util::Uuid id, std::string name);
-  void setRenderableBoundingSphere(util::Uuid id, const glm::vec4& boundingSphere);
-  void setRenderableVisible(util::Uuid id, bool val);*/
 
   struct TileInfo
   {
@@ -194,7 +175,15 @@ private:
 
   std::unordered_map<TileIndex, Tile> _tiles;
   std::vector<TileInfo> _tileInfos;
-  std::unordered_map<util::Uuid, TileIndex> _nodeTileMap; // Helper to know which tile a node has been added
+  std::unordered_map<util::Uuid, TileIndex> _nodeTileMap; // Helper to know which tile a node has been added to
+
+  struct NodePendingRemoval
+  {
+    util::Uuid _node;
+    int _counter = 0;
+  };
+  
+  std::vector<NodePendingRemoval> _nodesPendingRemoval;
 
   /*
   * TODO: In the future maybe these need to be tile - based aswell.

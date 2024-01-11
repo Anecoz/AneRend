@@ -57,7 +57,7 @@ private:
   void addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData> data);
   void oldUI();
   void calculateShadowMatrix();
-  util::Uuid instantiate(const render::asset::Prefab& prefab, util::Uuid parentRendUuid, glm::mat4 parentGlobalTransform);
+  util::Uuid instantiate(const render::asset::Prefab& prefab, glm::mat4 parentGlobalTransform);
 
   std::vector<gui::IGUI*> _guis;
 

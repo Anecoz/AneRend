@@ -73,18 +73,6 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
       auto id = n._id;
       renderNodeTree(id, c);
     }
-
-#if 0
-    for (const auto& n : nodes) {
-      std::string label = std::string("Node ") + (n._name.empty()? n._id.str() : n._name);
-      label += "##" + n._id.str();
-      if (ImGui::Selectable(label.c_str(), c->getFirstSelection() == n._id)) {
-        c->selection().clear();
-        c->selection().emplace_back(n._id);
-        c->selectionType() = logic::AneditContext::SelectionType::Node;
-      }
-    }
-#endif
   }
 
   ImGui::Separator();
@@ -131,9 +119,9 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 
 void SceneListGUI::renderNodeTree(util::Uuid& node, logic::AneditContext* c)
 {
-  auto* n = c->scene().getNode(node);
+  const auto* n = c->scene().getNode(node);
 
-  std::string label = std::string("Node ") + (n->_name.empty() ? n->_id.str() : n->_name);
+  std::string label = n->_name.empty() ? n->_id.str() : n->_name;
   label += "##" + n->_id.str();
 
   ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
@@ -150,6 +138,14 @@ void SceneListGUI::renderNodeTree(util::Uuid& node, logic::AneditContext* c)
   bool open = ImGui::TreeNodeEx(label.c_str(), flags);
   bool clicked = ImGui::IsItemClicked();
 
+  // Context menu
+  if (ImGui::BeginPopupContextItem()) {
+    if (ImGui::MenuItem("Delete")) {
+      deleteNodeClicked(c, node);
+    }
+    ImGui::EndPopup();
+  }
+
   if (clicked) {
     c->selection().clear();
     c->selection().emplace_back(node);
@@ -157,7 +153,7 @@ void SceneListGUI::renderNodeTree(util::Uuid& node, logic::AneditContext* c)
   }
 
   if (open) {
-    for (auto& childId : n->_children) {
+    for (auto childId : n->_children) {
       renderNodeTree(childId, c);
     }
 
@@ -235,11 +231,25 @@ void SceneListGUI::addAnimatorClicked(logic::AneditContext* c)
 void SceneListGUI::addLightClicked(logic::AneditContext* c)
 {
   // Add a default light
-#if 0
-  component::Light light{};
-  light._name = "New light";
-  c->scene().addLight(std::move(light));
-#endif
+  render::scene::Node node{};
+  node._name = "Light";
+  auto id = c->scene().addNode(std::move(node));
+
+  c->scene().registry().addComponent<component::Light>(id);
+  c->scene().registry().addComponent<component::Transform>(id, glm::mat4(1.0f), glm::mat4(1.0f));
+
+  c->scene().registry().patchComponent<component::Light>(id);
+  c->scene().registry().patchComponent<component::Transform>(id);
+}
+
+void SceneListGUI::deleteNodeClicked(logic::AneditContext* c, util::Uuid& node)
+{
+  // Scene will make sure that children are also deleted
+  c->scene().removeNode(node);
+
+  // Make sure we clear selection if this node was selected
+  c->selection().clear();
+  c->selectionType() = logic::AneditContext::SelectionType::Node;
 }
 
 void SceneListGUI::saveSceneClicked(logic::AneditContext* c)
