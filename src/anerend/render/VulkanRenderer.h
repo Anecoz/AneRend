@@ -115,6 +115,9 @@ public:
   // Sets the renderer in "baking" mode, baking diffuse GI at the given tile index.
   void startBakeDDGI(scene::TileIndex tileIdx);
 
+  // Update which registry to use for the observing components.
+  void setRegistry(component::Registry* registry);
+
   // Immediately returns the original camera position. Callback will be called after next update() has finished.
   glm::vec3 stopBake(BakeTextureCallback callback);
 

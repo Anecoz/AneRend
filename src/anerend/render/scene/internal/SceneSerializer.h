@@ -18,11 +18,10 @@ struct SceneSerializer
   SceneSerializer() = default;
   ~SceneSerializer();
 
-  void serialize(const Scene& scene, const std::filesystem::path& path);
+  void serialize(Scene& scene, const std::filesystem::path& path);
   std::future<DeserialisedSceneData> deserialize(const std::filesystem::path& path);
 
 private:
-  const std::uint8_t _currentVersion = 1;
   std::thread _serialisationThread;
   std::thread _deserialisationThread;
 };

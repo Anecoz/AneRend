@@ -104,6 +104,7 @@ void AneditApplication::update(double delta)
       auto scenePtr = dat._scene.get();
       _scene = std::move(*scenePtr);
       _scenePager.setScene(&_scene);
+      _vkRenderer.setRegistry(&_scene.registry());
       scenePtr = nullptr;
     }
   }

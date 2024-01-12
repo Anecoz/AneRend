@@ -198,8 +198,6 @@ private:
   std::vector<asset::Animator> _animators;
   std::vector<asset::Prefab> _prefabs;
   std::vector<asset::Texture> _textures;
-  std::vector<component::Renderable> _renderables;
-  std::vector<component::Light> _lights;
 
   std::unordered_map<util::Uuid, std::size_t> _nodes; // Index into _nodeVec
   std::vector<scene::Node> _nodeVec;
@@ -210,6 +208,7 @@ private:
   internal::SceneSerializer _serialiser;
 
   entt::observer _transformObserver;
+  bool _goThroughAllNodes = false;
 
   void addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx = TileIndex());
   void updateDependentTransforms(Node& node);

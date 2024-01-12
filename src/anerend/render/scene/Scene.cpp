@@ -38,6 +38,8 @@ Scene::~Scene()
 Scene::Scene(Scene&& rhs)
   : _transformObserver(_registry.getEnttRegistry(), entt::collector.update<component::Transform>())
 {
+  rhs._transformObserver.disconnect();
+
   std::swap(_tiles, rhs._tiles);
   std::swap(_materials, rhs._materials);
   std::swap(_animations, rhs._animations);
@@ -49,11 +51,17 @@ Scene::Scene(Scene&& rhs)
   std::swap(_eventLog, rhs._eventLog);
   std::swap(_nodes, rhs._nodes);
   std::swap(_nodeVec, rhs._nodeVec);
+  std::swap(_registry, rhs._registry);
+
+  _transformObserver.connect(_registry.getEnttRegistry(), entt::collector.update<component::Transform>());
+  _goThroughAllNodes = true;
 }
 
 Scene& Scene::operator=(Scene&& rhs)
 {
   if (this != &rhs) {
+    rhs._transformObserver.disconnect();
+
     std::swap(_tiles, rhs._tiles);
     std::swap(_materials, rhs._materials);
     std::swap(_animations, rhs._animations);
@@ -65,8 +73,12 @@ Scene& Scene::operator=(Scene&& rhs)
     std::swap(_eventLog, rhs._eventLog);
     std::swap(_nodes, rhs._nodes);
     std::swap(_nodeVec, rhs._nodeVec);
+    std::swap(_registry, rhs._registry);
+
+    _transformObserver.connect(_registry.getEnttRegistry(), entt::collector.update<component::Transform>());
   }
 
+  _goThroughAllNodes = true;
   return *this;
 }
 
@@ -110,36 +122,47 @@ void Scene::update()
     }
   }
 
+  auto lambda = [this](Node& node) {
+    updateDependentTransforms(node);
+
+    // Add to correct tile
+    auto& trans = _registry.getComponent<component::Transform>(node._id);
+    auto tileIdx = findTransformTile(trans, Tile::_tileSize);
+
+    // Is it already added to a tile?
+    if (_nodeTileMap.find(node._id) != _nodeTileMap.end()) {
+      auto& oldIdx = _nodeTileMap[node._id];
+      _tiles[oldIdx].removeNode(node._id);
+    }
+
+    if (_tiles.find(tileIdx) != _tiles.end()) {
+      _tiles[tileIdx].addNode(node._id);
+      _tiles[tileIdx].dirty() = true;
+      _nodeTileMap[node._id] = tileIdx;
+    }
+    else {
+      Tile tile(tileIdx);
+      tile.addNode(node._id);
+      _tiles[tileIdx] = std::move(tile);
+      _tiles[tileIdx].dirty() = true;
+      _nodeTileMap[node._id] = tileIdx;
+    }};
+
+  if (_goThroughAllNodes) {
+    for (auto& node : _nodeVec) {
+      lambda(node);
+    }
+
+    _goThroughAllNodes = false;
+  }
+
   // Check if any transforms have been updated
   for (const auto entity : _transformObserver) {
 
     // Update the transform hierarchy
     auto id = _registry.reverseLookup(entity);
     auto& node = _nodeVec[_nodes[id]];
-    updateDependentTransforms(node);
-
-    // Add to correct tile
-    auto& trans = _registry.getEnttRegistry().get<component::Transform>(entity);
-    auto tileIdx = findTransformTile(trans, Tile::_tileSize);
-
-    // Is it already added to a tile?
-    if (_nodeTileMap.find(id) != _nodeTileMap.end()) {
-      auto& oldIdx = _nodeTileMap[id];
-      _tiles[oldIdx].removeNode(id);
-    }
-
-    if (_tiles.find(tileIdx) != _tiles.end()) {
-      _tiles[tileIdx].addNode(id);
-      _tiles[tileIdx].dirty() = true;
-      _nodeTileMap[id] = tileIdx;
-    }
-    else {
-      Tile tile(tileIdx);
-      tile.addNode(id);
-      _tiles[tileIdx] = std::move(tile);
-      _tiles[tileIdx].dirty() = true;
-      _nodeTileMap[id] = tileIdx;
-    }
+    lambda(node);
   }
 
   _transformObserver.clear();
@@ -480,6 +503,8 @@ std::vector<util::Uuid> Scene::getNodeChildren(util::Uuid& node)
   if (_nodes.find(node) != _nodes.end()) {
     return _nodeVec[_nodes[node]]._children;
   }
+
+  return {};
 }
 
 void Scene::setDDGIAtlas(util::Uuid texId, scene::TileIndex idx)

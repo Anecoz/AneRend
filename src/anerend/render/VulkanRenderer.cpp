@@ -5013,6 +5013,20 @@ void VulkanRenderer::startBakeDDGI(scene::TileIndex tileIdx)
   _bakeInfo._stopNextFrame = false;
 }
 
+void VulkanRenderer::setRegistry(component::Registry* registry)
+{
+  _registry = registry;
+
+  _nodeObserver.connect(_registry->getEnttRegistry(), entt::collector
+    .update<component::PageStatus>()
+    .update<component::Light>()
+    .where<component::PageStatus>()
+    .update<component::Renderable>()
+    .where<component::PageStatus>()
+    .update<component::Transform>()
+    .where<component::PageStatus>());
+}
+
 glm::vec3 VulkanRenderer::stopBake(BakeTextureCallback callback)
 {
   // Stop baking means that we have to download the current DDGI probe atlas 

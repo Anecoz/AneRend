@@ -19,9 +19,25 @@ public:
 
   // No copying or moving
   Registry(const Registry&) = delete;
-  Registry(Registry&&) = delete;
   Registry& operator=(const Registry&) = delete;
-  Registry& operator=(Registry&&) = delete;
+
+  Registry(Registry&& rhs)
+  {
+    std::swap(_nodeMap, rhs._nodeMap);
+    std::swap(_registry, rhs._registry);
+    std::swap(_reverseNodeMap, rhs._reverseNodeMap);
+  }
+
+  Registry& operator=(Registry&& rhs)
+  {
+    if (this != &rhs) {
+      std::swap(_nodeMap, rhs._nodeMap);
+      std::swap(_registry, rhs._registry);
+      std::swap(_reverseNodeMap, rhs._reverseNodeMap);
+    }
+
+    return *this;
+  }
 
   void registerNode(util::Uuid& node)
   {

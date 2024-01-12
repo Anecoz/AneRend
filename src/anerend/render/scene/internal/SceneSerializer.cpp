@@ -7,9 +7,21 @@
 #include <bitsery/adapter/buffer.h>
 #include <bitsery/traits/vector.h>
 #include <bitsery/traits/string.h>
+#include <bitsery/ext/std_optional.h>
 
 #include <cstdint>
 #include <fstream>
+
+namespace {
+
+// Intermediate representation for nodes
+struct IntermediateNode
+{
+  render::scene::Node _node;
+  component::PotentialComponents _comps;
+};
+
+}
 
 namespace bitsery
 {
@@ -102,13 +114,42 @@ void serialize(S& s, render::Vertex& v)
 }
 
 template <typename S>
+void serialize(S& s, component::Transform& p)
+{
+  s.object(p._globalTransform);
+  s.object(p._localTransform);
+}
+
+template <typename S>
+void serialize(S& s, component::PotentialComponents& p)
+{
+  s.object(p._trans);
+  s.ext(p._rend, bitsery::ext::StdOptional{});
+  s.ext(p._light, bitsery::ext::StdOptional{});
+}
+
+template <typename S>
+void serialize(S& s, IntermediateNode& p)
+{
+  s.object(p._node._id);
+  s.text1b(p._node._name, 100);
+  s.object(p._node._parent);
+  s.container(p._node._children, 1000);
+  s.object(p._comps);
+}
+
+template <typename S>
+void serialize(S& s, std::vector<IntermediateNode>& v)
+{
+  s.container(v, 2500);
+}
+
+template <typename S>
 void serialize(S& s, render::asset::Prefab& p)
 {
   s.object(p._id);
   s.text1b(p._name, 100);
-  //s.object(p._model);
-  //s.object(p._skeleton);
-  //s.container(p._materials, 2500);
+  s.object(p._comps);
   s.object(p._parent);
   s.container(p._children, 1000);
 }
@@ -264,13 +305,9 @@ void serialize(S& s, component::Renderable& r)
   s.object(r._model);
   s.object(r._skeleton);
   s.container(r._materials, 2048);
-  //s.object(r._localTransform);
-  //s.object(r._globalTransform);
   s.object(r._tint);
   s.object(r._boundingSphere);
   s.value1b(r._visible);
-  //s.object(r._parent);
-  //s.container(r._children, 100);
 }
 
 template <typename S>
@@ -284,7 +321,6 @@ void serialize(S& s, component::Light& l)
 {
   s.object(l._id);
   s.text1b(l._name, 100);
-  //s.object(l._pos);
   s.object(l._color);
   s.value4b(l._range);
   s.value1b(l._enabled);
@@ -319,9 +355,61 @@ void serialize(S& s, std::vector<render::scene::Scene::TileInfo>& t)
 
 }
 
+static std::uint8_t g_CurrVersion = 1;
+
 namespace render::scene::internal {
 
 namespace {
+
+template <typename T>
+std::vector<std::uint8_t> serializeVector(const T& object) {
+  std::vector<std::uint8_t> serializedData;
+  auto byteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serializedData, object);
+  serializedData.resize(byteSize);
+  return serializedData;
+}
+
+class InternalSerializer
+{
+public:
+  // Add a type to be serialized
+  template <typename T>
+  void add(const T object) {
+    auto serializedData = serializeVector(object);
+    _serializedData.insert(_serializedData.end(), serializedData.begin(), serializedData.end());
+    _indices.push_back((std::uint32_t)_serializedData.size());
+  }
+
+  // Serialize the added data and write to file
+  void serializeToFile(const std::string& filePath) {
+    std::ofstream file(filePath, std::ios::binary);
+    if (!file.is_open()) {
+      printf("Could not open file for serialization!\n");
+      return;
+    }
+
+    std::uint32_t headerSize = (std::uint32_t)_indices.size() * sizeof(std::uint32_t) + (std::uint32_t)sizeof(g_CurrVersion);
+    file.write(reinterpret_cast<const char*>(&g_CurrVersion), sizeof(g_CurrVersion));
+
+    // This will be the first data index
+    file.write(reinterpret_cast<const char*>(&headerSize), sizeof(headerSize));
+
+    // All other indices
+    for (std::size_t i = 0; i < _indices.size() - 1; ++i) {
+      auto index = _indices[i];
+      index += headerSize;
+      file.write(reinterpret_cast<const char*>(&index), sizeof(index));
+    }
+
+    // All data in one go
+    file.write(reinterpret_cast<const char*>(_serializedData.data()), _serializedData.size());
+    file.close();
+  }
+
+private:
+  std::vector<std::uint8_t> _serializedData;
+  std::vector<std::uint32_t> _indices;
+};
 
 std::uint32_t headerSize()
 {
@@ -334,9 +422,8 @@ std::uint32_t headerSize()
     4 + // anim idx
     4 + // skel idx
     4 + // animator idx
-    4 + // rend idx
-    4 + // light idx
-    4;  // tile info idx
+    4 + // tile info idx
+    4;  // nodes idx
 }
 
 }
@@ -352,7 +439,7 @@ SceneSerializer::~SceneSerializer()
   }
 }
 
-void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path& path)
+void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
 {
   // Copy data from scene and then launch a thread to do the serialisation
 
@@ -364,7 +451,7 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
     [
       &scene,
       path,
-      version = _currentVersion
+      version = g_CurrVersion
     ]() {
 
       // Essentially we try to pack all the assets as close to binary compatible w/ c++ mem layout as possible,
@@ -382,9 +469,8 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
         4 bytes animation idx   (uint32_t)
         4 bytes skeleton idx    (uint32_t)
         4 bytes animator idx    (uint32_t)
-        4 bytes renderable idx  (uint32_t)
-        4 bytes lights     idx  (uint32_t)
         4 bytes tileInfo   idx  (uint32_t)
+        4 bytes nodes      idx  (uint32_t)
 
         -- prefabs --
 
@@ -400,11 +486,9 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
 
         -- animators --
 
-        -- renderables --
-
-        -- lights --
-
         -- tile infos --
+
+        -- nodes --
 
         EOF
       */
@@ -412,109 +496,41 @@ void SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
       // Copy assets. scene is a reference here in order to avoid copying on calling thread,
       // but there currently is no real guarantee that scene is alive here.
       // TODO: Should probably add a mechanism to make sure that scene stays alive for this duration.
-      auto models = scene._models;
-      auto prefabs = scene._prefabs;
-      auto textures = scene._textures;
-      auto materials = scene._materials;
-      auto animations = scene._animations;
-      auto skeletons = scene._skeletons;
-      auto renderables = scene._renderables;
-      auto animators = scene._animators;
-      auto lights = scene._lights;
-      auto tileInfos = scene._tileInfos;
 
-      std::ofstream file(path, std::ios::binary);
-      if (file.bad()) {
-        printf("Could not open path to serialize scene: %s!\n", path.string().c_str());
-        file.close();
-        return;
+      // Translate all nodes into intermediate representation
+      std::vector<IntermediateNode> imNodes;
+      for (auto& node : scene._nodeVec) {
+        IntermediateNode imn{};
+        imn._node._id = node._id;
+        imn._node._name = node._name;
+        imn._node._parent = node._parent;
+        imn._node._children = node._children;
+
+        // Components
+        imn._comps._trans = scene.registry().getComponent<component::Transform>(node._id);
+
+        if (scene.registry().hasComponent<component::Renderable>(node._id)) {
+          imn._comps._rend = scene.registry().getComponent<component::Renderable>(node._id);
+        }
+        if (scene.registry().hasComponent<component::Light>(node._id)) {
+          imn._comps._light = scene.registry().getComponent<component::Light>(node._id);
+        }
+
+        imNodes.emplace_back(std::move(imn));
       }
 
-      printf("Starting scene serialization to %s\n", path.string().c_str());
+      InternalSerializer ser;
+      ser.add(scene._prefabs);
+      ser.add(scene._textures);
+      ser.add(scene._models);
+      ser.add(scene._materials);
+      ser.add(scene._animations);
+      ser.add(scene._skeletons);
+      ser.add(scene._animators);
+      ser.add(scene._tileInfos);
+      ser.add(imNodes);
 
-      // Use bitsery to serialize the vectors
-      std::vector<std::uint8_t> serialisedPrefabs;
-      std::vector<std::uint8_t> serialisedTextures;
-      std::vector<std::uint8_t> serialisedModels;
-      std::vector<std::uint8_t> serialisedMats;
-      std::vector<std::uint8_t> serialisedAnimations;
-      std::vector<std::uint8_t> serialisedSkeletons;
-      std::vector<std::uint8_t> serialisedAnimators;
-      std::vector<std::uint8_t> serializedRenderables;
-      std::vector<std::uint8_t> serialisedLights;
-      std::vector<std::uint8_t> serialisedTis;
-
-      printf("Serialising prefabs...\n");
-      auto prefabsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedPrefabs, prefabs);
-      printf("Serialising textures...\n");
-      auto texturesByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedTextures, textures);
-      printf("Serialising models...\n");
-      auto modelsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedModels, models);
-      printf("Serialising materials...\n");
-      auto matsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedMats, materials);
-      printf("Serialising animations...\n");
-      auto animationsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedAnimations, animations);
-      printf("Serialising skeletons...\n");
-      auto skeletonsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedSkeletons, skeletons);
-      printf("Serialising animators...\n");
-      auto animatorsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedAnimators, animators);
-      printf("Serialising renderables...\n");
-      auto renderablesByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serializedRenderables, renderables);
-      printf("Serialising lights...\n");
-      auto lightsByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedLights, lights);
-      printf("Serialising tile infos...\n");
-      auto tisByteSize = (uint32_t)bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<std::uint8_t>>>(serialisedTis, tileInfos);
-
-      auto headerSz = headerSize();
-
-      printf("Writing to disk...\n");
-
-      auto prefabIdx = headerSz;
-      auto textureIdx = prefabIdx + prefabsByteSize;
-      auto modelIdx = textureIdx + texturesByteSize;
-      auto materialIdx = modelIdx + modelsByteSize;
-      auto animationIdx = materialIdx + matsByteSize;
-      auto skeletonIdx = animationIdx + animationsByteSize;
-      auto animatorIdx = skeletonIdx + skeletonsByteSize;
-      auto renderableIdx = animatorIdx + animatorsByteSize;
-      auto lightsIdx = renderableIdx + renderablesByteSize;
-      auto tiIdx = lightsIdx + lightsByteSize;
-
-      file.write((const char*)&version, 1);
-      // prefab idx (where model info starts)
-      file.write((const char*)&prefabIdx, 4);
-      // texture idx (where model info starts)
-      file.write((const char*)&textureIdx, 4);
-      // model idx (where model info starts)
-      file.write((const char*)&modelIdx, 4);
-      // material idx
-      file.write((const char*)&materialIdx, 4);
-      // animation idx
-      file.write((const char*)&animationIdx, 4);
-      // skeleton idx
-      file.write((const char*)&skeletonIdx, 4);
-      // animator idx
-      file.write((const char*)&animatorIdx, 4);
-      // renderable idx
-      file.write((const char*)&renderableIdx, 4);
-      // lights idx
-      file.write((const char*)&lightsIdx, 4);
-      // ti idx
-      file.write((const char*)&tiIdx, 4);
-      
-      // write the data
-      file.write((const char*)serialisedPrefabs.data(), prefabsByteSize);
-      file.write((const char*)serialisedTextures.data(), texturesByteSize);
-      file.write((const char*)serialisedModels.data(), modelsByteSize);
-      file.write((const char*)serialisedMats.data(), matsByteSize);
-      file.write((const char*)serialisedAnimations.data(), animationsByteSize);
-      file.write((const char*)serialisedSkeletons.data(), skeletonsByteSize);
-      file.write((const char*)serialisedAnimators.data(), animatorsByteSize);
-      file.write((const char*)serializedRenderables.data(), renderablesByteSize);
-      file.write((const char*)serialisedLights.data(), lightsByteSize);
-      file.write((const char*)serialisedTis.data(), tisByteSize);
-
-      file.close();
+      ser.serializeToFile(path.string());
 
       printf("Scene serialisation done!\n");
     });
@@ -550,7 +566,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
   }
 
   _deserialisationThread = std::thread(
-    [p = std::move(promise), path, version = _currentVersion] () mutable
+    [p = std::move(promise), path, version = g_CurrVersion] () mutable
     {
       std::ifstream file(path, std::ios::binary | std::ios::ate);
 
@@ -561,46 +577,6 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         file.close();
         return;
       }
-
-      // Read header
-      /*
-        File structure (version 1):
-
-        -- header--
-        1 byte  version         (uint8_t)
-        4 bytes prefabs idx     (uint32_t)
-        4 bytes tex idx         (uint32_t)
-        4 bytes model idx       (uint32_t)
-        4 bytes material idx    (uint32_t)
-        4 bytes animation idx   (uint32_t)
-        4 bytes skeleton idx    (uint32_t)
-        4 bytes animator idx    (uint32_t)
-        4 bytes renderable idx  (uint32_t)
-        4 bytes lights idx      (uint32_t)
-        4 bytes tile info idx   (uint32_t)
-
-        -- prefabs --
-
-        -- textures --
-
-        -- models --
-
-        -- materials --
-
-        -- animations --
-
-        -- skeletons --
-
-        -- animators -- 
-
-        -- renderables --
-
-        -- lights --
-
-        -- tile infos --
-
-        EOF
-      */
 
       DeserialisedSceneData outputData{};
       outputData._scene = std::make_unique<render::scene::Scene>();
@@ -629,9 +605,8 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       uint32_t animationIdx = header4BytePtr[4];
       uint32_t skeletonIdx = header4BytePtr[5];
       uint32_t animatorIdx = header4BytePtr[6];
-      uint32_t rendIdx = header4BytePtr[7];
-      uint32_t lightIdx = header4BytePtr[8];
-      uint32_t tiIdx = header4BytePtr[9];
+      uint32_t tiIdx = header4BytePtr[7];
+      uint32_t nodesIdx = header4BytePtr[8];
 
       std::vector<std::uint8_t> serialisedPrefabs(textureIdx - prefabIdx);
       std::vector<std::uint8_t> serialisedTextures(modelIdx - textureIdx);
@@ -639,10 +614,9 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       std::vector<std::uint8_t> serialisedMats(animationIdx - materialIdx);
       std::vector<std::uint8_t> serialisedAnimations(skeletonIdx - animationIdx);
       std::vector<std::uint8_t> serialisedSkeletons(animatorIdx - skeletonIdx);
-      std::vector<std::uint8_t> serialisedAnimators(rendIdx - animatorIdx);
-      std::vector<std::uint8_t> serialisedRenderables(lightIdx - rendIdx);
-      std::vector<std::uint8_t> serialisedLights(tiIdx - lightIdx);
-      std::vector<std::uint8_t> serialisedTis(fileSize - tiIdx);
+      std::vector<std::uint8_t> serialisedAnimators(tiIdx - animatorIdx);
+      std::vector<std::uint8_t> serialisedTis(nodesIdx - tiIdx);
+      std::vector<std::uint8_t> serialisedNodes(fileSize - nodesIdx);
 
       // We need these here so that we can add them properly to the scene.
       std::vector<render::asset::Prefab> prefabs;
@@ -652,9 +626,8 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       std::vector<render::anim::Animation> animations;
       std::vector<render::anim::Skeleton> skeletons;
       std::vector<render::asset::Animator> animators;
-      std::vector<component::Renderable> rends;
-      std::vector<component::Light> lights;
       std::vector<render::scene::Scene::TileInfo> tis;
+      std::vector<IntermediateNode> imNodes;
 
       // Read prefabs
       if (!desHelper(file, prefabIdx, serialisedPrefabs, prefabs)) {
@@ -698,20 +671,14 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         return;
       }
 
-      // Read renderables
-      if (!desHelper(file, rendIdx, serialisedRenderables, rends)) {
-        p.set_value(DeserialisedSceneData());
-        return;
-      }
-
-      // Read lights
-      if (!desHelper(file, lightIdx, serialisedLights, lights)) {
-        p.set_value(DeserialisedSceneData());
-        return;
-      }
-
       // Read tile infos
       if (!desHelper(file, tiIdx, serialisedTis, tis)) {
+        p.set_value(DeserialisedSceneData());
+        return;
+      }
+
+      // Read intermediate nodes
+      if (!desHelper(file, nodesIdx, serialisedNodes, imNodes)) {
         p.set_value(DeserialisedSceneData());
         return;
       }
@@ -737,15 +704,30 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       for (auto& animator : animators) {
         outputData._scene->addAnimator(std::move(animator));
       }
-      for (auto& r : rends) {
-        //outputData._scene->addRenderable(std::move(r));
-      }
-      for (auto& l : lights) {
-        //outputData._scene->addLight(std::move(l));
-      }
       for (auto& ti : tis) {
         if (ti._ddgiAtlas) {
           outputData._scene->setDDGIAtlas(ti._ddgiAtlas, ti._idx);
+        }
+      }
+
+      // Translate intermediate node representation to actual nodes
+      for (auto& imn : imNodes) {
+        auto id = outputData._scene->addNode(std::move(imn._node));
+
+        auto& c = outputData._scene->registry().addComponent<component::Transform>(id);
+        c = imn._comps._trans;
+        outputData._scene->registry().patchComponent<component::Transform>(id);
+
+        if (imn._comps._rend) {
+          auto& c = outputData._scene->registry().addComponent<component::Renderable>(id);
+          c = imn._comps._rend.value();
+          outputData._scene->registry().patchComponent<component::Renderable>(id);
+        }
+
+        if (imn._comps._light) {
+          auto& c = outputData._scene->registry().addComponent<component::Light>(id);
+          c = imn._comps._light.value();
+          outputData._scene->registry().patchComponent<component::Light>(id);
         }
       }
 
