@@ -111,7 +111,7 @@ void main()
       surfData.metallic,
       surfData.roughness,
       pos,
-      gl_ObjectRayOriginEXT,
+      gl_WorldRayOriginEXT,
       probeTex);
   }
 
