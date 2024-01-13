@@ -22,6 +22,8 @@ struct AneditContext
 
   virtual void spawnFromPrefabAtMouse(const util::Uuid& prefab) = 0;
 
+  virtual void* getImguiTexId(util::Uuid& tex) = 0;
+
   enum class SelectionType
   {
     Material,

@@ -284,6 +284,16 @@ bool UploadQueue::createTexture(
     if (mipHeight > 1) mipHeight /= 2;
   }
 
+  // Transition image to shader
+  imageutil::transitionImageLayout(
+    cmdBuffer,
+    image._image,
+    format,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    0,
+    tex._numMips);
+
   vmaUnmapMemory(uc->getRC()->vmaAllocator(), sb._buf._allocation);
   sb.advance(dataSize);
 

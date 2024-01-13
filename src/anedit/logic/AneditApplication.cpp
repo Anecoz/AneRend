@@ -561,6 +561,11 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
 #endif
 }
 
+void* AneditApplication::getImguiTexId(util::Uuid& tex)
+{
+  return _vkRenderer.getImGuiTexId(tex);
+}
+
 std::vector<util::Uuid>& AneditApplication::selection()
 {
   return _selection;

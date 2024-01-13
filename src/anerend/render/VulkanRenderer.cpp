@@ -5037,6 +5037,15 @@ glm::vec3 VulkanRenderer::stopBake(BakeTextureCallback callback)
   return _bakeInfo._originalCamPos;
 }
 
+void* VulkanRenderer::getImGuiTexId(util::Uuid& texId)
+{
+  if (_imguiTexIds.find(texId) != _imguiTexIds.end()) {
+    return _imguiTexIds[texId];
+  }
+
+  return nullptr;
+}
+
 internal::StagingBuffer& VulkanRenderer::getStagingBuffer()
 {
   return _gpuStagingBuffer[_currentFrame];
@@ -5063,6 +5072,10 @@ void VulkanRenderer::textureUploadedCB(internal::InternalTexture tex)
     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     tex._bindlessInfo._view,
     tex._bindlessInfo._sampler);
+
+  // Create the imgui tex id
+  auto desc = ImGui_ImplVulkan_AddTexture(tex._bindlessInfo._sampler, tex._bindlessInfo._view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  _imguiTexIds[tex._id] = (void*)desc;
 
   _textureIdMap[tex._id] = _currentTextures.size();
   _currentTextures.emplace_back(std::move(tex));

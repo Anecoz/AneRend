@@ -115,11 +115,15 @@ public:
   // Sets the renderer in "baking" mode, baking diffuse GI at the given tile index.
   void startBakeDDGI(scene::TileIndex tileIdx);
 
-  // Update which registry to use for the observing components.
-  void setRegistry(component::Registry* registry);
-
   // Immediately returns the original camera position. Callback will be called after next update() has finished.
   glm::vec3 stopBake(BakeTextureCallback callback);
+
+  // Update which registry to use for observing components.
+  void setRegistry(component::Registry* registry);
+
+  // Warning! This return value may not be valid the entire time. It is up to caller to make sure that update() and drawFrame() are called
+  // in such a way that this remains valid.
+  void* getImGuiTexId(util::Uuid& texId);
 
   // Upload context interface
   internal::StagingBuffer& getStagingBuffer() override final;
@@ -304,6 +308,9 @@ private:
   // Keeps track of where skeletons should go in the related GPU buffer. Does not own skeleton data.
   // NOTE: The offset given by each Handle is in terms of _NUMBER OF_ matrices, not bytes!
   std::unordered_map<util::Uuid, internal::BufferMemoryInterface::Handle> _skeletonOffsets;
+
+  // Keep track of imgui tex ids (Descriptor sets as of now)
+  std::unordered_map<util::Uuid, void*> _imguiTexIds;
 
   // Assets
   std::vector<internal::InternalModel> _currentModels;

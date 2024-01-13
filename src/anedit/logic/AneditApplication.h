@@ -45,6 +45,8 @@ public:
 
   void spawnFromPrefabAtMouse(const util::Uuid& prefab) override final;
 
+  void* getImguiTexId(util::Uuid& tex) override final;
+
   std::vector<util::Uuid>& selection() override final;
 
   render::Camera& camera() override final;
