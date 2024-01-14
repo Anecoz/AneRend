@@ -442,6 +442,7 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, g
 
   // There should always be a transform component
   auto globalTransform = parentGlobalTransform * prefab._comps._trans._localTransform;
+  auto localTransform = prefab._comps._trans._localTransform;
 
   // Instantiate children
   auto& prefabs = _scene.getPrefabs();
@@ -455,7 +456,11 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, g
     }
   }
 
-  _scene.registry().addComponent<component::Transform>(id, globalTransform, prefab._comps._trans._localTransform);
+  if (!prefab._parent) {
+    localTransform = globalTransform;
+  }
+
+  _scene.registry().addComponent<component::Transform>(id, globalTransform, localTransform);
   _scene.registry().patchComponent<component::Transform>(id);
 
   if (prefab._comps._rend) {
@@ -507,58 +512,18 @@ void AneditApplication::startLoadGLTF(std::filesystem::path p)
 
 void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
 {
-#if 0
   _vkRenderer.requestWorldPosition(MousePosInput::getPosition(),
     [prefab, this](glm::vec3 worldPos) {
+      auto trans = glm::translate(glm::mat4(1.0f), worldPos);
+
       auto* p = _scene.getPrefab(prefab);
-      component::Renderable rend{};
-      rend._materials = p->_materials;
-      rend._model = p->_model;
-      rend._skeleton = p->_skeleton;
-      rend._name = p->_name.empty() ? "" : p->_name;
-
-      rend._boundingSphere = p->_boundingSphere;
-      rend._visible = true;
-      rend._tint = p->_tint;
-
-      // Replace translation part of prefab transform with worldPos
-      glm::mat4 pMat = p->_transform;
-      auto& temp = pMat[3];
-      temp.x = worldPos.x;
-      temp.y = worldPos.y;
-      temp.z = worldPos.z;
-      pMat[3] = temp;
-      rend._globalTransform = std::move(pMat);
-      rend._localTransform = rend._globalTransform;
-
-      // Set and spawn children renderables
-      // TODO: Should be recursive!
-      for (auto& childId : p->_children) {
-        auto* childPrefab = _scene.getPrefab(childId);
-        component::Renderable childRend{};
-        childRend._materials = childPrefab->_materials;
-        childRend._model = childPrefab->_model;
-        childRend._skeleton = childPrefab->_skeleton;
-        childRend._name = childPrefab->_name.empty() ? "" : childPrefab->_name;
-
-        childRend._localTransform = childPrefab->_transform;
-        childRend._globalTransform = rend._globalTransform * childRend._localTransform;
-        childRend._boundingSphere = childPrefab->_boundingSphere;
-        childRend._visible = true;
-        childRend._tint = childPrefab->_tint;
-        childRend._parent = rend._id;
-
-        rend._children.emplace_back(childRend._id);
-        _scene.addRenderable(std::move(childRend));
-      }
+      auto id = instantiate(*p, trans);
 
       // Also select it
       _selection.clear();
-      _selection.emplace_back(rend._id);
-      _selectionType = AneditContext::SelectionType::Renderable;
-      _scene.addRenderable(std::move(rend));
+      _selection.emplace_back(id);
+      _selectionType = AneditContext::SelectionType::Node;
     });
-#endif
 }
 
 void* AneditApplication::getImguiTexId(util::Uuid& tex)
