@@ -5,6 +5,8 @@
 #include "../logic/AneditContext.h"
 #include <render/scene/Scene.h>
 
+#include <functional>
+
 #include <imgui.h>
 #include <nfd.hpp>
 
@@ -21,7 +23,9 @@ bool drawAssetList(
   const std::vector<T>& v, 
   util::Uuid& selectedUuid,
   util::Uuid& draggedUuid, // not necessarily the same as selected
-  bool& dragged)
+  bool& dragged,
+  std::vector<std::string> contextMenuItems = {},
+  std::vector<std::function<void(util::Uuid)>> contextMenuCbs = {})
 {
   bool changed = false;
   ImGui::BeginChild(label, size, true);
@@ -56,6 +60,19 @@ bool drawAssetList(
     if (ImGui::Selectable(label2.c_str(), selectedUuid == i._id)) {
       selectedUuid = i._id;
       changed = true;
+    }
+
+    // Context menu
+    if (!contextMenuCbs.empty()) {
+      if (ImGui::BeginPopupContextItem()) {
+        for (std::size_t j = 0; j < contextMenuItems.size(); ++j) {
+          if (ImGui::MenuItem(contextMenuItems[j].c_str())) {
+            contextMenuCbs[j](i._id);
+          }
+        }
+
+        ImGui::EndPopup();
+      }
     }
 
     // drag&drop
@@ -139,8 +156,13 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
 
   // Prefabs
   {
+    auto deleteLambda = [c](util::Uuid id) { c->scene().removePrefab(id); c->selection().clear(); };
+
+    std::vector<std::string> menuItems = { "Delete" };
+    std::vector<std::function<void(util::Uuid)>> cbs = { deleteLambda };
+
     bool draggedThisFrame = false;
-    if (drawAssetList(size, _prefabFilter, "Prefabs", c->scene().getPrefabs(), currSelection, _draggedPrefab, draggedThisFrame)) {
+    if (drawAssetList(size, _prefabFilter, "Prefabs", c->scene().getPrefabs(), currSelection, _draggedPrefab, draggedThisFrame, menuItems, cbs)) {
       c->selection().clear();
       c->selection().emplace_back(currSelection);
       c->selectionType() = logic::AneditContext::SelectionType::Prefab;

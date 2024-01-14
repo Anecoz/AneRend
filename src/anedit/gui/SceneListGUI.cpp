@@ -96,24 +96,6 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 
   ImGui::Separator();
 
-#if 0
-  // lights
-  {
-    ImGui::Text("Lights");
-
-    ImGui::Separator();
-    for (const auto& a : lights) {
-      std::string label = std::string("Light ") + (a._name.empty() ? a._id.str() : a._name);
-      label += "##" + a._id.str();
-      if (ImGui::Selectable(label.c_str(), c->getFirstSelection() == a._id)) {
-        c->selection().clear();
-        c->selection().emplace_back(a._id);
-        c->selectionType() = logic::AneditContext::SelectionType::Light;
-      }
-    }
-  }
-#endif
-
   ImGui::End();
 }
 

@@ -221,15 +221,46 @@ void Scene::updatePrefab(asset::Prefab prefab)
 
 void Scene::removePrefab(util::Uuid id)
 {
+  // Need to make sure that we delete any parent referencing this as a child and any child referencing this as a parent
+  util::Uuid parent;
+  bool found = false;
+
   for (auto it = _prefabs.begin(); it != _prefabs.end(); ++it) {
     if (it->_id == id) {
+      found = true;
+      parent = it->_parent;
       _prefabs.erase(it);
       addEvent(SceneEventType::PrefabRemoved, id);
-      return;
+      break;
     }
   }
 
-  printf("Could not remove model %s, doesn't exist!\n", id.str().c_str());
+  // Remove id as a child
+  if (parent) {
+    for (auto it = _prefabs.begin(); it != _prefabs.end(); ++it) {
+      if (it->_id == parent) {
+        for (auto it2 = it->_children.begin(); it2 != it->_children.end(); ++it) {
+          if (*it2 == id) {
+            it->_children.erase(it2);
+            break;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // Make sure no one has us as a parent
+  for (auto it = _prefabs.begin(); it != _prefabs.end(); ++it) {
+    if (it->_parent == id) {
+      it->_parent = util::Uuid();
+      break;
+    }
+  }
+
+  if (!found) {
+    printf("Could not remove prefab %s, doesn't exist!\n", id.str().c_str());
+  }
 }
 
 const asset::Prefab* Scene::getPrefab(util::Uuid id)

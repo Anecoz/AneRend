@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../logic/AneditContext.h"
+
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -15,6 +17,12 @@ void filterName(std::vector<T>& v, std::string filter)
       return t._name.find(filter) != std::string::npos;
     }
   ), v.end());
+}
+ 
+// TODO: Implement this and manage multiselect, probably via AneditContext.
+void updateSelection(util::Uuid& id, logic::AneditContext::SelectionType type, logic::AneditContext* c)
+{
+  
 }
 
 }
