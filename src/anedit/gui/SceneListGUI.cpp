@@ -125,6 +125,11 @@ void SceneListGUI::renderNodeTree(util::Uuid& node, logic::AneditContext* c)
     if (ImGui::MenuItem("Delete")) {
       deleteNodeClicked(c, node);
     }
+    auto n = c->scene().getNode(node);
+    if (n->_parent && ImGui::MenuItem("Remove parent")) {
+      auto pId = n->_parent;
+      c->scene().removeNodeChild(pId, node);
+    }
     ImGui::EndPopup();
   }
 
