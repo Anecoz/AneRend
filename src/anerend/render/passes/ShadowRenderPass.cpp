@@ -318,11 +318,15 @@ void ShadowRenderPass::registerPointShadowPass(FrameGraphBuilder& fgb, RenderCon
           &push);
 
         // Ask render context to draw big giga buffer
-        exeParams.rc->drawGigaBufferIndirectCount(
+        exeParams.rc->drawGigaBufferIndirect(
+          exeParams.cmdBuffer,
+          exeParams.buffers[1],
+          static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));
+        /*exeParams.rc->drawGigaBufferIndirectCount(
           exeParams.cmdBuffer,
           exeParams.buffers[1],
           exeParams.buffers[2],
-          static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));
+          static_cast<uint32_t>(exeParams.rc->getCurrentMeshes().size()));*/
 
         // Stop dynamic rendering
         vkCmdEndRendering(*exeParams.cmdBuffer);

@@ -608,6 +608,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     }
 
     // Do a sanity check that no renderable uses this model
+#if 0
     for (auto it = _currentRenderables.begin(); it != _currentRenderables.end(); ++it) {
       if (it->_renderable._model == removedModel) {
         //_currentRenderables.erase(it);
@@ -616,6 +617,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
         printf("Warning! Removing renderable that still uses removed model!\n");
       }
     }
+#endif
 
     _currentModels.erase(_currentModels.begin() + it->second);
   }
@@ -866,6 +868,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     _animThread.addAnimator(std::move(animator));
   }   
   
+#if 0
   // Removed renderables. This forces the id map to update aswell (potentially expensive)
   for (auto remId : update._removedRenderables) {
     for (auto it = _currentRenderables.begin(); it != _currentRenderables.end(); ++it) {
@@ -1094,7 +1097,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
       idx++;
     }
   }
-
+#endif
   // Mat id map update
   if (materialIdMapUpdate) {
     _materialIdMap.clear();
@@ -2388,8 +2391,8 @@ void VulkanRenderer::updateNodes()
       renderablesChanged = true;
       // Added renderables
       if (paged) {
-        if (_renderableIdMap.find(rend._id) == _renderableIdMap.end()) {
-          if (!rend._id) {
+        if (_renderableIdMap.find(internalId) == _renderableIdMap.end()) {
+          if (!internalId) {
             printf("Asset update fail: cannot add renderable with invalid id\n");
             continue;
           }
@@ -2405,6 +2408,7 @@ void VulkanRenderer::updateNodes()
           }
 
           internal::InternalRenderable internalRend{};
+          internalRend._id = internalId;
           internalRend._renderable = rend;
           internalRend._globalTransform = transComp._globalTransform;
 
@@ -2425,7 +2429,7 @@ void VulkanRenderer::updateNodes()
               // TODO: Don't do this if we already have this skeleton + model combination copied
               //       In that case, just point to the dynamic model already present
               DynamicModelCopyInfo copyInfo{};
-              copyInfo._renderableId = internalRend._renderable._id;
+              copyInfo._renderableId = internalRend._id;
               _dynamicModelsToCopy.emplace_back(std::move(copyInfo));
 
               for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -2438,7 +2442,7 @@ void VulkanRenderer::updateNodes()
         }
         else {
           // Updated renderable
-          if (!rend._id) {
+          if (!internalId) {
             printf("Asset update fail: cannot update renderable with invalid id\n");
             continue;
           }
@@ -2448,10 +2452,10 @@ void VulkanRenderer::updateNodes()
             continue;
           }
 
-          auto it = _renderableIdMap.find(rend._id);
+          auto it = _renderableIdMap.find(internalId);
 
           if (it == _renderableIdMap.end()) {
-            printf("Could not update renderable %s, doesn't exist!\n", rend._id.str().c_str());
+            printf("Could not update renderable %s, doesn't exist!\n", internalId.str().c_str());
             break;
           }
 
@@ -2462,9 +2466,9 @@ void VulkanRenderer::updateNodes()
       else {
         // not paged, removed
         rendIdMapUpdate = true;
-        auto remId = rend._id;
+        auto remId = internalId;
         for (auto it = _currentRenderables.begin(); it != _currentRenderables.end(); ++it) {
-          if (it->_renderable._id == remId) {
+          if (it->_id == remId) {
             if (_enableRayTracing && !it->_dynamicMeshes.empty()) {
 
               modelIdMapUpdate = true;
@@ -2547,13 +2551,13 @@ void VulkanRenderer::updateNodes()
       // Removed lights
       if (!paged) {
         for (auto it = _lights.begin(); it != _lights.end(); ++it) {
-          if (it->_lightComp._id == l._id) {
+          if (it->_id == internalId) {
 
             if (it->_lightComp._shadowCaster) {
               // Remove from caster list (if there)
 
               for (auto& id : _shadowCasters) {
-                if (id == it->_lightComp._id) {
+                if (id == internalId) {
                   id = util::Uuid();
                   break;
                 }
@@ -2569,14 +2573,14 @@ void VulkanRenderer::updateNodes()
         bool found = false;
         // Updated light
         for (auto& oldLight : _lights) {
-          if (oldLight._lightComp._id == l._id) {
+          if (oldLight._id == internalId) {
             found = true;
 
             // Did shadow caster status change?
             if (oldLight._lightComp._shadowCaster && !l._shadowCaster) {
               // it was shadow caster but not anymore, remove from list
               for (auto& id : _shadowCasters) {
-                if (id == oldLight._lightComp._id) {
+                if (id == oldLight._id) {
                   id = util::Uuid();
                   break;
                 }
@@ -2586,7 +2590,7 @@ void VulkanRenderer::updateNodes()
               // wasn't shadow caster but now is, add to list if possible
               for (auto& id : _shadowCasters) {
                 if (!id) {
-                  id = l._id;
+                  id = internalId;
                   break;
                 }
               }
@@ -2606,7 +2610,7 @@ void VulkanRenderer::updateNodes()
           if (l._shadowCaster) {
             for (auto& id : _shadowCasters) {
               if (!id) {
-                id = l._id;
+                id = internalId;
                 break;
               }
             }
@@ -2614,6 +2618,7 @@ void VulkanRenderer::updateNodes()
 
           l.updateViewMatrices(lightPos);
           internal::InternalLight internalLight{};
+          internalLight._id = internalId;
           internalLight._lightComp = l;
           internalLight._pos = std::move(lightPos);
           _lights.emplace_back(std::move(internalLight));
@@ -2639,7 +2644,7 @@ void VulkanRenderer::updateNodes()
       _renderableIdMap.clear();
 
       for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
-        _renderableIdMap[_currentRenderables[i]._renderable._id] = i;
+        _renderableIdMap[_currentRenderables[i]._id] = i;
       }
     }
   }
@@ -3374,7 +3379,7 @@ bool VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
       if (arePrerequisitesUploaded(*it)) {
         _currentRenderables.emplace_back(*it);
         auto internalId = _currentRenderables.size() - 1;
-        _renderableIdMap[it->_renderable._id] = internalId;
+        _renderableIdMap[it->_id] = internalId;
 
         it = _pendingFirstUploadRenderables.erase(it);
       }
@@ -3647,7 +3652,7 @@ void VulkanRenderer::prefillGPUPointLightShadowCubeBuffer(VkCommandBuffer& comma
     if (_shadowCasters[i]) {
       component::Light* light = nullptr;
       for (auto& l : _lights) {
-        if (l._lightComp._id == _shadowCasters[i]) {
+        if (l._id == _shadowCasters[i]) {
           light = &l._lightComp;
           break;
         }
@@ -4912,6 +4917,7 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
   if (_lightsChanged[_currentFrame]) {
     prefillGPULightBuffer(commandBuffer);
     prefillGPUPointLightShadowCubeBuffer(commandBuffer);
+    _lightsChanged[_currentFrame] = false;
   }
 
   // Update windforce texture
@@ -5244,7 +5250,7 @@ std::vector<int> VulkanRenderer::getShadowCasterLightIndices()
   for (auto& id : _shadowCasters) {
     if (id) {
       for (int i = 0; i < _lights.size(); ++i) {
-        if (_lights[i]._lightComp._id == id) {
+        if (_lights[i]._id == id) {
           out.emplace_back(i);
           break;
         }

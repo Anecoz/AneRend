@@ -8,6 +8,8 @@ struct InternalRenderable
 {
   component::Renderable _renderable;
 
+  util::Uuid _id;
+
   // Convenience
   std::vector<util::Uuid> _meshes;
 

@@ -300,7 +300,7 @@ void serialize(S& s, std::vector<render::anim::Skeleton>& skel)
 template <typename S>
 void serialize(S& s, component::Renderable& r)
 {
-  s.object(r._id);
+  //s.object(r._id);
   s.text1b(r._name, 100);
   s.object(r._model);
   s.object(r._skeleton);
@@ -319,7 +319,7 @@ void serialize(S& s, std::vector<component::Renderable>& r)
 template <typename S>
 void serialize(S& s, component::Light& l)
 {
-  s.object(l._id);
+  //s.object(l._id);
   s.text1b(l._name, 100);
   s.object(l._color);
   s.value4b(l._range);

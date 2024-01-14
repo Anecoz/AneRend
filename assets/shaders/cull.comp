@@ -279,15 +279,15 @@ void checkBSAgainstPointLightShadows(vec3 boundingSphereWorld, float radius, uin
       // add a draw call for this index
       uint shadowDrawIdx = atomicAdd(shadowCountBufs[i].count, 1);
 
-      shadowDrawBufs[i].draws[shadowDrawIdx].indexCount = drawBuffer.draws[drawIndex].indexCount;
-      shadowDrawBufs[i].draws[shadowDrawIdx].firstIndex = drawBuffer.draws[drawIndex].firstIndex;
-      shadowDrawBufs[i].draws[shadowDrawIdx].vertexOffset = drawBuffer.draws[drawIndex].vertexOffset;
-      shadowDrawBufs[i].draws[shadowDrawIdx].firstInstance = drawBuffer.draws[drawIndex].firstInstance;
+      shadowDrawBufs[i].draws[drawIndex].indexCount = drawBuffer.draws[drawIndex].indexCount;
+      shadowDrawBufs[i].draws[drawIndex].firstIndex = drawBuffer.draws[drawIndex].firstIndex;
+      shadowDrawBufs[i].draws[drawIndex].vertexOffset = drawBuffer.draws[drawIndex].vertexOffset;
+      shadowDrawBufs[i].draws[drawIndex].firstInstance = drawBuffer.draws[drawIndex].firstInstance;
       
-      uint countBefore = atomicAdd(shadowDrawBufs[i].draws[shadowDrawIdx].instanceCount, 1);
+      uint countBefore = atomicAdd(shadowDrawBufs[i].draws[drawIndex].instanceCount, 1);
 
       // Update translation buffer (from gl_InstanceIndex to renderableId and meshId)
-      uint instanceIndex = shadowDrawBufs[i].draws[shadowDrawIdx].firstInstance + countBefore;
+      uint instanceIndex = shadowDrawBufs[i].draws[drawIndex].firstInstance + countBefore;
       shadowTransBufs[i].ids[instanceIndex].renderableIndex = renderableIndex;
       shadowTransBufs[i].ids[instanceIndex].meshOffset = meshOffset;
     }

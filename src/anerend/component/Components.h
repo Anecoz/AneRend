@@ -23,7 +23,7 @@ struct Transform
 
 struct Renderable
 {
-  util::Uuid _id = util::Uuid::generate();
+  //util::Uuid _id = util::Uuid::generate();
 
   std::string _name; // for debugging
 
@@ -43,7 +43,7 @@ struct PageStatus
 
 struct Light
 {
-  util::Uuid _id = util::Uuid::generate();
+  //util::Uuid _id = util::Uuid::generate();
 
   std::string _name;
 
