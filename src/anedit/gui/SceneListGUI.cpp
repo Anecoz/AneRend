@@ -24,12 +24,11 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
   ImGui::Begin("Scene list", NULL, ImGuiWindowFlags_MenuBar);
 
   // Menu
-  std::string menuAction;
   if (ImGui::BeginMenuBar()) {
 
     if (ImGui::BeginMenu("File")) {
-      if (ImGui::MenuItem("Add renderable...")) {
-        menuAction = "AddRenderable";
+      if (ImGui::MenuItem("Add scene node...")) {
+        addNodeClicked(c);
       }
       if (ImGui::MenuItem("Add animator...")) {
         addAnimatorClicked(c);
@@ -56,11 +55,6 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
   // nodes
   {
     ImGui::Text("Nodes");
-
-    if (menuAction == "AddRenderable") {
-      ImGui::OpenPopup("Add from prefab");
-    }
-    addFromPrefab(c); // this has to run every frame but only executes if the button above was pressed
 
     ImGui::Separator();
 
@@ -168,45 +162,6 @@ void SceneListGUI::renderNodeTree(util::Uuid& node, logic::AneditContext* c)
   }
 }
 
-void SceneListGUI::addFromPrefab(logic::AneditContext* c)
-{
-  /*if (ImGui::BeginPopupModal("Add from prefab")) {
-    
-    // List all prefabs as selectable
-    auto& prefabs = c->scene().getPrefabs();
-    for (const auto& p : prefabs) {
-      std::string label = std::string("Prefab ") + (p._name.empty()? p._id.str() : p._name);
-      label += "##" + p._id.str();
-      if (ImGui::Selectable(label.c_str(), p._id == _selectedPrefab, ImGuiSelectableFlags_DontClosePopups)) {
-        _selectedPrefab = p._id;
-      }
-    }
-
-    if (ImGui::Button("OK")) {
-
-      // Create a renderable from prefab
-      if (_selectedPrefab) {
-        auto* p = c->scene().getPrefab(_selectedPrefab);
-        component::Renderable rend{};
-        rend._materials = p->_materials;
-        rend._model = p->_model;
-        rend._skeleton = p->_skeleton;
-
-        rend._boundingSphere = p->_boundingSphere;
-        rend._visible = true;
-        rend._transform = p->_transform;
-        rend._tint = p->_tint;
-
-        c->scene().addRenderable(std::move(rend));
-      }
-
-      ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
-  }*/
-}
-
 void SceneListGUI::loadSceneClicked(logic::AneditContext* c)
 {
   // Open a file dialog and choose where to load from
@@ -246,6 +201,16 @@ void SceneListGUI::addLightClicked(logic::AneditContext* c)
   c->scene().registry().addComponent<component::Transform>(id, glm::mat4(1.0f), glm::mat4(1.0f));
 
   c->scene().registry().patchComponent<component::Light>(id);
+  c->scene().registry().patchComponent<component::Transform>(id);
+}
+
+void SceneListGUI::addNodeClicked(logic::AneditContext* c)
+{  
+  // Add a node with just a transform
+  render::scene::Node node{};
+  node._name = "EmptyNode";
+  auto id = c->scene().addNode(std::move(node));
+  c->scene().registry().addComponent<component::Transform>(id, glm::mat4(1.0f), glm::mat4(1.0f));
   c->scene().registry().patchComponent<component::Transform>(id);
 }
 

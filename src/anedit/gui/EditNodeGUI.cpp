@@ -16,6 +16,7 @@ namespace {
 // Helper macro
 #define DRAW_COMP(comp) \
 if (c->scene().registry().hasComponent<component::comp>(id)) { \
+  has##comp = true; \
   if (ImGui::CollapsingHeader(#comp, ImGuiTreeNodeFlags_DefaultOpen)) { \
     _componentGUIs[typeid(component::comp)]->immediateDraw(c); \
   } \
@@ -58,9 +59,34 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
   }
   ImGui::Separator();
 
-  DRAW_COMP(Transform)
-  DRAW_COMP(Renderable)
-  DRAW_COMP(Light)
+ 
+  bool hasTransform = false;
+  bool hasRenderable = false;
+  bool hasLight = false;
+
+  DRAW_COMP(Transform);
+  DRAW_COMP(Renderable);
+  DRAW_COMP(Light);
+
+  // Add new components
+  if (ImGui::BeginPopupContextWindow()) {
+    if (!hasRenderable) {
+      if (ImGui::MenuItem("Add renderable...")) {
+        // TODO: Need to select model, materials, skeleton etc. Probably only makes sense from a prefab?
+        //       Or at least is easiest via prefab. Also of course doable without prefab
+        //c->scene().registry().addComponent<component::Renderable>(id);
+        //c->scene().registry().addComponent<component::Renderable>(id);
+      }
+    }
+    if (!hasLight) {
+      if (ImGui::MenuItem("Add light...")) {
+        c->scene().registry().addComponent<component::Light>(id);
+        c->scene().registry().patchComponent<component::Light>(id);
+      }
+    }
+
+    ImGui::EndPopup();
+  }
 }
 
 }
