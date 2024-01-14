@@ -32,6 +32,14 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
   char name[100];
   name[0] = '\0';
 
+  char model[100];
+  model[0] = '\0';
+
+  char skeleton[100];
+  skeleton[0] = '\0';
+
+  std::vector<util::Uuid> materials;
+
   {
     if (!id) {
       ImGui::BeginDisabled();
@@ -44,21 +52,39 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       boundingSphereCenter = glm::vec3(rendComp._boundingSphere.x, rendComp._boundingSphere.y, rendComp._boundingSphere.z);
       boundingSphereRadius = rendComp._boundingSphere.w;
       visible = rendComp._visible;
-    }
+      materials = rendComp._materials;
 
-#if 0
-    // Radio buttons for choosing guizmo mode
-    ImGui::SameLine();
-    if (ImGui::RadioButton("BS", _currentGuizmoOp == _bsGuizmoOp)) {
-      _currentGuizmoOp = _bsGuizmoOp;
+      auto modelName = c->scene().getModel(rendComp._model)->_name;
+      auto skeletonName = rendComp._skeleton ? c->scene().getSkeleton(rendComp._skeleton)->_name : "(None)";
+
+      strcpy_s(model, modelName.c_str());
+      strcpy_s(skeleton, skeletonName.c_str());
     }
-#endif
 
     // Name
     ImGui::Separator();
     ImGui::Text("Name");
-    if (ImGui::InputText("##name", name, 32) && id) {
+    if (ImGui::InputText("##name", name, 100) && id) {
       changed = true;
+    }
+
+    // Model name
+    ImGui::Separator();
+    ImGui::Text("Model");
+    ImGui::Text(model);
+
+    // Skeleton name
+    ImGui::Separator();
+    ImGui::Text("Skeleton");
+    ImGui::Text(skeleton);
+
+    // Materials (potentially many, so put in a collapsible header)
+    ImGui::Separator();
+    if (ImGui::CollapsingHeader("Material(s)")) {
+      for (auto& mat : materials) {
+        auto p = c->scene().getMaterial(mat);
+        ImGui::Selectable(p->_name.c_str(), false);
+      }
     }
 
     // Tint
@@ -99,61 +125,6 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       c->scene().registry().patchComponent<component::Renderable>(id);
     }
   }
-
-  // Do gizmo (transform) editing with ImGuizmo
-  if (id) {
-#if 0
-    glm::vec3 modelTrans = c->scene().getRenderable(id)->_localTransform[3];
-    glm::mat4 globalTransform = c->scene().getRenderable(id)->_globalTransform;
-
-    glm::vec3 globalTranslationBefore = globalTransform[3];
-    glm::vec3 parent = globalTranslationBefore - modelTrans;
-    glm::vec3 parentLocalDiff = modelTrans - parent;
-    glm::mat4 m{ 1.0f };
-
-    if (_currentGuizmoOp == _bsGuizmoOp) {
-      m = glm::translate(m, boundingSphereCenter + modelTrans);
-    }
-    else {
-      m = c->scene().getRenderable(id)->_localTransform;
-
-      // Set translation to global trans, just for visual purposes
-      m[3] = globalTransform[3];
-    }
-    
-    auto& viewMatrix = c->camera().getCamMatrix();
-    auto& projMatrix = c->camera().getProjection();
-
-    ImGuiIO& io = ImGui::GetIO();
-    ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
-
-    bool manipulated = ImGuizmo::Manipulate(
-      &viewMatrix[0][0],
-      &projMatrix[0][0],
-      _currentGuizmoOp == _bsGuizmoOp ? ImGuizmo::OPERATION::TRANSLATE : (ImGuizmo::OPERATION)_currentGuizmoOp,
-      ImGuizmo::MODE::WORLD,
-      (float*)&m[0][0]);
-
-    if (manipulated) {
-
-      if (_currentGuizmoOp == _bsGuizmoOp) {
-        glm::vec3 t = m[3];
-        t = t - modelTrans;
-        c->scene().setRenderableBoundingSphere(id, glm::vec4(t, boundingSphereRadius));
-      }
-      else {
-        // Calc new local translation from new global and old global translation
-        glm::vec3 newGlobalTrans = m[3];
-        glm::vec3 newLocalTrans = newGlobalTrans - globalTranslationBefore + parentLocalDiff + parent;
-        glm::mat4 temp = glm::translate(glm::mat4(1.0f), newLocalTrans);
-
-        m[3] = temp[3];
-        c->scene().setRenderableTransform(id, m);
-      }
-    }
-#endif
-  }
-
 }
 
 }

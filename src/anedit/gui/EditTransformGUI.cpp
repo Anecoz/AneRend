@@ -26,7 +26,7 @@ void EditTransformGUI::immediateDraw(logic::AneditContext* c)
   glm::vec3 scale{ 0.0f };
   glm::vec3 rot{ 0.0f };
 
-  bool disabled = !id || !c->scene().registry().hasComponent<component::Transform>(id);
+  bool disabled = !id;
 
   if (disabled) {
     ImGui::BeginDisabled();

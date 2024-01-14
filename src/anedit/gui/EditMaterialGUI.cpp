@@ -24,6 +24,9 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   float roughness = 1.0f;
   float metallic = 1.0f;
 
+  char name[100];
+  name[0] = '\0';
+
   // Textures
   util::Uuid metRoughTex;
   util::Uuid albedoTex;
@@ -42,6 +45,7 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
     baseColFac = mat->_baseColFactor;
     roughness = mat->_roughnessFactor;
     metallic = mat->_metallicFactor;
+    strcpy_s(name, mat->_name.c_str());
 
     metRoughTex = mat->_metallicRoughnessTex;
     albedoTex = mat->_albedoTex;
@@ -49,6 +53,12 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
     emissiveTex = mat->_emissiveTex;
   }
 
+  ImGui::Text("Name");
+  if (ImGui::InputText("##matname", name, 100)) {
+    changed = true;
+  }
+
+  ImGui::Separator();
   ImGui::Text("Emissive");
   if (ImGui::ColorEdit4("##emissive", &emissive[0], ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR)) {
     changed = true;
@@ -106,6 +116,7 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
 
   if (changed && id) {
     auto matCopy = *c->scene().getMaterial(id);
+    matCopy._name = name;
     matCopy._emissive = emissive;
     matCopy._baseColFactor = baseColFac;
     matCopy._metallicFactor = metallic;
