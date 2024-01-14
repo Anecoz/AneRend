@@ -158,7 +158,8 @@ public:
 
   // Node interface
   void setNodeName(util::Uuid& node, std::string name);
-  void addNodeChild(util::Uuid& node, util::Uuid& child);
+  void addNodeChild(util::Uuid& node, util::Uuid& child); // This assumes child didn't have a parent before
+  void setNodeAsChild(util::Uuid& node, util::Uuid& child); // This _changes_ parent/children, so previous parent is ok
   void removeNodeChild(util::Uuid& node, util::Uuid& child);
   std::vector<util::Uuid> getNodeChildren(util::Uuid& node);
 

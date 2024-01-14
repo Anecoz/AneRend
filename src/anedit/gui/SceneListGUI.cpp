@@ -134,6 +134,26 @@ void SceneListGUI::renderNodeTree(util::Uuid& node, logic::AneditContext* c)
     c->selectionType() = logic::AneditContext::SelectionType::Node;
   }
 
+  // Drag & drop
+  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+    // This should copy the data, so no worries that id won't live past this function
+    ImGui::SetDragDropPayload("id", &node, sizeof(util::Uuid));
+
+    ImGui::EndDragDropSource();
+  }
+
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("id")) {
+      std::array<std::uint8_t, 16> arr{};
+      std::memcpy(arr.data(), payload->Data, sizeof(util::Uuid));
+      util::Uuid droppedId(arr);
+
+      nodeDraggedToNode(c, droppedId, node);
+    }
+
+    ImGui::EndDragDropTarget();
+  }
+
   if (open) {
     for (auto childId : n->_children) {
       renderNodeTree(childId, c);
@@ -232,6 +252,12 @@ void SceneListGUI::deleteNodeClicked(logic::AneditContext* c, util::Uuid& node)
   // Make sure we clear selection if this node was selected
   c->selection().clear();
   c->selectionType() = logic::AneditContext::SelectionType::Node;
+}
+
+void SceneListGUI::nodeDraggedToNode(logic::AneditContext* c, util::Uuid& draggedNode, util::Uuid& droppedOnNode)
+{
+  // draggedNode = child, droppedOnNode = parent
+  c->scene().setNodeAsChild(droppedOnNode, draggedNode);
 }
 
 void SceneListGUI::saveSceneClicked(logic::AneditContext* c)

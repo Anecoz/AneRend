@@ -254,7 +254,6 @@ void Scene::removePrefab(util::Uuid id)
   for (auto it = _prefabs.begin(); it != _prefabs.end(); ++it) {
     if (it->_parent == id) {
       it->_parent = util::Uuid();
-      break;
     }
   }
 
@@ -513,6 +512,33 @@ void Scene::addNodeChild(util::Uuid& node, util::Uuid& child)
       _nodeVec[_nodes[child]]._parent = node;
     }
   }
+}
+
+void Scene::setNodeAsChild(util::Uuid& node, util::Uuid& child)
+{
+  // First we have to unset child as a child in parent, if there was one
+  if (_nodes.find(node) == _nodes.end() || _nodes.find(child) == _nodes.end()) {
+    assert("Nodes don't exist!");
+    return;
+  }
+
+  auto& childNode = _nodeVec[_nodes[child]];
+  if (childNode._parent) {
+    auto& oldParentNode = _nodeVec[_nodes[childNode._parent]];
+    for (auto it = oldParentNode._children.begin(); it != oldParentNode._children.end(); ++it){
+      if (*it == child) {
+        oldParentNode._children.erase(it);
+        break;
+      }
+    }
+  }
+
+  auto& nodeRef = _nodeVec[_nodes[node]];
+  childNode._parent = node;
+  nodeRef._children.emplace_back(child);
+
+  // Touch the transform of parent to force an update
+  _registry.patchComponent<component::Transform>(node);
 }
 
 void Scene::removeNodeChild(util::Uuid& node, util::Uuid& child)

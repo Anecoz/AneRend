@@ -24,6 +24,7 @@ private:
   void addAnimatorClicked(logic::AneditContext* c);
   void addLightClicked(logic::AneditContext* c);
   void deleteNodeClicked(logic::AneditContext* c, util::Uuid& node);
+  void nodeDraggedToNode(logic::AneditContext* c, util::Uuid& draggedNode, util::Uuid& droppedOnNode);
 };
 
 }
