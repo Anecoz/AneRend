@@ -45,6 +45,9 @@ public:
 
   void spawnFromPrefabAtMouse(const util::Uuid& prefab) override final;
 
+  // Does not take children/parents into account!
+  render::asset::Prefab prefabFromNode(const util::Uuid& node) override final;
+
   void* getImguiTexId(util::Uuid& tex) override final;
 
   std::vector<util::Uuid>& selection() override final;

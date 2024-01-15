@@ -4,6 +4,7 @@
 
 #include <util/Uuid.h>
 #include <render/Camera.h>
+#include <render/asset/Prefab.h>
 
 namespace render::scene { class Scene; }
 
@@ -20,7 +21,8 @@ struct AneditContext
 
   virtual void startLoadGLTF(std::filesystem::path p) = 0;
 
-  virtual void spawnFromPrefabAtMouse(const util::Uuid& prefab) = 0;
+  virtual void spawnFromPrefabAtMouse(const util::Uuid& prefab) = 0;  
+  virtual render::asset::Prefab prefabFromNode(const util::Uuid& node) = 0;
 
   virtual void* getImguiTexId(util::Uuid& tex) = 0;
 

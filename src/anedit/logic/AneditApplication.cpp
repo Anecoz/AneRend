@@ -526,6 +526,34 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
     });
 }
 
+render::asset::Prefab AneditApplication::prefabFromNode(const util::Uuid& node)
+{
+  render::asset::Prefab p{};
+  auto tmpId = p._id;
+  p._id = util::Uuid();
+
+  auto nodeP = _scene.getNode(node);
+  if (!nodeP) {
+    return p;
+  }
+
+  p._id = tmpId;
+  p._name = nodeP->_name;
+
+  // Go through each component
+  auto& transComp = _scene.registry().getComponent<component::Transform>(node);
+  p._comps._trans = transComp;
+
+  if (_scene.registry().hasComponent<component::Renderable>(node)) {
+    p._comps._rend = _scene.registry().getComponent<component::Renderable>(node);
+  }
+  if (_scene.registry().hasComponent<component::Light>(node)) {
+    p._comps._light = _scene.registry().getComponent<component::Light>(node);
+  }
+
+  return p;
+}
+
 void* AneditApplication::getImguiTexId(util::Uuid& tex)
 {
   return _vkRenderer.getImGuiTexId(tex);

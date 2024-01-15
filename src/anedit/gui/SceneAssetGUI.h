@@ -15,6 +15,7 @@ public:
 
 private:
   void loadGLTFClicked(logic::AneditContext* c);
+  void nodeDroppedOnPrefab(logic::AneditContext* c, util::Uuid node);
 
   bool _draggingPrefab = false;
   util::Uuid _draggedPrefab;

@@ -136,13 +136,13 @@ void SceneListGUI::renderNodeTree(util::Uuid& node, logic::AneditContext* c)
   // Drag & drop
   if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
     // This should copy the data, so no worries that id won't live past this function
-    ImGui::SetDragDropPayload("id", &node, sizeof(util::Uuid));
+    ImGui::SetDragDropPayload("node_id", &node, sizeof(util::Uuid));
 
     ImGui::EndDragDropSource();
   }
 
   if (ImGui::BeginDragDropTarget()) {
-    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("id")) {
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("node_id")) {
       std::array<std::uint8_t, 16> arr{};
       std::memcpy(arr.data(), payload->Data, sizeof(util::Uuid));
       util::Uuid droppedId(arr);

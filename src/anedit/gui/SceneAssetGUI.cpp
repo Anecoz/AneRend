@@ -25,7 +25,9 @@ bool drawAssetList(
   util::Uuid& draggedUuid, // not necessarily the same as selected
   bool& dragged,
   std::vector<std::string> contextMenuItems = {},
-  std::vector<std::function<void(util::Uuid)>> contextMenuCbs = {})
+  std::vector<std::function<void(util::Uuid)>> contextMenuCbs = {},
+  const char* dropTargetType = "",
+  std::vector<std::uint8_t>* dropTargetData = nullptr)
 {
   bool changed = false;
   ImGui::BeginChild(label, size, true);
@@ -83,6 +85,17 @@ bool drawAssetList(
       draggedUuid = i._id;
 
       ImGui::EndDragDropSource();
+    }
+
+    if (dropTargetData) {
+      if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dropTargetType)) {
+          dropTargetData->resize(payload->DataSize);
+          std::memcpy(dropTargetData->data(), payload->Data, payload->DataSize);
+        }
+
+        ImGui::EndDragDropTarget();
+      }
     }
   }
 
@@ -160,12 +173,32 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
 
     std::vector<std::string> menuItems = { "Delete" };
     std::vector<std::function<void(util::Uuid)>> cbs = { deleteLambda };
+    std::vector<std::uint8_t> dropData;
 
     bool draggedThisFrame = false;
-    if (drawAssetList(size, _prefabFilter, "Prefabs", c->scene().getPrefabs(), currSelection, _draggedPrefab, draggedThisFrame, menuItems, cbs)) {
+    if (drawAssetList(
+      size, 
+      _prefabFilter, 
+      "Prefabs", 
+      c->scene().getPrefabs(), 
+      currSelection, 
+      _draggedPrefab,
+      draggedThisFrame, 
+      menuItems, 
+      cbs,
+      "node_id",
+      &dropData)) {
       c->selection().clear();
       c->selection().emplace_back(currSelection);
       c->selectionType() = logic::AneditContext::SelectionType::Prefab;
+    }
+
+    if (!dropData.empty()) {
+      // Got a node_id dropped on us
+      std::array<std::uint8_t, 16> arr{};
+      std::memcpy(arr.data(), dropData.data(), sizeof(util::Uuid));
+
+      nodeDroppedOnPrefab(c, util::Uuid(arr));
     }
 
     // Did drag status change?
@@ -191,6 +224,36 @@ void SceneAssetGUI::loadGLTFClicked(logic::AneditContext* c)
   auto result = NFD::OpenDialog(outPath, filterItem, 1);
   if (result == NFD_OKAY) {
     c->startLoadGLTF(outPath.get());
+  }
+}
+
+void SceneAssetGUI::nodeDroppedOnPrefab(logic::AneditContext* c, util::Uuid node)
+{
+  // This means we want to create prefabs from the given node.
+
+  auto nodeP = c->scene().getNode(node);
+
+  if (!nodeP) {
+    return;
+  }
+
+  // Create prefabs from node and all its children
+  std::vector<render::asset::Prefab> prefabs;
+  auto parentPrefab = c->prefabFromNode(node);
+
+  for (auto& child : nodeP->_children) {
+    auto childPrefab = c->prefabFromNode(child);
+
+    childPrefab._parent = parentPrefab._id;
+    parentPrefab._children.emplace_back(childPrefab._id);
+
+    prefabs.emplace_back(std::move(childPrefab));
+  }
+
+  prefabs.emplace_back(std::move(parentPrefab));
+
+  for (auto& p : prefabs) {
+    c->scene().addPrefab(std::move(p));
   }
 }
 

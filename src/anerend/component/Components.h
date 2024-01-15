@@ -23,8 +23,6 @@ struct Transform
 
 struct Renderable
 {
-  //util::Uuid _id = util::Uuid::generate();
-
   std::string _name; // for debugging
 
   util::Uuid _model;
@@ -43,8 +41,6 @@ struct PageStatus
 
 struct Light
 {
-  //util::Uuid _id = util::Uuid::generate();
-
   std::string _name;
 
   glm::vec3 _color = glm::vec3(1.0f, 0.0f, 0.0f);
