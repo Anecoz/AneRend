@@ -3,6 +3,9 @@
 #include "../../common/input/KeyInput.h"
 #include "../../common/input/MousePosInput.h"
 
+#include <glm/gtx/euler_angles.hpp>
+#include <glm/gtx/quaternion.hpp>
+
 #include <stdio.h>
 #include <iostream>
 #include <string>
@@ -15,9 +18,10 @@ Camera::Camera(glm::vec3 initialPosition, ProjectionType type)
   , _roll(0.0)
   , _enabled(true)
   , _firstMouse(true)
-  , _projection(glm::mat4(1.0f))  
+  , _projection(glm::mat4(1.0f))
   , _position(initialPosition)
-  , _forward(0.0f, 0.0f, 0.0f)
+  , _forward(0.0f, 0.0f, -1.0f)
+  , _up(0.0f, 1.0f, 0.0f)
   , _cameraMatrix(glm::lookAt(_position, _forward, _up))
 {
   _near = .1f;
@@ -75,9 +79,7 @@ void Camera::updateFrustum()
 
 void Camera::updateViewMatrix()
 {
-  glm::mat4 view = glm::translate(glm::mat4(1.0f), _position);
-  view *= glm::rotate(glm::mat4(1.0f), (float)_yaw, glm::vec3(0.0f, 1.0f, 0.0f));
-  view *= glm::rotate(glm::mat4(1.0f), (float)_pitch, glm::vec3(1.0f, 0.0f, 0.0f));
+  glm::mat4 view = glm::translate(glm::mat4(1.0f), _position) * _rotation;
   _cameraMatrix = glm::inverse(view);
 
   _right = glm::normalize(view[0]);
@@ -92,11 +94,13 @@ void Camera::setPosition(const glm::vec3& posIn)
   updateFrustum();
 }
 
-void Camera::setYawPitchRoll(double yawDeg, double pitchDeg, double rollDeg)
+void Camera::setYawPitchRoll(const glm::vec3& ypr)
 {
-  _yaw = glm::radians(yawDeg);
-  _pitch = glm::radians(pitchDeg);
-  _roll = glm::radians(rollDeg);
+  _yaw = ypr.x;
+  _pitch = ypr.y;
+  _roll = ypr.z;
+
+  _rotation = glm::eulerAngleYXZ((float)_yaw, (float)_pitch, (float)_roll);
 
   updateViewMatrix();
   updateFrustum();
@@ -114,6 +118,14 @@ void Camera::setProjection(const glm::mat4& matrix, float near, float far)
   _projection = matrix;
   _near = near;
   _far = far;
+  updateFrustum();
+}
+
+void Camera::setRotationMatrix(const glm::mat4& matrix)
+{
+  _rotation = matrix;
+
+  updateViewMatrix();
   updateFrustum();
 }
 
@@ -183,5 +195,7 @@ void Camera::handleFreelookInput(double delta)
   else if (_pitch < glm::radians(-85.0)) {
     _pitch = glm::radians(-85.0);
   }
+
+  _rotation = glm::eulerAngleYXZ((float)_yaw, (float)_pitch, (float)_roll);
 }
 }

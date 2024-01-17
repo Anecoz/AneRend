@@ -26,12 +26,15 @@ struct AneditContext
 
   virtual void* getImguiTexId(util::Uuid& tex) = 0;
 
+  virtual void playCinematic(util::Uuid& id) = 0;
+
   enum class SelectionType
   {
     Material,
     Prefab,
     Animator,
-    Node
+    Node,
+    Cinematic
   };
 
   virtual std::vector<util::Uuid>& selection() = 0;

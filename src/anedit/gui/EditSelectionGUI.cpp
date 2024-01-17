@@ -4,30 +4,11 @@
 #include "EditNodeGUI.h"
 #include "EditMaterialGUI.h"
 #include "EditPrefabGUI.h"
+#include "EditCinematicGUI.h"
 
 #include <imgui.h>
 
 namespace gui {
-
-namespace {
-
-std::string selectionTypeToString(logic::AneditContext::SelectionType type)
-{
-  switch (type) {
-  case logic::AneditContext::SelectionType::Animator:
-    return "Animator";
-  case logic::AneditContext::SelectionType::Node:
-    return "Node";
-  case logic::AneditContext::SelectionType::Material:
-    return "Material";
-  case logic::AneditContext::SelectionType::Prefab:
-    return "Prefab";
-  }
-
-  return "";
-}
-
-}
 
 EditSelectionGUI::EditSelectionGUI()
   : IGUI()
@@ -37,6 +18,7 @@ EditSelectionGUI::EditSelectionGUI()
   _specificGuis[logic::AneditContext::SelectionType::Node] = new EditNodeGUI();
   _specificGuis[logic::AneditContext::SelectionType::Material] = new EditMaterialGUI();
   _specificGuis[logic::AneditContext::SelectionType::Prefab] = new EditPrefabGUI();
+  _specificGuis[logic::AneditContext::SelectionType::Cinematic] = new EditCinematicGUI();
 }
 
 EditSelectionGUI::~EditSelectionGUI()

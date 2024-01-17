@@ -19,6 +19,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 {
   // Draw list of current nodes
   const auto& animators = c->scene().getAnimators();
+  const auto& cinematics = c->scene().getCinematics();
   const auto& nodes = c->scene().getNodes();
 
   ImGui::Begin("Scene list", NULL, ImGuiWindowFlags_MenuBar);
@@ -29,6 +30,9 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
     if (ImGui::BeginMenu("File")) {
       if (ImGui::MenuItem("Add scene node...")) {
         addNodeClicked(c);
+      }
+      if (ImGui::MenuItem("Add cinematic...")) {
+        addCinematicClicked(c);
       }
       if (ImGui::MenuItem("Add animator...")) {
         addAnimatorClicked(c);
@@ -43,6 +47,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
         saveSceneClicked(c);
       }
       if (ImGui::MenuItem("Load scene...")) {
+
         loadSceneClicked(c);
       }
 
@@ -89,6 +94,23 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
   }
 
   ImGui::Separator();
+
+  // cinematics
+  {
+    ImGui::Text("Cinematics");
+
+    ImGui::Separator();
+
+    for (const auto& a : cinematics) {
+      std::string label = std::string("Cinematic ") + (a._name.empty() ? a._id.str() : a._name);
+      label += "##" + a._id.str();
+      if (ImGui::Selectable(label.c_str(), c->getFirstSelection() == a._id)) {
+        c->selection().clear();
+        c->selection().emplace_back(a._id);
+        c->selectionType() = logic::AneditContext::SelectionType::Cinematic;
+      }
+    }
+  }
 
   ImGui::End();
 }
@@ -212,6 +234,14 @@ void SceneListGUI::addNodeClicked(logic::AneditContext* c)
   auto id = c->scene().addNode(std::move(node));
   c->scene().registry().addComponent<component::Transform>(id, glm::mat4(1.0f), glm::mat4(1.0f));
   c->scene().registry().patchComponent<component::Transform>(id);
+}
+
+void SceneListGUI::addCinematicClicked(logic::AneditContext* c)
+{
+  // Default cinematic
+  render::asset::Cinematic cinematic{};
+  cinematic._name = "New cinematic";
+  c->scene().addCinematic(std::move(cinematic));
 }
 
 void SceneListGUI::deleteNodeClicked(logic::AneditContext* c, util::Uuid& node)

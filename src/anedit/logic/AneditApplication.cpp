@@ -5,6 +5,7 @@
 #include <util/GLTFLoader.h>
 #include <util/TextureHelpers.h>
 #include <render/ImageHelpers.h>
+#include <render/cinematic/CinematicPlayer.h>
 
 #include "../gui/SceneAssetGUI.h"
 #include "../gui/SceneListGUI.h"
@@ -120,6 +121,17 @@ void AneditApplication::update(double delta)
   _scenePager.update(_camera.getPosition());
   _scene.resetEvents();
 
+  for (auto it = _cinePlayers.begin(); it != _cinePlayers.end();) {
+    it->update(delta);
+
+    if (it->finished()) {
+      it = _cinePlayers.erase(it);
+    }
+    else {
+      ++it;
+    }
+  }
+
   //_windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));
 
@@ -141,9 +153,12 @@ void AneditApplication::render()
   ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
   {
+    auto ypr = _camera.getYPR();
+
     ImGui::Begin("Debug");
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
     ImGui::Text("Camera pos %.1f, %.1f, %.1f", _camera.getPosition().x, _camera.getPosition().y, _camera.getPosition().z);
+    ImGui::Text("Camera ypr %.1f, %.1f, %.1f", ypr.x, ypr.y, ypr.z);
     if (ImGui::Button("Teleport to origin")) {
       _camera.setPosition({ 0.0f, 0.0f, 0.0f });
     }
@@ -557,6 +572,18 @@ render::asset::Prefab AneditApplication::prefabFromNode(const util::Uuid& node)
 void* AneditApplication::getImguiTexId(util::Uuid& tex)
 {
   return _vkRenderer.getImGuiTexId(tex);
+}
+
+void AneditApplication::playCinematic(util::Uuid& id)
+{
+  auto* cinematic = _scene.getCinematic(id);
+  if (!cinematic) {
+    printf("Cannot play cinematic %s, does not exist\n", id.str().c_str());
+    return;
+  }
+
+  _cinePlayers.emplace_back(cinematic, &_scene, &_camera);
+  _cinePlayers.back().play();
 }
 
 std::vector<util::Uuid>& AneditApplication::selection()

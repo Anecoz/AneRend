@@ -14,6 +14,7 @@
 #include "../asset/Animator.h"
 #include "../asset/Prefab.h"
 #include "../asset/Texture.h"
+#include "../asset/Cinematic.h"
 
 #include "../animation/Skeleton.h"
 #include "../animation/Animation.h"
@@ -121,6 +122,10 @@ public:
     return _nodeVec;
   }
 
+  const std::vector<asset::Cinematic>& getCinematics() const { 
+    return _cinematics;
+  }
+
   util::Uuid addPrefab(asset::Prefab&& prefab);
   void updatePrefab(asset::Prefab prefab);
   void removePrefab(util::Uuid id);
@@ -151,6 +156,11 @@ public:
   void updateAnimator(asset::Animator animator);
   void removeAnimator(util::Uuid id);
   const asset::Animator* getAnimator(util::Uuid id);
+
+  util::Uuid addCinematic(asset::Cinematic cinematic);
+  void updateCinematic(asset::Cinematic cinematic);
+  void removeCinematic(util::Uuid id);
+  const asset::Cinematic* getCinematic(util::Uuid id);
 
   util::Uuid addNode(Node node);
   void removeNode(util::Uuid id); // Will recursively remove all (potential) children
@@ -190,7 +200,6 @@ private:
   * TODO: In the future maybe these need to be tile - based aswell.
   * They may need to be streamed in on demand, but that should be decided using renderables
   * _using_ the assets.
-  * Renderables aren't really assets... Maybe assets don't belong here, only renderables, lights, particle emitters etc.
   */ 
   std::vector<asset::Model> _models;
   std::vector<asset::Material> _materials;
@@ -199,6 +208,7 @@ private:
   std::vector<asset::Animator> _animators;
   std::vector<asset::Prefab> _prefabs;
   std::vector<asset::Texture> _textures;
+  std::vector<asset::Cinematic> _cinematics;
 
   std::unordered_map<util::Uuid, std::size_t> _nodes; // Index into _nodeVec
   std::vector<scene::Node> _nodeVec;

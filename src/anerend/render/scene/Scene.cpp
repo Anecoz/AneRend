@@ -52,6 +52,7 @@ Scene::Scene(Scene&& rhs)
   std::swap(_nodes, rhs._nodes);
   std::swap(_nodeVec, rhs._nodeVec);
   std::swap(_registry, rhs._registry);
+  std::swap(_cinematics, rhs._cinematics);
 
   _transformObserver.connect(_registry.getEnttRegistry(), entt::collector.update<component::Transform>());
   _goThroughAllNodes = true;
@@ -74,6 +75,7 @@ Scene& Scene::operator=(Scene&& rhs)
     std::swap(_nodes, rhs._nodes);
     std::swap(_nodeVec, rhs._nodeVec);
     std::swap(_registry, rhs._registry);
+    std::swap(_cinematics, rhs._cinematics);
 
     _transformObserver.connect(_registry.getEnttRegistry(), entt::collector.update<component::Transform>());
   }
@@ -462,6 +464,44 @@ const asset::Animator* Scene::getAnimator(util::Uuid id)
   asset::Animator* animator = nullptr;
   getAsset(_animators, id, &animator);
   return animator;
+}
+
+util::Uuid Scene::addCinematic(asset::Cinematic cinematic)
+{
+  auto id = cinematic._id;
+  _cinematics.emplace_back(std::move(cinematic));
+  return id;
+}
+
+void Scene::updateCinematic(asset::Cinematic cinematic)
+{
+  for (auto it = _cinematics.begin(); it != _cinematics.end(); ++it) {
+    if (it->_id == cinematic._id) {
+      *it = cinematic;
+      return;
+    }
+  }
+
+  printf("Could not update cinematic with id %s, doesn't exist!\n", cinematic._id.str().c_str());
+}
+
+void Scene::removeCinematic(util::Uuid id)
+{
+  for (auto it = _cinematics.begin(); it != _cinematics.end(); ++it) {
+    if (it->_id == id) {
+      _cinematics.erase(it);
+      return;
+    }
+  }
+
+  printf("Could not remove cinematic with id %s, doesn't exist!\n", id.str().c_str());
+}
+
+const asset::Cinematic* Scene::getCinematic(util::Uuid id)
+{
+  asset::Cinematic* cinematic = nullptr;
+  getAsset(_cinematics, id, &cinematic);
+  return cinematic;
 }
 
 util::Uuid Scene::addNode(Node node)

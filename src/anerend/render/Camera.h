@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 namespace render {
   
@@ -26,13 +27,15 @@ public:
   void updateViewMatrix();
 
   void setPosition(const glm::vec3& posIn);
-  void setYawPitchRoll(double yawDeg, double pitchDeg, double rollDeg);
+  void setYawPitchRoll(const glm::vec3& ypr); // radians
   void setViewMatrix(const glm::mat4& matrix);
   void setProjection(const glm::mat4& matrix, float near, float far);
+  void setRotationMatrix(const glm::mat4& matrix);
 
   float getFar() const { return _far; }
   float getNear() const { return _near; }
   glm::vec3 getPosition() const { return _position; }
+  glm::vec3 getYPR() const { return { _yaw, _pitch, _roll }; } // radians
   const glm::mat4& getProjection() const { return _projection; }
   const glm::mat4& getCamMatrix() const { return _cameraMatrix; }
   glm::mat4 getCombined() const { return _projection * _cameraMatrix; }
@@ -61,6 +64,7 @@ private:
 
   glm::mat4 _projection;
   glm::mat4 _cameraMatrix;
+  glm::mat4 _rotation;
   glm::vec3 _position;
   glm::vec3 _forward;
   glm::vec3 _right;

@@ -17,6 +17,7 @@
 #include <render/asset/Model.h>
 #include <render/scene/Scene.h>
 #include <render/scene/ScenePager.h>
+#include <render/cinematic/CinematicPlayer.h>
 #include "WindSystem.h"
 
 #include <filesystem>
@@ -50,6 +51,8 @@ public:
 
   void* getImguiTexId(util::Uuid& tex) override final;
 
+  void playCinematic(util::Uuid& id) override final;
+
   std::vector<util::Uuid>& selection() override final;
 
   render::Camera& camera() override final;
@@ -65,6 +68,8 @@ private:
   util::Uuid instantiate(const render::asset::Prefab& prefab, glm::mat4 parentGlobalTransform);
 
   std::vector<gui::IGUI*> _guis;
+
+  std::vector<render::cinematic::CinematicPlayer> _cinePlayers;
 
   std::filesystem::path _scenePath;
   logic::AneditConfig _config;

@@ -62,6 +62,15 @@ void serialize(S& s, glm::mat4& m)
 }
 
 template <typename S>
+void serialize(S& s, glm::quat& v)
+{
+  s.value4b(v.x);
+  s.value4b(v.y);
+  s.value4b(v.z);
+  s.value4b(v.w);
+}
+
+template <typename S>
 void serialize(S& s, glm::vec4& v)
 {
   s.value4b(v.x);
@@ -353,6 +362,60 @@ void serialize(S& s, std::vector<render::scene::Scene::TileInfo>& t)
   s.container(t, 1024);
 }
 
+template <typename S>
+void serialize(S& s, render::asset::CameraKeyframe& t)
+{
+  s.object(t._pos);
+  s.object(t._orientation);
+  s.object(t._ypr);
+}
+
+template <typename S>
+void serialize(S& s, render::asset::NodeKeyframe& t)
+{
+  s.object(t._id);
+  s.object(t._comps);
+}
+
+template <typename S>
+void serialize(S& s, render::asset::MaterialKeyframe& t)
+{
+  s.object(t._id);
+  s.object(t._emissive);
+  s.object(t._baseColFactor);
+}
+
+template <typename S>
+void serialize(S& s, render::asset::AnimatorKeyframe& t)
+{
+  s.object(t._id);
+  s.object(t._animator);
+}
+
+template <typename S>
+void serialize(S& s, render::asset::Cinematic::Keyframe& t)
+{
+  s.value4b(t._time);
+  s.container(t._nodeKFs, 100);
+  s.container(t._materialKFs, 100);
+  s.container(t._animatorKFs, 100);
+  s.ext(t._camKF, bitsery::ext::StdOptional{});
+}
+
+template <typename S>
+void serialize(S& s, render::asset::Cinematic& t)
+{
+  s.object(t._id);
+  s.text1b(t._name, 100);
+  s.container(t._keyframes, 100);
+}
+
+template <typename S>
+void serialize(S& s, std::vector<render::asset::Cinematic>& t)
+{
+  s.container(t, 50);
+}
+
 }
 
 static std::uint8_t g_CurrVersion = 1;
@@ -423,7 +486,8 @@ std::uint32_t headerSize()
     4 + // skel idx
     4 + // animator idx
     4 + // tile info idx
-    4;  // nodes idx
+    4 + // nodes idx
+    4;  // cinematic idx
 }
 
 }
@@ -471,6 +535,7 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
         4 bytes animator idx    (uint32_t)
         4 bytes tileInfo   idx  (uint32_t)
         4 bytes nodes      idx  (uint32_t)
+        4 bytes cinematic  idx  (uint32_t)
 
         -- prefabs --
 
@@ -489,6 +554,8 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
         -- tile infos --
 
         -- nodes --
+
+        -- cinematics --
 
         EOF
       */
@@ -529,6 +596,7 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
       ser.add(scene._animators);
       ser.add(scene._tileInfos);
       ser.add(imNodes);
+      ser.add(scene._cinematics);
 
       ser.serializeToFile(path.string());
 
@@ -607,6 +675,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       uint32_t animatorIdx = header4BytePtr[6];
       uint32_t tiIdx = header4BytePtr[7];
       uint32_t nodesIdx = header4BytePtr[8];
+      uint32_t cineIdx = header4BytePtr[9];
 
       std::vector<std::uint8_t> serialisedPrefabs(textureIdx - prefabIdx);
       std::vector<std::uint8_t> serialisedTextures(modelIdx - textureIdx);
@@ -616,7 +685,8 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       std::vector<std::uint8_t> serialisedSkeletons(animatorIdx - skeletonIdx);
       std::vector<std::uint8_t> serialisedAnimators(tiIdx - animatorIdx);
       std::vector<std::uint8_t> serialisedTis(nodesIdx - tiIdx);
-      std::vector<std::uint8_t> serialisedNodes(fileSize - nodesIdx);
+      std::vector<std::uint8_t> serialisedNodes(cineIdx - nodesIdx);
+      std::vector<std::uint8_t> serialisedCinematics(fileSize - cineIdx);
 
       // We need these here so that we can add them properly to the scene.
       std::vector<render::asset::Prefab> prefabs;
@@ -628,6 +698,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       std::vector<render::asset::Animator> animators;
       std::vector<render::scene::Scene::TileInfo> tis;
       std::vector<IntermediateNode> imNodes;
+      std::vector<render::asset::Cinematic> cinematics;
 
       // Read prefabs
       if (!desHelper(file, prefabIdx, serialisedPrefabs, prefabs)) {
@@ -683,6 +754,14 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         return;
       }
 
+      // Read cinematics
+      if (!desHelper(file, cineIdx, serialisedCinematics, cinematics)) {
+        printf("Failed deserialising cinematics\n");
+        cinematics.clear();
+        //p.set_value(DeserialisedSceneData());
+        //return;
+      }
+
       for (auto& p : prefabs) {
         outputData._scene->addPrefab(std::move(p));
       }
@@ -708,6 +787,9 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         if (ti._ddgiAtlas) {
           outputData._scene->setDDGIAtlas(ti._ddgiAtlas, ti._idx);
         }
+      }
+      for (auto& cinematic : cinematics) {
+        outputData._scene->addCinematic(std::move(cinematic));
       }
 
       // Translate intermediate node representation to actual nodes
