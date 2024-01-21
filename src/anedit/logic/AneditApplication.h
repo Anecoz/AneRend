@@ -51,7 +51,13 @@ public:
 
   void* getImguiTexId(util::Uuid& tex) override final;
 
+  void createCinematicPlayer(util::Uuid& id) override final;
+  void destroyCinematicPlayer(util::Uuid& id) override final;
   void playCinematic(util::Uuid& id) override final;
+  void pauseCinematic(util::Uuid& id) override final;
+  void stopCinematic(util::Uuid& id) override final;
+  double getCinematicTime(util::Uuid& id) override final;
+  void setCinematicTime(util::Uuid& id, double time) override final;
 
   std::vector<util::Uuid>& selection() override final;
 
@@ -69,7 +75,7 @@ private:
 
   std::vector<gui::IGUI*> _guis;
 
-  std::vector<render::cinematic::CinematicPlayer> _cinePlayers;
+  std::unordered_map<util::Uuid, render::cinematic::CinematicPlayer> _cinePlayers;
 
   std::filesystem::path _scenePath;
   logic::AneditConfig _config;

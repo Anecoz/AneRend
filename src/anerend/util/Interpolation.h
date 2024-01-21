@@ -13,13 +13,72 @@ namespace util::interp {
 enum class Easing
 {
   Linear,
-  InOutSine
+  InOutSine,
+  InCubic,
+  OutCubic,
+  InOutCubic,
+  InOutElastic,
+  OutBounce,
+  InOutBounce
 };
 
 // Easing functions from here: https://easings.net/
 static double easeInOutSine(double x)
 {
   return -(std::cos(std::numbers::pi_v<double> *x) - 1.0) / 2.0;
+}
+
+// A bit softer than sine version
+static double easeInOutCubic(double x)
+{
+  return x < 0.5 ? 4 * x * x * x : 1 - std::pow(-2 * x + 2, 3) / 2;
+}
+
+static double easeInCubic(double x)
+{
+  return x * x * x;
+}
+
+static double easeOutCubic(double x)
+{
+  return 1 - std::pow(1 - x, 3);
+}
+
+// Very bouncy, very hilarious
+static double easeInOutElastic(double x)
+{
+  const auto c5 = (2.0 * std::numbers::pi_v<double>) / 4.5;
+
+  return x == 0.0 ? 0.0 :
+    x == 1.0 ? 1.0 :
+    x < 0.5 ? -(std::pow(2.0, 20.0 * x - 10.0) * std::sin((20.0 * x - 11.125) * c5)) / 2.0 :
+    (std::pow(2.0, -20.0 * x + 10.0) * std::sin((20.0 * x - 11.125) * c5)) / 2.0 + 1.0;
+}
+
+static double easeOutBounce(double x)
+{
+  const auto n1 = 7.5625;
+  const auto d1 = 2.75;
+
+  if (x < 1 / d1) {
+    return n1 * x * x;
+  }
+  else if (x < 2 / d1) {
+    return n1 * (x -= 1.5 / d1) * x + 0.75;
+  }
+  else if (x < 2.5 / d1) {
+    return n1 * (x -= 2.25 / d1) * x + 0.9375;
+  }
+  else {
+    return n1 * (x -= 2.625 / d1) * x + 0.984375;
+  }
+}
+
+static double easeInOutBounce(double x)
+{
+  return x < 0.5
+    ? (1 - easeOutBounce(1 - 2 * x)) / 2
+    : (1 + easeOutBounce(2 * x - 1)) / 2;
 }
 
 static glm::mat4 lerpTransforms(const glm::mat4& m0, const glm::mat4& m1, double factor, Easing easing = Easing::Linear)

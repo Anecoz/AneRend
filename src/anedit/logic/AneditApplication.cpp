@@ -121,15 +121,8 @@ void AneditApplication::update(double delta)
   _scenePager.update(_camera.getPosition());
   _scene.resetEvents();
 
-  for (auto it = _cinePlayers.begin(); it != _cinePlayers.end();) {
-    it->update(delta);
-
-    if (it->finished()) {
-      it = _cinePlayers.erase(it);
-    }
-    else {
-      ++it;
-    }
+  for (auto it = _cinePlayers.begin(); it != _cinePlayers.end(); ++it) {
+    it->second.update(delta);
   }
 
   //_windSystem.update(delta);
@@ -239,6 +232,9 @@ void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData
 
 void AneditApplication::oldUI()
 {
+  // Demo window is useful for exploring different ImGui functionality.
+  //ImGui::ShowDemoWindow();
+
   {
     ImGui::Begin("Parameters");
     float dir[2];
@@ -302,7 +298,7 @@ void AneditApplication::oldUI()
     ImGui::SliderFloat("Sky intensity", &_renderOptions.skyIntensity, 0.0f, 20.0f);
     ImGui::SliderFloat("Exposure", &_renderOptions.exposure, 0.0f, 5.0f);
     ImGui::SliderFloat("Bloom threshold", &_renderOptions.bloomThresh, 0.1f, 20.0f);
-    ImGui::SliderFloat("Bloom knee", &_renderOptions.bloomKnee, 0.0f, 10.0f);
+    ImGui::SliderFloat("Bloom knee", &_renderOptions.bloomKnee, 0.0f, 1.0f);
     ImGui::ColorEdit3("Sky color", (float*) &_renderOptions.skyColor);
     ImGui::Checkbox("Lock frustum culling", &g_LockFrustumCulling);
     ImGui::End();
@@ -574,16 +570,61 @@ void* AneditApplication::getImguiTexId(util::Uuid& tex)
   return _vkRenderer.getImGuiTexId(tex);
 }
 
+void AneditApplication::createCinematicPlayer(util::Uuid& id)
+{
+  if (_cinePlayers.find(id) == _cinePlayers.end()) {
+    auto* cinematic = _scene.getCinematic(id);
+    if (!cinematic) {
+      printf("Cannot play cinematic %s, does not exist\n", id.str().c_str());
+      return;
+    }
+
+    _cinePlayers[id] = render::cinematic::CinematicPlayer(cinematic, &_scene, &_camera);
+  }
+}
+
+void AneditApplication::destroyCinematicPlayer(util::Uuid& id)
+{
+  if (_cinePlayers.find(id) != _cinePlayers.end()) {
+    _cinePlayers.erase(id);
+  }
+}
+
 void AneditApplication::playCinematic(util::Uuid& id)
 {
-  auto* cinematic = _scene.getCinematic(id);
-  if (!cinematic) {
-    printf("Cannot play cinematic %s, does not exist\n", id.str().c_str());
-    return;
+  if (_cinePlayers.find(id) != _cinePlayers.end()) {
+    _cinePlayers[id].play();
+  }
+}
+
+void AneditApplication::pauseCinematic(util::Uuid& id)
+{
+  if (_cinePlayers.find(id) != _cinePlayers.end()) {
+    _cinePlayers[id].pause();
+  }
+}
+
+void AneditApplication::stopCinematic(util::Uuid& id)
+{
+  if (_cinePlayers.find(id) != _cinePlayers.end()) {
+    _cinePlayers[id].stop();
+  }
+}
+
+double AneditApplication::getCinematicTime(util::Uuid& id)
+{
+  if (_cinePlayers.find(id) != _cinePlayers.end()) {
+    return _cinePlayers[id].getCurrentTime();
   }
 
-  _cinePlayers.emplace_back(cinematic, &_scene, &_camera);
-  _cinePlayers.back().play();
+  return 0.0;
+}
+
+void AneditApplication::setCinematicTime(util::Uuid& id, double time)
+{
+  if (_cinePlayers.find(id) != _cinePlayers.end()) {
+    _cinePlayers[id].setCurrentTime(time);
+  }
 }
 
 std::vector<util::Uuid>& AneditApplication::selection()

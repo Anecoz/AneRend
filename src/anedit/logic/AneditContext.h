@@ -26,7 +26,13 @@ struct AneditContext
 
   virtual void* getImguiTexId(util::Uuid& tex) = 0;
 
+  virtual void createCinematicPlayer(util::Uuid& id) = 0;
+  virtual void destroyCinematicPlayer(util::Uuid& id) = 0;
   virtual void playCinematic(util::Uuid& id) = 0;
+  virtual void pauseCinematic(util::Uuid& id) = 0;
+  virtual void stopCinematic(util::Uuid& id) = 0;
+  virtual double getCinematicTime(util::Uuid& id) = 0;
+  virtual void setCinematicTime(util::Uuid& id, double time) = 0;
 
   enum class SelectionType
   {

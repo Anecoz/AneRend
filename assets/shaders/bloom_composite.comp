@@ -43,17 +43,19 @@ void main() {
   float whitePoint = 4.0;
   float avgLum = averageBuffer.avgLum[0];
 
-  avgLum = clamp(avgLum, 0.005, 1.0);
+  //avgLum = clamp(avgLum, 0.005, 1.0);
 
   // Exposure adjusting using average luminance
-  //avgLum = binAvgLum(avgLum);
-  Yxy.x = Yxy.x / (9.6 * avgLum);
+  Yxy.x = Yxy.x / (9.6 * avgLum + 0.0001);
 
-  Yxy.x = fastAcesTonemapLum(Yxy.x);
+  // Applying aces to only the luminance will preserve hue.
+  // But this means that extremely bright stuff will not turn white, which may look strange.
+  //Yxy.x = fastAcesTonemapLum(Yxy.x);
 
   color.rgb = convertYxy2RGB(Yxy);
 
-  //color = vec4(fastAcesTonemap(color.rgb), color.a);
+  // Applying aces to the exposed RGB values will introduce hue-shift, i.e. bright areas become white.
+  color = vec4(fastAcesTonemap(color.rgb), color.a);
 
   imageStore(outputIm, pixel, color);
 }

@@ -37,19 +37,14 @@ std::tuple<const asset::Cinematic::Keyframe*, const asset::Cinematic::Keyframe*,
 
 render::asset::CameraKeyframe lerp(const render::asset::CameraKeyframe& kf0, const render::asset::CameraKeyframe& kf1, double factor)
 {
-  //auto view = util::interp::lerpTransforms(kf0._view, kf1._view, factor, util::interp::Easing::InOutSine);
-
   render::asset::CameraKeyframe out;
-  double easingFactor = util::interp::easeInOutSine(factor);
+  double easingFactor = util::interp::easeInOutCubic(factor);
 
   // Position
-  float y = (1.0f - float(factor)) * kf0._pos.y + (float)factor * kf1._pos.y;
   out._pos = (1.0f - float(easingFactor)) * kf0._pos + (float)easingFactor * kf1._pos;
-  out._pos.y = y;
 
   // Quat
   out._orientation = glm::slerp(kf0._orientation, kf1._orientation, (float)easingFactor);
-  //out._orientation = kf0._orientation;
 
   return out;
 }
@@ -88,7 +83,7 @@ CinematicPlayer& CinematicPlayer::operator=(CinematicPlayer&& rhs)
 
 void CinematicPlayer::update(double delta)
 {
-  if (_state != State::Playing) {
+  if (_state != State::Playing && !_dirty) {
     return;
   }
 
@@ -147,6 +142,8 @@ void CinematicPlayer::update(double delta)
     _finished = true;
     stop();
   }
+
+  _dirty = false;
 }
 
 void CinematicPlayer::play()

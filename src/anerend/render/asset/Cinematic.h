@@ -3,6 +3,7 @@
 #include "Animator.h"
 
 #include "../../util/Uuid.h"
+#include "../../util/Interpolation.h"
 #include "../../component/Components.h"
 
 #include <glm/glm.hpp>
@@ -17,6 +18,7 @@ namespace render::asset {
 
 struct CameraKeyframe
 {
+  util::interp::Easing _easing = util::interp::Easing::InOutCubic;
   glm::vec3 _pos;
   glm::quat _orientation;
   glm::vec3 _ypr;
@@ -26,6 +28,7 @@ struct CameraKeyframe
 
 struct NodeKeyframe
 {
+  util::interp::Easing _easing = util::interp::Easing::InOutCubic;
   util::Uuid _id;
   component::PotentialComponents _comps;
 };

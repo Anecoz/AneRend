@@ -20,6 +20,9 @@ public:
 
   void update(double delta);
 
+  void setCurrentTime(double time) { _currentTime = time; _dirty = true; }
+  double getCurrentTime() const { return _currentTime; }
+
   void play();
   void pause();
   void stop();
@@ -37,6 +40,7 @@ private:
   Camera* _camera = nullptr;
   double _currentTime = 0.0;
   bool _finished = false;
+  bool _dirty = false;
 };
 
 }
