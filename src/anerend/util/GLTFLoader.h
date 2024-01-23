@@ -7,7 +7,6 @@
 #include "../render/asset/Prefab.h"
 #include "../render/asset/Texture.h"
 #include "../render/animation/Animation.h"
-#include "../render/animation/Skeleton.h"
 
 #include <string>
 #include <vector>
@@ -26,7 +25,6 @@ public:
     std::vector<render::asset::Model>& modeslOut,
     std::vector<render::asset::Texture>& texturesOut,
     std::vector<render::asset::Material>& materialsOut,
-    std::vector<render::anim::Skeleton>& skeletonsOut,
     std::vector<render::anim::Animation>& animationsOut);
 };
 

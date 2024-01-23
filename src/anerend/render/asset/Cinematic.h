@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Animator.h"
-
 #include "../../util/Uuid.h"
 #include "../../util/Interpolation.h"
 #include "../../component/Components.h"
@@ -47,7 +45,7 @@ struct AnimatorKeyframe
 {
   util::Uuid _id;
 
-  Animator _animator;
+  component::Animator _animator;
 };
 
 struct Cinematic

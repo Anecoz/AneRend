@@ -34,6 +34,7 @@ AneditApplication::AneditApplication(std::string title)
   , _scene()
   , _vkRenderer(_window, _camera, &_scene.registry())
   , _scenePager(&_vkRenderer)
+  , _animUpdater(&_scene)
 {
   _scenePager.setScene(&_scene);
 
@@ -105,6 +106,7 @@ void AneditApplication::update(double delta)
       auto scenePtr = dat._scene.get();
       _scene = std::move(*scenePtr);
       _scenePager.setScene(&_scene);
+      _animUpdater.setScene(&_scene);
       _vkRenderer.setRegistry(&_scene.registry());
       scenePtr = nullptr;
     }
@@ -117,7 +119,22 @@ void AneditApplication::update(double delta)
   }
 
   _camera.update(delta);
-  _scene.update();
+  {
+    auto now = std::chrono::system_clock::now();
+    _animUpdater.update(delta);
+    auto after = std::chrono::system_clock::now();
+
+    //printf("Anim took %lld us\n", std::chrono::duration_cast<std::chrono::microseconds>(after - now).count());
+  }
+
+  {
+    auto now = std::chrono::system_clock::now();
+    _scene.update();
+    auto after = std::chrono::system_clock::now();
+
+    //printf("Scene update took %lld us\n", std::chrono::duration_cast<std::chrono::microseconds>(after - now).count());
+  }
+
   _scenePager.update(_camera.getPosition());
   _scene.resetEvents();
 
@@ -205,9 +222,9 @@ void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData
     _scene.addPrefab(std::move(prefab));
   }
 
-  for (auto& skeleton : data->_skeletons) {
+  /*for (auto& skeleton : data->_skeletons) {
     _scene.addSkeleton(std::move(skeleton));
-  }
+  }*/
 
   for (auto& anim : data->_animations) {
     _scene.addAnimation(std::move(anim));
@@ -225,7 +242,15 @@ void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData
   for (auto& prefab : prefabsCopy) {
     // Only instantiate if no parent
     if (!prefab._parent) {
-      instantiate(prefab, glm::mat4(1.0f));
+      glm::mat4 mtx(1.0f);
+      for (std::size_t x = 0; x < 20; ++x) {
+        for (std::size_t y = 0; y < 20; ++y) {
+          mtx = glm::translate(glm::mat4(1.0f), glm::vec3((float)(x + 1), 0.0f, (float)(y + 1)));
+          std::unordered_map<util::Uuid, util::Uuid> prefabNodeMap;
+          instantiate(prefab, mtx, prefabNodeMap);
+          updateSkeletons(prefabNodeMap);
+        }
+      }
     }
   }
 }
@@ -445,7 +470,25 @@ void AneditApplication::calculateShadowMatrix()
   _shadowCamera.setProjection(lpMatrix, minZ, maxZ);
 }
 
-util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, glm::mat4 parentGlobalTransform)
+void AneditApplication::updateSkeletons(std::unordered_map<util::Uuid, util::Uuid>& prefabNodeMap)
+{
+  // TODO: Prefabs should contain a sack of nodes instead...
+  for (auto& pair : prefabNodeMap) {
+    auto& prefabId = pair.first;
+    auto& nodeId = pair.second;
+    if (_scene.registry().hasComponent<component::Skeleton>(nodeId)) {
+      auto& skeleComp = _scene.registry().getComponent<component::Skeleton>(nodeId);
+      
+      for (auto& jr : skeleComp._jointRefs) {
+        assert(prefabNodeMap.find(jr._node) != prefabNodeMap.end() && "Can't update skeleton, something really wrong!");
+
+        jr._node = prefabNodeMap[jr._node];
+      }
+    }
+  }
+}
+
+util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, glm::mat4 parentGlobalTransform, std::unordered_map<util::Uuid, util::Uuid>& instantiatedNodes)
 {
   render::scene::Node node{};
   node._name = prefab._name;
@@ -460,7 +503,7 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, g
   for (auto& childPrefabId : prefab._children) {
     for (auto& p : prefabs) {
       if (p._id == childPrefabId) {
-        auto childId = instantiate(p, globalTransform);
+        auto childId = instantiate(p, globalTransform, instantiatedNodes);
         _scene.addNodeChild(id, childId);
         break;
       }
@@ -486,6 +529,20 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, g
     comp = prefabComp;
     _scene.registry().patchComponent<component::Light>(id);
   }
+  if (prefab._comps._animator) {
+    auto& prefabComp = prefab._comps._animator.value();
+    auto& comp = _scene.registry().addComponent<component::Animator>(id);
+    comp = prefabComp;
+    _scene.registry().patchComponent<component::Animator>(id);
+  }
+  if (prefab._comps._skeleton) {
+    auto& prefabComp = prefab._comps._skeleton.value();
+    auto& comp = _scene.registry().addComponent<component::Skeleton>(id);
+    comp = prefabComp;
+    _scene.registry().patchComponent<component::Skeleton>(id);
+  }
+
+  instantiatedNodes[prefab._id] = id;
 
   return id;
 }
@@ -528,7 +585,9 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
       auto trans = glm::translate(glm::mat4(1.0f), worldPos);
 
       auto* p = _scene.getPrefab(prefab);
-      auto id = instantiate(*p, trans);
+      std::unordered_map<util::Uuid, util::Uuid> prefabNodeMap;
+      auto id = instantiate(*p, trans, prefabNodeMap);
+      updateSkeletons(prefabNodeMap);
 
       // Also select it
       _selection.clear();

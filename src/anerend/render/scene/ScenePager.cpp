@@ -55,18 +55,6 @@ void ScenePager::update(const glm::vec3& pos)
       auto copy = *_scene->getAnimation(event._id);
       upd._addedAnimations.emplace_back(std::move(copy));
     }
-    else if (event._type == SceneEventType::AnimatorAdded) {
-      auto copy = *_scene->getAnimator(event._id);
-      upd._addedAnimators.emplace_back(std::move(copy));
-    }
-    else if (event._type == SceneEventType::AnimatorUpdated) {
-      auto copy = *_scene->getAnimator(event._id);
-      upd._updatedAnimators.emplace_back(std::move(copy));
-    }
-    else if (event._type == SceneEventType::SkeletonAdded) {
-      auto copy = *_scene->getSkeleton(event._id);
-      upd._addedSkeletons.emplace_back(std::move(copy));
-    }
 
     // TODO: Removal of assets
   }

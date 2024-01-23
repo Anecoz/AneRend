@@ -18,6 +18,7 @@
 #include <render/scene/Scene.h>
 #include <render/scene/ScenePager.h>
 #include <render/cinematic/CinematicPlayer.h>
+#include <render/animation/AnimationUpdater.h>
 #include "WindSystem.h"
 
 #include <filesystem>
@@ -71,7 +72,9 @@ private:
   void addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData> data);
   void oldUI();
   void calculateShadowMatrix();
-  util::Uuid instantiate(const render::asset::Prefab& prefab, glm::mat4 parentGlobalTransform);
+  // The map is <prefab, node>
+  util::Uuid instantiate(const render::asset::Prefab& prefab, glm::mat4 parentGlobalTransform, std::unordered_map<util::Uuid, util::Uuid>& instantiatedNodes);
+  void updateSkeletons(std::unordered_map<util::Uuid, util::Uuid>& prefabNodeMap);
 
   std::vector<gui::IGUI*> _guis;
 
@@ -94,40 +97,12 @@ private:
   render::Camera _camera;
   render::Camera _shadowCamera;
 
-  util::Uuid _lanternModelId;
-  std::vector<util::Uuid> _lanternMaterials;
-
-  util::Uuid _sponzaModelId;
-  std::vector<util::Uuid> _sponzaMaterialIds;
-
-  util::Uuid _brainstemModelId;
-  std::vector<util::Uuid> _brainstemMaterials;
-  util::Uuid _brainstemAnimId;
-  util::Uuid _brainstemSkelId;
-
-  util::Uuid _shrekModelId;
-  std::vector<util::Uuid> _shrekMaterials;
-  util::Uuid _shrekAnimId;
-  util::Uuid _shrekSkeleId;
-
-  util::Uuid _foxModelId;
-  std::vector<util::Uuid> _foxMaterials;
-  std::vector<util::Uuid> _foxAnims;
-  util::Uuid _foxSkeleId;
-  component::Renderable _cachedFoxRenderable;
-  render::asset::Animator _foxAnimator;
-  int _foxAnimIdx = 0;
-
-  std::vector<util::Uuid> _rends;
-
-  std::vector<util::Uuid> _dummyAnimations;
-  util::Uuid _dummySkele;
-
   render::scene::Scene _scene;
   render::VulkanRenderer _vkRenderer;
   std::future<render::scene::DeserialisedSceneData> _sceneFut;
   render::scene::ScenePager _scenePager;
 
+  render::anim::AnimationUpdater _animUpdater;
 
   // Test bake
   bool _baking = false;

@@ -14,6 +14,7 @@ struct InternalRenderable
   std::vector<util::Uuid> _meshes;
 
   glm::mat4 _globalTransform;
+  glm::mat4 _invGlobalTransform;
 
   // Index into the renderable material index buffer
   std::uint32_t _materialIndexBufferIndex = 0;

@@ -11,16 +11,15 @@
 #include "../../util/Uuid.h"
 #include "../asset/Model.h"
 #include "../asset/Material.h"
-#include "../asset/Animator.h"
 #include "../asset/Prefab.h"
 #include "../asset/Texture.h"
 #include "../asset/Cinematic.h"
 
-#include "../animation/Skeleton.h"
 #include "../animation/Animation.h"
 
 #include "internal/SceneSerializer.h"
 
+#include <atomic>
 #include <filesystem>
 #include <future>
 #include <memory>
@@ -39,11 +38,6 @@ enum class SceneEventType
   ModelRemoved,
   AnimationAdded,
   AnimationRemoved,
-  AnimatorAdded,
-  AnimatorUpdated,
-  AnimatorRemoved,
-  SkeletonAdded,
-  SkeletonRemoved,
   MaterialAdded,
   MaterialUpdated,
   MaterialRemoved,
@@ -102,14 +96,6 @@ public:
     return _animations;
   }
 
-  const std::vector<anim::Skeleton>& getSkeletons() const {
-    return _skeletons;
-  }
-
-  const std::vector<asset::Animator>& getAnimators() const {
-    return _animators;
-  }
-
   const std::vector<asset::Prefab>& getPrefabs() const {
     return _prefabs;
   }
@@ -147,15 +133,7 @@ public:
   util::Uuid addAnimation(anim::Animation&& animation);
   void removeAnimation(util::Uuid id);
   const anim::Animation* getAnimation(util::Uuid id);
-
-  util::Uuid addSkeleton(anim::Skeleton&& skeleton);
-  void removeSkeleton(util::Uuid id);
-  const anim::Skeleton* getSkeleton(util::Uuid id);
-
-  util::Uuid addAnimator(asset::Animator&& animator);
-  void updateAnimator(asset::Animator animator);
-  void removeAnimator(util::Uuid id);
-  const asset::Animator* getAnimator(util::Uuid id);
+  anim::Animation* getAnimationMut(util::Uuid id);
 
   util::Uuid addCinematic(asset::Cinematic cinematic);
   void updateCinematic(asset::Cinematic cinematic);
@@ -204,8 +182,6 @@ private:
   std::vector<asset::Model> _models;
   std::vector<asset::Material> _materials;
   std::vector<anim::Animation> _animations;
-  std::vector<anim::Skeleton> _skeletons;
-  std::vector<asset::Animator> _animators;
   std::vector<asset::Prefab> _prefabs;
   std::vector<asset::Texture> _textures;
   std::vector<asset::Cinematic> _cinematics;
@@ -219,11 +195,16 @@ private:
   internal::SceneSerializer _serialiser;
 
   entt::observer _transformObserver;
-  bool _goThroughAllNodes = false;
+  std::atomic_bool _goThroughAllNodes = false;
+
+  std::atomic_uint _atomicPatchIndex = 0;
+  std::vector<util::Uuid> _nodesToBePatched;
 
   void addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx = TileIndex());
   void updateDependentTransforms(Node& node);
   void updateChildrenTransforms(Node& node);
+
+  util::Uuid findRoot(Node& node);
 };
 
 }

@@ -1,7 +1,7 @@
 #include "GLTFLoader.h"
 
 #include "../render/asset/Mesh.h"
-#include "../render/animation/Skeleton.h"
+//#include "../render/animation/Skeleton.h"
 #include "TextureHelpers.h"
 #include "TangentGenerator.h"
 
@@ -117,87 +117,6 @@ namespace {
 
     return out;
   }
-
-  render::anim::Skeleton constructSkeleton(const std::vector<tinygltf::Node>& nodes, const tinygltf::Skin& skin, const tinygltf::Model& model)
-  {
-    // NOTE: We say that if there is a "skeleton" entry, this will be the root
-    //       transform of all joints, else the first joint is the root.
-    //       This may not hold at all, the skeleton might have a parent for instance.
-    render::anim::Skeleton skeleton{};
-    skeleton._name = skin.name;
-
-    if (skin.skeleton != -1) {
-      // There is a root transform
-      render::anim::Joint rootJoint{};
-      rootJoint._internalId = skin.skeleton;
-      rootJoint._localTransform = transformFromNode(nodes[skin.skeleton]);
-      rootJoint._originalLocalTransform = rootJoint._localTransform;
-      rootJoint._childrenInternalIds = nodes[skin.skeleton].children;
-      skeleton._nonJointRoot = true;
-      skeleton._joints.emplace_back(std::move(rootJoint));
-    }
-
-    // Check if there is a inverseBindMatrices entry
-    const float* ibmBufferPtr = nullptr;
-    if (skin.inverseBindMatrices != -1) {
-      auto& ibmAccessor = model.accessors[skin.inverseBindMatrices];
-      auto& ibmBufferView = model.bufferViews[ibmAccessor.bufferView];
-
-      ibmBufferPtr = reinterpret_cast<const float*>(&(model.buffers[ibmBufferView.buffer].data[ibmAccessor.byteOffset + ibmBufferView.byteOffset]));
-    }
-
-    // The calculations/construction below are split up for readability...
-
-    // Start by populating joints
-    for (int i = 0; i < skin.joints.size(); ++i) {
-      auto& jointNode = nodes[skin.joints[i]];
-
-      render::anim::Joint joint{};
-      joint._internalId = skin.joints[i];
-      joint._localTransform = transformFromNode(jointNode);
-      joint._originalLocalTransform = joint._localTransform;
-      joint._childrenInternalIds = jointNode.children;
-
-      if (ibmBufferPtr != nullptr) {
-        joint._inverseBindMatrix = glm::make_mat4(ibmBufferPtr + 16 * i);
-      }
-
-      skeleton._joints.emplace_back(std::move(joint));
-    }
-
-    // Set children
-    for (auto& joint : skeleton._joints) {
-
-      for (auto childId : joint._childrenInternalIds) {
-        for (auto& child : skeleton._joints) {
-          if (child._internalId == childId) {
-            joint._children.emplace_back(&child);
-            break;
-          }
-        }
-      }
-    }
-
-    // Set parents
-    for (auto& joint : skeleton._joints) {
-      for (auto& parent : skeleton._joints) {
-        for (auto childIdInParent : parent._childrenInternalIds) {
-          if (childIdInParent == joint._internalId) {
-            joint._parent = &parent;
-            break;
-          }
-        }
-        if (joint._parent != nullptr) {
-          // We found a parent and broke inner loop, break
-          break;
-        }
-      }
-    }
-
-    skeleton.calcGlobalTransforms();
-    return skeleton;
-  }
-
 }
 
 bool GLTFLoader::loadFromFile(
@@ -206,7 +125,6 @@ bool GLTFLoader::loadFromFile(
   std::vector<render::asset::Model>& modelsOut,
   std::vector<render::asset::Texture>& texturesOut,
   std::vector<render::asset::Material>& materialsOut,
-  std::vector<render::anim::Skeleton>& skeletonsOut,
   std::vector<render::anim::Animation>& animationsOut)
 {
   std::filesystem::path p(path);
@@ -248,6 +166,8 @@ bool GLTFLoader::loadFromFile(
   std::unordered_map<int, std::vector<int>> parsedMaterialIndices;
   std::unordered_map<int, util::Uuid> parsedTextures;
   std::unordered_map<int, std::size_t> prefabMap; // <node, prefabsOut idx>
+  std::unordered_map<int, component::Skeleton> parsedSkeletons;
+  std::unordered_map<int, util::Uuid> nodeMap;
 
   std::size_t numTotalMeshes = 0;
   std::size_t numTotalVerts = 0;
@@ -262,8 +182,6 @@ bool GLTFLoader::loadFromFile(
     if (node.mesh != -1) {
 
       util::Uuid assetModelId;
-      render::anim::Skeleton skeleton{};
-      skeleton._id = util::Uuid(); // Unset uuid for now
       std::vector<int> materialIndices;
 
       if (parsedModels.find(node.mesh) == parsedModels.end()) {
@@ -273,12 +191,6 @@ bool GLTFLoader::loadFromFile(
 
         if (!node.name.empty()) {
           assetModel._name += "_" + node.name;
-        }
-
-        // Is there a skeleton to parse?
-        if (node.skin != -1) {
-          skeleton = constructSkeleton(model.nodes, model.skins[node.skin], model);
-          skeleton._id = util::Uuid::generate();
         }
 
         // Parse all primitives as separate asset::Mesh        
@@ -647,7 +559,7 @@ bool GLTFLoader::loadFromFile(
 
       component::Renderable rendComp{};
       rendComp._model = assetModelId;
-      rendComp._skeleton = skeleton._id ? skeleton._id : util::Uuid();
+      //rendComp._skeleton = skeleton._id ? skeleton._id : util::Uuid();
       rendComp._name = node.name;
       rendComp._boundingSphere = glm::vec4(0.0f, 0.0f, 0.0f, 30.0f);
 
@@ -655,14 +567,54 @@ bool GLTFLoader::loadFromFile(
         rendComp._materials.push_back(materialsOut[idx]._id);
       }
 
+      // Is there a skeleton to parse?
+      if (node.skin != -1) {
+        // Note: Not caring about the "skeleton" attribute atm, it's not needed to update the hierarchy
+        if (parsedSkeletons.find(node.skin) == parsedSkeletons.end()) {
+          component::Skeleton skelComp;
+          skelComp._name = model.skins[node.skin].name;
+
+          // Check if there is a inverseBindMatrices entry
+          const float* ibmBufferPtr = nullptr;
+          if (model.skins[node.skin].inverseBindMatrices != -1) {
+            auto& ibmAccessor = model.accessors[model.skins[node.skin].inverseBindMatrices];
+            auto& ibmBufferView = model.bufferViews[ibmAccessor.bufferView];
+
+            ibmBufferPtr = reinterpret_cast<const float*>(&(model.buffers[ibmBufferView.buffer].data[ibmAccessor.byteOffset + ibmBufferView.byteOffset]));
+          }
+
+          // The uuids will be set at the end
+          for (std::size_t j = 0; j < model.skins[node.skin].joints.size(); ++j) {
+            component::Skeleton::JointRef jr;
+            jr._internalId = model.skins[node.skin].joints[j];
+            // Note that this order here is extremely important!
+            // The vertex attributes rely on this order for their "jointIds" to point correctly.
+            if (ibmBufferPtr != nullptr) {
+              jr._inverseBindMatrix = glm::make_mat4(ibmBufferPtr + 16 * j);
+            }
+            skelComp._jointRefs.emplace_back(std::move(jr));
+          }
+
+          parsedSkeletons[node.skin] = skelComp;
+          prefab._comps._skeleton = skelComp;
+        }
+        else {
+          prefab._comps._skeleton = parsedSkeletons[node.skin];
+        }
+
+        // Add animator to this node. Animations will be pre-filled at the end.
+        component::Animator animator;
+        prefab._comps._animator = std::move(animator);
+      }
+
       prefab._comps._rend = std::move(rendComp);
 
       prefabsOut.emplace_back(std::move(prefab));
       prefabMap[i] = prefabsOut.size() - 1;
 
-      if (skeleton._id) {
+      /*if (skeleton._id) {
         skeletonsOut.emplace_back(std::move(skeleton));
-      }
+      }*/
     }
     else {
       // Just a transform, but still a node
@@ -678,6 +630,8 @@ bool GLTFLoader::loadFromFile(
       prefabsOut.emplace_back(std::move(prefab));
       prefabMap[i] = prefabsOut.size() - 1;
     }
+
+    nodeMap[i] = prefabsOut.back()._id;
   }
 
   // Set children after all nodes have been parsed
@@ -692,6 +646,24 @@ bool GLTFLoader::loadFromFile(
         auto& childPrefab = prefabsOut[prefabMap[childNode]];
         childPrefab._parent = prefab._id;
         prefab._children.emplace_back(childPrefab._id);
+      }
+    }
+  }
+
+  // Set internal uuids of skeleton components now that everything is parsed
+  for (auto& prefab : prefabsOut) {
+    if (prefab._comps._skeleton) {
+      for (auto& ref : prefab._comps._skeleton.value()._jointRefs) {
+        ref._node = nodeMap[ref._internalId];
+      }
+    }
+
+    // Pre-fill animation ids in all animators
+    if (prefab._comps._animator) {
+      auto& anim = prefab._comps._animator.value();
+      for (auto& animation : animationsOut) {
+        anim._animations.emplace_back(animation._id);
+        anim._currentAnimation = animation._id;
       }
     }
   }
@@ -721,7 +693,7 @@ bool GLTFLoader::loadFromFile(
   }
 
   printf("Loaded GLTF %s. \n\t%zu models containing %zu meshes \n\t%zu verts \n\t%zu skeletons \n\t%zu animations \n\t%zu materials \n\t%zu textures\n",
-    path.c_str(), modelsOut.size(), numTotalMeshes, numTotalVerts, skeletonsOut.size(), animationsOut.size(), materialsOut.size(), texturesOut.size());
+    path.c_str(), modelsOut.size(), numTotalMeshes, numTotalVerts, parsedSkeletons.size(), animationsOut.size(), materialsOut.size(), texturesOut.size());
 
   return true;
 }

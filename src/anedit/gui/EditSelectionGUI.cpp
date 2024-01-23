@@ -1,6 +1,6 @@
 #include "EditSelectionGUI.h"
 
-#include "EditAnimatorGUI.h"
+//#include "EditAnimatorGUI.h"
 #include "EditNodeGUI.h"
 #include "EditMaterialGUI.h"
 #include "EditPrefabGUI.h"
@@ -14,7 +14,7 @@ EditSelectionGUI::EditSelectionGUI()
   : IGUI()
 {
   // Fill gui map, will choose correct GUI to render depending on selection type
-  _specificGuis[logic::AneditContext::SelectionType::Animator] = new EditAnimatorGUI();
+  //_specificGuis[logic::AneditContext::SelectionType::Animator] = new EditAnimatorGUI();
   _specificGuis[logic::AneditContext::SelectionType::Node] = new EditNodeGUI();
   _specificGuis[logic::AneditContext::SelectionType::Material] = new EditMaterialGUI();
   _specificGuis[logic::AneditContext::SelectionType::Prefab] = new EditPrefabGUI();

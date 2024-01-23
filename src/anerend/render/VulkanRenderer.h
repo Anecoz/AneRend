@@ -29,7 +29,7 @@
 #include "internal/InternalRenderable.h"
 #include "internal/InternalLight.h"
 #include "internal/GigaBuffer.h"
-#include "internal/AnimationThread.h"
+//#include "internal/AnimationThread.h"
 #include "internal/BufferMemoryInterface.h"
 #include "internal/DeletionQueue.h"
 #include "internal/InternalTexture.h"
@@ -244,6 +244,7 @@ private:
   entt::observer _nodeObserver;
 
   void updateNodes();
+  void updateSkeletons();
 
   bool arePrerequisitesUploaded(internal::InternalModel& model);
   bool arePrerequisitesUploaded(internal::InternalRenderable& rend);
@@ -300,7 +301,7 @@ private:
   uint32_t _currentSwapChainIndex;
 
   // Animation multithread runtime.
-  internal::AnimationThread _animThread;
+  //internal::AnimationThread _animThread;
 
   // Single mem interface to place skeletons into GPU buffers.
   internal::BufferMemoryInterface _skeletonMemIf;
@@ -308,6 +309,11 @@ private:
   // Keeps track of where skeletons should go in the related GPU buffer. Does not own skeleton data.
   // NOTE: The offset given by each Handle is in terms of _NUMBER OF_ matrices, not bytes!
   std::unordered_map<util::Uuid, internal::BufferMemoryInterface::Handle> _skeletonOffsets;
+
+  uint32_t getOrCreateSkeleOffset(util::Uuid& node, std::size_t numMatrices);
+
+  // This is a mirror of the GPU buffer, for simplicity re-created on CPU here.
+  std::array<glm::mat4, MAX_NUM_SKINNED_MODELS * MAX_NUM_JOINTS>* _cachedSkeletons = new std::array<glm::mat4, MAX_NUM_SKINNED_MODELS* MAX_NUM_JOINTS>;
 
   // Keep track of imgui tex ids (Descriptor sets as of now)
   std::unordered_map<util::Uuid, void*> _imguiTexIds;
@@ -396,24 +402,6 @@ private:
   // Use a mem interface to select empty bindless indices.
   internal::BufferMemoryInterface _bindlessTextureMemIf;
 
-  /*void createTexture(
-    VkCommandBuffer cmdBuffer,
-    VkFormat format, 
-    int width, 
-    int height, 
-    const std::vector<uint8_t>& data,
-    VkSampler& samplerOut,
-    AllocatedImage& imageOut,
-    VkImageView& viewOut);
-
-  void generateMipmaps(
-    VkCommandBuffer cmdBuffer,
-    VkImage image,
-    VkFormat imageFormat,
-    int32_t texWidth,
-    int32_t texHeight,
-    uint32_t mipLevels);*/
-
   internal::BufferMemoryInterface::Handle addTextureToBindless(VkImageLayout layout, VkImageView view, VkSampler sampler);
 
   RenderResourceVault _vault;
@@ -490,8 +478,8 @@ private:
   // Fill gpu mesh info.
   bool prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer);
 
-  // Fill gpu skeleton info.
-  void prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, std::vector<anim::Skeleton> skeletons);
+  // Fill gpu skeleton info from cached CPU array.
+  void prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer);
 
   // Fills GPU light buffer with current light information.
   void prefillGPULightBuffer(VkCommandBuffer& commandBuffer);

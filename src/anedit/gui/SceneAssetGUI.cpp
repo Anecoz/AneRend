@@ -160,13 +160,6 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
 
   ImGui::SameLine();
 
-  // Skeletons
-  if (drawAssetList(size, _skeletonFilter, "Skeletons", c->scene().getSkeletons(), currSelection, dummyUuid, dummy)) {
-
-  }
-
-  ImGui::SameLine();
-
   // Prefabs
   {
     auto deleteLambda = [c](util::Uuid id) { c->scene().removePrefab(id); c->selection().clear(); };

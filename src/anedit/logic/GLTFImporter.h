@@ -5,7 +5,6 @@
 #include <render/asset/Texture.h>
 #include <render/asset/Material.h>
 #include <render/animation/Animation.h>
-#include <render/animation/Skeleton.h>
 
 #include <memory>
 #include <future>
@@ -23,7 +22,6 @@ struct LoadedGLTFData
   std::vector<render::asset::Texture> _textures;
   std::vector<render::asset::Material> _materials;
 
-  std::vector<render::anim::Skeleton> _skeletons;
   std::vector<render::anim::Animation> _animations;
 };
 

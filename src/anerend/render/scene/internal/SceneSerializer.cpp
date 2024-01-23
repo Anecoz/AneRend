@@ -130,11 +130,37 @@ void serialize(S& s, component::Transform& p)
 }
 
 template <typename S>
+void serialize(S& s, component::Animator& p)
+{
+  s.value1b(p._state);
+  s.container(p._animations, 100);
+  s.object(p._currentAnimation);
+  s.value4b(p._playbackMultiplier);
+}
+
+template <typename S>
+void serialize(S& s, component::Skeleton::JointRef& p)
+{
+  s.value4b(p._internalId);
+  s.object(p._inverseBindMatrix);
+  s.object(p._node);
+}
+
+template <typename S>
+void serialize(S& s, component::Skeleton& p)
+{
+  s.text1b(p._name, 100);
+  s.container(p._jointRefs, 100);
+}
+
+template <typename S>
 void serialize(S& s, component::PotentialComponents& p)
 {
   s.object(p._trans);
   s.ext(p._rend, bitsery::ext::StdOptional{});
   s.ext(p._light, bitsery::ext::StdOptional{});
+  s.ext(p._animator, bitsery::ext::StdOptional{});
+  s.ext(p._skeleton, bitsery::ext::StdOptional{});
 }
 
 template <typename S>
@@ -150,7 +176,7 @@ void serialize(S& s, IntermediateNode& p)
 template <typename S>
 void serialize(S& s, std::vector<IntermediateNode>& v)
 {
-  s.container(v, 2500);
+  s.container(v, 20000);
 }
 
 template <typename S>
@@ -264,55 +290,12 @@ void serialize(S& s, std::vector<render::anim::Animation>& a)
 }
 
 template <typename S>
-void serialize(S& s, render::asset::Animator& a)
-{
-  s.object(a._id);
-  s.text1b(a._name, 100);
-  s.value1b(a._state);
-  s.object(a._skeleId);
-  s.object(a._animId);
-  s.value4b(a._playbackMultiplier);
-}
-
-template <typename S>
-void serialize(S& s, std::vector<render::asset::Animator>& a)
-{
-  s.container(a, 100);
-}
-
-template <typename S>
-void serialize(S& s, render::anim::Joint& j)
-{
-  s.object(j._globalTransform);
-  s.object(j._localTransform);
-  s.object(j._originalLocalTransform);
-  s.object(j._inverseBindMatrix);
-  s.value4b(j._internalId);
-  s.container4b(j._childrenInternalIds, 50);
-}
-
-template <typename S>
-void serialize(S& s, render::anim::Skeleton& skel)
-{
-  s.object(skel._id);
-  s.text1b(skel._name, 100);
-  s.value1b(skel._nonJointRoot);
-  s.container(skel._joints, 100);
-}
-
-template <typename S>
-void serialize(S& s, std::vector<render::anim::Skeleton>& skel)
-{
-  s.container(skel, 100);
-}
-
-template <typename S>
 void serialize(S& s, component::Renderable& r)
 {
   //s.object(r._id);
   s.text1b(r._name, 100);
   s.object(r._model);
-  s.object(r._skeleton);
+  //s.object(r._skeleton);
   s.container(r._materials, 2048);
   s.object(r._tint);
   s.object(r._boundingSphere);
@@ -461,6 +444,7 @@ public:
     for (std::size_t i = 0; i < _indices.size() - 1; ++i) {
       auto index = _indices[i];
       index += headerSize;
+      printf("Writing index %u\n", index);
       file.write(reinterpret_cast<const char*>(&index), sizeof(index));
     }
 
@@ -483,8 +467,6 @@ std::uint32_t headerSize()
     4 + // model idx
     4 + // mat idx
     4 + // anim idx
-    4 + // skel idx
-    4 + // animator idx
     4 + // tile info idx
     4 + // nodes idx
     4;  // cinematic idx
@@ -531,8 +513,6 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
         4 bytes model idx       (uint32_t)
         4 bytes material idx    (uint32_t)
         4 bytes animation idx   (uint32_t)
-        4 bytes skeleton idx    (uint32_t)
-        4 bytes animator idx    (uint32_t)
         4 bytes tileInfo   idx  (uint32_t)
         4 bytes nodes      idx  (uint32_t)
         4 bytes cinematic  idx  (uint32_t)
@@ -546,10 +526,6 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
         -- materials --
 
         -- animations --
-
-        -- skeletons --
-
-        -- animators --
 
         -- tile infos --
 
@@ -582,6 +558,12 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
         if (scene.registry().hasComponent<component::Light>(node._id)) {
           imn._comps._light = scene.registry().getComponent<component::Light>(node._id);
         }
+        if (scene.registry().hasComponent<component::Skeleton>(node._id)) {
+          imn._comps._skeleton = scene.registry().getComponent<component::Skeleton>(node._id);
+        }
+        if (scene.registry().hasComponent<component::Animator>(node._id)) {
+          imn._comps._animator = scene.registry().getComponent<component::Animator>(node._id);
+        }
 
         imNodes.emplace_back(std::move(imn));
       }
@@ -592,8 +574,6 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
       ser.add(scene._models);
       ser.add(scene._materials);
       ser.add(scene._animations);
-      ser.add(scene._skeletons);
-      ser.add(scene._animators);
       ser.add(scene._tileInfos);
       ser.add(imNodes);
       ser.add(scene._cinematics);
@@ -671,19 +651,15 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       uint32_t modelIdx = header4BytePtr[2];
       uint32_t materialIdx = header4BytePtr[3];
       uint32_t animationIdx = header4BytePtr[4];
-      uint32_t skeletonIdx = header4BytePtr[5];
-      uint32_t animatorIdx = header4BytePtr[6];
-      uint32_t tiIdx = header4BytePtr[7];
-      uint32_t nodesIdx = header4BytePtr[8];
-      uint32_t cineIdx = header4BytePtr[9];
+      uint32_t tiIdx = header4BytePtr[5];
+      uint32_t nodesIdx = header4BytePtr[6];
+      uint32_t cineIdx = header4BytePtr[7];
 
       std::vector<std::uint8_t> serialisedPrefabs(textureIdx - prefabIdx);
       std::vector<std::uint8_t> serialisedTextures(modelIdx - textureIdx);
       std::vector<std::uint8_t> serialisedModels(materialIdx - modelIdx);
       std::vector<std::uint8_t> serialisedMats(animationIdx - materialIdx);
-      std::vector<std::uint8_t> serialisedAnimations(skeletonIdx - animationIdx);
-      std::vector<std::uint8_t> serialisedSkeletons(animatorIdx - skeletonIdx);
-      std::vector<std::uint8_t> serialisedAnimators(tiIdx - animatorIdx);
+      std::vector<std::uint8_t> serialisedAnimations(tiIdx - animationIdx);
       std::vector<std::uint8_t> serialisedTis(nodesIdx - tiIdx);
       std::vector<std::uint8_t> serialisedNodes(cineIdx - nodesIdx);
       std::vector<std::uint8_t> serialisedCinematics(fileSize - cineIdx);
@@ -694,8 +670,6 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       std::vector<render::asset::Model> models;
       std::vector<render::asset::Material> mats;
       std::vector<render::anim::Animation> animations;
-      std::vector<render::anim::Skeleton> skeletons;
-      std::vector<render::asset::Animator> animators;
       std::vector<render::scene::Scene::TileInfo> tis;
       std::vector<IntermediateNode> imNodes;
       std::vector<render::asset::Cinematic> cinematics;
@@ -726,18 +700,6 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
 
       // Read animations
       if (!desHelper(file, animationIdx, serialisedAnimations, animations)) {
-        p.set_value(DeserialisedSceneData());
-        return;
-      }
-
-      // Read skeletons
-      if (!desHelper(file, skeletonIdx, serialisedSkeletons, skeletons)) {
-        p.set_value(DeserialisedSceneData());
-        return;
-      }
-
-      // Read animators
-      if (!desHelper(file, animatorIdx, serialisedAnimators, animators)) {
         p.set_value(DeserialisedSceneData());
         return;
       }
@@ -777,12 +739,6 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       for (auto& anim : animations) {
         outputData._scene->addAnimation(std::move(anim));
       }
-      for (auto& skel : skeletons) {
-        outputData._scene->addSkeleton(std::move(skel));
-      }
-      for (auto& animator : animators) {
-        outputData._scene->addAnimator(std::move(animator));
-      }
       for (auto& ti : tis) {
         if (ti._ddgiAtlas) {
           outputData._scene->setDDGIAtlas(ti._ddgiAtlas, ti._idx);
@@ -810,6 +766,18 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
           auto& c = outputData._scene->registry().addComponent<component::Light>(id);
           c = imn._comps._light.value();
           outputData._scene->registry().patchComponent<component::Light>(id);
+        }
+
+        if (imn._comps._animator) {
+          auto& c = outputData._scene->registry().addComponent<component::Animator>(id);
+          c = imn._comps._animator.value();
+          outputData._scene->registry().patchComponent<component::Animator>(id);
+        }
+
+        if (imn._comps._skeleton) {
+          auto& c = outputData._scene->registry().addComponent<component::Skeleton>(id);
+          c = imn._comps._skeleton.value();
+          outputData._scene->registry().patchComponent<component::Skeleton>(id);
         }
       }
 

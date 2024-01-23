@@ -4,6 +4,9 @@
 
 #include <glm/gtx/matrix_decompose.hpp>
 
+#include <algorithm>
+#include <execution>
+
 namespace render::scene {
 
 namespace {
@@ -26,10 +29,19 @@ bool getAsset(std::vector<T>& vec, IDType id, T** tOut)
   return false;
 }
 
+bool shouldBePatched(const util::Uuid& node, component::Registry& reg)
+{
+  if (reg.hasComponent<component::Renderable>(node)) return true;
+  if (reg.hasComponent<component::Light>(node)) return true;
+
+  return false;
+}
+
 }
 
 Scene::Scene()
   : _transformObserver(_registry.getEnttRegistry(), entt::collector.update<component::Transform>())
+  , _atomicPatchIndex(0)
 {}
 
 Scene::~Scene()
@@ -37,15 +49,14 @@ Scene::~Scene()
 
 Scene::Scene(Scene&& rhs)
   : _transformObserver(_registry.getEnttRegistry(), entt::collector.update<component::Transform>())
+  , _atomicPatchIndex(0)
 {
   rhs._transformObserver.disconnect();
 
   std::swap(_tiles, rhs._tiles);
   std::swap(_materials, rhs._materials);
   std::swap(_animations, rhs._animations);
-  std::swap(_skeletons, rhs._skeletons);
   std::swap(_models, rhs._models);
-  std::swap(_animators, rhs._animators);
   std::swap(_prefabs, rhs._prefabs);
   std::swap(_textures, rhs._textures);
   std::swap(_eventLog, rhs._eventLog);
@@ -66,9 +77,7 @@ Scene& Scene::operator=(Scene&& rhs)
     std::swap(_tiles, rhs._tiles);
     std::swap(_materials, rhs._materials);
     std::swap(_animations, rhs._animations);
-    std::swap(_skeletons, rhs._skeletons);
     std::swap(_models, rhs._models);
-    std::swap(_animators, rhs._animators);
     std::swap(_prefabs, rhs._prefabs);
     std::swap(_textures, rhs._textures);
     std::swap(_eventLog, rhs._eventLog);
@@ -80,6 +89,7 @@ Scene& Scene::operator=(Scene&& rhs)
     _transformObserver.connect(_registry.getEnttRegistry(), entt::collector.update<component::Transform>());
   }
 
+  _atomicPatchIndex.store(0);
   _goThroughAllNodes = true;
   return *this;
 }
@@ -125,49 +135,91 @@ void Scene::update()
   }
 
   auto lambda = [this](Node& node) {
-    updateDependentTransforms(node);
+    //updateDependentTransforms(node);
 
     // Add to correct tile
     auto& trans = _registry.getComponent<component::Transform>(node._id);
     auto tileIdx = findTransformTile(trans, Tile::_tileSize);
 
     // Is it already added to a tile?
+    bool updateTile = false;
     if (_nodeTileMap.find(node._id) != _nodeTileMap.end()) {
-      auto& oldIdx = _nodeTileMap[node._id];
-      _tiles[oldIdx].removeNode(node._id);
-    }
-
-    if (_tiles.find(tileIdx) != _tiles.end()) {
-      _tiles[tileIdx].addNode(node._id);
-      _tiles[tileIdx].dirty() = true;
-      _nodeTileMap[node._id] = tileIdx;
+      if (tileIdx != _nodeTileMap[node._id]) {
+        updateTile = true;
+        auto& oldIdx = _nodeTileMap[node._id];
+        _tiles[oldIdx].removeNode(node._id);
+      }
     }
     else {
-      Tile tile(tileIdx);
-      tile.addNode(node._id);
-      _tiles[tileIdx] = std::move(tile);
-      _tiles[tileIdx].dirty() = true;
-      _nodeTileMap[node._id] = tileIdx;
+      updateTile = true;
+    }
+
+    if (updateTile) {
+      if (_tiles.find(tileIdx) != _tiles.end()) {
+        _tiles[tileIdx].addNode(node._id);
+        _tiles[tileIdx].dirty() = true;
+        _nodeTileMap[node._id] = tileIdx;
+      }
+      else {
+        Tile tile(tileIdx);
+        tile.addNode(node._id);
+        _tiles[tileIdx] = std::move(tile);
+        _tiles[tileIdx].dirty() = true;
+        _nodeTileMap[node._id] = tileIdx;
+      }
     }};
 
-  if (_goThroughAllNodes) {
+  if (_goThroughAllNodes.load()) {
     for (auto& node : _nodeVec) {
+      updateDependentTransforms(node);
       lambda(node);
     }
 
-    _goThroughAllNodes = false;
+    _goThroughAllNodes.store(false);
   }
+  else {
+    // Try to parallelise the transform update.
+  // We start by finding all roots of touched transforms, this is an expensive operation
+  // but we have to do it in order to have independent updates for each root tree to run 
+  // across multiple threads.
+    std::vector<util::Uuid> rootsToUpdate;
+    for (const auto entity : _transformObserver) {
+      auto id = _registry.reverseLookup(entity);
+      auto& node = _nodeVec[_nodes[id]];
+      rootsToUpdate.emplace_back(findRoot(node));
+    }
 
-  // Check if any transforms have been updated
-  for (const auto entity : _transformObserver) {
+    // Uniqueify
+    rootsToUpdate.erase(std::unique(rootsToUpdate.begin(), rootsToUpdate.end()), rootsToUpdate.end());
 
-    // Update the transform hierarchy
-    auto id = _registry.reverseLookup(entity);
-    auto& node = _nodeVec[_nodes[id]];
-    lambda(node);
-  }
+    // Let the implementation decide how to parallise the udpate.
+    if (_nodesToBePatched.size() < 1024) {
+      _nodesToBePatched.resize(1024);
+    }
+
+    std::for_each(
+      std::execution::par_unseq,
+      rootsToUpdate.begin(),
+      rootsToUpdate.end(),
+      [this](auto&& id) {
+        auto& node = _nodeVec[_nodes[id]];
+        updateDependentTransforms(node);
+      }
+    );
+
+    // Patch stuff up that was touched and deemed necessary to update
+    auto maxIdx = _atomicPatchIndex.load();
+    for (std::size_t i = 0; i < maxIdx; ++i) {
+      auto& id = _nodesToBePatched[i];
+      auto& node = _nodeVec[_nodes[id]];
+
+      _registry.patchComponent<component::Transform>(id);
+      lambda(node);
+    }
+  }  
 
   _transformObserver.clear();
+  _atomicPatchIndex.store(0);
 }
 
 void Scene::serializeAsync(const std::filesystem::path& path)
@@ -397,73 +449,11 @@ const anim::Animation* Scene::getAnimation(util::Uuid id)
   return animation;
 }
 
-util::Uuid Scene::addSkeleton(anim::Skeleton&& skeleton)
+anim::Animation* Scene::getAnimationMut(util::Uuid id)
 {
-  auto id = skeleton._id;
-  addEvent(SceneEventType::SkeletonAdded, skeleton._id);
-  _skeletons.emplace_back(std::move(skeleton));
-  return id;
-}
-
-void Scene::removeSkeleton(util::Uuid id)
-{
-  for (auto it = _skeletons.begin(); it != _skeletons.end(); ++it) {
-    if (it->_id == id) {
-      _skeletons.erase(it);
-      addEvent(SceneEventType::SkeletonRemoved, id);
-      return;
-    }
-  }
-
-  printf("Could not remove skeleton with id %s, doesn't exist!\n", id.str().c_str());
-}
-
-const anim::Skeleton* Scene::getSkeleton(util::Uuid id)
-{
-  anim::Skeleton* skele = nullptr;
-  getAsset(_skeletons, id, &skele);
-  return skele;
-}
-
-util::Uuid Scene::addAnimator(asset::Animator&& animator)
-{
-  auto id = animator._id;
-  addEvent(SceneEventType::AnimatorAdded, animator._id);
-  _animators.emplace_back(std::move(animator));
-  return id;
-}
-
-void Scene::updateAnimator(asset::Animator animator)
-{
-  for (auto it = _animators.begin(); it != _animators.end(); ++it) {
-    if (it->_id == animator._id) {
-      *it = animator;
-      addEvent(SceneEventType::AnimatorUpdated, animator._id);
-      return;
-    }
-  }
-
-  printf("Could not update animator with id %s, doesn't exist!\n", animator._id.str().c_str());
-}
-
-void Scene::removeAnimator(util::Uuid id)
-{
-  for (auto it = _animators.begin(); it != _animators.end(); ++it) {
-    if (it->_id == id) {
-      _animators.erase(it);
-      addEvent(SceneEventType::AnimatorRemoved, id);
-      return;
-    }
-  }
-
-  printf("Could not remove animator with id %s, doesn't exist!\n", id.str().c_str());
-}
-
-const asset::Animator* Scene::getAnimator(util::Uuid id)
-{
-  asset::Animator* animator = nullptr;
-  getAsset(_animators, id, &animator);
-  return animator;
+  anim::Animation* animation = nullptr;
+  getAsset(_animations, id, &animation);
+  return animation;
 }
 
 util::Uuid Scene::addCinematic(asset::Cinematic cinematic)
@@ -653,7 +643,14 @@ void Scene::updateChildrenTransforms(Node& node)
     auto& childTransform = _registry.getComponent<component::Transform>(childId);
 
     childTransform._globalTransform = nodeTrans._globalTransform * childTransform._localTransform;
-    _registry.patchComponent<component::Transform>(childId);
+    if (!_goThroughAllNodes && shouldBePatched(childId, _registry)) {
+      auto idx = _atomicPatchIndex.fetch_add(1, std::memory_order_relaxed);
+      //printf("Got idx %u\n", idx);
+      _nodesToBePatched[idx] = childId;
+    }
+    else if (_goThroughAllNodes) {
+      _registry.patchComponent<component::Transform>(childId);
+    }
 
     if (!child._children.empty()) {
       updateChildrenTransforms(child);
@@ -661,26 +658,39 @@ void Scene::updateChildrenTransforms(Node& node)
   }
 }
 
+util::Uuid Scene::findRoot(Node& node)
+{
+  if (!node._parent) {
+    return node._id;
+  }
+
+  auto& parNod = _nodeVec[_nodes[node._parent]];
+  return findRoot(parNod);
+}
+
 void Scene::updateDependentTransforms(Node& node)
 {
-  // Figure out which renderables are involved
-  if (!node._parent) {
-    auto& nodeTrans = _registry.getComponent<component::Transform>(node._id);
-    nodeTrans._globalTransform = nodeTrans._localTransform;
+  glm::mat4 parentGlobal(1.0f);
+  if (node._parent) {
+    parentGlobal = _registry.getComponent<component::Transform>(node._parent)._globalTransform;
+  }
+
+  auto& nodeTrans = _registry.getComponent<component::Transform>(node._id);
+  nodeTrans._globalTransform = parentGlobal * nodeTrans._localTransform;
+  if (!_goThroughAllNodes && shouldBePatched(node._id, _registry)) {
+    auto idx = _atomicPatchIndex.fetch_add(1, std::memory_order_relaxed);
+    _nodesToBePatched[idx] = node._id;
+  }
+  else if (_goThroughAllNodes) {
     _registry.patchComponent<component::Transform>(node._id);
-
-    if (node._children.empty()) {
-      return;
-    }
-
-    // Will recursively take care of all children
-    updateChildrenTransforms(node);
   }
-  else {
-    auto& parentTrans = _registry.getComponent<component::Transform>(node._parent);
-    updateDependentTransforms(_nodeVec[_nodes[node._parent]]);
-    _registry.patchComponent<component::Transform>(node._parent);
+
+  if (node._children.empty()) {
+    return;
   }
+
+  // Will recursively take care of all children
+  updateChildrenTransforms(node);
 }
 
 }

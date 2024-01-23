@@ -8,10 +8,8 @@
 #include "../component/Components.h"
 #include "asset/Material.h"
 #include "asset/Texture.h"
-#include "asset/Animator.h"
 #include "asset/TileInfo.h"
 #include "animation/Animation.h"
-#include "animation/Skeleton.h"
 #include "internal/InternalMesh.h"
 #include "internal/InternalRenderable.h"
 #include "internal/BufferMemoryInterface.h"
@@ -41,11 +39,6 @@ struct AssetUpdate
       !_removedTextures.empty() ||
       !_addedAnimations.empty() ||
       !_removedAnimations.empty() ||
-      !_addedAnimators.empty() ||
-      !_updatedAnimators.empty() ||
-      !_removedAnimators.empty() ||
-      !_addedSkeletons.empty() ||
-      !_removedSkeletons.empty() ||
       !_addedRenderables.empty() ||
       !_updatedRenderables.empty() ||
       !_removedRenderables.empty() ||
@@ -69,13 +62,6 @@ struct AssetUpdate
 
   std::vector<anim::Animation> _addedAnimations;
   std::vector<util::Uuid> _removedAnimations;
-
-  std::vector<asset::Animator> _addedAnimators;
-  std::vector<asset::Animator> _updatedAnimators;
-  std::vector<util::Uuid> _removedAnimators;
-
-  std::vector<anim::Skeleton> _addedSkeletons;
-  std::vector<util::Uuid> _removedSkeletons;
 
   std::vector<component::Renderable> _addedRenderables;
   std::vector<component::Renderable> _updatedRenderables;

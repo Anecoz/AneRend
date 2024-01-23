@@ -26,7 +26,7 @@ struct Renderable
   std::string _name; // for debugging
 
   util::Uuid _model;
-  util::Uuid _skeleton;
+  //util::Uuid _skeleton;
   std::vector<util::Uuid> _materials; // one for each mesh in the model (could be same ID for multiple meshes tho)
 
   glm::vec3 _tint;
@@ -107,12 +107,41 @@ struct Light
   // Type, i.e. directional, point, spot
 };
 
+struct Skeleton
+{
+  std::string _name;
+
+  struct JointRef
+  {
+    int _internalId = -1;
+    glm::mat4 _inverseBindMatrix = glm::mat4(1.0f);
+    util::Uuid _node;
+  };
+
+  std::vector<JointRef> _jointRefs; // <internal id, prefab/node w/ transform>
+};
+
+struct Animator
+{
+  enum class State : std::uint8_t {
+    Playing,
+    Paused,
+    Stopped
+  } _state;
+
+  std::vector<util::Uuid> _animations;
+  util::Uuid _currentAnimation;
+  float _playbackMultiplier = 1.0f;
+};
+
 // Struct that holds potential components used by e.g. prefabs
 struct PotentialComponents
 {
   Transform _trans; // not optional
   std::optional<Renderable> _rend;
   std::optional<Light> _light;
+  std::optional<Skeleton> _skeleton;
+  std::optional<Animator> _animator;
 };
 
 }

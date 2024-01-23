@@ -6,6 +6,7 @@
 #include "EditTransformGUI.h"
 #include "EditLightGUI.h"
 #include "EditRenderableGUI.h"
+#include "EditAnimatorGUI.h"
 
 #include <imgui.h>
 
@@ -30,6 +31,7 @@ EditNodeGUI::EditNodeGUI()
   _componentGUIs[typeid(component::Transform)] = new EditTransformGUI();
   _componentGUIs[typeid(component::Renderable)] = new EditRenderableGUI();
   _componentGUIs[typeid(component::Light)] = new EditLightGUI();
+  _componentGUIs[typeid(component::Animator)] = new EditAnimatorGUI();
 }
 
 EditNodeGUI::~EditNodeGUI()
@@ -63,10 +65,12 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
   bool hasTransform = false;
   bool hasRenderable = false;
   bool hasLight = false;
+  bool hasAnimator = false;
 
   DRAW_COMP(Transform);
   DRAW_COMP(Renderable);
   DRAW_COMP(Light);
+  DRAW_COMP(Animator);
 
   // Add new components
   if (ImGui::BeginPopupContextWindow()) {

@@ -24,7 +24,7 @@ void GLTFImporter::startLoad(const std::filesystem::path& path)
       data._models,
       data._textures,
       data._materials,
-      data._skeletons,
+      //data._skeletons,
       data._animations);
 
     return data;

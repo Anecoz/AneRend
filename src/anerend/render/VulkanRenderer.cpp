@@ -171,7 +171,9 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera, 
     .update<component::Renderable>()
     .where<component::PageStatus>()
     .update<component::Transform>()
-    .where<component::PageStatus>()) 
+    .where<component::PageStatus, component::Renderable>()
+    .update<component::Transform>()
+    .where<component::PageStatus, component::Light>())
   , _currentSwapChainIndex(0)
   , _vault(MAX_FRAMES_IN_FLIGHT)
   , _gigaVtxBuffer(1024 * 1024 * GIGA_MESH_BUFFER_SIZE_MB)
@@ -223,17 +225,6 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _tlas._scratchBuffer._buffer, _tlas._scratchBuffer._allocation);
     vkext::vkDestroyAccelerationStructureKHR(_device, _tlas._as, nullptr);
   }
-
-  /*for (auto& light : _lights) {
-    for (auto& v: light._shadowImageViews) {
-      vkDestroyImageView(_device, v, nullptr);
-    }
-    vkDestroyImageView(_device, light._cubeShadowView, nullptr);
-
-    vmaDestroyImage(_vmaAllocator, light._shadowImage._image, light._shadowImage._allocation);
-    vkDestroySampler(_device, light._sampler, nullptr);
-    light._shadowImageViews.clear();
-  }*/
 
   vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
   vkDestroyDescriptorPool(_device, _imguiDescriptorPool, nullptr);
@@ -485,9 +476,7 @@ void printAssetUpdateInfo(
   std::size_t textureBytes,
   std::size_t numModels,
   std::size_t numMeshes,
-  std::size_t numSkeles,
   std::size_t numAnimations,
-  std::size_t numAnimators,
   std::size_t numRendsAdd,
   std::size_t numRendsUpd, 
   std::size_t numRendsDel)
@@ -508,14 +497,8 @@ void printAssetUpdateInfo(
   if (numMeshes > 0) {
     printf("\tNum meshes: %zu\n", numMeshes);
   }
-  if (numSkeles > 0) {
-    printf("\tNum skeles: %zu\n", numSkeles);
-  }
   if (numAnimations > 0) {
     printf("\tNum animations: %zu\n", numAnimations);
-  }
-  if (numAnimators > 0) {
-    printf("\tNum animators: %zu\n", numAnimators);
   }
   if (numRendsAdd > 0) {
     printf("\tNum rends added: %zu\n", numRendsAdd);
@@ -801,6 +784,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
 
   }
 
+#if 0
   // Removed animations
   for (auto remAnim : update._removedAnimations) {
     // TODO: What if a renderable references this animation?
@@ -866,7 +850,8 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   // Added animators
   for (auto& animator : update._addedAnimators) {
     _animThread.addAnimator(std::move(animator));
-  }   
+  }
+#endif
   
 #if 0
   // Removed renderables. This forces the id map to update aswell (potentially expensive)
@@ -1170,9 +1155,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     textureBytes,
     update._addedModels.size(),
     numMeshes,
-    update._addedSkeletons.size(),
     update._addedAnimations.size(),
-    update._addedAnimators.size(),
     update._addedRenderables.size(),
     update._updatedRenderables.size(),
     update._removedRenderables.size());
@@ -1541,6 +1524,7 @@ void VulkanRenderer::update(
   }
 
   updateNodes();
+  updateSkeletons();
 }
 
 AccelerationStructure VulkanRenderer::registerBottomLevelAS(
@@ -2411,13 +2395,15 @@ void VulkanRenderer::updateNodes()
           internalRend._id = internalId;
           internalRend._renderable = rend;
           internalRend._globalTransform = transComp._globalTransform;
+          internalRend._invGlobalTransform = glm::inverse(transComp._globalTransform);
 
           // Fill in meshids
           auto& model = _currentModels[_modelIdMap[rend._model]];
           internalRend._meshes = model._meshes;
 
-          if (rend._skeleton) {
-            internalRend._skeletonOffset = (uint32_t)_skeletonOffsets[rend._skeleton]._offset;
+          if (_registry->hasComponent<component::Skeleton>(internalId)) {
+            auto& skeleComp = _registry->getComponent<component::Skeleton>(internalId);
+            internalRend._skeletonOffset = getOrCreateSkeleOffset(internalId, skeleComp._jointRefs.size());
 
             // If ray tracing is enabled, we need to write individual BLAS:es for each renderable that is animated.
             if (_enableRayTracing) {
@@ -2461,6 +2447,7 @@ void VulkanRenderer::updateNodes()
 
           _currentRenderables[it->second]._renderable = rend;
           _currentRenderables[it->second]._globalTransform = transComp._globalTransform;
+          _currentRenderables[it->second]._invGlobalTransform = glm::inverse(transComp._globalTransform);
         }
       }
       else {
@@ -2670,6 +2657,30 @@ void VulkanRenderer::updateNodes()
   }
 
   _nodeObserver.clear();
+}
+
+void VulkanRenderer::updateSkeletons()
+{
+  glm::mat4 invModelMtx = glm::mat4(1.0f);
+
+  auto view = _registry->getEnttRegistry().view<component::Skeleton>();
+  for (auto entity : view) {
+    auto nodeId = _registry->reverseLookup(entity);
+    auto& skeleComp = _registry->getComponent<component::Skeleton>(nodeId);
+
+    // Write all joints into correct offset, and with correct index
+    auto skeleOffset = getOrCreateSkeleOffset(nodeId, skeleComp._jointRefs.size());
+
+    if (_renderableIdMap.find(nodeId) != _renderableIdMap.end()) {
+      invModelMtx = _currentRenderables[_renderableIdMap[nodeId]]._invGlobalTransform;
+    }
+
+    for (std::size_t i = 0; i < skeleComp._jointRefs.size(); ++i) {
+      auto& jr = skeleComp._jointRefs[i];
+      auto& transComp = _registry->getComponent<component::Transform>(jr._node);
+      (*_cachedSkeletons)[skeleOffset + i] = invModelMtx * transComp._globalTransform * jr._inverseBindMatrix;
+    }
+  }
 }
 
 bool VulkanRenderer::arePrerequisitesUploaded(internal::InternalModel& model)
@@ -2993,6 +3004,21 @@ void VulkanRenderer::computePerFrameQueries()
   }
 }
 
+uint32_t VulkanRenderer::getOrCreateSkeleOffset(util::Uuid& node, std::size_t numMatrices)
+{
+  if (_skeletonOffsets.find(node) == _skeletonOffsets.end()) {
+    auto handle = _skeletonMemIf.addData(numMatrices);
+    if (!handle) {
+      printf("Cannot add skeleton with id %s, can't fit into mem interface!\n", node.str().c_str());
+      return 0;
+    }
+
+    _skeletonOffsets[node] = std::move(handle);
+  }
+
+  return (uint32_t)_skeletonOffsets[node]._offset;
+}
+
 void VulkanRenderer::registerPerFrameTimer(const std::string& name, const std::string& group)
 {
   PerFrameTimer timer{ name, group };
@@ -3123,7 +3149,7 @@ bool VulkanRenderer::createDescriptorPool()
     { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
     { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
     { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 },
-    { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1000 }
+    { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 10000 }
   };
 
   VkDescriptorPoolCreateInfo poolInfo{};
@@ -3518,24 +3544,27 @@ bool VulkanRenderer::prefillGPUMeshBuffer(VkCommandBuffer& commandBuffer)
   return true;
 }
 
-void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, std::vector<anim::Skeleton> skeletons)
+void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer)
 {
-  if (skeletons.empty()) return;
+  // TODO: How do we deal with knowing exactly what to update?
+  //if (skeletons.empty()) return;
 
   auto& sb = getStagingBuffer();
 
-  std::size_t dataSize = 0;
+  std::size_t dataSize = MAX_NUM_JOINTS * MAX_NUM_SKINNED_MODELS * sizeof(glm::mat4);
+  /*std::size_t dataSize = 0;
   for (auto& skel : skeletons) {
     dataSize += skel._joints.size() * sizeof(float) * 16; // one mat4 per joint
-  }
+  }*/
 
   uint8_t* data;
   vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
   // Offset according to current staging buffer usage
   data = data + sb._currentOffset;
+  std::memcpy(data, _cachedSkeletons->data(), dataSize);
 
-  glm::mat4* mappedData = reinterpret_cast<glm::mat4*>(data);
+  /*glm::mat4* mappedData = reinterpret_cast<glm::mat4*>(data);
 
   for (std::size_t i = 0; i < skeletons.size(); ++i) {
     std::size_t j = 0;
@@ -3550,7 +3579,7 @@ void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer, st
       mappedData[indexOffset + currentLocalIndex] = skeletons[i]._joints[j]._globalTransform * skeletons[i]._joints[j]._inverseBindMatrix;
       currentLocalIndex++;
     }
-  }
+  }*/
 
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
@@ -4470,7 +4499,7 @@ bool VulkanRenderer::initGpuBuffers()
 
     bufferutil::createBuffer(
       _vmaAllocator,
-      sizeof(uint32_t) * MAX_NUM_MESHES,
+      sizeof(uint32_t) * MAX_NUM_MESHES * 2,
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuModelBuffer[i]);
@@ -4846,7 +4875,7 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
   }
 
   // Skeletons, get copies from animation thread. No-op if the list is empty
-  prefillGPUSkeletonBuffer(commandBuffer, _animThread.getCurrentSkeletons());
+  prefillGPUSkeletonBuffer(commandBuffer);
 
   // Uploads
   {
@@ -5030,7 +5059,9 @@ void VulkanRenderer::setRegistry(component::Registry* registry)
     .update<component::Renderable>()
     .where<component::PageStatus>()
     .update<component::Transform>()
-    .where<component::PageStatus>());
+    .where<component::PageStatus, component::Renderable>()
+    .update<component::Transform>()
+    .where<component::PageStatus, component::Light>());
 }
 
 glm::vec3 VulkanRenderer::stopBake(BakeTextureCallback callback)

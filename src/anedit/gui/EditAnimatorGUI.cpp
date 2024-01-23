@@ -17,155 +17,66 @@ EditAnimatorGUI::~EditAnimatorGUI()
 void EditAnimatorGUI::immediateDraw(logic::AneditContext* c)
 {
   auto id = c->getFirstSelection();
+  if (!id || (c->selectionType() != logic::AneditContext::SelectionType::Node)) {
+    return;
+  }
 
-  std::string name;
-  util::Uuid skele;
-  util::Uuid anim;
-  render::asset::Animator::State state;
-  float playbackMultiplier = 1.0f;
+  auto& animatorComp = c->scene().registry().getComponent<component::Animator>(id);
+
+  std::vector<std::string> animations;
+  std::string currentAnimationStr = c->scene().getAnimation(animatorComp._currentAnimation)->_name;
+  component::Animator::State state = animatorComp._state;
+  std::size_t selectedAnimIdx = 0;
+  for (std::size_t i = 0; i < animatorComp._animations.size(); ++i) {
+    auto& anim = animatorComp._animations[i];
+    animations.emplace_back(c->scene().getAnimation(anim)->_name);
+    if (anim == animatorComp._currentAnimation) {
+      selectedAnimIdx = i;
+    }
+  }
+
+  
 
   bool changed = false;
-
-  if (!id) {
-    ImGui::BeginDisabled();
-  }
-  else {
-    auto* animator = c->scene().getAnimator(id);
-
-    name = animator->_name;
-    skele = animator->_skeleId;
-    anim = animator->_animId;
-    state = animator->_state;
-    playbackMultiplier = animator->_playbackMultiplier;
-  }
-
-  ImGui::Text("Name");
-  char nameBuf[40];
-  strcpy_s(nameBuf, name.c_str());
-  if (ImGui::InputText("##name", nameBuf, 40)) {
-    changed = true;
-  }
-  name = std::string(nameBuf);
-
-  ImGui::Separator();
+  
   if (ImGui::Button("Play")) {
-    state = render::asset::Animator::State::Playing;
+    state = component::Animator::State::Playing;
     changed = true;
   }
+
   ImGui::SameLine();
   if (ImGui::Button("Pause")) {
-    state = render::asset::Animator::State::Paused;
+    state = component::Animator::State::Paused;
     changed = true;
   }
+
   ImGui::SameLine();
   if (ImGui::Button("Stop")) {
-    state = render::asset::Animator::State::Stopped;
+    state = component::Animator::State::Stopped;
+    changed = true;
+  }
+
+  if (ImGui::SliderFloat("Playback speed", &animatorComp._playbackMultiplier, 0.0f, 10.0f)) {
     changed = true;
   }
 
   ImGui::Separator();
-  ImGui::Text("Playback speed");
-  if (ImGui::SliderFloat("##playbackspeed", &playbackMultiplier, 0.0f, 2.0f)) {
-    changed = true;
-  }
+  ImGui::Text("Selected animation: %s", currentAnimationStr.c_str());
 
-  ImGui::Separator();
-  if (ImGui::Button("Skeleton")) {
-    ImGui::OpenPopup("Choose skeleton");
+  ImGui::BeginChild("Animation list", ImVec2(0, 0), true);
+  for (std::size_t i = 0; i < animations.size(); ++i) {
+    if (ImGui::Selectable(animations[i].c_str(), selectedAnimIdx == i)) {
+      printf("Selected anim %zu (%s)\n", i, animations[i].c_str());
+      selectedAnimIdx = i;
+      changed = true;
+    }
   }
-  if (chooseSkeleton(c, skele)) {
-    changed = true;
-  }
+  ImGui::EndChild();
 
-  ImGui::SameLine();
-  if (ImGui::Button("Animation")) {
-    ImGui::OpenPopup("Choose animation");
-  }
-  if (chooseAnimation(c, anim)) {
-    changed = true;
-  }
-
-  if (!id) {
-    ImGui::EndDisabled();
-  }
-
-  if (changed && id) {
-    auto animCopy = *c->scene().getAnimator(id);
-    
-    animCopy._name = name;
-    animCopy._skeleId = skele;
-    animCopy._animId = anim;
-    animCopy._playbackMultiplier = playbackMultiplier;
-    animCopy._state = state;
-
-    c->scene().updateAnimator(std::move(animCopy));
+  if (changed) {
+    animatorComp._state = state;
+    animatorComp._currentAnimation = animatorComp._animations[selectedAnimIdx];
+    c->scene().registry().patchComponent<component::Animator>(id);
   }
 }
-
-bool EditAnimatorGUI::chooseSkeleton(logic::AneditContext* c, util::Uuid& uuidOut)
-{
-  bool ret = false;
-
-  if (ImGui::BeginPopupModal("Choose skeleton")) {
-
-    // List all current skeletons
-    const auto& skeletons = c->scene().getSkeletons();
-    for (const auto& s : skeletons) {
-      std::string label = std::string("Skeleton ") + (s._name.empty() ? s._id.str() : s._name);
-      label += "##" + s._id.str();
-      if (ImGui::Selectable(label.c_str(), s._id == _selectedSkeleton, ImGuiSelectableFlags_DontClosePopups)) {
-        _selectedSkeleton = s._id;
-      }
-    }
-
-    if (ImGui::Button("OK")) {
-      uuidOut = _selectedSkeleton;
-      ret = true;
-      ImGui::CloseCurrentPopup();
-    }
-
-    if (ImGui::Button("Cancel")) {
-      ret = false;
-      ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
-  }
-
-  return ret;
-}
-
-bool EditAnimatorGUI::chooseAnimation(logic::AneditContext* c, util::Uuid& uuidOut)
-{
-  bool ret = false;
-
-  if (ImGui::BeginPopupModal("Choose animation")) {
-
-    // List all current anims
-    const auto& animations = c->scene().getAnimations();
-    for (const auto& s : animations) {
-      std::string label = std::string("Animation ") + (s._name.empty() ? s._id.str() : s._name);
-      label += "##" + s._id.str();
-      if (ImGui::Selectable(label.c_str(), s._id == _selectedAnimation, ImGuiSelectableFlags_DontClosePopups)) {
-        _selectedAnimation = s._id;
-      }
-    }
-
-    if (ImGui::Button("OK")) {
-      ret = true;
-      uuidOut = _selectedAnimation;
-      ImGui::CloseCurrentPopup();
-    }
-
-    if (ImGui::Button("Cancel")) {
-      ret = false;
-      ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
-  }
-
-  return ret;
-}
-
 }

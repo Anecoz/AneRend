@@ -38,7 +38,7 @@ struct AneditContext
   {
     Material,
     Prefab,
-    Animator,
+    //Animator,
     Node,
     Cinematic
   };

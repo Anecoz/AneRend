@@ -35,8 +35,8 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
   char model[100];
   model[0] = '\0';
 
-  char skeleton[100];
-  skeleton[0] = '\0';
+  /*char skeleton[100];
+  skeleton[0] = '\0';*/
 
   std::vector<util::Uuid> materials;
 
@@ -55,10 +55,10 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       materials = rendComp._materials;
 
       auto modelName = c->scene().getModel(rendComp._model)->_name;
-      auto skeletonName = rendComp._skeleton ? c->scene().getSkeleton(rendComp._skeleton)->_name : "(None)";
+      //auto skeletonName = rendComp._skeleton ? c->scene().getSkeleton(rendComp._skeleton)->_name : "(None)";
 
       strcpy_s(model, modelName.c_str());
-      strcpy_s(skeleton, skeletonName.c_str());
+      //strcpy_s(skeleton, skeletonName.c_str());
     }
 
     // Name
@@ -74,9 +74,9 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     ImGui::Text(model);
 
     // Skeleton name
-    ImGui::Separator();
+    /*ImGui::Separator();
     ImGui::Text("Skeleton");
-    ImGui::Text(skeleton);
+    ImGui::Text(skeleton);*/
 
     // Materials (potentially many, so put in a collapsible header)
     ImGui::Separator();

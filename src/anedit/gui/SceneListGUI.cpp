@@ -18,7 +18,6 @@ SceneListGUI::~SceneListGUI()
 void SceneListGUI::immediateDraw(logic::AneditContext* c)
 {
   // Draw list of current nodes
-  const auto& animators = c->scene().getAnimators();
   const auto& cinematics = c->scene().getCinematics();
   const auto& nodes = c->scene().getNodes();
 
@@ -33,9 +32,6 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
       }
       if (ImGui::MenuItem("Add cinematic...")) {
         addCinematicClicked(c);
-      }
-      if (ImGui::MenuItem("Add animator...")) {
-        addAnimatorClicked(c);
       }
       if (ImGui::MenuItem("Add light...")) {
         addLightClicked(c);
@@ -76,6 +72,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
 
   ImGui::Separator();
 
+#if 0
   // animators
   {
     ImGui::Text("Animators");
@@ -94,6 +91,7 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
   }
 
   ImGui::Separator();
+#endif
 
   // cinematics
   {
@@ -201,15 +199,6 @@ void SceneListGUI::loadSceneClicked(logic::AneditContext* c)
   else {
     printf("Could not load scene!\n");
   }
-}
-
-void SceneListGUI::addAnimatorClicked(logic::AneditContext* c)
-{
-  // Just add a default animator with no skele and anim
-  render::asset::Animator animator{};
-  animator._name = "New animator";
-  animator._state = render::asset::Animator::State::Stopped;
-  c->scene().addAnimator(std::move(animator));
 }
 
 void SceneListGUI::addLightClicked(logic::AneditContext* c)
