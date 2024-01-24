@@ -103,9 +103,10 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
       std::string label = std::string("Cinematic ") + (a._name.empty() ? a._id.str() : a._name);
       label += "##" + a._id.str();
       if (ImGui::Selectable(label.c_str(), c->getFirstSelection() == a._id)) {
-        c->selection().clear();
+        /*c->selection().clear();
         c->selection().emplace_back(a._id);
-        c->selectionType() = logic::AneditContext::SelectionType::Cinematic;
+        c->selectionType() = logic::AneditContext::SelectionType::Cinematic;*/
+        c->getLastCinematicSelection() = a._id;
       }
     }
   }

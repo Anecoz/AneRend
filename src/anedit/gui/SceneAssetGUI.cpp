@@ -115,7 +115,7 @@ SceneAssetGUI::~SceneAssetGUI()
 
 void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
 {
-  const int numPanels = 5;
+  const int numPanels = 4;
 
   ImGui::Begin("Assets", NULL, ImGuiWindowFlags_MenuBar);
   ImVec2 size = ImVec2(ImGui::GetWindowWidth() / numPanels, 0);

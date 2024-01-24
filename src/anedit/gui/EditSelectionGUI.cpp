@@ -1,6 +1,5 @@
 #include "EditSelectionGUI.h"
 
-//#include "EditAnimatorGUI.h"
 #include "EditNodeGUI.h"
 #include "EditMaterialGUI.h"
 #include "EditPrefabGUI.h"
@@ -14,11 +13,12 @@ EditSelectionGUI::EditSelectionGUI()
   : IGUI()
 {
   // Fill gui map, will choose correct GUI to render depending on selection type
-  //_specificGuis[logic::AneditContext::SelectionType::Animator] = new EditAnimatorGUI();
   _specificGuis[logic::AneditContext::SelectionType::Node] = new EditNodeGUI();
   _specificGuis[logic::AneditContext::SelectionType::Material] = new EditMaterialGUI();
   _specificGuis[logic::AneditContext::SelectionType::Prefab] = new EditPrefabGUI();
-  _specificGuis[logic::AneditContext::SelectionType::Cinematic] = new EditCinematicGUI();
+  //_specificGuis[logic::AneditContext::SelectionType::Cinematic] = new EditCinematicGUI();
+
+  _cinematicGUI = new EditCinematicGUI();
 }
 
 EditSelectionGUI::~EditSelectionGUI()
@@ -26,13 +26,20 @@ EditSelectionGUI::~EditSelectionGUI()
   for (auto& item : _specificGuis) {
     delete item.second;
   }
+
+  delete _cinematicGUI;
 }
 
 void EditSelectionGUI::immediateDraw(logic::AneditContext* c)
 {
   ImGui::Begin("Edit selection");
-  _specificGuis[c->selectionType()]->immediateDraw(c);
+  if (c->selectionType() != logic::AneditContext::SelectionType::Cinematic) {
+    _specificGuis[c->selectionType()]->immediateDraw(c);
+  }
   ImGui::End();
+
+  // Always draw cinematic gui
+  _cinematicGUI->immediateDraw(c);
 }
 
 }

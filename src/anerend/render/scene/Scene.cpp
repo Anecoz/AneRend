@@ -179,9 +179,9 @@ void Scene::update()
   }
   else {
     // Try to parallelise the transform update.
-  // We start by finding all roots of touched transforms, this is an expensive operation
-  // but we have to do it in order to have independent updates for each root tree to run 
-  // across multiple threads.
+    // We start by finding all roots of touched transforms, this is an expensive operation
+    // but we have to do it in order to have independent updates for each root tree to run 
+    // across multiple threads.
     std::vector<util::Uuid> rootsToUpdate;
     for (const auto entity : _transformObserver) {
       auto id = _registry.reverseLookup(entity);
@@ -592,6 +592,31 @@ std::vector<util::Uuid> Scene::getNodeChildren(util::Uuid& node)
   }
 
   return {};
+}
+
+component::PotentialComponents Scene::nodeToPotComps(util::Uuid& node)
+{
+  auto& n = _nodeVec[_nodes[node]];
+
+  component::PotentialComponents out;
+
+  // Always transform
+  out._trans = _registry.getComponent<component::Transform>(node);
+
+  if (_registry.hasComponent<component::Renderable>(node)) {
+    out._rend = _registry.getComponent<component::Renderable>(node);
+  }
+  if (_registry.hasComponent<component::Light>(node)) {
+    out._light = _registry.getComponent<component::Light>(node);
+  }
+  if (_registry.hasComponent<component::Skeleton>(node)) {
+    out._skeleton = _registry.getComponent<component::Skeleton>(node);
+  }
+  if (_registry.hasComponent<component::Animator>(node)) {
+    out._animator = _registry.getComponent<component::Animator>(node);
+  }
+
+  return out;
 }
 
 void Scene::setDDGIAtlas(util::Uuid texId, scene::TileIndex idx)

@@ -10,7 +10,7 @@
 
 namespace util::interp {
 
-enum class Easing
+enum class Easing : std::uint8_t
 {
   Linear,
   InOutSine,
@@ -21,6 +21,30 @@ enum class Easing
   OutBounce,
   InOutBounce
 };
+
+static std::string easingToStr(Easing easing)
+{
+  switch (easing) {
+  case Easing::InCubic:
+    return "In cubic";
+  case Easing::InOutBounce:
+    return "In Out bounce";
+  case Easing::InOutCubic:
+    return "In Out cubic";
+  case Easing::InOutElastic:
+    return "In Out elastic";
+  case Easing::InOutSine:
+    return "In Out sine";
+  case Easing::Linear:
+    return "Linear";
+  case Easing::OutBounce:
+    return "Out bounce";
+  case Easing::OutCubic:
+    return "Out cubic";
+  }
+
+  return "";
+}
 
 // Easing functions from here: https://easings.net/
 static double easeInOutSine(double x)
@@ -81,6 +105,30 @@ static double easeInOutBounce(double x)
     : (1 + easeOutBounce(2 * x - 1)) / 2;
 }
 
+static double ease(double x, Easing easing)
+{
+  switch (easing) {
+  case Easing::InCubic:
+    return easeInCubic(x);
+  case Easing::InOutBounce:
+    return easeInOutBounce(x);
+  case Easing::InOutCubic:
+    return easeInOutCubic(x);
+  case Easing::InOutElastic:
+    return easeInOutElastic(x);
+  case Easing::InOutSine:
+    return easeInOutSine(x);
+  case Easing::Linear:
+    return x;
+  case Easing::OutBounce:
+    return easeOutBounce(x);
+  case Easing::OutCubic:
+    return easeOutCubic(x);
+  }
+
+  return x;
+}
+
 static glm::mat4 lerpTransforms(const glm::mat4& m0, const glm::mat4& m1, double factor, Easing easing = Easing::Linear)
 {
   glm::mat4 out{ 1.0f };
@@ -100,19 +148,12 @@ static glm::mat4 lerpTransforms(const glm::mat4& m0, const glm::mat4& m1, double
   glm::quat q_out{ 1.0f, 0.0f, 0.0f, 0.0f };
   glm::vec3 t_out{ 0.0f };
 
-  double easedFactor = factor;
-  if (easing == Easing::InOutSine) {
-    easedFactor = easeInOutSine(factor);
-  }
+  double easedFactor = ease(factor, easing);
 
   q_out = glm::slerp(q0, q1, (float)easedFactor);
 
-  // Always lerp up-axis linearly (?)
-  float y = (1.0f - (float)factor) * t0.y + (float)factor * t1.y;
-
   s_out = (1.0f - (float)easedFactor) * s0 + (float)easedFactor * s1;
   t_out = (1.0f - (float)easedFactor) * t0 + (float)easedFactor * t1;
-  t_out.y = y;
 
   glm::mat4 rotMat = glm::toMat4(q_out);
   glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), s_out);

@@ -243,8 +243,8 @@ void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData
     // Only instantiate if no parent
     if (!prefab._parent) {
       glm::mat4 mtx(1.0f);
-      for (std::size_t x = 0; x < 20; ++x) {
-        for (std::size_t y = 0; y < 20; ++y) {
+      for (std::size_t x = 0; x < 1; ++x) {
+        for (std::size_t y = 0; y < 1; ++y) {
           mtx = glm::translate(glm::mat4(1.0f), glm::vec3((float)(x + 1), 0.0f, (float)(y + 1)));
           std::unordered_map<util::Uuid, util::Uuid> prefabNodeMap;
           instantiate(prefab, mtx, prefabNodeMap);

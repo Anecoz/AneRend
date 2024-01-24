@@ -150,6 +150,7 @@ public:
   void setNodeAsChild(util::Uuid& node, util::Uuid& child); // This _changes_ parent/children, so previous parent is ok
   void removeNodeChild(util::Uuid& node, util::Uuid& child);
   std::vector<util::Uuid> getNodeChildren(util::Uuid& node);
+  component::PotentialComponents nodeToPotComps(util::Uuid& node);
 
   void setDDGIAtlas(util::Uuid texId, scene::TileIndex idx);
 

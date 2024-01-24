@@ -348,6 +348,8 @@ void serialize(S& s, std::vector<render::scene::Scene::TileInfo>& t)
 template <typename S>
 void serialize(S& s, render::asset::CameraKeyframe& t)
 {
+  s.value1b(t._easing);
+  s.value4b(t._time);
   s.object(t._pos);
   s.object(t._orientation);
   s.object(t._ypr);
@@ -356,13 +358,22 @@ void serialize(S& s, render::asset::CameraKeyframe& t)
 template <typename S>
 void serialize(S& s, render::asset::NodeKeyframe& t)
 {
+  s.value1b(t._easing);
+  s.value4b(t._time);
   s.object(t._id);
   s.object(t._comps);
 }
 
 template <typename S>
+void serialize(S& s, std::vector<render::asset::NodeKeyframe>& t)
+{
+  s.container(t, 500);
+}
+
+template <typename S>
 void serialize(S& s, render::asset::MaterialKeyframe& t)
 {
+  s.value4b(t._time);
   s.object(t._id);
   s.object(t._emissive);
   s.object(t._baseColFactor);
@@ -371,11 +382,12 @@ void serialize(S& s, render::asset::MaterialKeyframe& t)
 template <typename S>
 void serialize(S& s, render::asset::AnimatorKeyframe& t)
 {
+  s.value4b(t._time);
   s.object(t._id);
   s.object(t._animator);
 }
 
-template <typename S>
+/*template <typename S>
 void serialize(S& s, render::asset::Cinematic::Keyframe& t)
 {
   s.value4b(t._time);
@@ -383,14 +395,17 @@ void serialize(S& s, render::asset::Cinematic::Keyframe& t)
   s.container(t._materialKFs, 100);
   s.container(t._animatorKFs, 100);
   s.ext(t._camKF, bitsery::ext::StdOptional{});
-}
+}*/
 
 template <typename S>
 void serialize(S& s, render::asset::Cinematic& t)
 {
   s.object(t._id);
   s.text1b(t._name, 100);
-  s.container(t._keyframes, 100);
+  s.value4b(t._maxTime);
+  s.container(t._camKeyframes, 100);
+  s.container(t._nodeKeyframes, 100);
+  s.container(t._materialKeyframes, 100);
 }
 
 template <typename S>
@@ -444,7 +459,6 @@ public:
     for (std::size_t i = 0; i < _indices.size() - 1; ++i) {
       auto index = _indices[i];
       index += headerSize;
-      printf("Writing index %u\n", index);
       file.write(reinterpret_cast<const char*>(&index), sizeof(index));
     }
 

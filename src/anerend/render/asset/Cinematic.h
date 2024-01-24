@@ -17,6 +17,7 @@ namespace render::asset {
 struct CameraKeyframe
 {
   util::interp::Easing _easing = util::interp::Easing::InOutCubic;
+  float _time;
   glm::vec3 _pos;
   glm::quat _orientation;
   glm::vec3 _ypr;
@@ -27,6 +28,7 @@ struct CameraKeyframe
 struct NodeKeyframe
 {
   util::interp::Easing _easing = util::interp::Easing::InOutCubic;
+  float _time;
   util::Uuid _id;
   component::PotentialComponents _comps;
 };
@@ -35,6 +37,7 @@ struct NodeKeyframe
 struct MaterialKeyframe
 {
   util::Uuid _id;
+  float _time;
 
   glm::vec4 _emissive;
   glm::vec3 _baseColFactor;
@@ -44,6 +47,7 @@ struct MaterialKeyframe
 struct AnimatorKeyframe
 {
   util::Uuid _id;
+  float _time;
 
   component::Animator _animator;
 };
@@ -54,17 +58,11 @@ struct Cinematic
 
   std::string _name;
 
-  struct Keyframe
-  {
-    float _time;
+  std::vector<CameraKeyframe> _camKeyframes;
+  std::vector<std::vector<NodeKeyframe>> _nodeKeyframes;
+  std::vector<MaterialKeyframe> _materialKeyframes;
 
-    std::optional<CameraKeyframe> _camKF;
-    std::vector<NodeKeyframe> _nodeKFs;
-    std::vector<MaterialKeyframe> _materialKFs;
-    std::vector<AnimatorKeyframe> _animatorKFs;
-  };
-
-  std::vector<Keyframe> _keyframes;
+  float _maxTime = 0.0f;
 };
 
 }

@@ -8,6 +8,8 @@
 
 namespace gui {
 
+class EditCinematicGUI;
+
 class EditSelectionGUI : public IGUI
 {
 public:
@@ -18,6 +20,7 @@ public:
 
 private:
   std::unordered_map<logic::AneditContext::SelectionType, IGUI*> _specificGuis;
+  EditCinematicGUI* _cinematicGUI; // special case
 };
 
 }

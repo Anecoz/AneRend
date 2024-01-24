@@ -2375,6 +2375,14 @@ void VulkanRenderer::updateNodes()
       renderablesChanged = true;
       // Added renderables
       if (paged) {
+        // Check that we're not currently adding this renderable
+        auto it = std::find_if(_pendingFirstUploadRenderables.begin(), _pendingFirstUploadRenderables.end(),
+          [internalId](internal::InternalRenderable& a) {return a._id == internalId; });
+
+        if (it != _pendingFirstUploadRenderables.end()) {
+          continue;
+        }
+
         if (_renderableIdMap.find(internalId) == _renderableIdMap.end()) {
           if (!internalId) {
             printf("Asset update fail: cannot add renderable with invalid id\n");

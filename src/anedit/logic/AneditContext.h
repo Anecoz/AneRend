@@ -44,6 +44,7 @@ struct AneditContext
   };
 
   virtual std::vector<util::Uuid>& selection() = 0;
+  virtual util::Uuid& getLastCinematicSelection() { return _lastCinematicSelection; }
   virtual util::Uuid getFirstSelection() {
     if (_selection.empty()) {
       return util::Uuid();
@@ -57,6 +58,7 @@ struct AneditContext
 
 protected:
   std::vector<util::Uuid> _selection;
+  util::Uuid _lastCinematicSelection;
   SelectionType _selectionType = SelectionType::Node;
 };
 
