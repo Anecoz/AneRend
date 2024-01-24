@@ -5,10 +5,12 @@ namespace render::internal
 
 BufferMemoryInterface::BufferMemoryInterface()
   : _size(0)
+  , _firstFreeOffset(0)
 {}
 
 BufferMemoryInterface::BufferMemoryInterface(std::size_t size)
   : _size(size)
+  , _firstFreeOffset(0)
 {
   // Create initial free block that spans entire size
   FreeBlock initialFreeBlock{ 0, size };
@@ -47,6 +49,7 @@ BufferMemoryInterface::Handle BufferMemoryInterface::addData(std::size_t dataSiz
       }
 
       //printf("Adding data at offset %zu and size %zu\n", handle._offset, handle._size);
+      recalculateFirstFreeOffset();
       return handle;
     }
   }
@@ -60,6 +63,17 @@ void BufferMemoryInterface::removeData(BufferMemoryInterface::Handle handle)
   FreeBlock freeBlock{ handle._offset, handle._size };
   //printf("Removing data at offset %zu and size %zu\n", handle._offset, handle._size);
   _freeBlocks.emplace_back(std::move(freeBlock));
+
+  recalculateFirstFreeOffset();
+}
+
+void BufferMemoryInterface::recalculateFirstFreeOffset()
+{
+  for (auto& fb : _freeBlocks) {
+    if (fb._offset > _firstFreeOffset) {
+      _firstFreeOffset = fb._offset;
+    }
+  }
 }
 
 }

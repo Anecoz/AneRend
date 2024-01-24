@@ -3551,11 +3551,11 @@ void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer)
 
   auto& sb = getStagingBuffer();
 
-  std::size_t dataSize = MAX_NUM_JOINTS * MAX_NUM_SKINNED_MODELS * sizeof(glm::mat4);
-  /*std::size_t dataSize = 0;
-  for (auto& skel : skeletons) {
-    dataSize += skel._joints.size() * sizeof(float) * 16; // one mat4 per joint
-  }*/
+  std::size_t dataSize = _skeletonMemIf.usedSpace() * sizeof(glm::mat4);// MAX_NUM_JOINTS* MAX_NUM_SKINNED_MODELS * sizeof(glm::mat4);
+
+  if (dataSize == 0) {
+    return;
+  }
 
   uint8_t* data;
   vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
@@ -3563,23 +3563,6 @@ void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer)
   // Offset according to current staging buffer usage
   data = data + sb._currentOffset;
   std::memcpy(data, _cachedSkeletons->data(), dataSize);
-
-  /*glm::mat4* mappedData = reinterpret_cast<glm::mat4*>(data);
-
-  for (std::size_t i = 0; i < skeletons.size(); ++i) {
-    std::size_t j = 0;
-
-    if (skeletons[i]._nonJointRoot) {
-      j = 1;
-    }
-
-    std::size_t currentLocalIndex = 0;
-    std::size_t indexOffset = _skeletonOffsets[skeletons[i]._id]._offset;
-    for (; j < skeletons[i]._joints.size(); ++j) {
-      mappedData[indexOffset + currentLocalIndex] = skeletons[i]._joints[j]._globalTransform * skeletons[i]._joints[j]._inverseBindMatrix;
-      currentLocalIndex++;
-    }
-  }*/
 
   VkBufferCopy copyRegion{};
   copyRegion.dstOffset = 0;
@@ -3595,7 +3578,7 @@ void VulkanRenderer::prefillGPUSkeletonBuffer(VkCommandBuffer& commandBuffer)
   memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   memBarr.buffer = _gpuSkeletonBuffer[_currentFrame]._buffer;
   memBarr.offset = 0;
-  memBarr.size = VK_WHOLE_SIZE;
+  memBarr.size = dataSize;
 
   vkCmdPipelineBarrier(
     commandBuffer,

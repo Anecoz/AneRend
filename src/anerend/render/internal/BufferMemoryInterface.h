@@ -34,7 +34,11 @@ public:
   Handle addData(std::size_t dataSize);
   void removeData(Handle handle);
 
+  // This is the total size supplied to this interface.
   std::size_t size() const { return _size; }
+
+  // This is how much space is currently used, i.e. the "highest" 
+  std::size_t usedSpace() const { return _firstFreeOffset; }
 
 private:
   struct FreeBlock
@@ -43,8 +47,11 @@ private:
     std::size_t _size;
   };
 
+  void recalculateFirstFreeOffset();
+
   std::vector<FreeBlock> _freeBlocks;
   std::size_t _size;
+  std::size_t _firstFreeOffset; // Used to be able to answer how much space has been used.
 };
 
 }
