@@ -36,10 +36,13 @@ std::tuple<const T*, const T*, double> findClosestKfs(const std::vector<T>& vec,
       break;
     }
   }
-
+  
   if (!found) {
+    // If we couldn't find a keyframe past the time, just snap it to the last one.
     kf0 = &vec[sz - 2];
     kf1 = &vec.back();
+
+    return { kf0, kf1, 1.0 };
   }
 
   double factor = (time - kf0->_time) / (kf1->_time - kf0->_time);
@@ -65,12 +68,50 @@ render::asset::NodeKeyframe lerp(const render::asset::NodeKeyframe& kf0, const r
 {
   render::asset::NodeKeyframe out;
 
-  // Transform comp for now
+  // Always transform
   out._comps._trans._localTransform = util::interp::lerpTransforms(
     kf0._comps._trans._localTransform,
     kf1._comps._trans._localTransform,
     factor,
     kf0._easing);
+
+  if (kf0._comps._light) {
+    // Lerp color for now
+    double easingFactor = util::interp::ease(factor, kf0._easing);
+    auto& light0 = kf0._comps._light.value();
+    auto& light1 = kf1._comps._light.value();
+
+    component::Light lightOut;
+    lightOut._color = (1.0f - float(easingFactor)) * light0._color+ (float)easingFactor * light1._color;
+
+    out._comps._light = std::move(lightOut);
+  }
+  // Animator
+  if (kf0._comps._animator) {
+    double easingFactor = util::interp::ease(factor, kf0._easing);
+
+    // Just snap this to whatever kf0 says
+    out._comps._animator = kf0._comps._animator;
+
+    // But do blend playback multiplier
+    out._comps._animator.value()._playbackMultiplier = 
+      (1.0f - float(easingFactor)) * kf0._comps._animator.value()._playbackMultiplier + 
+      (float)easingFactor * kf1._comps._animator.value()._playbackMultiplier;
+  }
+
+  return out;
+}
+
+render::asset::MaterialKeyframe lerp(const render::asset::MaterialKeyframe& kf0, const render::asset::MaterialKeyframe& kf1, double factor)
+{
+  render::asset::MaterialKeyframe out;
+  double easingFactor = util::interp::ease(factor, kf0._easing);
+
+  // Emissive
+  out._emissive = (1.0f - float(easingFactor)) * kf0._emissive + (float)easingFactor * kf1._emissive;
+
+  // Base col
+  out._baseColFactor = (1.0f - float(easingFactor)) * kf0._baseColFactor + (float)easingFactor * kf1._baseColFactor;
 
   return out;
 }
@@ -113,21 +154,12 @@ void CinematicPlayer::update(double delta)
     return;
   }
 
-#if 0
-  if (_cinematic->_keyframes.size() <= 1) {
-    printf("Only one keyframe in cinematic, won't play\n");
-    _finished = true;
-    return;
-  }
-#endif
-
   // Go through keyframes and find closest one to current time
   {
     // Camera
     auto [kf0, kf1, factor] = findClosestKfs<asset::CameraKeyframe>(_cinematic->_camKeyframes, _currentTime);
 
     if (!kf0 || !kf1) {
-      printf("No kf for cinematic found!\n");
       return;
     }
 
@@ -147,7 +179,6 @@ void CinematicPlayer::update(double delta)
       auto [kf0, kf1, factor] = findClosestKfs<asset::NodeKeyframe>(v, _currentTime);
 
       if (!kf0 || !kf1) {
-        printf("No kf for cinematic found!\n");
         return;
       }
 
@@ -156,11 +187,44 @@ void CinematicPlayer::update(double delta)
 
         auto* node = _scene->getNode(kf0->_id);
 
-        // Only transform for now
+        // Always transform component
         auto& transComp = _scene->registry().getComponent<component::Transform>(kf0->_id);
         transComp._localTransform = lerped._comps._trans._localTransform;
         _scene->registry().patchComponent<component::Transform>(kf0->_id);
+
+        if (_scene->registry().hasComponent<component::Light>(kf0->_id)) {
+          auto& lightComp = _scene->registry().getComponent<component::Light>(kf0->_id);
+          lightComp = lerped._comps._light.value();
+          _scene->registry().patchComponent<component::Light>(kf0->_id);
+        }
+        if (_scene->registry().hasComponent<component::Animator>(kf0->_id)) {
+          auto& animatorComp = _scene->registry().getComponent<component::Animator>(kf0->_id);
+          animatorComp = lerped._comps._animator.value();
+          _scene->registry().patchComponent<component::Animator>(kf0->_id);
+        }
       }
+    }
+
+  }
+
+  {
+    // materials
+    for (auto& v : _cinematic->_materialKeyframes) {
+      auto [kf0, kf1, factor] = findClosestKfs<asset::MaterialKeyframe>(v, _currentTime);
+
+      if (!kf0 || !kf1) {
+        return;
+      }
+
+      if (kf0 && kf1) {
+        auto lerped = lerp(*kf0, *kf1, factor);
+
+        auto matCopy = *_scene->getMaterial(kf0->_id);
+
+        matCopy._emissive = lerped._emissive;
+        matCopy._baseColFactor = lerped._baseColFactor;
+
+        _scene->updateMaterial(std::move(matCopy));}
     }
 
   }

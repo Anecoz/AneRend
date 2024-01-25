@@ -374,28 +374,17 @@ template <typename S>
 void serialize(S& s, render::asset::MaterialKeyframe& t)
 {
   s.value4b(t._time);
+  s.value1b(t._easing);
   s.object(t._id);
   s.object(t._emissive);
   s.object(t._baseColFactor);
 }
 
 template <typename S>
-void serialize(S& s, render::asset::AnimatorKeyframe& t)
+void serialize(S& s, std::vector<render::asset::MaterialKeyframe>& t)
 {
-  s.value4b(t._time);
-  s.object(t._id);
-  s.object(t._animator);
+  s.container(t, 500);
 }
-
-/*template <typename S>
-void serialize(S& s, render::asset::Cinematic::Keyframe& t)
-{
-  s.value4b(t._time);
-  s.container(t._nodeKFs, 100);
-  s.container(t._materialKFs, 100);
-  s.container(t._animatorKFs, 100);
-  s.ext(t._camKF, bitsery::ext::StdOptional{});
-}*/
 
 template <typename S>
 void serialize(S& s, render::asset::Cinematic& t)

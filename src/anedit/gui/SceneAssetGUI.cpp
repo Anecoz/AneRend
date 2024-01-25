@@ -24,6 +24,7 @@ bool drawAssetList(
   util::Uuid& selectedUuid,
   util::Uuid& draggedUuid, // not necessarily the same as selected
   bool& dragged,
+  const char* dropSourceType = "",
   std::vector<std::string> contextMenuItems = {},
   std::vector<std::function<void(util::Uuid)>> contextMenuCbs = {},
   const char* dropTargetType = "",
@@ -80,6 +81,10 @@ bool drawAssetList(
     // drag&drop
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
       ImGui::Text(label2.c_str());
+
+      if (strlen(dropSourceType) != 0) {
+        ImGui::SetDragDropPayload(dropSourceType, &i._id, sizeof(util::Uuid));
+      }
 
       dragged = true;
       draggedUuid = i._id;
@@ -138,7 +143,7 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
   bool dummy;
   util::Uuid dummyUuid;
   auto currSelection = c->getFirstSelection();
-  if (drawAssetList(size, _matFilter, "Materials", c->scene().getMaterials(), currSelection, dummyUuid, dummy)) {
+  if (drawAssetList(size, _matFilter, "Materials", c->scene().getMaterials(), currSelection, dummyUuid, dummy, "material_id")) {
     c->selection().clear();
     c->selection().emplace_back(currSelection);
     c->selectionType() = logic::AneditContext::SelectionType::Material;
@@ -176,7 +181,8 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
       c->scene().getPrefabs(), 
       currSelection, 
       _draggedPrefab,
-      draggedThisFrame, 
+      draggedThisFrame,
+      "",
       menuItems, 
       cbs,
       "node_id",

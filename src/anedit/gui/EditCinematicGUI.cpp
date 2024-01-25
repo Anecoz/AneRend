@@ -64,15 +64,26 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
   util::Uuid nodeToAdd;
   util::Uuid nodeToDelete;
 
+  int matKfToDelete = -1;
+  util::Uuid matToAdd;
+  util::Uuid matToDelete;
+
   bool addKeyFrameToSelectedTimeline = false;
 
+  if (!verifyNodesExist(cinematic, c)) {
+    // Update immediately
+    c->scene().updateCinematic(cinematic);
+  }
+
   // Fill in keys
-  // Camera key frames
   if (!_cachedId || _cachedId != id) {
     fillCamKeys(cinematic);
 
     // Node key frames
     fillNodeKeys(cinematic, c);
+
+    // Material key frames
+    fillMatKeys(cinematic, c);
 
     _cachedId = id;
   }
@@ -178,7 +189,7 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
               }
             }
 
-            std::string popupStr = "keyframe_context_menu_nodes" + std::to_string(i);
+            std::string popupStr = "keyframe_context_menu_nodes" + std::to_string(i) + id.str();
             if (ImGui::IsNeoKeyframeRightClicked()) {
               ImGui::OpenPopup(popupStr.c_str(), 1);
             }
@@ -197,6 +208,49 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
         }
       }      
 
+      // Materials
+      for (auto& [id, vec] : _cachedMatKeys) {
+        std::string label = _matNames[id];
+        if (ImGui::BeginNeoTimelineEx(label.c_str())) {
+
+          if (addKeyFrameToSelectedTimeline && ImGui::IsNeoTimelineSelected()) {
+            matToAdd = id;
+          }
+
+          for (std::size_t i = 0; i < vec.size(); ++i) {
+            auto& v = vec[i];
+            ImGui::NeoKeyframe(&v);
+            // Per keyframe code here
+            if (ImGui::IsNeoKeyframeSelected()) {
+              _selectedKFType = Material;
+              _selectedIndex = i;
+              _selectedMat = id;
+
+              if (ImGui::NeoIsDraggingSelection()) {
+                cinematic._materialKeyframes[_matIndices[id]][i]._time = translateKeyToTime(v);
+                changed = true;
+              }
+            }
+
+            std::string popupStr = "keyframe_context_menu_mats" + std::to_string(i) + id.str();
+            if (ImGui::IsNeoKeyframeRightClicked()) {
+              ImGui::OpenPopup(popupStr.c_str(), 1);
+            }
+
+            if (ImGui::BeginPopup(popupStr.c_str(), ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings)) {
+
+              if (ImGui::MenuItem("Delete")) {
+                matKfToDelete = (int)i;
+                matToDelete = id;
+              }
+
+              ImGui::EndPopup();
+            }
+          }
+          ImGui::EndNeoTimeLine();
+        }
+      }
+
       ImGui::EndNeoSequencer();
     }
   } // sequencer end
@@ -205,7 +259,7 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
 
   // Draw the list of current nodes involved
   {
-    if (ImGui::BeginChild("Node list", ImVec2(0, 60), true)) {
+    if (ImGui::BeginChild("Node list", ImVec2(0, 200), true)) {
       ImGui::Text("Node list");
       ImGui::Separator();
       for (auto& pair : _nodeNames) {
@@ -213,22 +267,50 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
 
         ImGui::Text(label.c_str());
       }
+    }
 
-      if (ImGui::BeginDragDropTarget()) {
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("node_id")) {
-          std::array<std::uint8_t, 16> arr{};
-          std::memcpy(arr.data(), payload->Data, sizeof(util::Uuid));
+    ImGui::EndChild();
 
-          if (nodeDroppedInList(util::Uuid(arr), cinematic, c)) {
-            changed = true;
-          }
+    if (ImGui::BeginDragDropTarget()) {
+      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("node_id")) {
+        std::array<std::uint8_t, 16> arr{};
+        std::memcpy(arr.data(), payload->Data, sizeof(util::Uuid));
+
+        if (nodeDroppedInList(util::Uuid(arr), cinematic, c)) {
+          changed = true;
         }
+      }
 
-        ImGui::EndDragDropTarget();
+      ImGui::EndDragDropTarget();
+    }
+  }
+
+  // Draw the list of current materials involved
+  {
+    if (ImGui::BeginChild("Material list", ImVec2(0, 200), true)) {
+      ImGui::Text("Material list");
+      ImGui::Separator();
+      for (auto& pair : _matNames) {
+        std::string label = pair.second;
+
+        ImGui::Text(label.c_str());
       }
     }
 
     ImGui::EndChild();
+
+    if (ImGui::BeginDragDropTarget()) {
+      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("material_id")) {
+        std::array<std::uint8_t, 16> arr{};
+        std::memcpy(arr.data(), payload->Data, sizeof(util::Uuid));
+
+        if (materialDroppedInList(util::Uuid(arr), cinematic, c)) {
+          changed = true;
+        }
+      }
+
+      ImGui::EndDragDropTarget();
+    }
   }
 
   // Draw specific GUI for the selected node
@@ -243,8 +325,15 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
     if (drawNodeKeyframeEditor(cinematic._nodeKeyframes[idx][_selectedIndex], c)) {
       changed = true;
 
-      //  Just redo cache?
-      fillNodeKeys(cinematic, c);
+      _cachedNodeKeys[_selectedNode][_selectedIndex] = translateTimeToKey(cinematic._nodeKeyframes[idx][_selectedIndex]._time);
+    }
+  }
+  else if (_selectedKFType == Material) {
+    auto idx = _matIndices[_selectedMat];
+    if (drawMatKeyframeEditor(cinematic._materialKeyframes[idx][_selectedIndex], c)) {
+      changed = true;
+
+      _cachedMatKeys[_selectedMat][_selectedIndex] = translateTimeToKey(cinematic._materialKeyframes[idx][_selectedIndex]._time);
     }
   }
 
@@ -258,6 +347,20 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
     changed = true;
   }
 
+  if (nodeToDelete) {
+    auto idx = _nodeIndices[nodeToDelete];
+    cinematic._nodeKeyframes[idx].erase(cinematic._nodeKeyframes[idx].begin() + nodeKfToDelete);
+    fillNodeKeys(cinematic, c);
+    changed = true;
+  }
+
+  if (matToDelete) {
+    auto idx = _nodeIndices[matToDelete];
+    cinematic._materialKeyframes[idx].erase(cinematic._materialKeyframes[idx].begin() + matKfToDelete);
+    fillMatKeys(cinematic, c);
+    changed = true;
+  }
+
   // Add new keyframes
   if (addCameraKeyframeThisFrame) {
     addCameraKeyframePressed(cinematic, c);
@@ -265,6 +368,10 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
 
   if (nodeToAdd) {
     addNodeKeyframePressed(cinematic, nodeToAdd, c);
+  }
+
+  if (matToAdd) {
+    addMaterialKeyframePressed(cinematic, matToAdd, c);
   }
 
   // Update
@@ -279,11 +386,56 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
   }
 }
 
+bool EditCinematicGUI::verifyNodesExist(render::asset::Cinematic& cinematic, logic::AneditContext* c)
+{
+  bool ret = true;
+  // Go through all node ids and check that they actually exist in the scene
+  for (auto it = cinematic._nodeKeyframes.begin(); it != cinematic._nodeKeyframes.end();) {
+    // Peek id
+    auto& id = (*it)[0]._id;
+    if (!c->scene().getNode(id)) {
+      ret = false;
+
+      // Remove from cinematic. This is quite dangerous if we get it wrong...
+      printf("WARNING! Detected a cinematic node that doesn't exist, removing it from cinematic...\n");
+      it = cinematic._nodeKeyframes.erase(it);
+    }
+    else {
+      ++it;
+    }
+  }
+
+  return ret;
+}
+
 void EditCinematicGUI::fillCamKeys(render::asset::Cinematic& cinematic)
 {
   _cachedCamKeys.clear();
   for (auto& kf : cinematic._camKeyframes) {
     _cachedCamKeys.emplace_back(translateTimeToKey(kf._time));
+  }
+
+  _forceSelectionClear = true;
+}
+
+void EditCinematicGUI::fillMatKeys(render::asset::Cinematic& cinematic, logic::AneditContext* c)
+{
+  _cachedMatKeys.clear();
+  _matNames.clear();
+  _matIndices.clear();
+
+  for (std::size_t i = 0; i < cinematic._materialKeyframes.size(); ++i) {
+    auto& v = cinematic._materialKeyframes[i];
+    // Just peek into first element of vector to get uuid
+    if (!v.empty()) {
+      auto uuid = v[0]._id;
+      _matNames[uuid] = c->scene().getMaterial(uuid)->_name;
+      _matIndices[uuid] = i;
+
+      for (auto& kf : v) {
+        _cachedMatKeys[uuid].emplace_back(translateTimeToKey(kf._time));
+      }
+    }
   }
 
   _forceSelectionClear = true;
@@ -352,7 +504,7 @@ void EditCinematicGUI::addCameraKeyframePressed(render::asset::Cinematic& cinema
   // Redo cam keys
   fillCamKeys(cinematic);
 
-  c->scene().updateCinematic(std::move(cinematic));
+  c->scene().updateCinematic(cinematic);
 }
 
 void EditCinematicGUI::addNodeKeyframePressed(render::asset::Cinematic& cinematic, util::Uuid node, logic::AneditContext* c)
@@ -382,7 +534,38 @@ void EditCinematicGUI::addNodeKeyframePressed(render::asset::Cinematic& cinemati
   // Redo cache
   fillNodeKeys(cinematic, c);
 
-  c->scene().updateCinematic(std::move(cinematic));
+  c->scene().updateCinematic(cinematic);
+}
+
+void EditCinematicGUI::addMaterialKeyframePressed(render::asset::Cinematic& cinematic, util::Uuid material, logic::AneditContext* c)
+{
+  auto* matP = c->scene().getMaterial(material);
+
+  if (!matP) {
+    return;
+  }
+
+  printf("Adding material keyframe at time %f\n", _time);
+
+  render::asset::MaterialKeyframe kf{};
+  kf._time = _time;
+  kf._id = material;
+  kf._emissive = matP->_emissive;
+  kf._baseColFactor = matP->_baseColFactor;
+
+  auto idx = _matIndices[material];
+  cinematic._materialKeyframes[idx].emplace_back(std::move(kf));
+
+  // Force sort
+  std::sort(cinematic._materialKeyframes[idx].begin(), cinematic._materialKeyframes[idx].end(),
+    [](render::asset::MaterialKeyframe& a, render::asset::MaterialKeyframe& b) {
+      return a._time < b._time;
+    });
+
+  // Redo cache
+  fillMatKeys(cinematic, c);
+
+  c->scene().updateCinematic(cinematic);
 }
 
 bool EditCinematicGUI::nodeDroppedInList(util::Uuid node, render::asset::Cinematic& cinematic, logic::AneditContext* c)
@@ -411,6 +594,37 @@ bool EditCinematicGUI::nodeDroppedInList(util::Uuid node, render::asset::Cinemat
   // Assume this node not already here
   cinematic._nodeKeyframes.emplace_back();
   cinematic._nodeKeyframes.back().emplace_back(std::move(kf));
+
+  return true;
+}
+
+bool EditCinematicGUI::materialDroppedInList(util::Uuid material, render::asset::Cinematic& cinematic, logic::AneditContext* c)
+{
+  // Check that we don't have this material already
+  if (_matIndices.find(material) != _matIndices.end()) {
+    return false;
+  }
+
+  // Add this material and a kf at time 0
+  const auto* matP = c->scene().getMaterial(material);
+  if (!matP) {
+    return false;
+  }
+
+  render::asset::MaterialKeyframe kf{};
+  kf._time = 0.0f;
+  kf._id = material;
+  kf._emissive = matP->_emissive;
+  kf._baseColFactor = matP->_baseColFactor;
+
+  // Also add to cache
+  _matIndices[material] = cinematic._materialKeyframes.size();
+  _matNames[material] = matP->_name;
+  _cachedMatKeys[material].emplace_back(0);
+
+  // Assume this material not already here
+  cinematic._materialKeyframes.emplace_back();
+  cinematic._materialKeyframes.back().emplace_back(std::move(kf));
 
   return true;
 }
@@ -530,6 +744,38 @@ bool EditCinematicGUI::drawNodeKeyframeEditor(render::asset::NodeKeyframe& kf, l
   return changed;
 }
 
+bool EditCinematicGUI::drawMatKeyframeEditor(render::asset::MaterialKeyframe& kf, logic::AneditContext* c)
+{
+  bool changed = false;
+
+  ImGui::BeginChild("mat_kf", ImVec2(0, 0), true);
+  ImGui::Text("Edit material key");
+  ImGui::Separator();
+
+  if (drawEasingCombo(kf._easing)) {
+    changed = true;
+  }
+
+  ImGui::Separator();
+
+  if (ImGui::InputFloat("Time", &kf._time)) {
+    changed = true;
+  }
+
+  // Just sets new parameters
+  if (ImGui::Button("Patch")) {
+    auto* matP = c->scene().getMaterial(kf._id);
+    kf._emissive = matP->_emissive;
+    kf._baseColFactor = matP->_baseColFactor;
+
+    changed = true;
+  }
+
+  ImGui::EndChild();
+
+  return changed;
+}
+
 void EditCinematicGUI::recalculateMaxTime(render::asset::Cinematic& cinematic)
 {
   float max = 0.0f;
@@ -540,9 +786,11 @@ void EditCinematicGUI::recalculateMaxTime(render::asset::Cinematic& cinematic)
     }
   }
 
-  for (auto& kf : cinematic._materialKeyframes) {
-    if (kf._time > max) {
-      max = kf._time;
+  for (auto& v : cinematic._materialKeyframes) {
+    for (auto& kf : v) {
+      if (kf._time > max) {
+        max = kf._time;
+      }
     }
   }
 

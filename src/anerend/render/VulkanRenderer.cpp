@@ -1149,16 +1149,20 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     }
   }
 
-  printAssetUpdateInfo(
-    modelBytes,
-    materialBytes,
-    textureBytes,
-    update._addedModels.size(),
-    numMeshes,
-    update._addedAnimations.size(),
-    update._addedRenderables.size(),
-    update._updatedRenderables.size(),
-    update._removedRenderables.size());
+  if (modelBytes > 0 ||
+    materialBytes > 0 ||
+    textureBytes > 0) {
+    printAssetUpdateInfo(
+      modelBytes,
+      materialBytes,
+      textureBytes,
+      update._addedModels.size(),
+      numMeshes,
+      update._addedAnimations.size(),
+      update._addedRenderables.size(),
+      update._updatedRenderables.size(),
+      update._removedRenderables.size());
+  }
 }
 
 void VulkanRenderer::uploadPendingMaterials(VkCommandBuffer cmdBuffer)

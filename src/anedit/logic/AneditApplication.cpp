@@ -610,8 +610,11 @@ render::asset::Prefab AneditApplication::prefabFromNode(const util::Uuid& node)
   p._id = tmpId;
   p._name = nodeP->_name;
 
-  // Go through each component
-  auto& transComp = _scene.registry().getComponent<component::Transform>(node);
+  // Set components
+  auto id = node;
+  p._comps = _scene.nodeToPotComps(id);
+
+  /*auto& transComp = _scene.registry().getComponent<component::Transform>(node);
   p._comps._trans = transComp;
 
   if (_scene.registry().hasComponent<component::Renderable>(node)) {
@@ -619,7 +622,7 @@ render::asset::Prefab AneditApplication::prefabFromNode(const util::Uuid& node)
   }
   if (_scene.registry().hasComponent<component::Light>(node)) {
     p._comps._light = _scene.registry().getComponent<component::Light>(node);
-  }
+  }*/
 
   return p;
 }

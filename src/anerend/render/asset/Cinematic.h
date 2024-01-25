@@ -36,20 +36,12 @@ struct NodeKeyframe
 // Only support a couple of parameters
 struct MaterialKeyframe
 {
+  util::interp::Easing _easing = util::interp::Easing::InOutCubic;
   util::Uuid _id;
   float _time;
 
   glm::vec4 _emissive;
   glm::vec3 _baseColFactor;
-};
-
-// Easier to just put the whole animator in here. It is quite cheap.
-struct AnimatorKeyframe
-{
-  util::Uuid _id;
-  float _time;
-
-  component::Animator _animator;
 };
 
 struct Cinematic
@@ -60,7 +52,7 @@ struct Cinematic
 
   std::vector<CameraKeyframe> _camKeyframes;
   std::vector<std::vector<NodeKeyframe>> _nodeKeyframes;
-  std::vector<MaterialKeyframe> _materialKeyframes;
+  std::vector<std::vector<MaterialKeyframe>> _materialKeyframes;
 
   float _maxTime = 0.0f;
 };
