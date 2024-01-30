@@ -10,6 +10,7 @@
 #include "asset/Texture.h"
 
 #include "../../common/util/nanojpeg.h"
+#include "../../common/util/Utils.h"
 #include <lodepng.h>
 
 namespace render {
@@ -20,10 +21,52 @@ static bool hasStencilComponent(VkFormat format)
   return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
+static unsigned stride(render::asset::Texture::Format format)
+{
+  if (format == asset::Texture::Format::RGBA8_SRGB) {
+    return 4;
+  }
+  else if (format == asset::Texture::Format::RGBA8_UNORM) {
+    return 4;
+  }
+  else if (format == asset::Texture::Format::RGBA16F_SFLOAT) {
+    return 8;
+  }
+  else if (format == asset::Texture::Format::RGB8_SRGB) {
+    return 3;
+  }
+  else if (format == asset::Texture::Format::RG8_UNORM) {
+    return 2;
+  }
+  else if (format == asset::Texture::Format::RGB8_UNORM) {
+    return 3;
+  }
+  else if (format == asset::Texture::Format::RGBA_SRGB_BC7) {
+    return 4;
+  }
+  else if (format == asset::Texture::Format::RGBA_UNORM_BC7) {
+    return 4;
+  }
+  else if (format == asset::Texture::Format::RG_UNORM_BC5) {
+    return 2;
+  }
+  else if (format == asset::Texture::Format::R8_UNORM) {
+    return 1;
+  }
+  else if (format == asset::Texture::Format::R16_UNORM) {
+    return 2;
+  }
+
+  return 4;
+}
+
 static VkFormat texFormatToVk(render::asset::Texture::Format format)
 {
   if (format == asset::Texture::Format::RGBA8_SRGB) {
     return VK_FORMAT_R8G8B8A8_SRGB;
+  }
+  else if (format == asset::Texture::Format::RGBA8_UNORM) {
+    return VK_FORMAT_R8G8B8A8_UNORM;
   }
   else if (format == asset::Texture::Format::RGBA16F_SFLOAT) {
     return VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -46,6 +89,12 @@ static VkFormat texFormatToVk(render::asset::Texture::Format format)
   else if (format == asset::Texture::Format::RG_UNORM_BC5) {
     return VK_FORMAT_BC5_UNORM_BLOCK;
   }
+  else if (format == asset::Texture::Format::R8_UNORM) {
+    return VK_FORMAT_R8_UNORM;
+  }
+  else if (format == asset::Texture::Format::R16_UNORM) {
+    return VK_FORMAT_R16_UNORM;
+  }
 
   return VK_FORMAT_R8G8B8A8_UNORM;
 }
@@ -53,10 +102,13 @@ static VkFormat texFormatToVk(render::asset::Texture::Format format)
 static unsigned numDimensions(render::asset::Texture::Format format)
 {
   if (format == asset::Texture::Format::RGBA8_SRGB) {
-    return 3;
+    return 4;
+  }
+  else if (format == asset::Texture::Format::RGBA8_UNORM) {
+    return 4;
   }
   else if (format == asset::Texture::Format::RGBA16F_SFLOAT) {
-    return 3;
+    return 4;
   }
   else if (format == asset::Texture::Format::RGB8_SRGB) {
     return 3;
@@ -68,13 +120,19 @@ static unsigned numDimensions(render::asset::Texture::Format format)
     return 3;
   }
   else if (format == asset::Texture::Format::RGBA_SRGB_BC7) {
-    return 3;
+    return 4;
   }
   else if (format == asset::Texture::Format::RGBA_UNORM_BC7) {
-    return 3;
+    return 4;
   }
   else if (format == asset::Texture::Format::RG_UNORM_BC5) {
     return 2;
+  }
+  else if (format == asset::Texture::Format::R8_UNORM) {
+    return 1;
+  }
+  else if (format == asset::Texture::Format::R16_UNORM) {
+    return 1;
   }
 
   return 3;
@@ -121,10 +179,9 @@ static void createImage(
   uint32_t mipLevels = 1,
   uint32_t arrayLayers = 1,
   VkImageCreateFlags flags = 0,
-  bool hostAccess = false)
+  bool hostAccess = false,
+  VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED)
 {
-  //uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
-
   VkImageCreateInfo imageInfo{};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -135,7 +192,7 @@ static void createImage(
   imageInfo.arrayLayers = arrayLayers;
   imageInfo.format = format;
   imageInfo.tiling = tiling;
-  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  imageInfo.initialLayout = initialLayout;
   imageInfo.usage = usage;
   imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -182,6 +239,7 @@ struct TextureData
   std::vector<uint8_t> data;
   int width;
   int height;
+  int bitdepth = 8;
   bool isColor;
 };
 
@@ -189,7 +247,7 @@ static void init()
 {
 }
 
-static TextureData loadTex(const std::string& tex)
+static TextureData loadTex(const std::string& tex, bool requestGray = false)
 {
   TextureData output{};
 
@@ -236,16 +294,39 @@ static TextureData loadTex(const std::string& tex)
   else if (extension == ".png") {
     unsigned width, height;
 
-    unsigned error = lodepng::decode(output.data, width, height, tex.c_str());
+    auto readFile = util::readFile(tex);
+    LodePNGState state{};
+    lodepng_inspect(&width, &height, &state, (unsigned char*)readFile.data(), readFile.size());
+
+    printf("Bitdepth of png: %u\n", state.info_png.color.bitdepth);
+
+    LodePNGColorType colorType = requestGray ? LodePNGColorType::LCT_GREY : LodePNGColorType::LCT_RGBA;
+    unsigned error = lodepng::decode(output.data, width, height, tex.c_str(), colorType, state.info_png.color.bitdepth);
     if (error != 0) {
       printf("Failed to decode png: %s\n", tex.c_str());
       printf("Error is: %s\n", lodepng_error_text(error));
       return output;
     }
 
+    // If 16 bit, lodepng for some reason likes its endianness the other way around
+    if (state.info_png.color.bitdepth == 16) {
+      std::vector<std::uint8_t> temp;
+      temp.resize(output.data.size());
+
+      for (unsigned x = 0; x < width; ++x) {
+        for (unsigned y = 0; y < height; ++y) {
+          temp[2 * width * y + 2 * x + 0] = output.data[2 * width * y + 2 * x + 1];
+          temp[2 * width * y + 2 * x + 1] = output.data[2 * width * y + 2 * x + 0];
+        }
+      }
+
+      output.data = std::move(temp);
+    }
+
     output.width = width;
     output.height = height;
-    output.isColor = true;
+    output.bitdepth = state.info_png.color.bitdepth;
+    output.isColor = !requestGray;
   }
   else {
     printf("Unsupported extension in loadTex: %s\n", extension.c_str());

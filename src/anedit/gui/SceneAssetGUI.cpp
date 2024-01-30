@@ -4,7 +4,10 @@
 
 #include "../logic/AneditContext.h"
 #include <render/scene/Scene.h>
+#include <render/ImageHelpers.h>
+#include <util/TextureHelpers.h>
 
+#include <filesystem>
 #include <functional>
 
 #include <imgui.h>
@@ -120,7 +123,7 @@ SceneAssetGUI::~SceneAssetGUI()
 
 void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
 {
-  const int numPanels = 4;
+  const int numPanels = 5;
 
   ImGui::Begin("Assets", NULL, ImGuiWindowFlags_MenuBar);
   ImVec2 size = ImVec2(ImGui::GetWindowWidth() / numPanels, 0);
@@ -129,8 +132,20 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
   if (ImGui::BeginMenuBar()) {
 
     if (ImGui::BeginMenu("File")) {
+      if (ImGui::MenuItem("New material")) {
+        createMaterialClicked(c);
+      }
+
       if (ImGui::MenuItem("Load GLTF...")) {
         loadGLTFClicked(c);
+      }
+
+      if (ImGui::MenuItem("Load RGBA texture...")) {
+        loadRGBATextureClicked(c);
+      }
+
+      if (ImGui::MenuItem("Load grayscale texture...")) {
+        loadGrayTextureClicked(c);
       }
 
       ImGui::EndMenu();
@@ -161,6 +176,15 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
   // Animations
   if (drawAssetList(size, _animationFilter, "Animations", c->scene().getAnimations(), currSelection, dummyUuid, dummy)) {
 
+  }
+
+  ImGui::SameLine();
+
+  // Textures
+  if (drawAssetList(size, _textureFilter, "Textures", c->scene().getTextures(), currSelection, dummyUuid, dummy, "texture_id")) {
+    c->selection().clear();
+    c->selection().emplace_back(currSelection);
+    c->selectionType() = logic::AneditContext::SelectionType::Texture;
   }
 
   ImGui::SameLine();
@@ -223,6 +247,87 @@ void SceneAssetGUI::loadGLTFClicked(logic::AneditContext* c)
   auto result = NFD::OpenDialog(outPath, filterItem, 1);
   if (result == NFD_OKAY) {
     c->startLoadGLTF(outPath.get());
+  }
+}
+
+namespace {
+
+std::string pathToName(std::string name)
+{
+  return std::filesystem::path(name).stem().string();
+}
+
+void addTextureToScene(logic::AneditContext* c, render::imageutil::TextureData&& data, std::string&& name)
+{
+  if (!data) {
+    return;
+  }
+
+  auto format = render::asset::Texture::Format::RGBA8_UNORM;
+  if (!data.isColor) {
+    if (data.bitdepth == 16) {
+      format = render::asset::Texture::Format::R16_UNORM;
+    }
+    else {
+      format = render::asset::Texture::Format::R8_UNORM;
+    }
+  }
+
+  render::asset::Texture tex{};
+  tex._data.emplace_back(std::move(data.data));
+  tex._height = data.height;
+  tex._width = data.width;
+  tex._name = std::move(name);
+  tex._numMips = 1;
+  tex._format = format;
+
+  // Generate mipmaps. TODO: Maybe not always?
+  c->generateMipMaps(tex);
+
+  // And then compress
+  if (render::imageutil::numDimensions(tex._format) >= 3) {
+    util::TextureHelpers::convertRGBA8ToBC7(tex);
+  }
+  else if (render::imageutil::numDimensions(tex._format) == 2) {
+    util::TextureHelpers::convertRG8ToBC5(tex);
+  }
+
+  c->scene().addTexture(std::move(tex));
+}
+
+}
+
+void SceneAssetGUI::loadGrayTextureClicked(logic::AneditContext* c)
+{
+  NFD::UniquePath outPath;
+  nfdfilteritem_t filterItem[1] = { {"PNG", "png"} };
+
+  auto result = NFD::OpenDialog(outPath, filterItem, 1);
+  if (result == NFD_OKAY) {
+    // Just raw dog texture loading on current thread
+    std::string path = outPath.get();
+    addTextureToScene(c, render::imageutil::loadTex(path, true), pathToName(path));
+  }
+}
+
+void SceneAssetGUI::createMaterialClicked(logic::AneditContext* c)
+{
+  // Just create an empty default material
+  render::asset::Material mat{};
+  mat._name = "NewMaterial";
+  c->scene().addMaterial(std::move(mat));
+}
+
+void SceneAssetGUI::loadRGBATextureClicked(logic::AneditContext* c)
+{
+  NFD::UniquePath outPath;
+  nfdfilteritem_t filterItem[1] = { {"JPEG, PNG", "jpg,jpeg,png"}};
+
+  auto result = NFD::OpenDialog(outPath, filterItem, 1);
+  if (result == NFD_OKAY) {
+    // Just raw dog texture loading on current thread
+    std::string path = outPath.get();
+    addTextureToScene(c, render::imageutil::loadTex(path), pathToName(path));
   }
 }
 

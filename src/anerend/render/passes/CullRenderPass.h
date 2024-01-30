@@ -5,6 +5,8 @@
 
 namespace render {
 
+struct BufferRenderResource;
+
 class CullRenderPass : public RenderPass
 {
 public:
@@ -17,6 +19,7 @@ public:
   void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
 
 private:
+  void prefillDrawData(BufferRenderResource* buf, VkCommandBuffer cmdBuffer, RenderContext* renderContext);
   // Temp
   const std::size_t MAX_NUM_GRASS_BLADES = 32 * 32 * 1000;
 

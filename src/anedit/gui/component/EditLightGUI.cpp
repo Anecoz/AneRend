@@ -1,6 +1,6 @@
 #include "EditLightGUI.h"
 
-#include "../logic/AneditContext.h"
+#include "../../logic/AneditContext.h"
 #include <render/scene/Scene.h>
 
 #include <glm/glm.hpp>

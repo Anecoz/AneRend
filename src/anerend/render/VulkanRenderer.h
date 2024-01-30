@@ -27,6 +27,7 @@
 #include "internal/InternalModel.h"
 #include "internal/InternalMaterial.h"
 #include "internal/InternalRenderable.h"
+#include "internal/InternalTerrain.h"
 #include "internal/InternalLight.h"
 #include "internal/GigaBuffer.h"
 //#include "internal/AnimationThread.h"
@@ -242,6 +243,7 @@ private:
 
   component::Registry* _registry = nullptr;
   entt::observer _nodeObserver;
+  entt::observer _terrainObserver;
 
   void updateNodes();
   void updateSkeletons();
@@ -323,6 +325,7 @@ private:
   std::vector<internal::InternalMesh> _currentMeshes;
   std::vector<internal::InternalMaterial> _currentMaterials;
   std::vector<internal::InternalTexture> _currentTextures;
+  std::vector<internal::InternalTerrain> _currentTerrains;
   std::vector<internal::InternalRenderable> _currentRenderables;
   std::vector<internal::InternalRenderable> _pendingFirstUploadRenderables;
 
@@ -332,6 +335,7 @@ private:
   std::unordered_map<util::Uuid, std::size_t> _renderableIdMap;
   std::unordered_map<util::Uuid, std::size_t> _materialIdMap;
   std::unordered_map<util::Uuid, std::size_t> _textureIdMap;
+  std::unordered_map<util::Uuid, std::size_t> _terrainIdMap;
 
   // This is needed for generating draw calls, it records how many renderables use each mesh.
   std::unordered_map<util::Uuid, std::size_t> _currentMeshUsage;
@@ -341,6 +345,7 @@ private:
   std::vector<bool> _lightsChanged;
   std::vector<bool> _materialsChanged;
   std::vector<bool> _texturesChanged;
+  std::vector<bool> _terrainsChanged;
   std::vector<bool> _tileInfosChanged;
 
   std::vector<asset::Material> _materialsToUpload;
@@ -397,7 +402,8 @@ private:
   uint32_t _tlasBinding = _meshBinding + 1;
   uint32_t _skeletonBinding = _tlasBinding + 1;
   uint32_t _tileBinding = _skeletonBinding + 1;
-  uint32_t _bindlessTextureBinding = _tileBinding + 1;
+  uint32_t _terrainBinding = _tileBinding + 1;
+  uint32_t _bindlessTextureBinding = _terrainBinding + 1;
 
   // Use a mem interface to select empty bindless indices.
   internal::BufferMemoryInterface _bindlessTextureMemIf;
@@ -457,6 +463,9 @@ private:
   // Contains scene data needed in shaders (view and proj matrices etc.)
   std::vector<AllocatedBuffer> _gpuSceneDataBuffer;
 
+  // SSBO with terrain info used in terrain pass.
+  std::vector<AllocatedBuffer> _gpuTerrainBuffer;
+
   // Contains wind system data, accessed by various render passes.
   std::vector<AllocatedImage> _gpuWindForceImage;
 
@@ -489,6 +498,9 @@ private:
 
   // Fills GPU tile info buffer with the current tile infos (camera relative).
   void prefillGPUTileInfoBuffer(VkCommandBuffer& commandBuffer);
+
+  // Fills GPU terrain info buffer with currently paged terrain infos.
+  void prefillGPUTerrainInfoBuffer(VkCommandBuffer& commandBuffer);
 
   // Update wind force image
   void updateWindForceImage(VkCommandBuffer& commandBuffer);

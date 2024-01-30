@@ -48,40 +48,7 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       // Prefill with draw cmd data using rendercontext to get current mesh data
       auto buf = (BufferRenderResource*)resource;
       
-      auto& meshes = renderContext->getCurrentMeshes();
-      std::size_t dataSize = meshes.size() * sizeof(gpu::GPUDrawCallCmd);
-
-      if (_currentStagingOffset + dataSize >= renderContext->getMaxNumRenderables() * sizeof(gpu::GPURenderable) * 2) {
-        _currentStagingOffset = 0;
-      }
-
-      uint8_t* data;
-      vmaMapMemory(renderContext->vmaAllocator(), _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._allocation, (void**)&data);
-      
-      data += _currentStagingOffset;
-
-      gpu::GPUDrawCallCmd* mappedData = reinterpret_cast<gpu::GPUDrawCallCmd*>(data);
-      uint32_t cumulativeMeshUsage = 0;
-      for (std::size_t i = 0; i < meshes.size(); ++i) {
-        auto& mesh = meshes[i];
-
-        mappedData[i]._command.indexCount = (uint32_t)mesh._numIndices;
-        mappedData[i]._command.instanceCount = 0; // Updated by GPU compute shader
-        mappedData[i]._command.firstIndex = (uint32_t)mesh._indexOffset;
-        mappedData[i]._command.vertexOffset = (uint32_t)mesh._vertexOffset;
-        mappedData[i]._command.firstInstance = cumulativeMeshUsage;//i == 0 ? 0 : (uint32_t)renderContext->getCurrentMeshUsage()[(uint32_t)i - 1];
-
-        cumulativeMeshUsage += (uint32_t)renderContext->getCurrentMeshUsage()[mesh._id];
-      }
-
-      VkBufferCopy copyRegion{};
-      copyRegion.srcOffset = _currentStagingOffset;
-      copyRegion.dstOffset = 0;
-      copyRegion.size = dataSize;
-      vkCmdCopyBuffer(cmdBuffer, _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._buffer, buf->_buffer._buffer, 1, &copyRegion);
-
-      vmaUnmapMemory(renderContext->vmaAllocator(), _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._allocation);
-      _currentStagingOffset += dataSize;
+      prefillDrawData(buf, cmdBuffer, renderContext);
     });
 
   // Add an initializer for the trans buffer
@@ -102,6 +69,42 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
         VK_WHOLE_SIZE,
         0);
     });
+
+  // Initializer for terrain draw buffer
+  {
+    ResourceUsage drawBufInitUsage{};
+    drawBufInitUsage._type = Type::SSBO;
+    drawBufInitUsage._access.set((std::size_t)Access::Write);
+    drawBufInitUsage._stage.set((std::size_t)Stage::Transfer);
+
+    fgb.registerResourceInitExe("CullTerrainDrawBuf", std::move(drawBufInitUsage),
+      [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
+        // Prefill with draw cmd data using rendercontext to get current mesh data
+        auto buf = (BufferRenderResource*)resource;
+        prefillDrawData(buf, cmdBuffer, renderContext);
+      });
+  }
+
+  // Initializer for terrain trans buffer
+  {
+    ResourceUsage transBufInitUsage{};
+    transBufInitUsage._type = Type::SSBO;
+    transBufInitUsage._access.set((std::size_t)Access::Write);
+    transBufInitUsage._stage.set((std::size_t)Stage::Transfer);
+
+    fgb.registerResourceInitExe("CullTerrainTransBuf", std::move(transBufInitUsage),
+      [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
+        // Just fill buffer with 0's
+        auto buf = (BufferRenderResource*)resource;
+
+        vkCmdFillBuffer(
+          cmdBuffer,
+          buf->_buffer._buffer,
+          0,
+          VK_WHOLE_SIZE,
+          0);
+      });
+  }
 
   // Add an initializer for the grass draw buffer
   ResourceUsage grassDrawBufInitUsage{};
@@ -248,6 +251,8 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
           0);
       });
   }
+
+
 
   // Register the actual render pass
   RenderPassRegisterInfo regInfo{};
@@ -403,6 +408,35 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
     regInfo._resourceUsages.emplace_back(std::move(usage));
   }
 
+  // Draw buffer specifically for terrain renderables
+  {
+    ResourceUsage drawCmdUsage{};
+    drawCmdUsage._resourceName = "CullTerrainDrawBuf";
+    drawCmdUsage._access.set((std::size_t)Access::Write);
+    drawCmdUsage._access.set((std::size_t)Access::Read);
+    drawCmdUsage._stage.set((std::size_t)Stage::Compute);
+    drawCmdUsage._type = Type::SSBO;
+    BufferInitialCreateInfo drawCreateInfo{};
+    drawCreateInfo._multiBuffered = true;
+    drawCreateInfo._initialSize = rc->getMaxNumMeshes() * sizeof(gpu::GPUDrawCallCmd);
+    drawCmdUsage._bufferCreateInfo = drawCreateInfo;
+    regInfo._resourceUsages.emplace_back(std::move(drawCmdUsage));
+  }
+  // Translation buffer for terrain draws
+  {
+    ResourceUsage translationBufUsage{};
+    translationBufUsage._resourceName = "CullTerrainTransBuf";
+    translationBufUsage._access.set((std::size_t)Access::Write);
+    translationBufUsage._access.set((std::size_t)Access::Read);
+    translationBufUsage._stage.set((std::size_t)Stage::Compute);
+    translationBufUsage._type = Type::SSBO;
+    BufferInitialCreateInfo transCreateInfo{};
+    transCreateInfo._multiBuffered = true;
+    transCreateInfo._initialSize = rc->getMaxNumRenderables() * sizeof(gpu::GPUTranslationId);
+    translationBufUsage._bufferCreateInfo = transCreateInfo;
+    regInfo._resourceUsages.emplace_back(std::move(translationBufUsage));
+  }
+
   ComputePipelineCreateParams pipeParam{};
   pipeParam.device = rc->device();
   pipeParam.shader = "cull_comp.spv";
@@ -438,6 +472,46 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       int sqr = static_cast<int>(std::ceil(std::sqrt((double)exeParams.rc->getCurrentNumRenderables() / (double)(localSize * localSize))));
       vkCmdDispatch(*exeParams.cmdBuffer, sqr, sqr, 1);
     });
+}
+
+void CullRenderPass::prefillDrawData(BufferRenderResource* buf, VkCommandBuffer cmdBuffer, RenderContext* renderContext)
+{
+  // Prefill with draw cmd data using rendercontext to get current mesh data
+
+  auto& meshes = renderContext->getCurrentMeshes();
+  std::size_t dataSize = meshes.size() * sizeof(gpu::GPUDrawCallCmd);
+
+  if (_currentStagingOffset + dataSize >= renderContext->getMaxNumRenderables() * sizeof(gpu::GPURenderable) * 2) {
+    _currentStagingOffset = 0;
+  }
+
+  uint8_t* data;
+  vmaMapMemory(renderContext->vmaAllocator(), _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._allocation, (void**)&data);
+
+  data += _currentStagingOffset;
+
+  gpu::GPUDrawCallCmd* mappedData = reinterpret_cast<gpu::GPUDrawCallCmd*>(data);
+  uint32_t cumulativeMeshUsage = 0;
+  for (std::size_t i = 0; i < meshes.size(); ++i) {
+    auto& mesh = meshes[i];
+
+    mappedData[i]._command.indexCount = (uint32_t)mesh._numIndices;
+    mappedData[i]._command.instanceCount = 0; // Updated by GPU compute shader
+    mappedData[i]._command.firstIndex = (uint32_t)mesh._indexOffset;
+    mappedData[i]._command.vertexOffset = (uint32_t)mesh._vertexOffset;
+    mappedData[i]._command.firstInstance = cumulativeMeshUsage;
+
+    cumulativeMeshUsage += (uint32_t)renderContext->getCurrentMeshUsage()[mesh._id];
+  }
+
+  VkBufferCopy copyRegion{};
+  copyRegion.srcOffset = _currentStagingOffset;
+  copyRegion.dstOffset = 0;
+  copyRegion.size = dataSize;
+  vkCmdCopyBuffer(cmdBuffer, _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._buffer, buf->_buffer._buffer, 1, &copyRegion);
+
+  vmaUnmapMemory(renderContext->vmaAllocator(), _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._allocation);
+  _currentStagingOffset += dataSize;
 }
 
 }

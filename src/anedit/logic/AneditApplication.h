@@ -19,6 +19,7 @@
 #include <render/scene/ScenePager.h>
 #include <render/cinematic/CinematicPlayer.h>
 #include <render/animation/AnimationUpdater.h>
+#include <terrain/TerrainSystem.h>
 #include "WindSystem.h"
 
 #include <filesystem>
@@ -51,6 +52,7 @@ public:
   render::asset::Prefab prefabFromNode(const util::Uuid& node) override final;
 
   void* getImguiTexId(util::Uuid& tex) override final;
+  void generateMipMaps(render::asset::Texture& tex) override final;
 
   void createCinematicPlayer(util::Uuid& id) override final;
   void destroyCinematicPlayer(util::Uuid& id) override final;
@@ -63,6 +65,8 @@ public:
   std::vector<util::Uuid>& selection() override final;
 
   render::Camera& camera() override final;
+
+  virtual glm::vec3 latestWorldPosition() override final { return _latestWorldPosition; }
 
   // AneditContext end
 
@@ -103,6 +107,9 @@ private:
   render::scene::ScenePager _scenePager;
 
   render::anim::AnimationUpdater _animUpdater;
+  terrain::TerrainSystem _terrainSystem;
+
+  glm::vec3 _latestWorldPosition = glm::vec3(0.0f);
 
   // Test bake
   bool _baking = false;

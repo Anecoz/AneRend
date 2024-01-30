@@ -20,7 +20,6 @@ EditCinematicGUI::~EditCinematicGUI()
 
 void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
 {
-  ImGui::Begin("Edit cinematic");
   auto id = c->getLastCinematicSelection();
 
   if (!id) {
@@ -30,6 +29,8 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
   if (!c->scene().getCinematic(id)) {
     return;
   }
+
+  ImGui::Begin("Edit cinematic");
 
   // Lazy create
   c->createCinematicPlayer(id);

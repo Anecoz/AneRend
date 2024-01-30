@@ -6,6 +6,7 @@
 #include <bitsery/bitsery.h>
 #include <bitsery/adapter/buffer.h>
 #include <bitsery/traits/vector.h>
+#include <bitsery/traits/array.h>
 #include <bitsery/traits/string.h>
 #include <bitsery/ext/std_optional.h>
 
@@ -154,6 +155,15 @@ void serialize(S& s, component::Skeleton& p)
 }
 
 template <typename S>
+void serialize(S& s, component::Terrain& p)
+{
+  s.object(p._heightMap);
+  s.object(p._tileIndex);
+  s.container(p._baseMaterials);
+  s.object(p._blendMap);
+}
+
+template <typename S>
 void serialize(S& s, component::PotentialComponents& p)
 {
   s.object(p._trans);
@@ -161,6 +171,7 @@ void serialize(S& s, component::PotentialComponents& p)
   s.ext(p._light, bitsery::ext::StdOptional{});
   s.ext(p._animator, bitsery::ext::StdOptional{});
   s.ext(p._skeleton, bitsery::ext::StdOptional{});
+  s.ext(p._terrain, bitsery::ext::StdOptional{});
 }
 
 template <typename S>
@@ -201,7 +212,7 @@ void serialize(S& s, render::asset::Mesh& m)
 {
   s.object(m._id);
   s.container(m._vertices, 500000);
-  s.container4b(m._indices, 500000);
+  s.container4b(m._indices, 2000000);
   s.object(m._minPos);
   s.object(m._maxPos);
 }
@@ -245,6 +256,7 @@ template <typename S>
 void serialize(S& s, render::asset::Texture& t)
 {
   s.object(t._id);
+  s.text1b(t._name, 100);
   s.value1b(t._format);
   s.value4b(t._width);
   s.value4b(t._height);
@@ -567,6 +579,9 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
         if (scene.registry().hasComponent<component::Animator>(node._id)) {
           imn._comps._animator = scene.registry().getComponent<component::Animator>(node._id);
         }
+        if (scene.registry().hasComponent<component::Terrain>(node._id)) {
+          imn._comps._terrain = scene.registry().getComponent<component::Terrain>(node._id);
+        }
 
         imNodes.emplace_back(std::move(imn));
       }
@@ -781,6 +796,12 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
           auto& c = outputData._scene->registry().addComponent<component::Skeleton>(id);
           c = imn._comps._skeleton.value();
           outputData._scene->registry().patchComponent<component::Skeleton>(id);
+        }
+
+        if (imn._comps._terrain) {
+          auto& c = outputData._scene->registry().addComponent<component::Terrain>(id);
+          c = imn._comps._terrain.value();
+          outputData._scene->registry().patchComponent<component::Terrain>(id);
         }
       }
 

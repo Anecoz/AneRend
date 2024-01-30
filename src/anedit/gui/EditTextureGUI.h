@@ -4,11 +4,11 @@
 
 namespace gui {
 
-class EditLightGUI : public IGUI
+class EditTextureGUI : public IGUI
 {
 public:
-  EditLightGUI();
-  ~EditLightGUI();
+  EditTextureGUI();
+  ~EditTextureGUI();
 
   void immediateDraw(logic::AneditContext* c) override final;
 };

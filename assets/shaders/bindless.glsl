@@ -15,6 +15,7 @@ struct Renderable
   uint visible;
   uint firstMaterialIndex;
   uint dynamicModelOffset; // Only for ray-tracing: First dynamic mesh id (numMeshId applies here aswell)
+  int terrainOffset;
 };
 
 struct Light 
@@ -98,6 +99,13 @@ struct SurfaceData
   vec3 emissive;
 };
 
+struct TerrainInfo 
+{
+  ivec4 baseMaterials;
+  int blendMap;
+  int heightMap;
+};
+
 Vertex unpackVertex(PackedVertex packedVertex)
 {
   Vertex outVtx;
@@ -175,7 +183,11 @@ layout(std430, set = 0, binding = 14) readonly buffer TileInfoBuffer {
   TileInfo tiles[];
 } tileInfoBuffer;
 
-layout(set = 0, binding = 15) uniform sampler2D textures[];
+layout(std430, set = 0, binding = 15) readonly buffer TerrainInfoBuffer {
+  TerrainInfo terrains[];
+} terrainInfoBuffer;
+
+layout(set = 0, binding = 16) uniform sampler2D textures[];
 
 SurfaceData getSurfaceDataFromMat(MaterialInfo matInfo, vec2 uv, vec3 inNormal, mat3 inTBN, vec3 inTangent, vec3 inColor, out bool discardPixel)
 {

@@ -24,7 +24,7 @@ void SpecularGIRTPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc
   {
     uint32_t width = rc->swapChainExtent().width;
     uint32_t height = rc->swapChainExtent().height;
-    uint32_t mipLevels = 6;// static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
+    uint32_t mipLevels = 5;// static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
     ResourceUsage usage{};
     usage._resourceName = "ReflectTex";

@@ -22,6 +22,7 @@ struct alignas(16) GPURenderable {
   uint32_t _visible;
   uint32_t _firstMaterialIndex;
   uint32_t _dynamicModelOffset;
+  int32_t _terrainOffset = -1;
 };
 
 // See render::asset::Material
@@ -72,6 +73,12 @@ struct GPULight {
 
 struct GPUTileInfo {
   int _ddgiAtlasTex;
+};
+
+struct GPUTerrainInfo {
+  glm::ivec4 _baseMaterials;
+  int _blendMap;
+  int _heightmap;
 };
 
 struct GPUPointLightShadowCube

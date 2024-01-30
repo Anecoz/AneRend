@@ -86,27 +86,87 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   auto maxRegion = ImGui::GetWindowContentRegionMax();
   ImVec2 texSize{ texFactor * maxRegion.x , texFactor * maxRegion.x };
 
+  ImGui::Separator();
+  ImGui::Text("Metallic roughness tex");
+
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("texture_id")) {
+      std::array<std::uint8_t, 16> arr{};
+      std::memcpy(arr.data(), payload->Data, sizeof(util::Uuid));
+      auto uuid = util::Uuid(arr);
+
+      metRoughTex = uuid;
+
+      changed = true;
+    }
+
+    ImGui::EndDragDropTarget();
+  }
+
   if (metRoughTex) {
-    ImGui::Separator();
-    ImGui::Text("Metallic roughness tex");
     ImGui::Image((ImTextureID)c->getImguiTexId(metRoughTex), texSize);
   }
 
+  ImGui::Separator();
+  ImGui::Text("Albedo tex");
+
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("texture_id")) {
+      std::array<std::uint8_t, 16> arr{};
+      std::memcpy(arr.data(), payload->Data, sizeof(util::Uuid));
+      auto uuid = util::Uuid(arr);
+
+      albedoTex = uuid;
+
+      changed = true;
+    }
+
+    ImGui::EndDragDropTarget();
+  }
+
   if (albedoTex) {
-    ImGui::Separator();
-    ImGui::Text("Albedo tex");
     ImGui::Image((ImTextureID)c->getImguiTexId(albedoTex), texSize);
   }
 
+  ImGui::Separator();
+  ImGui::Text("Normal tex");
+
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("texture_id")) {
+      std::array<std::uint8_t, 16> arr{};
+      std::memcpy(arr.data(), payload->Data, sizeof(util::Uuid));
+      auto uuid = util::Uuid(arr);
+
+      normalTex = uuid;
+
+      changed = true;
+    }
+
+    ImGui::EndDragDropTarget();
+  }
+
   if (normalTex) {
-    ImGui::Separator();
-    ImGui::Text("Normal tex");
     ImGui::Image((ImTextureID)c->getImguiTexId(normalTex), texSize);
   }
 
+  ImGui::Separator();
+  ImGui::Text("Emissive tex");
+
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("texture_id")) {
+      std::array<std::uint8_t, 16> arr{};
+      std::memcpy(arr.data(), payload->Data, sizeof(util::Uuid));
+      auto uuid = util::Uuid(arr);
+
+      emissiveTex = uuid;
+
+      changed = true;
+    }
+
+    ImGui::EndDragDropTarget();
+  }
+
   if (emissiveTex) {
-    ImGui::Separator();
-    ImGui::Text("Emissive tex");
     ImGui::Image((ImTextureID)c->getImguiTexId(emissiveTex), texSize);
   }
 
@@ -121,6 +181,11 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
     matCopy._baseColFactor = baseColFac;
     matCopy._metallicFactor = metallic;
     matCopy._roughnessFactor = roughness;
+
+    matCopy._metallicRoughnessTex = metRoughTex;
+    matCopy._albedoTex = albedoTex;
+    matCopy._normalTex = normalTex;
+    matCopy._emissiveTex = emissiveTex;
     c->scene().updateMaterial(std::move(matCopy));
   }
 }

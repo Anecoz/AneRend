@@ -1,6 +1,6 @@
 #include "EditRenderableGUI.h"
 
-#include "../logic/AneditContext.h"
+#include "../../logic/AneditContext.h"
 #include <render/scene/Scene.h>
 
 #include <glm/glm.hpp>
@@ -34,9 +34,6 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
 
   char model[100];
   model[0] = '\0';
-
-  /*char skeleton[100];
-  skeleton[0] = '\0';*/
 
   std::vector<util::Uuid> materials;
 

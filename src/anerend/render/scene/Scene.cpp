@@ -331,6 +331,19 @@ util::Uuid Scene::addTexture(asset::Texture&& texture)
   return id;
 }
 
+void Scene::updateTexture(asset::Texture texture)
+{
+  for (auto it = _textures.begin(); it != _textures.end(); ++it) {
+    if (it->_id == texture._id) {
+      *it = std::move(texture);
+      addEvent(SceneEventType::TextureUpdated, it->_id);
+      return;
+    }
+  }
+
+  printf("Could not update texture with id %s, doesn't exist!\n", texture._id.str().c_str());
+}
+
 void Scene::removeTexture(util::Uuid id)
 {
   for (auto it = _textures.begin(); it != _textures.end(); ++it) {

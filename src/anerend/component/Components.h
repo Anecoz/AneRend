@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <array>
 #include <optional>
 #include <string>
 #include <vector>
@@ -26,7 +27,6 @@ struct Renderable
   std::string _name; // for debugging
 
   util::Uuid _model;
-  //util::Uuid _skeleton;
   std::vector<util::Uuid> _materials; // one for each mesh in the model (could be same ID for multiple meshes tho)
 
   glm::vec3 _tint;
@@ -134,6 +134,15 @@ struct Animator
   float _playbackMultiplier = 1.0f;
 };
 
+struct Terrain
+{
+  util::Uuid _heightMap;
+  glm::ivec2 _tileIndex;
+  
+  std::array<util::Uuid, 4> _baseMaterials;
+  util::Uuid _blendMap;
+};
+
 // Struct that holds potential components used by e.g. prefabs
 struct PotentialComponents
 {
@@ -142,6 +151,7 @@ struct PotentialComponents
   std::optional<Light> _light;
   std::optional<Skeleton> _skeleton;
   std::optional<Animator> _animator;
+  std::optional<Terrain> _terrain;
 };
 
 }

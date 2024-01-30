@@ -36,6 +36,7 @@ struct AssetUpdate
       !_updatedMaterials.empty() ||
       !_removedMaterials.empty() ||
       !_addedTextures.empty() ||
+      !_updatedTextures.empty() ||
       !_removedTextures.empty() ||
       !_addedAnimations.empty() ||
       !_removedAnimations.empty() ||
@@ -58,6 +59,7 @@ struct AssetUpdate
   std::vector<util::Uuid> _removedMaterials;
 
   std::vector<asset::Texture> _addedTextures;
+  std::vector<asset::Texture> _updatedTextures;
   std::vector<util::Uuid> _removedTextures;
 
   std::vector<anim::Animation> _addedAnimations;

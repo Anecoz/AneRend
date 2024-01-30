@@ -2,6 +2,8 @@
 
 #include "../render/asset/Texture.h"
 
+#include <glm/glm.hpp>
+
 #include <cstdint>
 #include <vector>
 
@@ -9,6 +11,8 @@ namespace util {
 
 struct TextureHelpers
 {
+
+  static render::asset::Texture createTextureRGBA8(unsigned w, unsigned h, glm::u8vec4 val);
 
   // 1 byte per channel
   static std::vector<std::uint8_t> convertRGBA8ToRGB8(std::vector<std::uint8_t> in);

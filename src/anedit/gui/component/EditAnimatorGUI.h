@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IGUI.h"
+#include "../IGUI.h"
 
 #include <util/Uuid.h>
 

@@ -11,6 +11,8 @@ struct Texture
 {
   util::Uuid _id = util::Uuid::generate();
 
+  std::string _name;
+
   explicit operator bool() const {
     return !_data.empty();
   }
@@ -25,7 +27,9 @@ struct Texture
     RGBA16F_SFLOAT,
     RGBA_SRGB_BC7,
     RGBA_UNORM_BC7,
-    RG_UNORM_BC5
+    RG_UNORM_BC5,
+    R8_UNORM,
+    R16_UNORM
   } _format;
 
   unsigned _numMips = 1; // Needed so we know how to deserialise

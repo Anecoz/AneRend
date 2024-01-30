@@ -597,7 +597,7 @@ vec3 calcIndirectSpecularLight(
   F0 = mix(F0, albedo, metallic);
 
   vec3 kS = fresnelSchlickRoughness(max(dot(normal, V), 0.0), F0, roughness);
-  const float MAX_REFLECTION_LOD = 5.0;
+  const float MAX_REFLECTION_LOD = 4.0;
 
   float finalLod = clamp(roughness * MAX_REFLECTION_LOD, 0.0, MAX_REFLECTION_LOD);
 

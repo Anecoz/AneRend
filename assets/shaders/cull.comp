@@ -76,6 +76,14 @@ layout(std430, set = 1, binding = 9) buffer PointLightShadowTransBuf {
   TranslationId ids[];
 } shadowTransBufs[4];
 
+layout(std430, set = 1, binding = 10) buffer TerrainDrawBuffer {
+  DrawCommand draws[];
+} terrainDrawBuffer;
+
+layout(std430, set = 1, binding = 11) buffer TerrainTranslationBuffer {
+  TranslationId ids[];
+} terrainTranslationBuffer;
+
 layout(push_constant) uniform constants {
   mat4 view;
   vec4 frustumPlanes[4];
@@ -303,6 +311,7 @@ void main()
 
     // Check visibility against frustum planes
     bool visible = visibleBitSet(renderableBuffer.renderables[gID]);
+    bool isTerrain = renderableBuffer.renderables[gID].terrainOffset >= 0;
 
     if (visible) {
 
@@ -351,12 +360,23 @@ void main()
                 // Point light shadows, they have their own respective draw buffers
                 checkBSAgainstPointLightShadows(meshBs.xyz, meshBs.w, meshIndex, meshOffset, gID);
 
-                uint countBefore = atomicAdd(drawBuffer.draws[meshIndex].instanceCount, 1);
+                // Terrain has its own draw buffer
+                if (isTerrain) {
+                  uint countBefore = atomicAdd(terrainDrawBuffer.draws[meshIndex].instanceCount, 1);
 
-                // Update translation buffer (from gl_InstanceIndex to renderableId and meshId)
-                uint instanceIndex = drawBuffer.draws[meshIndex].firstInstance + countBefore;
-                translationBuffer.ids[instanceIndex].renderableIndex = gID;
-                translationBuffer.ids[instanceIndex].meshOffset = meshOffset;
+                  // Update translation buffer (from gl_InstanceIndex to renderableId and meshId)
+                  uint instanceIndex = terrainDrawBuffer.draws[meshIndex].firstInstance + countBefore;
+                  terrainTranslationBuffer.ids[instanceIndex].renderableIndex = gID;
+                  terrainTranslationBuffer.ids[instanceIndex].meshOffset = meshOffset;
+                }
+                else {
+                  uint countBefore = atomicAdd(drawBuffer.draws[meshIndex].instanceCount, 1);
+
+                  // Update translation buffer (from gl_InstanceIndex to renderableId and meshId)
+                  uint instanceIndex = drawBuffer.draws[meshIndex].firstInstance + countBefore;
+                  translationBuffer.ids[instanceIndex].renderableIndex = gID;
+                  translationBuffer.ids[instanceIndex].meshOffset = meshOffset;
+                }
 
                 // Also add debug sphere instances if it is enabled
                 if (checkUboFlag(UBO_BS_VIS_FLAG)) {

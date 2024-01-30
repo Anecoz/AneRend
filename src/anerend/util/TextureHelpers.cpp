@@ -24,6 +24,31 @@ KTX_error_code fillMipsOfTex(
 
 }
 
+render::asset::Texture TextureHelpers::createTextureRGBA8(unsigned w, unsigned h, glm::u8vec4 val)
+{
+  render::asset::Texture tex;
+
+  tex._width = w;
+  tex._height = h;
+  tex._format = render::asset::Texture::Format::RGBA8_UNORM;
+  tex._data.emplace_back();
+  tex._data.back().resize(w * h * 4);
+
+  auto& data = tex._data.back();
+  for (unsigned x = 0; x < w; x++) {
+    for (unsigned y = 0; y < h; y++) {
+      data[4 * (w * y + x) + 0] = val[0];
+      data[4 * (w * y + x) + 1] = val[1];
+      data[4 * (w * y + x) + 2] = val[2];
+      data[4 * (w * y + x) + 3] = val[3];
+    }
+  }
+
+  //std::fill(tex._data.back().begin(), tex._data.back().end(), initialVal);
+
+  return tex;
+}
+
 std::vector<std::uint8_t> TextureHelpers::convertRGBA8ToRGB8(std::vector<std::uint8_t> in)
 {
   std::vector<std::uint8_t> out;
@@ -66,7 +91,7 @@ void TextureHelpers::convertRGBA8ToBC7(render::asset::Texture& tex)
   createInfo.baseWidth = tex._width;
   createInfo.baseHeight = tex._height;
   createInfo.baseDepth = 1;
-  createInfo.numDimensions = render::imageutil::numDimensions(tex._format);
+  createInfo.numDimensions = std::min(render::imageutil::numDimensions(tex._format), 3u);
   createInfo.numLevels = tex._numMips;
   createInfo.numLayers = 1;
   createInfo.numFaces = 1;
@@ -152,7 +177,7 @@ void TextureHelpers::convertRG8ToBC5(render::asset::Texture& tex)
   createInfo.baseWidth = tex._width;
   createInfo.baseHeight = tex._height;
   createInfo.baseDepth = 1;
-  createInfo.numDimensions = render::imageutil::numDimensions(tex._format);
+  createInfo.numDimensions = std::min(render::imageutil::numDimensions(tex._format), 3u);
   createInfo.numLevels = tex._numMips;
   createInfo.numLayers = 1;
   createInfo.numFaces = 1;

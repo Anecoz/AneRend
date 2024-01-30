@@ -5,6 +5,7 @@
 #include <util/Uuid.h>
 #include <render/Camera.h>
 #include <render/asset/Prefab.h>
+#include <render/asset/Texture.h>
 
 namespace render::scene { class Scene; }
 
@@ -25,6 +26,7 @@ struct AneditContext
   virtual render::asset::Prefab prefabFromNode(const util::Uuid& node) = 0;
 
   virtual void* getImguiTexId(util::Uuid& tex) = 0;
+  virtual void generateMipMaps(render::asset::Texture& tex) = 0;
 
   virtual void createCinematicPlayer(util::Uuid& id) = 0;
   virtual void destroyCinematicPlayer(util::Uuid& id) = 0;
@@ -40,7 +42,8 @@ struct AneditContext
     Prefab,
     //Animator,
     Node,
-    Cinematic
+    Cinematic,
+    Texture
   };
 
   virtual std::vector<util::Uuid>& selection() = 0;
@@ -55,6 +58,8 @@ struct AneditContext
   virtual SelectionType& selectionType() { return _selectionType; }
 
   virtual render::Camera& camera() = 0;
+
+  virtual glm::vec3 latestWorldPosition() = 0;
 
 protected:
   std::vector<util::Uuid> _selection;

@@ -247,7 +247,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
       color0AttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
       color0AttachmentInfo.imageView = exeParams.colorAttachmentViews[0];
       color0AttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      color0AttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      color0AttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
       color0AttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
       color0AttachmentInfo.clearValue = clearValues[0];
 
@@ -255,7 +255,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
       color1AttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
       color1AttachmentInfo.imageView = exeParams.colorAttachmentViews[1];
       color1AttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      color1AttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      color1AttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
       color1AttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
       color1AttachmentInfo.clearValue = clearValues[0];
 
@@ -263,7 +263,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
       color2AttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
       color2AttachmentInfo.imageView = exeParams.colorAttachmentViews[2];
       color2AttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      color2AttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      color2AttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
       color2AttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
       color2AttachmentInfo.clearValue = clearValues[0];
 
@@ -275,7 +275,7 @@ void GeometryRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* 
       depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
       depthAttachmentInfo.imageView = exeParams.depthAttachmentViews[0];
       depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-      depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
       depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
       depthAttachmentInfo.clearValue = clearValues[1];
 

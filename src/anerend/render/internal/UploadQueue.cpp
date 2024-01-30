@@ -6,6 +6,85 @@
 
 namespace render::internal {
 
+namespace {
+
+void uploadTextureData(
+  render::AllocatedImage image, 
+  VkFormat format, 
+  render::asset::Texture& tex,
+  UploadContext* uc,
+  render::internal::StagingBuffer& sb, 
+  VkCommandBuffer cmdBuffer)
+{
+  // Transition image to transfer dst
+  imageutil::transitionImageLayout(
+    cmdBuffer,
+    image._image,
+    format,
+    VK_IMAGE_LAYOUT_UNDEFINED,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    0,
+    tex._numMips);
+
+  void* data;
+  glm::uint8_t* mappedData = nullptr;
+  vmaMapMemory(uc->getRC()->vmaAllocator(), sb._buf._allocation, &data);
+  mappedData = (glm::uint8_t*)data;
+  mappedData = mappedData + sb._currentOffset;
+
+  // Copy each mip to staging buffer and then to image
+  uint32_t mipWidth = tex._width;
+  uint32_t mipHeight = tex._height;
+  std::size_t rollingOffset = 0;
+  for (unsigned i = 0; i < tex._numMips; ++i) {
+    auto* data = mappedData + rollingOffset;
+
+    std::memcpy(data, tex._data[i].data(), tex._data[i].size());
+
+    VkExtent3D extent{};
+    extent.depth = 1;
+    extent.height = mipHeight;
+    extent.width = mipWidth;
+
+    VkOffset3D offset{};
+
+    VkBufferImageCopy imCopy{};
+    imCopy.bufferOffset = sb._currentOffset + rollingOffset;
+    imCopy.imageExtent = extent;
+    imCopy.imageOffset = offset;
+    imCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imCopy.imageSubresource.layerCount = 1;
+    imCopy.imageSubresource.mipLevel = i;
+
+    vkCmdCopyBufferToImage(
+      cmdBuffer,
+      sb._buf._buffer,
+      image._image,
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      1,
+      &imCopy);
+
+    rollingOffset += tex._data[i].size();
+    if (mipWidth > 1) mipWidth /= 2;
+    if (mipHeight > 1) mipHeight /= 2;
+  }
+
+  // Transition image to shader
+  imageutil::transitionImageLayout(
+    cmdBuffer,
+    image._image,
+    format,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    0,
+    tex._numMips);
+
+  vmaUnmapMemory(uc->getRC()->vmaAllocator(), sb._buf._allocation);
+  //sb.advance(dataSize);
+}
+
+}
+
 UploadQueue::UploadQueue()
 {}
 
@@ -24,9 +103,18 @@ void UploadQueue::add(asset::Texture textureToUpload)
   _texturesToUpload.emplace_back(std::move(textureToUpload));
 }
 
+void UploadQueue::update(asset::Texture textureToUpdate, internal::InternalTexture internalTex)
+{
+  TextureUpdateInfo info{};
+  info._internalTex = std::move(internalTex);
+  info._tex = std::move(textureToUpdate);
+  _texturesToUpdate.emplace_back(std::move(info));
+}
+
 void UploadQueue::execute(UploadContext* uc, VkCommandBuffer cmdBuf)
 {
   uploadModels(uc, cmdBuf);
+  updateTextures(uc, cmdBuf);
   uploadTextures(uc, cmdBuf);
 }
 
@@ -53,6 +141,38 @@ void UploadQueue::uploadTextures(UploadContext* uc, VkCommandBuffer cmdBuf)
     it = _texturesToUpload.erase(it);
 
     uc->textureUploadedCB(std::move(internalTex));
+  }
+}
+
+void UploadQueue::updateTextures(UploadContext* uc, VkCommandBuffer cmdBuf)
+{
+  auto& sb = uc->getStagingBuffer();
+
+  for (auto it = _texturesToUpdate.begin(); it != _texturesToUpdate.end();) {
+    auto& internalTex = it->_internalTex;
+    auto& tex = it->_tex;
+    auto format = imageutil::texFormatToVk(tex._format);
+
+    // Make sure that we're at a multiple of 16
+    auto mod = sb._currentOffset % 16;
+    auto padding = 16 - mod;
+
+    std::size_t dataSize = padding;
+    for (auto& dat : tex._data) {
+      dataSize += dat.size();
+    }
+
+    if (!sb.canFit(dataSize)) {
+      break;
+    }
+
+    sb.advance(padding);
+
+    uploadTextureData(internalTex._bindlessInfo._image, format, tex, uc, sb, cmdBuf);
+
+    sb.advance(dataSize);
+
+    it = _texturesToUpdate.erase(it);
   }
 }
 
@@ -231,6 +351,15 @@ bool UploadQueue::createTexture(
     0,
     tex._numMips);
 
+  uploadTextureData(
+    image,
+    format,
+    tex,
+    uc,
+    sb,
+    cmdBuffer);
+
+#if 0
   // Transition image to transfer dst
   imageutil::transitionImageLayout(
     cmdBuffer,
@@ -295,6 +424,7 @@ bool UploadQueue::createTexture(
     tex._numMips);
 
   vmaUnmapMemory(uc->getRC()->vmaAllocator(), sb._buf._allocation);
+#endif
   sb.advance(dataSize);
 
   SamplerCreateParams params{};

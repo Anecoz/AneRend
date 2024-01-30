@@ -16,7 +16,7 @@ void SpecularGIMipPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* r
 {
   //uint32_t width = rc->swapChainExtent().width;
   //uint32_t height = rc->swapChainExtent().height;
-  uint32_t mipLevels = 6;// static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
+  uint32_t mipLevels = 5;// static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
   for (uint32_t i = 0; i < mipLevels - 1; ++i) {
     RenderPassRegisterInfo info{};

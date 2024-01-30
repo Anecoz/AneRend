@@ -3,10 +3,11 @@
 #include "../logic/AneditContext.h"
 #include <render/scene/Scene.h>
 
-#include "EditTransformGUI.h"
-#include "EditLightGUI.h"
-#include "EditRenderableGUI.h"
-#include "EditAnimatorGUI.h"
+#include "component/EditTransformGUI.h"
+#include "component/EditLightGUI.h"
+#include "component/EditRenderableGUI.h"
+#include "component/EditAnimatorGUI.h"
+#include "component/EditTerrainGUI.h"
 
 #include <imgui.h>
 
@@ -32,6 +33,7 @@ EditNodeGUI::EditNodeGUI()
   _componentGUIs[typeid(component::Renderable)] = new EditRenderableGUI();
   _componentGUIs[typeid(component::Light)] = new EditLightGUI();
   _componentGUIs[typeid(component::Animator)] = new EditAnimatorGUI();
+  _componentGUIs[typeid(component::Terrain)] = new EditTerrainGUI();
 }
 
 EditNodeGUI::~EditNodeGUI()
@@ -66,11 +68,13 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
   bool hasRenderable = false;
   bool hasLight = false;
   bool hasAnimator = false;
+  bool hasTerrain = false;
 
   DRAW_COMP(Transform);
   DRAW_COMP(Renderable);
   DRAW_COMP(Light);
   DRAW_COMP(Animator);
+  DRAW_COMP(Terrain);
 
   // Add new components
   if (ImGui::BeginPopupContextWindow()) {
@@ -86,6 +90,12 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
       if (ImGui::MenuItem("Add light...")) {
         c->scene().registry().addComponent<component::Light>(id);
         c->scene().registry().patchComponent<component::Light>(id);
+      }
+    }
+    if (!hasTerrain) {
+      if (ImGui::MenuItem("Add terrain...")) {
+        c->scene().registry().addComponent<component::Terrain>(id);
+        c->scene().registry().patchComponent<component::Terrain>(id);
       }
     }
 

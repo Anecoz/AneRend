@@ -28,6 +28,9 @@ struct InternalRenderable
   // Only used for ray tracing: Offset where to write animated vertices
   std::vector<util::Uuid> _dynamicMeshes;
   std::uint32_t _dynamicModelBufferOffset = 0;
+
+  // Offset into terrain buffer on GPU
+  bool _isTerrain = false;
 };
 
 }

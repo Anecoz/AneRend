@@ -41,6 +41,7 @@
 #include "passes/LuminanceAveragePass.h"
 #include "passes/UpdateBlasPass.h"
 #include "passes/CompactDrawsPass.h"
+#include "passes/TerrainRenderPass.h"
 #include "internal/MipMapGenerator.h"
 #include "../component/Components.h"
 
@@ -174,6 +175,9 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera, 
     .where<component::PageStatus, component::Renderable>()
     .update<component::Transform>()
     .where<component::PageStatus, component::Light>())
+  , _terrainObserver(_registry->getEnttRegistry(), entt::collector
+    .update<component::Terrain>()
+    .where<component::PageStatus, component::Renderable>())
   , _currentSwapChainIndex(0)
   , _vault(MAX_FRAMES_IN_FLIGHT)
   , _gigaVtxBuffer(1024 * 1024 * GIGA_MESH_BUFFER_SIZE_MB)
@@ -258,6 +262,7 @@ VulkanRenderer::~VulkanRenderer()
     vmaDestroyBuffer(_vmaAllocator, _gpuSceneDataBuffer[i]._buffer, _gpuSceneDataBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuLightBuffer[i]._buffer, _gpuLightBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuTileBuffer[i]._buffer, _gpuTileBuffer[i]._allocation);
+    vmaDestroyBuffer(_vmaAllocator, _gpuTerrainBuffer[i]._buffer, _gpuTerrainBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuPointLightShadowBuffer[i]._buffer, _gpuPointLightShadowBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuViewClusterBuffer[i]._buffer, _gpuViewClusterBuffer[i]._allocation);
     vmaDestroyBuffer(_vmaAllocator, _gpuSkeletonBuffer[i]._buffer, _gpuSkeletonBuffer[i]._allocation);
@@ -290,6 +295,7 @@ bool VulkanRenderer::init()
   _materialsChanged.resize(MAX_FRAMES_IN_FLIGHT);
   _texturesChanged.resize(MAX_FRAMES_IN_FLIGHT);
   _tileInfosChanged.resize(MAX_FRAMES_IN_FLIGHT);
+  _terrainsChanged.resize(MAX_FRAMES_IN_FLIGHT);
 
   uint32_t extensionCount = 0;
   vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
@@ -420,6 +426,9 @@ bool VulkanRenderer::init()
   for (auto&& val : _tileInfosChanged) {
     val = true;
   }
+  for (auto&& val : _terrainsChanged) {
+    val = true;
+  }
 
   std::vector<Vertex> vert;
   std::vector<std::uint32_t> inds;
@@ -523,7 +532,7 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
   bool rendIdMapUpdate = !update._removedRenderables.empty();
   bool modelIdMapUpdate = !update._removedModels.empty();
   bool materialIdMapUpdate = !update._removedMaterials.empty();
-  bool textureIdMapUpdate = !update._removedTextures.empty();
+  bool textureIdMapUpdate = !update._removedTextures.empty() || !update._updatedTextures.empty();
   bool forceModelChange = false;
 
   // Start with tile infos
@@ -687,6 +696,21 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
     }
   }
 
+  // Updated textures
+  for (auto& tex : update._updatedTextures) {
+    if (!tex._id) {
+      printf("Cannot update non-existing texture!\n");
+      continue;
+    }
+
+    if (_textureIdMap.find(tex._id) == _textureIdMap.end()) {
+      printf("Cannot update unknown texture\n");
+      continue;
+    }
+
+    _uploadQ.update(std::move(tex), _currentTextures[_textureIdMap[tex._id]]);
+  }
+
   // Added textures
   for (auto& tex : update._addedTextures) {
     if (!tex._id) {
@@ -775,314 +799,17 @@ void VulkanRenderer::assetUpdate(AssetUpdate&& update)
       break;
     }
 
-    // TODO: Currently only support updating basecolfac and emissive (not the textures)
     _currentMaterials[it->second]._baseColFactor = mat._baseColFactor;
     _currentMaterials[it->second]._emissive = mat._emissive;
     _currentMaterials[it->second]._metallicFactor = mat._metallicFactor;
     _currentMaterials[it->second]._roughnessFactor = mat._roughnessFactor;
-
+    _currentMaterials[it->second]._albedoTex = mat._albedoTex;
+    _currentMaterials[it->second]._emissiveTex = mat._emissiveTex;
+    _currentMaterials[it->second]._normalTex = mat._normalTex;
+    _currentMaterials[it->second]._metRoughTex = mat._metallicRoughnessTex;
 
   }
 
-#if 0
-  // Removed animations
-  for (auto remAnim : update._removedAnimations) {
-    // TODO: What if a renderable references this animation?
-    _animThread.removeAnimation(remAnim);
-  }
-
-  // Added animations
-  for (auto& anim : update._addedAnimations) {
-    _animThread.addAnimation(std::move(anim));
-  }
-
-  // Removed skeletons
-  for (auto remSkel : update._removedSkeletons) {
-    // TODO: What if a renderable references this skeleton?
-    
-    // Free from skeleton offset mem if
-    bool exist = _skeletonOffsets.count(remSkel) > 0;
-
-    if (!exist) {
-      printf("WARNING! Removing skeleton with id %s, but does not exist in mem if!\n", remSkel.str().c_str());
-    }
-    else {
-      _skeletonMemIf.removeData(_skeletonOffsets[remSkel]);
-      _skeletonOffsets.erase(remSkel);
-    }
-
-    // Remove from animation runtime (actually frees the memory)
-    _animThread.removeSkeleton(remSkel);
-  }
-
-  // Added skeletons
-  for (auto& skel : update._addedSkeletons) {
-    // Also update mem if of skeleton offsets
-    std::size_t numMatrices = 0;
-    if (skel._nonJointRoot) {
-      numMatrices = skel._joints.size() - 1;
-    }
-    else {
-      numMatrices = skel._joints.size();
-    }
-
-    auto handle = _skeletonMemIf.addData(numMatrices);
-    if (!handle) {
-      printf("Cannot add skeleton with id %s, can't fit into mem interface!\n", skel._id.str().c_str());
-      continue;
-    }
-
-    _skeletonOffsets[skel._id] = std::move(handle);
-
-    _animThread.addSkeleton(std::move(skel));
-  }
-
-  // Removed animators
-  for (auto remAnimator : update._removedAnimators) {
-    _animThread.removeAnimator(remAnimator);
-  }
-
-  // Updated animators
-  for (auto& animator : update._updatedAnimators) {
-    _animThread.updateAnimator(std::move(animator));
-  }
-
-  // Added animators
-  for (auto& animator : update._addedAnimators) {
-    _animThread.addAnimator(std::move(animator));
-  }
-#endif
-  
-#if 0
-  // Removed renderables. This forces the id map to update aswell (potentially expensive)
-  for (auto remId : update._removedRenderables) {
-    for (auto it = _currentRenderables.begin(); it != _currentRenderables.end(); ++it) {
-      if (it->_renderable._id == remId) {
-        if (_enableRayTracing && !it->_dynamicMeshes.empty()) {
-
-          modelIdMapUpdate = true;
-          forceModelChange = true;
-
-          if (_dynamicBlases.count(remId) > 0) {
-            auto& dynamicBlas = _dynamicBlases[remId];
-
-            for (std::size_t i = 0; i < it->_meshes.size(); ++i) {
-              auto& mesh = it->_dynamicMeshes[i];
-
-              for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
-                if (meshIt->_id == mesh) {
-                  // Put blas on deletion q
-                  auto& blas = dynamicBlas[i];
-                  _delQ.add(blas); // copy
-
-                  // Remove meshes so that nothing uses the blas anymore
-                  _gigaVtxBuffer._memInterface.removeData(meshIt->_vertexHandle);
-                  _gigaIdxBuffer._memInterface.removeData(meshIt->_indexHandle);
-                  meshIt = _currentMeshes.erase(meshIt);
-                  break;
-                }
-                else {
-                  ++meshIt;
-                }
-              }
-            }
-
-            _dynamicBlases.erase(remId);
-            printf("erased id %s from dynamic blases\n", remId.str().c_str());
-          }
-        }
-        else if (_enableRayTracing) {
-          // If we're still in the process of adding this dynamic rend, remove it from the processing list
-          for (auto it = _dynamicModelsToCopy.begin(); it != _dynamicModelsToCopy.end(); ++it) {
-            if (it->_renderableId == remId) {
-
-              // Add any potentially added blases to delQ
-              for (auto& blas : it->_currentBlases) {
-                _delQ.add(blas);
-              }
-
-              // Also give back potential meshes that have already been added
-              for (std::size_t i = 0; i < it->_currentBlases.size(); ++i) {
-                auto& meshId = it->_generatedDynamicIds[i];
-                for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
-                  if (meshIt->_id == meshId) {
-
-                    // Remove meshes so that nothing uses the blas anymore
-                    _gigaVtxBuffer._memInterface.removeData(meshIt->_vertexHandle);
-                    _gigaIdxBuffer._memInterface.removeData(meshIt->_indexHandle);
-                    meshIt = _currentMeshes.erase(meshIt);
-                    break;
-                  }
-                  else {
-                    ++meshIt;
-                  }
-                }
-              }
-
-              _dynamicModelsToCopy.erase(it);
-              break;
-            }
-          }
-        }
-        _currentRenderables.erase(it);
-        break;
-      }
-    }
-  }
-
-  // Rend id map update
-  if (rendIdMapUpdate) {
-    _renderableIdMap.clear();
-
-    for (std::size_t i = 0; i < _currentRenderables.size(); ++i) {
-      _renderableIdMap[_currentRenderables[i]._renderable._id] = i;
-    }
-  }
-
-  // Added renderables
-  for (const auto& rend : update._addedRenderables) {
-    if (!rend._id) {
-      printf("Asset update fail: cannot add renderable with invalid id\n");
-      continue;
-    }
-
-    if (!rend._model) {
-      printf("Asset update fail: cannot add renderable with invalid model id\n");
-      continue;
-    }
-
-    if (_currentRenderables.size() == MAX_NUM_RENDERABLES) {
-      printf("Cannot add renderable, max size reached!\n");
-      continue;
-    }
-
-    internal::InternalRenderable internalRend{};
-    internalRend._renderable = rend;
-
-    // Fill in meshids
-    auto& model = _currentModels[_modelIdMap[rend._model]];
-    internalRend._meshes = model._meshes;
-
-    if (rend._skeleton) {
-      internalRend._skeletonOffset = (uint32_t)_skeletonOffsets[rend._skeleton]._offset;
-
-      // If ray tracing is enabled, we need to write individual BLAS:es for each renderable that is animated.
-      if (_enableRayTracing) {
-        if (_currentMeshes.size() == MAX_NUM_MESHES) {
-          printf("Cannot add dynamic BLAS for renderable, max num meshes reached!\n");
-          continue;
-        }
-
-        // TODO: Don't do this if we already have this skeleton + model combination copied
-        //       In that case, just point to the dynamic model already present
-        DynamicModelCopyInfo copyInfo{};
-        copyInfo._renderableId = internalRend._renderable._id;
-        _dynamicModelsToCopy.emplace_back(std::move(copyInfo));
-
-        for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-          _modelsChanged[i] = true;
-        }
-      }
-    }
-
-    _pendingFirstUploadRenderables.emplace_back(std::move(internalRend));
-  }
-
-  // Updated renderables
-  for (const auto& rend : update._updatedRenderables) {
-    if (!rend._id) {
-      printf("Asset update fail: cannot update renderable with invalid id\n");
-      continue;
-    }
-
-    if (!rend._model) {
-      printf("Asset update fail: cannot update renderable with invalid model id\n");
-      continue;
-    }
-
-    auto it = _renderableIdMap.find(rend._id);
-
-    if (it == _renderableIdMap.end()) {
-      printf("Could not update renderable %s, doesn't exist!\n", rend._id.str().c_str());
-      break;
-    }
-
-    _currentRenderables[it->second]._renderable = rend;
-  }
-
-  // Removed lights
-  for (auto& l : update._removedLights) {
-    for (auto it = _lights.begin(); it != _lights.end(); ++it) {
-      if (it->_lightComp._id == l) {
-
-        if (it->_lightComp._shadowCaster) {
-          // Remove from caster list (if there)
-
-          for (auto& id : _shadowCasters) {
-            if (id == it->_lightComp._id) {
-              id = util::Uuid();
-              break;
-            }
-          }
-        }
-
-        _lights.erase(it);
-        break;
-      }
-    }
-  }
-
-  // Added lights
-  for (auto& l : update._addedLights) {
-
-    // add to shadow caster index list (if possible)
-    if (l._shadowCaster) {
-      for (auto& id : _shadowCasters) {
-        if (!id) {
-          id = l._id;
-          break;
-        }
-      }
-    }
-
-    //l.updateViewMatrices();
-    _lights.emplace_back(std::move(l));
-  }
-
-  // Updated lights
-  for (auto& l : update._updatedLights) {
-    int idx = 0;
-    for (auto& oldLight : _lights) {
-      if (oldLight._lightComp._id == l._id) {
-
-        // Did shadow caster status change?
-        if (oldLight._lightComp._shadowCaster && !l._shadowCaster) {
-          // it was shadow caster but not anymore, remove from list
-          for (auto& id : _shadowCasters) {
-            if (id == oldLight._lightComp._id) {
-              id = util::Uuid();
-              break;
-            }
-          }
-        }
-        else if (!oldLight._lightComp._shadowCaster && l._shadowCaster) {
-          // wasn't shadow caster but now is, add to list if possible
-          for (auto& id : _shadowCasters) {
-            if (!id) {
-              id = l._id;
-              break;
-            }
-          }
-        }
-
-        //l.updateViewMatrices();
-        oldLight._lightComp = l;
-        break;
-      }
-      idx++;
-    }
-  }
-#endif
   // Mat id map update
   if (materialIdMapUpdate) {
     _materialIdMap.clear();
@@ -2359,8 +2086,10 @@ void VulkanRenderer::updateNodes()
   bool modelIdMapUpdate = false;
   bool modelChange = false;
   bool rendIdMapUpdate = false;
+  bool terrainIdMapUpdate = false;
   bool renderablesChanged = false;
   bool lightsChanged = false;
+  bool terrainChanged = false;
 
   for (const auto entity : _nodeObserver) {
     auto internalId = _registry->reverseLookup(entity);
@@ -2413,6 +2142,7 @@ void VulkanRenderer::updateNodes()
           auto& model = _currentModels[_modelIdMap[rend._model]];
           internalRend._meshes = model._meshes;
 
+          // Skeleton
           if (_registry->hasComponent<component::Skeleton>(internalId)) {
             auto& skeleComp = _registry->getComponent<component::Skeleton>(internalId);
             internalRend._skeletonOffset = getOrCreateSkeleOffset(internalId, skeleComp._jointRefs.size());
@@ -2436,6 +2166,26 @@ void VulkanRenderer::updateNodes()
             }
           }
 
+          // Terrain
+          if (_registry->hasComponent<component::Terrain>(internalId)) {
+
+            auto& terrainComp = _registry->getComponent<component::Terrain>(internalId);
+            internal::InternalTerrain internalTerrain{};
+
+            internalTerrain._id = internalId;
+            internalTerrain._baseMaterials = terrainComp._baseMaterials;
+            internalTerrain._blendMask = terrainComp._blendMap;
+            internalTerrain._heightmap = terrainComp._heightMap;
+
+            _currentTerrains.emplace_back(std::move(internalTerrain));
+            auto idx = _currentTerrains.size() - 1;
+            _terrainIdMap[internalId] = idx;
+
+            internalRend._isTerrain = true;
+
+            terrainChanged = true;
+          }
+
           _pendingFirstUploadRenderables.emplace_back(std::move(internalRend));
         }
         else {
@@ -2456,6 +2206,8 @@ void VulkanRenderer::updateNodes()
             printf("Could not update renderable %s, doesn't exist!\n", internalId.str().c_str());
             break;
           }
+
+          // Terrain update is handled by its own observer
 
           _currentRenderables[it->second]._renderable = rend;
           _currentRenderables[it->second]._globalTransform = transComp._globalTransform;
@@ -2534,6 +2286,16 @@ void VulkanRenderer::updateNodes()
                 }
               }
             }
+            
+            // Remove terrain if present
+            auto terrainIt = _terrainIdMap.find(remId);
+            if (terrainIt != _terrainIdMap.end()) {
+              _currentTerrains.erase(_currentTerrains.begin() + terrainIt->second);
+
+              terrainIdMapUpdate = true;
+              terrainChanged = true;
+            }
+
             _currentRenderables.erase(it);
             break;
           }
@@ -2646,12 +2408,43 @@ void VulkanRenderer::updateNodes()
         _renderableIdMap[_currentRenderables[i]._id] = i;
       }
     }
+
+    // Terrain id map
+    if (terrainIdMapUpdate) {
+      _terrainIdMap.clear();
+
+      for (std::size_t i = 0; i < _currentTerrains.size(); ++i) {
+        _terrainIdMap[_currentTerrains[i]._id] = i;
+      }
+    }
+  }
+
+  for (const auto entity : _terrainObserver) {
+    auto internalId = _registry->reverseLookup(entity);
+    auto& terrainComp = _registry->getComponent<component::Terrain>(internalId);
+
+    auto it = _terrainIdMap.find(internalId);
+    if (it != _terrainIdMap.end()) {
+      // Update
+      _currentTerrains[it->second]._baseMaterials = terrainComp._baseMaterials;
+      _currentTerrains[it->second]._blendMask = terrainComp._blendMap;
+      _currentTerrains[it->second]._heightmap = terrainComp._heightMap;
+
+      terrainChanged = true;
+    }
+
   }
 
   // Did we update any renderables
   if (renderablesChanged) {
     for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
       _renderablesChanged[i] = true;
+    }
+  }
+
+  if (terrainChanged) {
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      _terrainsChanged[i] = true;
     }
   }
 
@@ -2669,6 +2462,7 @@ void VulkanRenderer::updateNodes()
   }
 
   _nodeObserver.clear();
+  _terrainObserver.clear();
 }
 
 void VulkanRenderer::updateSkeletons()
@@ -3451,7 +3245,12 @@ bool VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     for (uint32_t i = 0; i < model._meshes.size(); ++i) {
       _currentMeshUsage[model._meshes[i]]++;
     }
-    
+
+    int32_t terrainOffset = -1;    
+    if (_currentRenderables[i]._isTerrain) {
+      terrainOffset = (int32_t)_terrainIdMap[_currentRenderables[i]._id];
+    }
+
     mappedData[i]._transform = _currentRenderables[i]._globalTransform;
     mappedData[i]._tint = glm::vec4(renderable._tint, 1.0f);
     mappedData[i]._modelOffset = _currentRenderables[i]._modelBufferOffset;
@@ -3461,6 +3260,7 @@ bool VulkanRenderer::prefillGPURenderableBuffer(VkCommandBuffer& commandBuffer)
     mappedData[i]._visible = renderable._visible ? 1 : 0;
     mappedData[i]._firstMaterialIndex = _currentRenderables[i]._materialIndexBufferIndex;
     mappedData[i]._dynamicModelOffset = _currentRenderables[i]._dynamicModelBufferOffset;
+    mappedData[i]._terrainOffset = terrainOffset;
   }
 
   VkBufferCopy copyRegion{};
@@ -3799,8 +3599,83 @@ void VulkanRenderer::prefillGPUTileInfoBuffer(VkCommandBuffer& commandBuffer)
   sb.advance(dataSize);
 }
 
+void VulkanRenderer::prefillGPUTerrainInfoBuffer(VkCommandBuffer& commandBuffer)
+{
+  if (_currentTerrains.empty()) return;
+
+  auto& sb = getStagingBuffer();
+
+  std::size_t dataSize = _currentTerrains.size() * sizeof(gpu::GPUTerrainInfo);
+  uint8_t* data;
+  vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
+
+  // Offset according to current staging buffer usage
+  data = data + sb._currentOffset;
+
+  gpu::GPUTerrainInfo* mappedData = reinterpret_cast<gpu::GPUTerrainInfo*>(data);
+
+  for (std::size_t i = 0; i < _currentTerrains.size(); ++i) {
+    auto& t = _currentTerrains[i];
+
+    mappedData[i]._heightmap = (int32_t)_currentTextures[_textureIdMap[t._heightmap]]._bindlessInfo._bindlessIndexHandle._offset;
+
+    if (_textureIdMap.find(t._blendMask) != _textureIdMap.end()) {
+      mappedData[i]._blendMap = (int32_t)_currentTextures[_textureIdMap[t._blendMask]]._bindlessInfo._bindlessIndexHandle._offset;
+    }
+    else {
+      mappedData[i]._blendMap = -1;
+    }
+
+    for (int j = 0; j < 4; ++j) {
+      if (_materialIdMap.find(t._baseMaterials[j]) != _materialIdMap.end()) {
+        mappedData[i]._baseMaterials[j] = (int)_materialIdMap[t._baseMaterials[j]];
+      }
+      else {
+        mappedData[i]._baseMaterials[j] = -1;
+      }
+    }
+  }
+
+  VkBufferCopy copyRegion{};
+  copyRegion.dstOffset = 0;
+  copyRegion.srcOffset = sb._currentOffset;
+  copyRegion.size = dataSize;
+  vkCmdCopyBuffer(commandBuffer, sb._buf._buffer, _gpuTerrainBuffer[_currentFrame]._buffer, 1, &copyRegion);
+
+  VkBufferMemoryBarrier memBarr{};
+  memBarr.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  memBarr.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  memBarr.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  memBarr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  memBarr.buffer = _gpuTerrainBuffer[_currentFrame]._buffer;
+  memBarr.offset = 0;
+  memBarr.size = VK_WHOLE_SIZE;
+
+  vkCmdPipelineBarrier(
+    commandBuffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+    0, 0, nullptr,
+    1, &memBarr,
+    0, nullptr);
+
+  vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
+
+  // Update staging offset
+  sb.advance(dataSize);
+}
+
 void VulkanRenderer::updateWindForceImage(VkCommandBuffer& commandBuffer)
 {
+  // Quench warning..
+  imageutil::transitionImageLayout(
+    commandBuffer,
+    _gpuWindForceImage[_currentFrame]._image,
+    VK_FORMAT_R32_SFLOAT,
+    VK_IMAGE_LAYOUT_UNDEFINED,
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
   /*std::size_t dataSize = _currentWindMap.height * _currentWindMap.width * 4;
   uint8_t* data;
   vmaMapMemory(_vmaAllocator, _gpuStagingBuffer[_currentFrame]._allocation, (void**)&data);
@@ -4008,8 +3883,15 @@ bool VulkanRenderer::initBindless()
     tileLayoutBinding.binding = _tileBinding;
     tileLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     tileLayoutBinding.descriptorCount = 1;
-    tileLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+    tileLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
     bindings.emplace_back(std::move(tileLayoutBinding));
+
+    VkDescriptorSetLayoutBinding terrainLayoutBinding{};
+    terrainLayoutBinding.binding = _terrainBinding;
+    terrainLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    terrainLayoutBinding.descriptorCount = 1;
+    terrainLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    bindings.emplace_back(std::move(terrainLayoutBinding));
 
     VkDescriptorSetLayoutBinding texLayoutBinding{};
     texLayoutBinding.binding = _bindlessTextureBinding;
@@ -4167,6 +4049,24 @@ bool VulkanRenderer::initBindless()
       tileBufWrite.pBufferInfo = &tileBufferInfo;
 
       descriptorWrites.emplace_back(std::move(tileBufWrite));
+
+      // Terrain Info SSBO
+      VkDescriptorBufferInfo terrainBufInfo{};
+      VkWriteDescriptorSet terrainBufWrite{};
+
+      terrainBufInfo.buffer = _gpuTerrainBuffer[i]._buffer;
+      terrainBufInfo.offset = 0;
+      terrainBufInfo.range = VK_WHOLE_SIZE;
+
+      terrainBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      terrainBufWrite.dstSet = _bindlessDescriptorSets[i];
+      terrainBufWrite.dstBinding = _terrainBinding;
+      terrainBufWrite.dstArrayElement = 0;
+      terrainBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      terrainBufWrite.descriptorCount = 1;
+      terrainBufWrite.pBufferInfo = &terrainBufInfo;
+
+      descriptorWrites.emplace_back(std::move(terrainBufWrite));
 
       // Point light shadow cube views UBO
       VkDescriptorBufferInfo pointLightShadowBufferInfo{};
@@ -4377,6 +4277,7 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new CompactDrawsPass());
   _renderPasses.emplace_back(new ShadowRenderPass());
   _renderPasses.emplace_back(new GrassShadowRenderPass());
+  _renderPasses.emplace_back(new TerrainRenderPass());
   _renderPasses.emplace_back(new GeometryRenderPass());
   _renderPasses.emplace_back(new GrassRenderPass());
   _renderPasses.emplace_back(new UpdateBlasPass());
@@ -4444,6 +4345,7 @@ bool VulkanRenderer::initGpuBuffers()
   _gpuWindForceView.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuLightBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuTileBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+  _gpuTerrainBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuPointLightShadowBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuViewClusterBuffer.resize(MAX_FRAMES_IN_FLIGHT);
   _gpuSkeletonBuffer.resize(MAX_FRAMES_IN_FLIGHT);
@@ -4541,6 +4443,15 @@ bool VulkanRenderer::initGpuBuffers()
 
     bufferutil::createBuffer(
       _vmaAllocator,
+      MAX_NUM_RENDERABLES / 100 * sizeof(gpu::GPUTerrainInfo),
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+      0,
+      _gpuTerrainBuffer[i]);
+    name = "_gpuTerrainBuffer" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)_gpuTerrainBuffer[i]._buffer, name.c_str());
+
+    bufferutil::createBuffer(
+      _vmaAllocator,
       MAX_NUM_POINT_LIGHT_SHADOWS * sizeof(gpu::GPUPointLightShadowCube),
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
       0,
@@ -4594,7 +4505,10 @@ bool VulkanRenderer::initGpuBuffers()
       VK_IMAGE_TILING_OPTIMAL,
       _vmaAllocator,
       VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-      _gpuWindForceImage[i]);
+      _gpuWindForceImage[i],
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    name = "_gpuWindForceImage" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)_gpuWindForceImage[i]._image, name.c_str());
 
     // Wind force image view
     _gpuWindForceView[i] = imageutil::createImageView(
@@ -4602,6 +4516,8 @@ bool VulkanRenderer::initGpuBuffers()
       _gpuWindForceImage[i]._image,
       VK_FORMAT_R32_SFLOAT,
       VK_IMAGE_ASPECT_COLOR_BIT);
+    name = "_gpuWindForceView" + std::to_string(i);
+    setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)_gpuWindForceView[i], name.c_str());
 
     // Add the wind force image view to the vault so that the debug view can watch it
     auto res = new ImageRenderResource();
@@ -4885,6 +4801,9 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
       // Tile-information (baked textures have new indices)
       _tileInfosChanged[_currentFrame] = true;
 
+      // Terrain info references textures for a bit of everything
+      _terrainsChanged[_currentFrame] = true;
+
       _texturesChanged[_currentFrame] = false;
     }
 
@@ -4916,8 +4835,20 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
       // force rend update because the material indices might now be out of date
       forceRenderableUpdate = true;
 
+      // Terrain info references materials for blending
+      _terrainsChanged[_currentFrame] = true;
+
       _materialsChanged[_currentFrame] = false;
     }
+  }
+
+  if (_terrainsChanged[_currentFrame]) {
+    prefillGPUTerrainInfoBuffer(commandBuffer);
+
+    // Force rends because the terrain index might be out of date
+    forceRenderableUpdate = true;
+
+    _terrainsChanged[_currentFrame] = false;
   }
 
   if (forceRenderableUpdate) {
@@ -5057,6 +4988,10 @@ void VulkanRenderer::setRegistry(component::Registry* registry)
     .where<component::PageStatus, component::Renderable>()
     .update<component::Transform>()
     .where<component::PageStatus, component::Light>());
+
+  _terrainObserver.connect(_registry->getEnttRegistry(), entt::collector
+    .update<component::Terrain>()
+    .where<component::PageStatus, component::Renderable>());
 }
 
 glm::vec3 VulkanRenderer::stopBake(BakeTextureCallback callback)

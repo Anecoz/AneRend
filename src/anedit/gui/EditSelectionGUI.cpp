@@ -4,6 +4,7 @@
 #include "EditMaterialGUI.h"
 #include "EditPrefabGUI.h"
 #include "EditCinematicGUI.h"
+#include "EditTextureGUI.h"
 
 #include <imgui.h>
 
@@ -16,7 +17,7 @@ EditSelectionGUI::EditSelectionGUI()
   _specificGuis[logic::AneditContext::SelectionType::Node] = new EditNodeGUI();
   _specificGuis[logic::AneditContext::SelectionType::Material] = new EditMaterialGUI();
   _specificGuis[logic::AneditContext::SelectionType::Prefab] = new EditPrefabGUI();
-  //_specificGuis[logic::AneditContext::SelectionType::Cinematic] = new EditCinematicGUI();
+  _specificGuis[logic::AneditContext::SelectionType::Texture] = new EditTextureGUI();
 
   _cinematicGUI = new EditCinematicGUI();
 }

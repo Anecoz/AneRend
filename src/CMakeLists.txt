@@ -1,2 +1,3 @@
 add_subdirectory(anerend)
 add_subdirectory(anedit)
+add_subdirectory(heightmapgen)

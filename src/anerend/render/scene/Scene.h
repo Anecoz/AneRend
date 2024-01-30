@@ -33,6 +33,7 @@ enum class SceneEventType
   PrefabUpdated,
   PrefabRemoved,
   TextureAdded,
+  TextureUpdated,
   TextureRemoved,
   ModelAdded,
   ModelRemoved,
@@ -118,6 +119,7 @@ public:
   const asset::Prefab* getPrefab(util::Uuid id);
 
   util::Uuid addTexture(asset::Texture&& texture);
+  void updateTexture(asset::Texture texture);
   void removeTexture(util::Uuid id);
   const asset::Texture* getTexture(util::Uuid id);
 

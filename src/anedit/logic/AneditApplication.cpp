@@ -35,6 +35,7 @@ AneditApplication::AneditApplication(std::string title)
   , _vkRenderer(_window, _camera, &_scene.registry())
   , _scenePager(&_vkRenderer)
   , _animUpdater(&_scene)
+  , _terrainSystem(&_scene)
 {
   _scenePager.setScene(&_scene);
 
@@ -107,6 +108,7 @@ void AneditApplication::update(double delta)
       _scene = std::move(*scenePtr);
       _scenePager.setScene(&_scene);
       _animUpdater.setScene(&_scene);
+      _terrainSystem.setScene(&_scene);
       _vkRenderer.setRegistry(&_scene.registry());
       scenePtr = nullptr;
     }
@@ -127,6 +129,8 @@ void AneditApplication::update(double delta)
     //printf("Anim took %lld us\n", std::chrono::duration_cast<std::chrono::microseconds>(after - now).count());
   }
 
+  _terrainSystem.update();
+
   {
     auto now = std::chrono::system_clock::now();
     _scene.update();
@@ -144,6 +148,12 @@ void AneditApplication::update(double delta)
 
   //_windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));
+
+  // For now always request a world pos
+  _vkRenderer.requestWorldPosition(MousePosInput::getPosition(),
+    [this](glm::vec3 worldPos) {
+      _latestWorldPosition = worldPos;
+    });
 
   _vkRenderer.update(
     _camera,
@@ -181,7 +191,18 @@ void AneditApplication::render()
 
   oldUI();
 
-  _vkRenderer.drawFrame();
+  {
+    auto now = std::chrono::system_clock::now();
+    _vkRenderer.drawFrame();
+    auto after = std::chrono::system_clock::now();
+
+    /*static int counter = 0;
+    if (counter++ % 50) {
+      printf("Recording frame took %lld us\n", std::chrono::duration_cast<std::chrono::microseconds>(after - now).count());
+    }*/
+
+  }
+
 }
 
 void AneditApplication::setupGuis()
@@ -614,22 +635,17 @@ render::asset::Prefab AneditApplication::prefabFromNode(const util::Uuid& node)
   auto id = node;
   p._comps = _scene.nodeToPotComps(id);
 
-  /*auto& transComp = _scene.registry().getComponent<component::Transform>(node);
-  p._comps._trans = transComp;
-
-  if (_scene.registry().hasComponent<component::Renderable>(node)) {
-    p._comps._rend = _scene.registry().getComponent<component::Renderable>(node);
-  }
-  if (_scene.registry().hasComponent<component::Light>(node)) {
-    p._comps._light = _scene.registry().getComponent<component::Light>(node);
-  }*/
-
   return p;
 }
 
 void* AneditApplication::getImguiTexId(util::Uuid& tex)
 {
   return _vkRenderer.getImGuiTexId(tex);
+}
+
+void AneditApplication::generateMipMaps(render::asset::Texture& tex)
+{
+  _vkRenderer.generateMipMaps(tex);
 }
 
 void AneditApplication::createCinematicPlayer(util::Uuid& id)

@@ -80,3 +80,6 @@ REM %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/standard_instanced_shadow.
 %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/luminance_average.comp -o %2/luminance_average_comp.spv
 
 %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/imgui_fixup.frag -o %2/imgui_fixup_frag.spv
+
+%VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/terrain.vert -o %2/terrain_vert.spv
+%VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/terrain.frag -o %2/terrain_frag.spv
