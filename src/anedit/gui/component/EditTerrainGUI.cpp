@@ -207,7 +207,35 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
 
     tool::Brush brush;
     tool::ImageManipulator imip(brush);
-    imip.paint8Bit(blendTex, (unsigned)(blendTex._width * u), (unsigned)(blendTex._height * v), val, std::move(mask), !_eraser);
+    //imip.paint8Bit(blendTex, (unsigned)(blendTex._width * u), (unsigned)(blendTex._height * v), val, std::move(mask), !_eraser);
+    imip.paint8Bit(blendTex, (unsigned)(blendTex._width* u), (unsigned)(blendTex._height* v), [idx = _paintMatIndex](glm::u8vec4* val, float falloff) {
+      falloff = falloff * falloff;
+      auto old = (*val)[idx];
+      auto newVal = (std::uint8_t)(255 * falloff);
+      if (old < newVal) {
+        (*val)[idx] = newVal;
+      }      
+
+      if (falloff > 0.999f) {
+        // Set all other to 0
+        for (int i = 0; i < 4; ++i) {
+          if (i != idx) {
+            (*val)[i] = 0;
+          }
+        }
+      }
+      else {
+        // Fade
+        for (int i = 0; i < 4; ++i) {
+          if (i != idx) {
+            auto tmp = (*val)[i];
+            if (tmp > 250) {
+              (*val)[i] = (std::uint8_t)(255 * (1.0f - falloff));
+            }
+          }
+        }
+      }
+    });
 
     c->scene().updateTexture(std::move(blendTex));
   }

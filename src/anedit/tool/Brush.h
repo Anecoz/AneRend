@@ -13,7 +13,7 @@ struct Brush
   std::uint8_t _baseOpacity = 255;
 
   // Num pixels where brush fades from _baseOpacity to 0.
-  unsigned _falloff = 10;
+  unsigned _falloff = 5;
 };
 
 }
