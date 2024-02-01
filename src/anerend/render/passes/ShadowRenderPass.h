@@ -14,7 +14,8 @@ public:
   void registerToGraph(FrameGraphBuilder&, RenderContext* rc) override final;
 
 private:
-  void reigsterDirectionalShadowPass(FrameGraphBuilder&, RenderContext* rc);
+  void registerDirectionalShadowPass(FrameGraphBuilder&, RenderContext* rc);
+  void registerTerrainDirectionalShadowPass(FrameGraphBuilder&, RenderContext* rc);
   void registerPointShadowPass(FrameGraphBuilder&, RenderContext* rc);
 };
 

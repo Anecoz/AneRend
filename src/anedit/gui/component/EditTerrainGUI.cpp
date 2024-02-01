@@ -168,8 +168,12 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
   ImGui::Checkbox("Erase", &_eraser);
   ImGui::InputFloat("Opacity", &_paintOpacity);
   ImGui::InputInt("Paint idx", &_paintMatIndex);
+  ImGui::InputScalar("Brush size", ImGuiDataType_U32, &_brush._radius);
+  ImGui::InputScalar("Brush falloff", ImGuiDataType_U32, &_brush._falloff);
 
-  if (_paintingMat && ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+  bool overViewport = !ImGui::GetIO().WantCaptureMouse;
+
+  if (_paintingMat && ImGui::IsMouseDown(ImGuiMouseButton_Left) && overViewport) {
     // Find if we're currently over the selected terrain
     auto worldPos = c->latestWorldPosition();
     auto ts = render::scene::Tile::_tileSize;
@@ -205,35 +209,48 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
       mask._a = true;
     }
 
-    tool::Brush brush;
-    tool::ImageManipulator imip(brush);
+    tool::ImageManipulator imip(_brush);
     //imip.paint8Bit(blendTex, (unsigned)(blendTex._width * u), (unsigned)(blendTex._height * v), val, std::move(mask), !_eraser);
     imip.paint8Bit(blendTex, (unsigned)(blendTex._width* u), (unsigned)(blendTex._height* v), [idx = _paintMatIndex](glm::u8vec4* val, float falloff) {
-      falloff = falloff * falloff;
+
       auto old = (*val)[idx];
       auto newVal = (std::uint8_t)(255 * falloff);
       if (old < newVal) {
         (*val)[idx] = newVal;
-      }      
 
-      if (falloff > 0.999f) {
-        // Set all other to 0
-        for (int i = 0; i < 4; ++i) {
-          if (i != idx) {
-            (*val)[i] = 0;
-          }
-        }
-      }
-      else {
-        // Fade
-        for (int i = 0; i < 4; ++i) {
-          if (i != idx) {
-            auto tmp = (*val)[i];
-            if (tmp > 250) {
-              (*val)[i] = (std::uint8_t)(255 * (1.0f - falloff));
+        if (falloff > 0.999f) {
+          // Set all other to 0
+          for (int i = 0; i < 4; ++i) {
+            if (i != idx) {
+              (*val)[i] = 0;
             }
           }
         }
+        else {
+          // Fade
+          float remaining = 1.0f - falloff;
+          // Prepass to determine how many channels can share 1.0 - falloff
+          int count = 0;
+          for (int i = 0; i < 4; ++i) {
+            if (i != idx) {
+              auto tmp = (*val)[i];
+              if (tmp > 0) {
+                count++;
+              }
+            }
+          }
+
+          remaining = remaining / (float)count;
+          for (int i = 0; i < 4; ++i) {
+            if (i != idx) {
+              auto tmp = (*val)[i];
+              if (tmp > 0) {
+                (*val)[i] = (std::uint8_t)(255 * remaining);
+              }
+            }
+          }
+        }
+
       }
     });
 

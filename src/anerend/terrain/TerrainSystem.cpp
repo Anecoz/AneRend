@@ -34,6 +34,15 @@ void TerrainSystem::update()
         _scene->registry().patchComponent<component::Terrain>(uuid);
       }
     }
+    else {
+      // TODO: How handle raytracing material for terrain? The rchit shaders want a material index to shade their hitpoints...
+      auto& rendComp = _scene->registry().getComponent<component::Renderable>(uuid);
+
+      if (rendComp._materials.empty() && terrainComp._baseMaterials[0]) {
+        rendComp._materials.emplace_back(terrainComp._baseMaterials[0]);
+        _scene->registry().patchComponent<component::Renderable>(uuid);
+      }
+    }
 
     // Lock transform to tile index
     auto pos = glm::vec3(

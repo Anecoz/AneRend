@@ -47,11 +47,6 @@ void main() {
   fragPos = (model * vec4(pos, 1.0)).xyz;
   fragUV = inUV;
 
-  //uint meshOffset = translationBuffer.ids[gl_InstanceIndex].meshOffset;
-  //uint firstMeshOffset = renderableBuffer.renderables[renderableIndex].modelOffset;
-  //uint materialOffset = meshOffset - firstMeshOffset;
-  //fragMaterialIdx = renderableBuffer.renderables[renderableIndex].firstMaterialIndex + materialOffset;
-
   fragTerrainIdx = renderableBuffer.renderables[renderableIndex].terrainOffset;
 
   fragMaterialIdx0 = terrainInfoBuffer.terrains[fragTerrainIdx].baseMaterials[0];
