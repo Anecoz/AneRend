@@ -58,7 +58,7 @@ void TerrainSystem::update()
 
 namespace {
 
-float convertUint16ToFloat(std::uint16_t v, float scale = 2.0f)
+float convertUint16ToFloat(std::uint16_t v, float scale = 5.0f)
 {
   float zeroToOne = (float)v / (float)65535;
 
@@ -68,11 +68,16 @@ float convertUint16ToFloat(std::uint16_t v, float scale = 2.0f)
 inline glm::vec3 posFromPixel(
   const std::uint16_t* data,
   float vertStepMeters,
+  int startX, int startY,
   unsigned w, unsigned h,
-  unsigned x, unsigned y)
+  int x, int y)
 {
-  float xPos = (float)x * vertStepMeters;
-  float zPos = (float)y * vertStepMeters;
+  float xPos = (float)(x - startX) * vertStepMeters;
+  float zPos = (float)(y - startY) * vertStepMeters;
+
+  if ((unsigned)y >= w || (unsigned)x >= h) {
+    return { xPos, 0.0f, zPos };
+  }
 
   auto val = data[y * w + x];
   float yPos = convertUint16ToFloat(val);
@@ -91,23 +96,22 @@ inline glm::vec3 calcNormal(
 inline glm::vec3 calcAvgNormal(
   const std::uint16_t* data,
   float vertStepMeters,
+  int startX, int startY,
   unsigned w, unsigned h,
-  unsigned x, unsigned y,
+  int x, int y,
   const glm::vec3& posAtXY)
 {
   // Sample a bunch of gradients around (x,y) and average them
   // Check for edge cases, first case is we're somewhere in the middle and the most common case
-  if (x > 0 && x < w - 1 &&
-      y > 0 && y < h - 1) {
+  if (x > 0 && (unsigned)x < w - 1 &&
+      y > 0 && (unsigned)y < h - 1) {
 
-    auto p00 = posFromPixel(data, vertStepMeters, w, h, x - 1, y - 1);
-    auto p10 = posFromPixel(data, vertStepMeters, w, h, x - 0, y - 1);
-    //auto p20 = posFromPixel(data, vertStepMeters, w, h, x + 1, y - 1);
-    auto p01 = posFromPixel(data, vertStepMeters, w, h, x - 1, y - 0);
-    auto p21 = posFromPixel(data, vertStepMeters, w, h, x + 1, y - 0);
-    //auto p02 = posFromPixel(data, vertStepMeters, w, h, x - 1, y + 1);
-    auto p12 = posFromPixel(data, vertStepMeters, w, h, x - 0, y + 1);
-    auto p22 = posFromPixel(data, vertStepMeters, w, h, x + 1, y + 1);
+    auto p00 = posFromPixel(data, vertStepMeters, startX, startY, w, h, x - 1, y - 1);
+    auto p10 = posFromPixel(data, vertStepMeters, startX, startY, w, h, x - 0, y - 1);
+    auto p01 = posFromPixel(data, vertStepMeters, startX, startY, w, h, x - 1, y - 0);
+    auto p21 = posFromPixel(data, vertStepMeters, startX, startY, w, h, x + 1, y - 0);
+    auto p12 = posFromPixel(data, vertStepMeters, startX, startY, w, h, x - 0, y + 1);
+    auto p22 = posFromPixel(data, vertStepMeters, startX, startY, w, h, x + 1, y + 1);
 
     glm::vec3 normal;
     normal += (calcNormal(posAtXY, p00, p01));
@@ -145,11 +149,18 @@ void TerrainSystem::generateModel(util::Uuid& node)
 
   unsigned gridWidthMeters = render::scene::Tile::_tileSize;
   unsigned gridHeightMeters = render::scene::Tile::_tileSize;
+  glm::ivec2 tileIdx = terrainComp._tileIndex;
 
-  unsigned w = tex->_width;
-  unsigned h = tex->_height;
-  unsigned vertScale = w / gridWidthMeters;
-  float vertStepMeters = 1.0f / (float)vertScale;
+  float mpp = terrainComp._mpp;
+  float ppm = 1.0f / mpp;
+  int startX = (int)(tileIdx.x * gridWidthMeters * ppm);
+  int startY = (int)(tileIdx.y * gridHeightMeters * ppm);
+  unsigned texW = tex->_width;
+  unsigned texH = tex->_height;
+  unsigned w = (unsigned)(gridWidthMeters * ppm);
+  unsigned h = (unsigned)(gridHeightMeters * ppm);
+  float vertScale = (float)w / (float)gridWidthMeters;
+  float vertStepMeters = 1.0f / vertScale;
   auto* p = reinterpret_cast<const std::uint16_t*>(tex->_data[0].data());
 
   // Generate verts
@@ -161,42 +172,42 @@ void TerrainSystem::generateModel(util::Uuid& node)
   mesh._maxPos = glm::vec3((float)gridWidthMeters, 0.0f, (float)gridWidthMeters);
 
   // Convert each pixel in height map to a vertex
-  mesh._vertices.resize(w * h);
-  for (unsigned x = 0; x < w; ++x) {
-    for (unsigned y = 0; y < h; ++y) {
+  mesh._vertices.resize((w+1) * (h+1));
+  for (int x = startX; x <= (int)w + startX; ++x) {
+    for (int y = startY; y <= (int)h + startY; ++y) {
       render::Vertex vert{};
       vert.jointIds = { -1, -1, -1, -1 };
 
-      vert.pos = posFromPixel(p, vertStepMeters, w, h, x, y);
-      vert.normal = calcAvgNormal(p, vertStepMeters, w, h, x, y, vert.pos);
-      vert.uv = { vert.pos.x, vert.pos.z }; // Sampler needs to be repeating
+      vert.pos = posFromPixel(p, vertStepMeters, startX, startY, texW, texH, x, y);
+      vert.normal = calcAvgNormal(p, vertStepMeters, startX, startY, texW, texH, x, y, vert.pos);
+      vert.uv = { vert.pos.x, vert.pos.z}; // Sampler needs to be repeating
 
       if (vert.pos.y > mesh._maxPos.y) {
         mesh._maxPos.y = vert.pos.y;
       }
 
-      mesh._vertices[y * w + x] = std::move(vert);
+      mesh._vertices[(y - startY) * (w + 1) + (x - startX)] = std::move(vert);
     }
   }
 
   // Create indices to create the triangles
-  mesh._indices.reserve((w - 1) * (w - 1) * 2 * 3); // Assume square...
-  for (unsigned x = 0; x < w - 1; ++x) {
-    for (unsigned y = 0; y < h - 1; ++y) {
+  mesh._indices.reserve((w - 1) * (w - 1) * 2 * 3);
+  for (unsigned x = 0; x < w; ++x) {
+    for (unsigned y = 0; y < h; ++y) {
       // Each point corresponds to a square consisting of two triangles.
 
       // Triangle 1.
       {
-        mesh._indices.emplace_back((y + 0) * w + (x + 0));
-        mesh._indices.emplace_back((y + 1) * w + (x + 0));
-        mesh._indices.emplace_back((y + 1) * w + (x + 1));
+        mesh._indices.emplace_back((y + 0) * (w + 1) + (x + 0));
+        mesh._indices.emplace_back((y + 1) * (w + 1) + (x + 0));
+        mesh._indices.emplace_back((y + 1) * (w + 1) + (x + 1));
       }
 
       // Triangle 2.
       {
-        mesh._indices.emplace_back((y + 0) * w + (x + 1));
-        mesh._indices.emplace_back((y + 0) * w + (x + 0));
-        mesh._indices.emplace_back((y + 1) * w + (x + 1));
+        mesh._indices.emplace_back((y + 0) * (w + 1) + (x + 1));
+        mesh._indices.emplace_back((y + 0) * (w + 1) + (x + 0));
+        mesh._indices.emplace_back((y + 1) * (w + 1) + (x + 1));
       }
 
     }
@@ -212,17 +223,31 @@ void TerrainSystem::generateModel(util::Uuid& node)
   // Add renderable component
   auto& rendComp = _scene->registry().addComponent<component::Renderable>(node);
   rendComp._model = modelId;
-  rendComp._boundingSphere = glm::vec4(0.0f, 0.0f, 0.0f, (float)gridWidthMeters);
+  rendComp._boundingSphere = glm::vec4((float)gridWidthMeters/2.0f, 0.0f, (float)gridWidthMeters/2.0f, (float)gridWidthMeters);
   rendComp._visible = true;
   rendComp._name = "Terrain";
   _scene->registry().patchComponent<component::Renderable>(node);
 
+  // Make all paintable layers bigger than the heightmap chunk.
+  unsigned layerTextureScale = 4;
+
   // Generate a default blend mask
-  auto blendTex = util::TextureHelpers::createTextureRGBA8(w, h, glm::u8vec4(255, 0, 0, 0));
+  auto blendTex = util::TextureHelpers::createTextureRGBA8(w * layerTextureScale, h * layerTextureScale, glm::u8vec4(255, 0, 0, 0));
   blendTex._name = "TerrainBlendTex";
+  blendTex._clampToEdge = true;
   
   auto blendId = _scene->addTexture(std::move(blendTex));
   terrainComp._blendMap = blendId;
+
+  // Generate a vegetation mask
+  auto vegTex = util::TextureHelpers::createTextureR8(w * layerTextureScale, h * layerTextureScale, 0);
+  vegTex._name = "TerrainVegTex";
+  vegTex._clampToEdge = true;
+
+  auto vegId = _scene->addTexture(std::move(vegTex));
+  terrainComp._vegetationMap = vegId;
+
+  terrainComp._heightScale = 5.0f;
 }
 
 }

@@ -88,7 +88,7 @@ void main() {
   vec3 viewB = vec3(view * vec4(b, 1.0));
 
   // Tilt vertices in view space if orthogonal to us
-  if (gl_VertexIndex != NUM_VERT_IDX) {
+  /*if (gl_VertexIndex != NUM_VERT_IDX) {
     vec3 camToVtx = normalize(b - ubo.cameraPos.xyz);
     float d = dot(preTiltNormal, camToVtx);
 
@@ -97,7 +97,7 @@ void main() {
     if (abs(d) < 0.5) {
       viewB = viewB + viewNormal * signFlip * dotSign * .008;
     }
-  }
+  }*/
 
   fragNormal = normalize(fragNormal);
   fragT = t;

@@ -1,7 +1,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
 
-#define TILE_PAGE_RADIUS 0
+#define TILE_PAGE_RADIUS 2
 #define TILE_SIZE 32
 
 struct Renderable
@@ -46,8 +46,6 @@ struct MaterialInfo
   vec4 emissive; // factor or RGB depending on if emissive texture present
   ivec4 bindlessIndices; // metallicRoughness, albedo, normal, emissive
   vec4 metRough; // r metallic, g roughness
-  //float metallicFactor;
-  //float roughnessFactor;
 };
 
 struct MeshInfo
@@ -80,16 +78,6 @@ struct Vertex
   vec2 uv;
 };
 
-struct IrradianceProbe {
-  vec4 pos;
-  vec4 irr0; //n.r, n.g, n.b, sum-of-weights
-  vec4 irr1; //e.r, e.g, e.b, sum-of-weights
-  vec4 irr2; //s.r, s.g, s.b, sum-of-weights
-  vec4 irr3; //w.r, w.g, w.b, sum-of-weights
-  vec4 irr4; //u.r, u.g, u.b, sum-of-weights
-  vec4 irr5; //d.r, d.g, d.b, sum-of-weights
-};
-
 struct SurfaceData
 {
   vec3 normal;
@@ -102,8 +90,9 @@ struct SurfaceData
 struct TerrainInfo 
 {
   ivec4 baseMaterials;
-  int blendMap;
-  int heightMap;
+  ivec4 texIndices; // blendmap, heightmap, vegmap
+  ivec4 tileInfo; // tilex, tiley
+  vec4 extraData; // mpp, heightscale, uvscale
 };
 
 Vertex unpackVertex(PackedVertex packedVertex)

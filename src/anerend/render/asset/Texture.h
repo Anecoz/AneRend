@@ -36,6 +36,8 @@ struct Texture
   std::vector<std::vector<std::uint8_t>> _data; // One entry for each mip, _data[0] is most hi-res and so on
   unsigned _width;
   unsigned _height;
+
+  bool _clampToEdge = false; // TODO: This is a sampling thing, not a texture attribute...
 };
 
 }

@@ -170,6 +170,8 @@ public:
   const std::vector<internal::InternalLight>& getLights() override final;
   std::vector<int> getShadowCasterLightIndices() override final;
 
+  virtual std::vector<std::size_t> getTerrainIndices() override final;
+
   std::vector<internal::InternalMesh>& getCurrentMeshes() override final;
   std::vector<internal::InternalRenderable>& getCurrentRenderables() override final;
   bool getRenderableById(util::Uuid id, internal::InternalRenderable** out) override final;
@@ -239,7 +241,7 @@ private:
   static const std::size_t MAX_NUM_JOINTS = 50;
   static const std::size_t MAX_NUM_SKINNED_MODELS = 1000;
   static const std::size_t MAX_NUM_POINT_LIGHT_SHADOWS = 4;
-  static const std::size_t MAX_PAGE_TILE_RADIUS = 0;
+  static const std::size_t MAX_PAGE_TILE_RADIUS = 2;
 
   component::Registry* _registry = nullptr;
   entt::observer _nodeObserver;
@@ -251,6 +253,7 @@ private:
   bool arePrerequisitesUploaded(internal::InternalModel& model);
   bool arePrerequisitesUploaded(internal::InternalRenderable& rend);
   bool arePrerequisitesUploaded(internal::InternalMaterial& mat);
+  bool arePrerequisitesUploaded(internal::InternalTerrain& terrain);
 
   std::unordered_map<std::string, std::any> _blackboard;
 
@@ -500,7 +503,7 @@ private:
   void prefillGPUTileInfoBuffer(VkCommandBuffer& commandBuffer);
 
   // Fills GPU terrain info buffer with currently paged terrain infos.
-  void prefillGPUTerrainInfoBuffer(VkCommandBuffer& commandBuffer);
+  bool prefillGPUTerrainInfoBuffer(VkCommandBuffer& commandBuffer);
 
   // Update wind force image
   void updateWindForceImage(VkCommandBuffer& commandBuffer);

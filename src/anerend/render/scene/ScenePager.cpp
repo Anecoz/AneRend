@@ -165,6 +165,9 @@ void ScenePager::update(const glm::vec3& pos)
 
     // Remove paged component
     for (const auto& nodeId : tile->getNodes()) {
+      // Terrain is always paged
+      if (_scene->registry().hasComponent<component::Terrain>(nodeId)) continue;
+
       auto& pagedComp = _scene->registry().getComponent<component::PageStatus>(nodeId);
       pagedComp._paged = false;
       _scene->registry().patchComponent<component::PageStatus>(nodeId);
@@ -172,6 +175,14 @@ void ScenePager::update(const glm::vec3& pos)
 
     // Remove tile info
     upd._removedTileInfos.emplace_back(idx);
+  }
+
+  // Check if there are any added terrains that don't have PageStatus yet
+  auto terrainView = _scene->registry().getEnttRegistry().view<component::Terrain>(entt::exclude<component::PageStatus>);
+  for (auto ent : terrainView) {
+    auto id = _scene->registry().reverseLookup(ent);
+    _scene->registry().addComponent<component::PageStatus>(id, true);
+    _scene->registry().patchComponent<component::PageStatus>(id);
   }
 
   _pagedTiles = std::move(pagedTiles);

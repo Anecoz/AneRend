@@ -161,6 +161,10 @@ void serialize(S& s, component::Terrain& p)
   s.object(p._tileIndex);
   s.container(p._baseMaterials);
   s.object(p._blendMap);
+  s.object(p._vegetationMap);
+  s.value4b(p._mpp);
+  s.value4b(p._heightScale);
+  s.value4b(p._uvScale);
 }
 
 template <typename S>
@@ -261,6 +265,7 @@ void serialize(S& s, render::asset::Texture& t)
   s.value4b(t._width);
   s.value4b(t._height);
   s.value4b(t._numMips);
+  s.value1b(t._clampToEdge);
   // For deserialisation
   if (t._data.empty()) {
     for (unsigned i = 0; i < t._numMips; ++i) {
@@ -730,8 +735,10 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
 
       // Read intermediate nodes
       if (!desHelper(file, nodesIdx, serialisedNodes, imNodes)) {
-        p.set_value(DeserialisedSceneData());
-        return;
+        printf("Failed deserialising nodes\n");
+        imNodes.clear();
+        //p.set_value(DeserialisedSceneData());
+        //return;
       }
 
       // Read cinematics

@@ -120,6 +120,8 @@ public:
   virtual const std::vector<internal::InternalLight>& getLights() = 0;
   virtual std::vector<int> getShadowCasterLightIndices() = 0;
 
+  virtual std::vector<std::size_t> getTerrainIndices() = 0;
+
   virtual std::vector<internal::InternalMesh>& getCurrentMeshes() = 0;
   virtual std::vector<internal::InternalRenderable>& getCurrentRenderables() = 0;
   virtual bool getRenderableById(util::Uuid id, internal::InternalRenderable** out) = 0;

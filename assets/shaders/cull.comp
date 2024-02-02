@@ -15,23 +15,6 @@ struct DrawCommand
   uint firstInstance;
 };
 
-struct GrassDrawCommand
-{
-  uint vertexCount;
-  uint instanceCount;
-  uint firstVertex;
-  uint firstInstance;
-};
-
-struct GrassObj
-{
-  vec4 worldPos;
-  vec4 cpData0;
-  vec4 cpData1;
-  vec4 cpData2;
-  vec4 widthDir;
-};
-
 struct TranslationId
 {
   uint renderableIndex;
@@ -46,41 +29,33 @@ layout(std430, set = 1, binding = 1) buffer TranslationBuffer {
   TranslationId ids[];
 } translationBuffer;
 
-layout(std430, set = 1, binding = 2) buffer GrassDrawBuffer {
-  GrassDrawCommand draw;
-} grassDrawBuffer;
+layout(set = 1, binding = 2) uniform sampler2D hiz[6];
 
-layout(std430, set = 1, binding = 3) buffer GrassObjBuffer {
-  GrassObj blades[];
-} grassObjBuffer;
-
-layout(set = 1, binding = 4) uniform sampler2D hiz[6];
-
-layout(std430, set = 1, binding = 5) buffer DebugSphereDrawBuffer {
+layout(std430, set = 1, binding = 3) buffer DebugSphereDrawBuffer {
   DrawCommand draw;
 } debugSphereDrawBuffer;
 
-layout(std430, set = 1, binding = 6) buffer DebugSphereTranslationBuffer {
+layout(std430, set = 1, binding = 4) buffer DebugSphereTranslationBuffer {
   TranslationId ids[];
 } debugSphereTransBuffer;
 
-layout(std430, set = 1, binding = 7) buffer PointLightShadowDrawBufs {
+layout(std430, set = 1, binding = 5) buffer PointLightShadowDrawBufs {
   DrawCommand draws[];
 } shadowDrawBufs[4];
 
-layout(std430, set = 1, binding = 8) buffer PointLightShadowCountBuf {
+layout(std430, set = 1, binding = 6) buffer PointLightShadowCountBuf {
   uint count;
 } shadowCountBufs[4];
 
-layout(std430, set = 1, binding = 9) buffer PointLightShadowTransBuf {
+layout(std430, set = 1, binding = 7) buffer PointLightShadowTransBuf {
   TranslationId ids[];
 } shadowTransBufs[4];
 
-layout(std430, set = 1, binding = 10) buffer TerrainDrawBuffer {
+layout(std430, set = 1, binding = 8) buffer TerrainDrawBuffer {
   DrawCommand draws[];
 } terrainDrawBuffer;
 
-layout(std430, set = 1, binding = 11) buffer TerrainTranslationBuffer {
+layout(std430, set = 1, binding = 9) buffer TerrainTranslationBuffer {
   TranslationId ids[];
 } terrainTranslationBuffer;
 
@@ -393,7 +368,7 @@ void main()
   }
 
   // Grass
-  uint xPos = gl_GlobalInvocationID.x;
+  /*uint xPos = gl_GlobalInvocationID.x;
   uint yPos = gl_GlobalInvocationID.y;
 
   vec3 worldPos = vec3(xPos*0.08, .25, yPos*0.08);
@@ -459,5 +434,5 @@ void main()
     grassObjBuffer.blades[instanceIndex].cpData0 = vec4(p0, p1.x);
     grassObjBuffer.blades[instanceIndex].cpData1 = vec4(p1.yz, p2.xy);
     grassObjBuffer.blades[instanceIndex].cpData2 = vec4(p2.z, p3);
-  }
+  }*/
 }

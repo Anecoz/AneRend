@@ -601,7 +601,19 @@ void AneditApplication::startLoadGLTF(std::filesystem::path p)
 
 void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
 {
-  _vkRenderer.requestWorldPosition(MousePosInput::getPosition(),
+  auto trans = glm::translate(glm::mat4(1.0f), _latestWorldPosition);
+
+  auto* p = _scene.getPrefab(prefab);
+  std::unordered_map<util::Uuid, util::Uuid> prefabNodeMap;
+  auto id = instantiate(*p, trans, prefabNodeMap);
+  updateSkeletons(prefabNodeMap);
+
+  // Also select it
+  _selection.clear();
+  _selection.emplace_back(id);
+  _selectionType = AneditContext::SelectionType::Node;
+
+  /*_vkRenderer.requestWorldPosition(MousePosInput::getPosition(),
     [prefab, this](glm::vec3 worldPos) {
       auto trans = glm::translate(glm::mat4(1.0f), worldPos);
 
@@ -614,7 +626,7 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
       _selection.clear();
       _selection.emplace_back(id);
       _selectionType = AneditContext::SelectionType::Node;
-    });
+    });*/
 }
 
 render::asset::Prefab AneditApplication::prefabFromNode(const util::Uuid& node)

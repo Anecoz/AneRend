@@ -77,8 +77,9 @@ struct GPUTileInfo {
 
 struct GPUTerrainInfo {
   glm::ivec4 _baseMaterials;
-  int _blendMap;
-  int _heightmap;
+  glm::ivec4 _indices; // blendmap, heightmap, vegmap
+  glm::ivec4 _tileInfo; // tilex, tiley
+  glm::vec4 _extraData; // mpp
 };
 
 struct GPUPointLightShadowCube

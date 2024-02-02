@@ -8,7 +8,11 @@
 
 int main()
 {
-  constexpr unsigned size = 512;
+  constexpr unsigned size = 1024;
+  //constexpr float scale = 1.0f;
+  constexpr double startX = 0.0;
+  constexpr double startY = 0.0;
+  constexpr double boundSize = 8.0;
 
   noise::module::Perlin myModule;
   noise::utils::NoiseMap heightMap;
@@ -16,13 +20,16 @@ int main()
   heightMapBuilder.SetSourceModule(myModule);
   heightMapBuilder.SetDestNoiseMap(heightMap);
   heightMapBuilder.SetDestSize(size, size);
-  heightMapBuilder.SetBounds(2.0, 3.0, 1.0, 3.0);
+  heightMapBuilder.SetBounds(
+    startX,
+    startX + boundSize,
+    startY, 
+    startY + boundSize);
   heightMapBuilder.Build();
 
   std::vector<std::uint16_t> converted;
   converted.resize(size * size);
 
-  auto* slab = heightMap.GetSlabPtr();
   for (int x = 0; x < size; ++x) {
     for (int y = 0; y < size; ++y) {
       float f = heightMap.GetValue(x, y);
@@ -34,7 +41,7 @@ int main()
       converted[x + size * y] = v;
     }
   }
-  
+
   auto* ptr = reinterpret_cast<std::uint8_t*>(converted.data());
 
   std::vector<std::uint8_t> data;
@@ -63,10 +70,12 @@ int main()
   auto ret = lodepng::encode(out, data, size, size, state);
   printf("ret: %u\n", ret);
 
-  std::ofstream ofs("test.png", std::ios::binary);
+  std::string name = "height.png";
+  std::ofstream ofs(name, std::ios::binary);
   ofs.write((const char*)out.data(), out.size());
 
   ofs.close();
+  
 
 #if 0
   noise::utils::RendererImage renderer;

@@ -141,6 +141,11 @@ struct Terrain
   
   std::array<util::Uuid, 4> _baseMaterials;
   util::Uuid _blendMap;
+  util::Uuid _vegetationMap;
+
+  float _mpp = 0.5f; // How many meters per pixel in the heightmap
+  float _heightScale = 1.0f; // Scale applied to heightmap pixels to get world pos height.
+  float _uvScale = 0.25f; // Scale applied to uv coordinates
 };
 
 // Struct that holds potential components used by e.g. prefabs

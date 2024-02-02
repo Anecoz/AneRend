@@ -31,18 +31,23 @@ public:
   };
 
   // Will only paint in mip 0!
-  void paint8Bit(
+  /*void paintRGBA8(
     render::asset::Texture& texture,
     unsigned x, unsigned y,
     const glm::u8vec4& value,
     PaintMask mask = PaintMask(),
-    bool keepMax = true);
+    bool keepMax = true);*/
 
   // Will only paint in mip 0!
-  void paint8Bit(
+  void paintRGBA8(
     render::asset::Texture& texture,
-    unsigned x, unsigned y,
+    int x, int y,
     std::function<void(glm::u8vec4*, float)> cb); // old val and falloff
+
+  void paintR8(
+    render::asset::Texture& texture,
+    int x, int y,
+    std::function<void(std::uint8_t*, float)> cb);
 
 private:
   Brush _brush;

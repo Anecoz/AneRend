@@ -45,7 +45,7 @@ void main() {
   fragTint = renderableBuffer.renderables[renderableIndex].tint.rgb;
   fragNormal =  normalize(mat3(model) * normal);
   fragPos = (model * vec4(pos, 1.0)).xyz;
-  fragUV = inUV;
+  fragUV = inUV * terrainInfoBuffer.terrains[fragTerrainIdx].extraData[3];
 
   fragTerrainIdx = renderableBuffer.renderables[renderableIndex].terrainOffset;
 

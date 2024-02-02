@@ -35,7 +35,7 @@ private:
   Scene* _scene = nullptr;
 
   // How many tiles around current camera tile do we page:
-  int _pageRadius = 0;
+  int _pageRadius = 2;
   std::vector<TileIndex> _pagedTiles;
 
   std::vector<util::Uuid> _pagedModels;

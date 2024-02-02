@@ -74,6 +74,10 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
       ImVec2 texSize{ texFactor * maxRegion.x , texFactor * maxRegion.x };
       ImGui::Image((ImTextureID)c->getImguiTexId(terrainComp._heightMap), texSize);
     }
+
+    if (ImGui::InputFloat("MPP", &terrainComp._mpp)) {
+      changed = true;
+    }
   }
 
   ImGui::Separator();
@@ -159,12 +163,39 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
     }
   }
 
+  ImGui::Separator();
+  // Vegmap
+  {
+    ImGui::Text("Vegetationmap");
+
+    if (ImGui::BeginDragDropTarget()) {
+      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("texture_id")) {
+        std::array<std::uint8_t, 16> arr{};
+        std::memcpy(arr.data(), payload->Data, sizeof(util::Uuid));
+
+        terrainComp._vegetationMap = util::Uuid(arr);
+        changed = true;
+      }
+
+      ImGui::EndDragDropTarget();
+    }
+
+    if (terrainComp._vegetationMap) {
+      float texFactor = 0.75f;
+      auto maxRegion = ImGui::GetWindowContentRegionMax();
+      ImVec2 texSize{ texFactor * maxRegion.x , texFactor * maxRegion.x };
+      ImGui::Image((ImTextureID)c->getImguiTexId(terrainComp._vegetationMap), texSize);
+    }
+  }
+
   if (changed) {
     c->scene().registry().patchComponent<component::Terrain>(id);
   }
 
   // Do painting
-  ImGui::Checkbox("Paint", &_paintingMat);
+  ImGui::Separator();
+  ImGui::Checkbox("Paint material", &_paintingMat);
+  ImGui::Checkbox("Paint vegetation", &_paintingVeg);
   ImGui::Checkbox("Erase", &_eraser);
   ImGui::InputFloat("Opacity", &_paintOpacity);
   ImGui::InputInt("Paint idx", &_paintMatIndex);
@@ -211,7 +242,7 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
 
     tool::ImageManipulator imip(_brush);
     //imip.paint8Bit(blendTex, (unsigned)(blendTex._width * u), (unsigned)(blendTex._height * v), val, std::move(mask), !_eraser);
-    imip.paint8Bit(blendTex, (unsigned)(blendTex._width* u), (unsigned)(blendTex._height* v), [idx = _paintMatIndex](glm::u8vec4* val, float falloff) {
+    imip.paintRGBA8(blendTex, (int)(blendTex._width* u), (int)(blendTex._height* v), [idx = _paintMatIndex](glm::u8vec4* val, float falloff) {
 
       auto old = (*val)[idx];
       auto newVal = (std::uint8_t)(255 * falloff);
@@ -255,6 +286,34 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
     });
 
     c->scene().updateTexture(std::move(blendTex));
+  }
+
+  if (_paintingVeg && ImGui::IsMouseDown(ImGuiMouseButton_Left) && overViewport) {
+    // Find if we're currently over the selected terrain
+    auto worldPos = c->latestWorldPosition();
+    auto ts = render::scene::Tile::_tileSize;
+    auto ti = terrainComp._tileIndex;
+
+    int wTiX = (int)worldPos.x / (int)ts;
+    int wTiZ = (int)worldPos.z / (int)ts;
+
+    if (wTiX != ti.x || wTiZ != ti.y) {
+      return;
+    }
+
+    // Calc normalized tile coordinate
+    float u = (worldPos.x - (float)ts * (float)ti.x) / (float)ts;
+    float v = (worldPos.z - (float)ts * (float)ti.y) / (float)ts;
+
+    auto vegTex = *c->scene().getTexture(terrainComp._vegetationMap);
+
+    tool::ImageManipulator imip(_brush);
+    imip.paintR8(vegTex, (int)(vegTex._width* u), (int)(vegTex._height* v),
+      [e = _eraser](uint8_t* val, float falloff) {
+        *val = e ? 0: 255;
+      });
+
+    c->scene().updateTexture(std::move(vegTex));
   }
 }
 

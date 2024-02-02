@@ -14,6 +14,8 @@ struct TextureHelpers
 
   static render::asset::Texture createTextureRGBA8(unsigned w, unsigned h, glm::u8vec4 val);
 
+  static render::asset::Texture createTextureR8(unsigned w, unsigned h, std::uint8_t val);
+
   // 1 byte per channel
   static std::vector<std::uint8_t> convertRGBA8ToRGB8(std::vector<std::uint8_t> in);
 

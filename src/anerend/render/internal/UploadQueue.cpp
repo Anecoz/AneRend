@@ -359,75 +359,10 @@ bool UploadQueue::createTexture(
     sb,
     cmdBuffer);
 
-#if 0
-  // Transition image to transfer dst
-  imageutil::transitionImageLayout(
-    cmdBuffer,
-    image._image,
-    format,
-    VK_IMAGE_LAYOUT_UNDEFINED,
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    0,
-    tex._numMips);
-  
-  void* data;
-  glm::uint8_t* mappedData = nullptr;
-  vmaMapMemory(uc->getRC()->vmaAllocator(), sb._buf._allocation, &data);
-  mappedData = (glm::uint8_t*)data;
-  mappedData = mappedData + sb._currentOffset;
-
-  // Copy each mip to staging buffer and then to image
-  uint32_t mipWidth = tex._width;
-  uint32_t mipHeight = tex._height;
-  std::size_t rollingOffset = 0;
-  for (unsigned i = 0; i < tex._numMips; ++i) {
-    auto* data = mappedData + rollingOffset;
-
-    std::memcpy(data, tex._data[i].data(), tex._data[i].size());
-
-    VkExtent3D extent{};
-    extent.depth = 1;
-    extent.height = mipHeight;
-    extent.width = mipWidth;
-
-    VkOffset3D offset{};
-
-    VkBufferImageCopy imCopy{};
-    imCopy.bufferOffset = sb._currentOffset + rollingOffset;
-    imCopy.imageExtent = extent;
-    imCopy.imageOffset = offset;
-    imCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    imCopy.imageSubresource.layerCount = 1;
-    imCopy.imageSubresource.mipLevel = i;
-
-    vkCmdCopyBufferToImage(
-      cmdBuffer,
-      sb._buf._buffer,
-      image._image,
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-      1,
-      &imCopy);
-
-    rollingOffset += tex._data[i].size();
-    if (mipWidth > 1) mipWidth /= 2;
-    if (mipHeight > 1) mipHeight /= 2;
-  }
-
-  // Transition image to shader
-  imageutil::transitionImageLayout(
-    cmdBuffer,
-    image._image,
-    format,
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    0,
-    tex._numMips);
-
-  vmaUnmapMemory(uc->getRC()->vmaAllocator(), sb._buf._allocation);
-#endif
   sb.advance(dataSize);
 
   SamplerCreateParams params{};
+  params.addressMode = tex._clampToEdge ? VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE : VK_SAMPLER_ADDRESS_MODE_REPEAT;
   params.renderContext = uc->getRC();
 
   imageOut = image;

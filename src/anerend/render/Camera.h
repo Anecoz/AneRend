@@ -72,8 +72,8 @@ private:
 
   float _far;
   float _near;
-  double _speed = 5.0;
-  double _sensitivity = 0.005;
+  double _speed = 2.7; // avg running speed human female
+  double _sensitivity = 0.002;
 };
 
 }

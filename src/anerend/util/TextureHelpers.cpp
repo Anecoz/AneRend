@@ -44,7 +44,25 @@ render::asset::Texture TextureHelpers::createTextureRGBA8(unsigned w, unsigned h
     }
   }
 
-  //std::fill(tex._data.back().begin(), tex._data.back().end(), initialVal);
+  return tex;
+}
+
+render::asset::Texture TextureHelpers::createTextureR8(unsigned w, unsigned h, std::uint8_t val)
+{
+  render::asset::Texture tex;
+
+  tex._width = w;
+  tex._height = h;
+  tex._format = render::asset::Texture::Format::R8_UNORM;
+  tex._data.emplace_back();
+  tex._data.back().resize(w * h);
+
+  auto& data = tex._data.back();
+  for (unsigned x = 0; x < w; x++) {
+    for (unsigned y = 0; y < h; y++) {
+      data[w * y + x] = val;
+    }
+  }
 
   return tex;
 }

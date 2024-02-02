@@ -106,43 +106,6 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       });
   }
 
-  // Add an initializer for the grass draw buffer
-  ResourceUsage grassDrawBufInitUsage{};
-  grassDrawBufInitUsage._type = Type::SSBO;
-  grassDrawBufInitUsage._access.set((std::size_t)Access::Write);
-  grassDrawBufInitUsage._stage.set((std::size_t)Stage::Transfer);
-
-  fgb.registerResourceInitExe("CullGrassDrawBuf", std::move(grassDrawBufInitUsage),
-    [this](IRenderResource* resource, VkCommandBuffer& cmdBuffer, RenderContext* renderContext) {
-      auto buf = (BufferRenderResource*)resource;
-
-      std::size_t dataSize = sizeof(gpu::GPUNonIndexDrawCallCmd);
-
-      if (_currentStagingOffset + dataSize >= renderContext->getMaxNumRenderables() * sizeof(gpu::GPURenderable) * 2) {
-        _currentStagingOffset = 0;
-      }
-
-      uint8_t* data;
-      vmaMapMemory(renderContext->vmaAllocator(), _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._allocation, (void**)&data);
-      data += _currentStagingOffset;
-
-      gpu::GPUNonIndexDrawCallCmd* mappedData = reinterpret_cast<gpu::GPUNonIndexDrawCallCmd*>(data);
-
-      mappedData->_command.firstInstance = 0;
-      mappedData->_command.firstVertex = 0;
-      mappedData->_command.instanceCount = 0;
-      mappedData->_command.vertexCount = 15;
-
-      VkBufferCopy copyRegion{};
-      copyRegion.srcOffset = _currentStagingOffset;
-      copyRegion.dstOffset = 0;
-      copyRegion.size = sizeof(gpu::GPUNonIndexDrawCallCmd);
-      vkCmdCopyBuffer(cmdBuffer, _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._buffer, buf->_buffer._buffer, 1, &copyRegion);
-
-      vmaUnmapMemory(renderContext->vmaAllocator(), _gpuStagingBuffers[renderContext->getCurrentMultiBufferIdx()]._allocation);
-      _currentStagingOffset += sizeof(gpu::GPUNonIndexDrawCallCmd);
-    });
-
   // An initializer for the bounding sphere visualizer draw buffer
   {
     ResourceUsage initUsage{};
@@ -252,8 +215,6 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       });
   }
 
-
-
   // Register the actual render pass
   RenderPassRegisterInfo regInfo{};
   regInfo._name = "Cull";
@@ -291,30 +252,6 @@ void CullRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
   transCreateInfo._initialSize = rc->getMaxNumRenderables() * sizeof(gpu::GPUTranslationId);
   translationBufUsage._bufferCreateInfo = transCreateInfo;
   regInfo._resourceUsages.emplace_back(std::move(translationBufUsage));
-
-  ResourceUsage grassDrawBufUsage{};
-  grassDrawBufUsage._resourceName = "CullGrassDrawBuf";
-  grassDrawBufUsage._access.set((std::size_t)Access::Write);
-  grassDrawBufUsage._access.set((std::size_t)Access::Read);
-  grassDrawBufUsage._stage.set((std::size_t)Stage::Compute);
-  grassDrawBufUsage._type = Type::SSBO;
-  BufferInitialCreateInfo grassDrawCreateInfo{};
-  grassDrawCreateInfo._multiBuffered = true;
-  grassDrawCreateInfo._initialSize = sizeof(gpu::GPUNonIndexDrawCallCmd);
-  grassDrawBufUsage._bufferCreateInfo = grassDrawCreateInfo;
-  regInfo._resourceUsages.emplace_back(std::move(grassDrawBufUsage));
-
-  ResourceUsage grassObjBufUsage{};
-  grassObjBufUsage._resourceName = "CullGrassObjBuf";
-  grassObjBufUsage._access.set((std::size_t)Access::Write);
-  grassObjBufUsage._access.set((std::size_t)Access::Read);
-  grassObjBufUsage._stage.set((std::size_t)Stage::Compute);
-  grassObjBufUsage._type = Type::SSBO;
-  BufferInitialCreateInfo grassObjCreateInfo{};
-  grassObjCreateInfo._multiBuffered = true;
-  grassObjCreateInfo._initialSize = MAX_NUM_GRASS_BLADES * sizeof(gpu::GPUGrassBlade);
-  grassObjBufUsage._bufferCreateInfo = grassObjCreateInfo;
-  regInfo._resourceUsages.emplace_back(std::move(grassObjBufUsage));
 
   int currSize = 64;
   for (int i = 0; i < 6; ++i) {

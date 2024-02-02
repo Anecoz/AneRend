@@ -42,6 +42,7 @@
 #include "passes/UpdateBlasPass.h"
 #include "passes/CompactDrawsPass.h"
 #include "passes/TerrainRenderPass.h"
+#include "passes/GrassGenPass.h"
 #include "internal/MipMapGenerator.h"
 #include "../component/Components.h"
 
@@ -188,7 +189,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow* window, const Camera& initialCamera, 
   , _fgb(&_vault)
   , _window(window)
   , _enableValidationLayers(true)
-  , _enableRayTracing(false)
+  , _enableRayTracing(true)
   , _delQ()
 {
   imageutil::init();
@@ -2176,6 +2177,11 @@ void VulkanRenderer::updateNodes()
             internalTerrain._baseMaterials = terrainComp._baseMaterials;
             internalTerrain._blendMask = terrainComp._blendMap;
             internalTerrain._heightmap = terrainComp._heightMap;
+            internalTerrain._vegMap = terrainComp._vegetationMap;
+            internalTerrain._tileIdx = terrainComp._tileIndex;
+            internalTerrain._mpp = terrainComp._mpp;
+            internalTerrain._heightScale = terrainComp._heightScale;
+            internalTerrain._uvScale = terrainComp._uvScale;
 
             _currentTerrains.emplace_back(std::move(internalTerrain));
             auto idx = _currentTerrains.size() - 1;
@@ -2429,6 +2435,11 @@ void VulkanRenderer::updateNodes()
       _currentTerrains[it->second]._baseMaterials = terrainComp._baseMaterials;
       _currentTerrains[it->second]._blendMask = terrainComp._blendMap;
       _currentTerrains[it->second]._heightmap = terrainComp._heightMap;
+      _currentTerrains[it->second]._vegMap = terrainComp._vegetationMap;
+      _currentTerrains[it->second]._tileIdx = terrainComp._tileIndex;
+      _currentTerrains[it->second]._mpp = terrainComp._mpp;
+      _currentTerrains[it->second]._heightScale = terrainComp._heightScale;
+      _currentTerrains[it->second]._uvScale = terrainComp._uvScale;
 
       terrainChanged = true;
     }
@@ -2553,6 +2564,19 @@ bool VulkanRenderer::arePrerequisitesUploaded(internal::InternalMaterial& mat)
     return false;
   }
   if (material._emissiveTex && _textureIdMap.find(material._emissiveTex) == _textureIdMap.end()) {
+    return false;
+  }
+
+  return true;
+}
+
+bool VulkanRenderer::arePrerequisitesUploaded(internal::InternalTerrain& terrain)
+{
+  if (_textureIdMap.find(terrain._blendMask) == _textureIdMap.end()) {
+    return false;
+  }
+
+  if (_textureIdMap.find(terrain._vegMap) == _textureIdMap.end()) {
     return false;
   }
 
@@ -3534,7 +3558,7 @@ void VulkanRenderer::prefillGPUTileInfoBuffer(VkCommandBuffer& commandBuffer)
 
   auto& sb = getStagingBuffer();
 
-  std::size_t dataSize = (MAX_PAGE_TILE_RADIUS * 2 + 1) * sizeof(gpu::GPUTileInfo);
+  std::size_t dataSize = (MAX_PAGE_TILE_RADIUS * 2 + 1) * (MAX_PAGE_TILE_RADIUS * 2 + 1) * sizeof(gpu::GPUTileInfo);
   uint8_t* data;
   vmaMapMemory(_vmaAllocator, sb._buf._allocation, (void**)&data);
 
@@ -3599,9 +3623,9 @@ void VulkanRenderer::prefillGPUTileInfoBuffer(VkCommandBuffer& commandBuffer)
   sb.advance(dataSize);
 }
 
-void VulkanRenderer::prefillGPUTerrainInfoBuffer(VkCommandBuffer& commandBuffer)
+bool VulkanRenderer::prefillGPUTerrainInfoBuffer(VkCommandBuffer& commandBuffer)
 {
-  if (_currentTerrains.empty()) return;
+  if (_currentTerrains.empty()) return true;
 
   auto& sb = getStagingBuffer();
 
@@ -3617,13 +3641,29 @@ void VulkanRenderer::prefillGPUTerrainInfoBuffer(VkCommandBuffer& commandBuffer)
   for (std::size_t i = 0; i < _currentTerrains.size(); ++i) {
     auto& t = _currentTerrains[i];
 
-    mappedData[i]._heightmap = (int32_t)_currentTextures[_textureIdMap[t._heightmap]]._bindlessInfo._bindlessIndexHandle._offset;
+    if (!arePrerequisitesUploaded(t)) {
+      return false;
+    }
+
+    mappedData[i]._indices[1] = (int32_t)_currentTextures[_textureIdMap[t._heightmap]]._bindlessInfo._bindlessIndexHandle._offset;
+    mappedData[i]._tileInfo[0] = t._tileIdx.x;
+    mappedData[i]._tileInfo[1] = t._tileIdx.y;
+    mappedData[i]._extraData[0] = t._mpp;
+    mappedData[i]._extraData[1] = t._heightScale;
+    mappedData[i]._extraData[3] = t._uvScale;
 
     if (_textureIdMap.find(t._blendMask) != _textureIdMap.end()) {
-      mappedData[i]._blendMap = (int32_t)_currentTextures[_textureIdMap[t._blendMask]]._bindlessInfo._bindlessIndexHandle._offset;
+      mappedData[i]._indices[0] = (int32_t)_currentTextures[_textureIdMap[t._blendMask]]._bindlessInfo._bindlessIndexHandle._offset;
     }
     else {
-      mappedData[i]._blendMap = -1;
+      mappedData[i]._indices[0] = -1;
+    }
+
+    if (_textureIdMap.find(t._vegMap) != _textureIdMap.end()) {
+      mappedData[i]._indices[2] = (int32_t)_currentTextures[_textureIdMap[t._vegMap]]._bindlessInfo._bindlessIndexHandle._offset;
+    }
+    else {
+      mappedData[i]._indices[2] = -1;
     }
 
     for (int j = 0; j < 4; ++j) {
@@ -3664,6 +3704,8 @@ void VulkanRenderer::prefillGPUTerrainInfoBuffer(VkCommandBuffer& commandBuffer)
 
   // Update staging offset
   sb.advance(dataSize);
+
+  return true;
 }
 
 void VulkanRenderer::updateWindForceImage(VkCommandBuffer& commandBuffer)
@@ -3890,7 +3932,7 @@ bool VulkanRenderer::initBindless()
     terrainLayoutBinding.binding = _terrainBinding;
     terrainLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     terrainLayoutBinding.descriptorCount = 1;
-    terrainLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    terrainLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
     bindings.emplace_back(std::move(terrainLayoutBinding));
 
     VkDescriptorSetLayoutBinding texLayoutBinding{};
@@ -4274,6 +4316,7 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new HiZRenderPass());
   _renderPasses.emplace_back(new ParticleUpdatePass());
   _renderPasses.emplace_back(new CullRenderPass());
+  _renderPasses.emplace_back(new GrassGenPass());
   _renderPasses.emplace_back(new CompactDrawsPass());
   _renderPasses.emplace_back(new ShadowRenderPass());
   _renderPasses.emplace_back(new GrassShadowRenderPass());
@@ -4434,7 +4477,7 @@ bool VulkanRenderer::initGpuBuffers()
 
     bufferutil::createBuffer(
       _vmaAllocator,
-      (2 * MAX_PAGE_TILE_RADIUS + 1) * sizeof(gpu::GPUTileInfo),
+      (MAX_PAGE_TILE_RADIUS * 2 + 1) * (2 * MAX_PAGE_TILE_RADIUS + 1) * sizeof(gpu::GPUTileInfo),
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       0,
       _gpuTileBuffer[i]);
@@ -4843,12 +4886,12 @@ void VulkanRenderer::executeFrameGraph(VkCommandBuffer commandBuffer, int imageI
   }
 
   if (_terrainsChanged[_currentFrame]) {
-    prefillGPUTerrainInfoBuffer(commandBuffer);
+    auto ret = prefillGPUTerrainInfoBuffer(commandBuffer);
 
     // Force rends because the terrain index might be out of date
     forceRenderableUpdate = true;
 
-    _terrainsChanged[_currentFrame] = false;
+    _terrainsChanged[_currentFrame] = !ret;
   }
 
   if (forceRenderableUpdate) {
@@ -5221,6 +5264,17 @@ std::vector<int> VulkanRenderer::getShadowCasterLightIndices()
       out.emplace_back(-1);
     }
   }
+  return out;
+}
+
+std::vector<std::size_t> VulkanRenderer::getTerrainIndices()
+{
+  std::vector<std::size_t> out;
+
+  for (std::size_t i = 0; i < _currentTerrains.size(); ++i) {
+    out.emplace_back(i);
+  }
+
   return out;
 }
 

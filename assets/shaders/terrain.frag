@@ -41,7 +41,7 @@ void main() {
   // Calc normalized tile coordinate
   float u = (fragPos.x - float(TILE_SIZE) * float(wTiX)) / float(TILE_SIZE);
   float v = (fragPos.z - float(TILE_SIZE) * float(wTiZ)) / float(TILE_SIZE);
-  int blendMapIdx = terrainInfoBuffer.terrains[fragTerrainIdx].blendMap;
+  int blendMapIdx = terrainInfoBuffer.terrains[fragTerrainIdx].texIndices[0];
   vec4 blendSample = texture(textures[nonuniformEXT(blendMapIdx)], vec2(u, v));
 
   // Default values

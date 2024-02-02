@@ -1,0 +1,277 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_nonuniform_qualifier : enable
+
+#include "scene_ubo.glsl"
+#include "bindless.glsl"
+#include "helpers.glsl"
+
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+struct GrassDrawCommand
+{
+  uint vertexCount;
+  uint instanceCount;
+  uint firstVertex;
+  uint firstInstance;
+};
+
+struct GrassObj
+{
+  vec4 worldPos;
+  vec4 cpData0;
+  vec4 cpData1;
+  vec4 cpData2;
+  vec4 widthDir;
+};
+
+layout(std430, set = 1, binding = 0) buffer GrassDrawBuffer {
+  GrassDrawCommand draw;
+} grassDrawBuffer;
+
+layout(std430, set = 1, binding = 1) buffer GrassObjBuffer {
+  GrassObj blades[];
+} grassObjBuffer;
+
+layout(set = 1, binding = 2) uniform sampler2D hiz[6];
+
+layout(push_constant) uniform constants {
+  mat4 view;
+  vec4 frustumPlanes[4];
+  ivec4 pointLightShadowIndices;
+  float nearDist;
+  float farDist;
+  uint drawCount;
+  float windDirX;
+  float windDirY;
+} pushConstants;
+
+const vec3 up = vec3(0.0, 1.0, 0.0);
+
+bool projectSphere2(vec3 sphereView, float radius, out vec4 aabb, out vec2 zMinMax)
+{
+  vec3 botRightViewFar = vec3(sphereView.x + radius, sphereView.y - radius, sphereView.z - radius);
+  vec3 topLeftViewFar = vec3(sphereView.x - radius, sphereView.y + radius, sphereView.z - radius);
+  vec3 botRightViewNear = vec3(sphereView.x + radius, sphereView.y - radius, sphereView.z + radius);
+  vec3 topLeftViewNear = vec3(sphereView.x - radius, sphereView.y + radius, sphereView.z + radius);
+
+  vec4 botRightNDCFar = ubo.proj * vec4(botRightViewFar, 1.0);
+  botRightNDCFar /= botRightNDCFar.w;
+
+  vec4 topLeftNDCFar = ubo.proj * vec4(topLeftViewFar, 1.0);
+  topLeftNDCFar /= topLeftNDCFar.w;
+
+  vec4 botRightNDCNear = ubo.proj * vec4(botRightViewNear, 1.0);
+  botRightNDCNear /= botRightNDCNear.w;
+
+  vec4 topLeftNDCNear = ubo.proj * vec4(topLeftViewNear, 1.0);
+  topLeftNDCNear /= topLeftNDCNear.w;
+
+  if (abs(topLeftNDCFar.x) > 1.0 ||
+    abs(topLeftNDCFar.y) > 1.0 ||
+    topLeftNDCFar.z > 1.0 ||
+    topLeftNDCFar.z < 0.0) {
+    return false;
+  }
+
+  if (abs(botRightNDCFar.x) > 1.0 ||
+    abs(botRightNDCFar.y) > 1.0 ||
+    botRightNDCFar.z > 1.0 ||
+    botRightNDCFar.z < 0.0) {
+    return false;
+  }
+
+  if (abs(topLeftNDCNear.x) > 1.0 ||
+    abs(topLeftNDCNear.y) > 1.0 ||
+    topLeftNDCNear.z > 1.0 ||
+    topLeftNDCNear.z < 0.0) {
+    return false;
+  }
+
+  if (abs(botRightNDCNear.x) > 1.0 ||
+    abs(botRightNDCNear.y) > 1.0 ||
+    botRightNDCNear.z > 1.0 ||
+    botRightNDCNear.z < 0.0) {
+    return false;
+  }
+
+  float minZ = min(topLeftNDCNear.z, botRightNDCNear.z);
+  float maxZ = max(topLeftNDCFar.z, botRightNDCFar.z);
+  zMinMax = vec2(minZ, maxZ);
+
+  // -1 to 1 to 0 to 1
+  botRightNDCFar = botRightNDCFar * 0.5 + 0.5;
+  topLeftNDCFar = topLeftNDCFar * 0.5 + 0.5;
+  botRightNDCNear = botRightNDCNear * 0.5 + 0.5;
+  topLeftNDCNear = topLeftNDCNear * 0.5 + 0.5;
+
+  // (minx, maxx, miny, maxy)
+  aabb = vec4(topLeftNDCFar.x, botRightNDCFar.x, topLeftNDCFar.y, botRightNDCFar.y);
+
+  return true;
+}
+
+bool sphereVisible(vec3 sphereCenter, float sphereRadius)
+{
+  bool visible = true;
+  for (int i = 0; i < 4; i++) {
+    vec3 frustumNormal = pushConstants.frustumPlanes[i].xyz;
+    float frustumD = pushConstants.frustumPlanes[i].w;
+    bool inFrustum = (dot(sphereCenter, frustumNormal) + frustumD + sphereRadius) >= 0.0;
+    visible = visible && inFrustum;
+  }
+
+  return visible;
+}
+
+float sampleHiZ(vec2 coords, uint level)
+{
+  float ret = 1.0;
+  uint clampedLevel = clamp(level, 0u, 5u);
+  ret = texture(hiz[clampedLevel], coords).r;
+
+  return ret;
+}
+
+bool occlusionCull(vec3 sphereCenterView, float radius)
+{
+  bool visible = true;
+
+  // aabb is (minx, maxx, miny, maxy) in 0-1 coords in NDC space
+  vec4 aabb;
+  vec2 zMinMax;
+  bool projOk = projectSphere2(sphereCenterView, radius, aabb, zMinMax);
+  if (projOk) {
+    float width = (aabb.y - aabb.x) * 64.0;
+    float height = (aabb.w - aabb.z) * 64.0;
+
+    uint level = uint(max(floor(log2(max(width, height))), 1));
+
+    float depth = 1.0;
+    float depth0 = sampleHiZ(vec2(aabb.xz), level - 1);
+    float depth1 = sampleHiZ(vec2(aabb.yw), level - 1);
+    float depth2 = sampleHiZ(vec2(aabb.xw), level - 1);
+    float depth3 = sampleHiZ(vec2(aabb.yz), level - 1);
+
+    depth = max(max(depth0, depth1), max(depth2, depth3));
+
+    vec3 adjusted = vec3(sphereCenterView.x, sphereCenterView.y, sphereCenterView.z + radius);
+    vec4 projected = ubo.proj * vec4(adjusted, 1.0);
+    projected /= projected.w;
+    float depthSphere = zMinMax.x - 0.001;//projected.z;//pushConstants.nearDist / (sphereCenterView.z - radius);
+
+    visible = depthSphere <= depth;
+  }
+
+  return visible;
+}
+
+float rand(vec2 co){
+  return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+void main()
+{
+  uint terrainIndex = gl_GlobalInvocationID.z;
+  int vegTex = terrainInfoBuffer.terrains[terrainIndex].texIndices[2];
+  int heightMap = terrainInfoBuffer.terrains[terrainIndex].texIndices[1];
+  int tileX = terrainInfoBuffer.terrains[terrainIndex].tileInfo[0];
+  int tileY = terrainInfoBuffer.terrains[terrainIndex].tileInfo[1];
+  float mpp = terrainInfoBuffer.terrains[terrainIndex].extraData[0];
+  float ppm = 1.0f / mpp;
+  float heightScale = terrainInfoBuffer.terrains[terrainIndex].extraData[1];
+
+  if (vegTex < 0) {
+    return;
+  }
+
+  // Find which pixel to sample
+  ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 dims = textureSize(textures[nonuniformEXT(vegTex)], 0);
+  vec2 uv = pixelToUv(pixel, dims);
+
+  // Check if we should plop grass here
+  float samp = texture(textures[nonuniformEXT(vegTex)], uv).r;
+  if (samp < 0.5) {
+    return;
+  }
+
+  float pixelToWorldScale = float(TILE_SIZE) / dims.x;
+
+  ivec2 tileHeightmapPixelSize = ivec2(int(TILE_SIZE) * ppm, int(TILE_SIZE) * ppm);
+  ivec2 tileHeightmapPixelOffset = ivec2(tileX * tileHeightmapPixelSize.x, tileY * tileHeightmapPixelSize.y);
+  ivec2 heightmapPixel = tileHeightmapPixelOffset + ivec2(uv.x * tileHeightmapPixelSize.x, uv.y * tileHeightmapPixelSize.y);
+  ivec2 heightmapDims = textureSize(textures[nonuniformEXT(heightMap)], 0);
+  vec2 heightUV = pixelToUv(heightmapPixel, heightmapDims);
+  float yPos = texture(textures[nonuniformEXT(heightMap)], heightUV).r * heightScale;
+
+  // Calc world pos
+  vec2 tileOffset = vec2(float(TILE_SIZE) * float(tileX), float(TILE_SIZE) * float(tileY));
+  vec2 worldPosXZ = pixelToWorldScale * vec2(pixel.x, pixel.y) + tileOffset;
+  vec3 worldPos = vec3(worldPosXZ.x, yPos, worldPosXZ.y);
+
+  vec3 worldPosView = vec3(pushConstants.view * vec4(worldPos, 1.0));
+  float radius = 1.5;
+  bool visible = sphereVisible(worldPos, radius);
+  visible = visible && occlusionCull(worldPosView, radius);
+
+  if (visible) {
+    uint countBefore = atomicAdd(grassDrawBuffer.draw.instanceCount, 1);
+
+    float bladeHash = rand(vec2(worldPos.x, worldPos.z));
+    vec2 bladeHash2D = vec2(
+      rand(vec2(worldPos.x / bladeHash, worldPos.z)),
+      rand(vec2(worldPos.x, worldPos.z * bladeHash)));
+
+    // Jitter position slightly
+    worldPos.x += bladeHash * 0.5;
+    worldPos.z += bladeHash * 0.5;
+
+    uint instanceIndex = grassDrawBuffer.draw.firstInstance + countBefore;
+
+    // Data used to construct control points
+    float height = 1.0 * max(bladeHash2D.y, 0.3);
+    float windStrength = .0f;//texture(windForceTex, vec2(float(xPos)/256.0, float(yPos)/256.0)).r;
+    vec2 windDir = vec2(1.0, 0.0);//vec2(pushConstants.windDirX, pushConstants.windDirY);
+    float tilt = min(bladeHash + windStrength, 1.0);
+    float bend = bladeHash < 0.05 ? 0.0 : .1;
+    vec2 facing2D = normalize(bladeHash2D * 2.0 - 1.0);
+    facing2D = normalize(facing2D*(1.0 - windStrength) + windDir*windStrength);
+    vec3 facing = vec3(facing2D.x, 0.0, facing2D.y);
+
+    vec3 widthDir = vec3(0.0, 0.0, 0.0);
+    widthDir.x = facing.z;
+    widthDir.z = -facing.x;
+
+    // Find control points of the bezier curve
+    vec3 p0 = worldPos.xyz;
+
+    // End point, or tip, is dictated by base point and the tilt
+    vec3 p3 = p0 + facing * tilt + up * height;
+
+    vec3 bladeDir = normalize(p3 - p0);
+    vec3 away = cross(-widthDir, bladeDir);
+
+    // p1 is straight above p0
+    vec3 p1 = p0 + up * height * bend;
+
+    // The shaping control point is dictated by the bend parameter
+    vec3 p2 = p0 + 0.5 * (p3 - p0);
+    p2 = p2 + away * bend;
+
+    // Attempt animation, find vector perpendicular to blade dir
+    float phaseOffset = bladeHash * 1.57;
+    float speedMult = 2.0 * (bladeHash + 1.0) * (windStrength + 1.0);
+    float maxAmplitude = 0.01 * (windStrength + 3.0);
+    float timeMod = mod(ubo.time, 2.0*acos(-1.0)); // To stop loss of precision when ubo.time gets big
+    p3 = p3 + sin(timeMod*speedMult + phaseOffset)*maxAmplitude*away;
+    p2 = p2 + sin(timeMod*speedMult + 1.57 + phaseOffset)*maxAmplitude/2.0*away;
+
+    grassObjBuffer.blades[instanceIndex].worldPos = vec4(worldPos, height);
+    grassObjBuffer.blades[instanceIndex].widthDir = vec4(widthDir, bladeHash);
+    grassObjBuffer.blades[instanceIndex].cpData0 = vec4(p0, p1.x);
+    grassObjBuffer.blades[instanceIndex].cpData1 = vec4(p1.yz, p2.xy);
+    grassObjBuffer.blades[instanceIndex].cpData2 = vec4(p2.z, p3);
+  }
+}
