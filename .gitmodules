@@ -16,3 +16,6 @@
 [submodule "contrib/entt"]
 	path = contrib/entt
 	url = https://github.com/skypjack/entt.git
+[submodule "contrib/JoltPhysics"]
+	path = contrib/JoltPhysics
+	url = https://github.com/jrouwe/JoltPhysics.git
