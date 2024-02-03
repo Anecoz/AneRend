@@ -58,5 +58,8 @@ if (WIN32)
   # entt
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/entt)
 
+  # JoltPhysics
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/JoltPhysics/Build)
+
 else()  
 endif()
