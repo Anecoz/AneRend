@@ -60,9 +60,12 @@ if (WIN32)
 
   # JoltPhysics
   set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "Use the static MSVC runtime library" FORCE)
+ 
+  if (CMAKE_BUILD_TYPE MATCHES Debug)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MDd ")  
+  endif()
+  
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/JoltPhysics/Build)
-
-  message(STATUS "Flags: ${CMAKE_CXX_FLAGS}")
 
 else()  
 endif()
