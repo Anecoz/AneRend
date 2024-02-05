@@ -489,7 +489,7 @@ void DebugViewRenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext*
         sizeof(Push),
         &push);
 
-      exeParams.rc->drawMeshId(exeParams.cmdBuffer, _meshId, 6, 1);
+      exeParams.rc->drawMeshId(exeParams.cmdBuffer, _meshId, 1);
 
       vkCmdEndRendering(*exeParams.cmdBuffer);
     });

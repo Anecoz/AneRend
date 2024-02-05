@@ -360,7 +360,7 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
   // Vertex input
   std::vector<VkVertexInputBindingDescription> bindingDescriptions;
   VkVertexInputBindingDescription bindingDescription{};
-  bindingDescription.binding = 0;
+  bindingDescription.binding = param.vertexBinding;
   bindingDescription.stride = sizeof(render::Vertex);
   bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
   bindingDescriptions.emplace_back(std::move(bindingDescription));
@@ -368,7 +368,7 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
   std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
   if (param.posLoc != -1) {
     VkVertexInputAttributeDescription desc{};
-    desc.binding = 0;
+    desc.binding = param.vertexBinding;
     desc.location = param.posLoc;
     desc.format = VK_FORMAT_R32G32B32_SFLOAT;
     desc.offset = offsetof(render::Vertex, pos);
@@ -377,7 +377,7 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
 
   if (param.colorLoc != -1) {
     VkVertexInputAttributeDescription desc{};
-    desc.binding = 0;
+    desc.binding = param.vertexBinding;
     desc.location = param.colorLoc;
     desc.format = VK_FORMAT_R32G32B32_SFLOAT;
     desc.offset = offsetof(render::Vertex, color);
@@ -386,7 +386,7 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
 
   if (param.normalLoc != -1) {
     VkVertexInputAttributeDescription desc{};
-    desc.binding = 0;
+    desc.binding = param.vertexBinding;
     desc.location = param.normalLoc;
     desc.format = VK_FORMAT_R32G32B32_SFLOAT;
     desc.offset = offsetof(render::Vertex, normal);
@@ -395,7 +395,7 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
 
   if (param.uvLoc != -1) {
     VkVertexInputAttributeDescription desc{};
-    desc.binding = 0;
+    desc.binding = param.vertexBinding;
     desc.location = param.uvLoc;
     desc.format = VK_FORMAT_R32G32_SFLOAT;
     desc.offset = offsetof(render::Vertex, uv);
@@ -404,7 +404,7 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
 
   if (param.tangentLoc != -1) {
     VkVertexInputAttributeDescription desc{};
-    desc.binding = 0;
+    desc.binding = param.vertexBinding;
     desc.location = param.tangentLoc;
     desc.format = VK_FORMAT_R32G32B32A32_SFLOAT;
     desc.offset = offsetof(render::Vertex, tangent);
@@ -413,7 +413,7 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
 
   if (param.jointLoc != -1) {
     VkVertexInputAttributeDescription desc{};
-    desc.binding = 0;
+    desc.binding = param.vertexBinding;
     desc.location = param.jointLoc;
     desc.format = VK_FORMAT_R16G16B16A16_SINT;
     desc.offset = offsetof(render::Vertex, jointIds);
@@ -422,7 +422,7 @@ bool buildGraphicsPipeline(GraphicsPipelineCreateParams param, VkPipelineLayout&
 
   if (param.jointWeightLoc != -1) {
     VkVertexInputAttributeDescription desc{};
-    desc.binding = 0;
+    desc.binding = param.vertexBinding;
     desc.location = param.jointWeightLoc;
     desc.format = VK_FORMAT_R32G32B32A32_SFLOAT;
     desc.offset = offsetof(render::Vertex, jointWeights);

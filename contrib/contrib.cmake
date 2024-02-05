@@ -59,7 +59,10 @@ if (WIN32)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/entt)
 
   # JoltPhysics
+  set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "Use the static MSVC runtime library" FORCE)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/JoltPhysics/Build)
+
+  message(STATUS "Flags: ${CMAKE_CXX_FLAGS}")
 
 else()  
 endif()

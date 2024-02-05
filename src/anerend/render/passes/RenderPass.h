@@ -2,13 +2,6 @@
 
 #include "../RenderContext.h"
 
-//#include <vulkan/vulkan.h>
-
-#include <cstdint>
-#include <string>
-#include <optional>
-#include <vector>
-
 namespace render {
 
   class FrameGraphBuilder;

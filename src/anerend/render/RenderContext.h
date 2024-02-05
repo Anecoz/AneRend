@@ -14,6 +14,7 @@
 #include "internal/InternalRenderable.h"
 #include "internal/BufferMemoryInterface.h"
 #include "internal/InternalLight.h"
+#include "internal/StagingBuffer.h"
 #include "Vertex.h"
 #include "GpuBuffers.h"
 #include "RenderDebugOptions.h"
@@ -21,6 +22,9 @@
 #include "Camera.h"
 #include "Particle.h"
 #include "AccelerationStructure.h"
+#include "debug/Line.h"
+#include "debug/Triangle.h"
+#include "debug/Geometry.h"
 
 #include <unordered_map>
 
@@ -91,6 +95,7 @@ public:
   virtual VkDevice& device() = 0;
   virtual VkDescriptorPool& descriptorPool() = 0;
   virtual VmaAllocator vmaAllocator() = 0;
+  virtual internal::StagingBuffer& getStagingBuffer() = 0;
 
   virtual VkPipelineLayout& bindlessPipelineLayout() = 0;
   virtual VkDescriptorSetLayout& bindlessDescriptorSetLayout() = 0;
@@ -104,7 +109,7 @@ public:
   virtual void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount) = 0;
   virtual void drawGigaBufferIndirectCount(VkCommandBuffer*, VkBuffer drawCalls, VkBuffer count, uint32_t maxDrawCount) = 0;
   virtual void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) = 0;
-  virtual void drawMeshId(VkCommandBuffer*, util::Uuid, uint32_t vertCount, uint32_t instanceCount) = 0;
+  virtual void drawMeshId(VkCommandBuffer*, util::Uuid, uint32_t instanceCount) = 0;
 
   virtual VkImage& getCurrentSwapImage() = 0;
   virtual int getCurrentMultiBufferIdx() = 0;
@@ -161,6 +166,16 @@ public:
   virtual AccelerationStructure& getTLAS() = 0;
 
   virtual VkFormat getHDRFormat() = 0;
+
+  // Debug rendering methods. These are all immediate mode, meaning nothing called here is retained across multiple frames.
+  virtual void debugDrawLine(debug::Line line) = 0;
+  virtual void debugDrawTriangle(debug::Triangle triangle) = 0;
+  virtual void debugDrawGeometry(debug::Geometry geometry) = 0;
+
+  virtual std::vector<debug::Line> takeCurrentDebugLines() = 0;
+  virtual std::vector<debug::Triangle> takeCurrentDebugTriangles() = 0;
+  virtual std::vector<debug::Geometry> takeCurrentDebugGeometryWireframe() = 0;
+  virtual std::vector<debug::Geometry> takeCurrentDebugGeometry() = 0;
 
   // Hack for testing
   virtual std::vector<Particle>& getParticles() = 0;

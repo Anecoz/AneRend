@@ -43,6 +43,7 @@
 #include "passes/CompactDrawsPass.h"
 #include "passes/TerrainRenderPass.h"
 #include "passes/GrassGenPass.h"
+#include "passes/DebugDrawRenderPass.h"
 #include "internal/MipMapGenerator.h"
 #include "../component/Components.h"
 
@@ -2927,6 +2928,26 @@ VkFormat VulkanRenderer::getHDRFormat()
   return VK_FORMAT_R16G16B16A16_SFLOAT;
 }
 
+void VulkanRenderer::debugDrawLine(debug::Line line)
+{
+  _currentDebugLines.emplace_back(std::move(line));
+}
+
+void VulkanRenderer::debugDrawTriangle(debug::Triangle triangle)
+{
+  _currentDebugTriangles.emplace_back(std::move(triangle));
+}
+
+void VulkanRenderer::debugDrawGeometry(debug::Geometry geometry)
+{
+  if (geometry._wireframe) {
+    _currentDebugGeometriesWireframe.emplace_back(std::move(geometry));
+  }
+  else {
+    _currentDebugGeometries.emplace_back(std::move(geometry));
+  }  
+}
+
 std::vector<Particle>& VulkanRenderer::getParticles()
 {
   return _particles;
@@ -4346,6 +4367,7 @@ bool VulkanRenderer::initRenderPasses()
   _renderPasses.emplace_back(new BloomRenderPass());
   _renderPasses.emplace_back(new FXAARenderPass());
   _renderPasses.emplace_back(new DebugBSRenderPass());
+  _renderPasses.emplace_back(new DebugDrawRenderPass());
   _renderPasses.emplace_back(new DebugViewRenderPass());
   _renderPasses.emplace_back(new UIRenderPass());
   _renderPasses.emplace_back(new PresentationRenderPass());
@@ -5200,11 +5222,20 @@ void VulkanRenderer::drawNonIndexIndirect(VkCommandBuffer* cmdBuffer, VkBuffer d
   vkCmdDrawIndirect(*cmdBuffer, drawCalls, 0, drawCount, stride);
 }
 
-void VulkanRenderer::drawMeshId(VkCommandBuffer* cmdBuffer, util::Uuid meshId, uint32_t vertCount, uint32_t instanceCount)
+void VulkanRenderer::drawMeshId(VkCommandBuffer* cmdBuffer, util::Uuid meshId, uint32_t instanceCount)
 {
+  if (_meshIdMap.find(meshId) == _meshIdMap.end()) return;
+
   auto idx = _meshIdMap[meshId];
   auto& mesh = _currentMeshes[idx];
-  vkCmdDraw(*cmdBuffer, vertCount, instanceCount, (uint32_t)mesh._vertexOffset, 0);
+
+  if (mesh._numIndices > 0) {
+    vkCmdDrawIndexed(*cmdBuffer, mesh._numIndices, instanceCount, (uint32_t)mesh._indexOffset, (uint32_t)mesh._vertexOffset, 0);
+  }
+  else {
+    vkCmdDraw(*cmdBuffer, mesh._numVertices, instanceCount, (uint32_t)mesh._vertexOffset, 0);
+  }
+
 }
 
 VkImage& VulkanRenderer::getCurrentSwapImage()

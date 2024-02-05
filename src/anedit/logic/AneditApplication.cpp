@@ -149,6 +149,79 @@ void AneditApplication::update(double delta)
   //_windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));
 
+  // Test debug draws
+  {
+    // Line
+    render::debug::Line line{};
+    line._v0 = render::Vertex();
+    line._v0.pos = glm::vec3(0.0f, 2.0f, 0.0f);
+    line._v0.color = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    line._v1 = render::Vertex();
+    line._v1.pos = glm::vec3(10.0f, 2.0f, 0.0f);
+    line._v1.color = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    _vkRenderer.debugDrawLine(std::move(line));
+  }
+
+  {
+    // Triangles
+    render::debug::Triangle triangle{};
+    triangle._v0 = render::Vertex();
+    triangle._v0.pos = glm::vec3(0.0f, 2.0f, 0.0f);
+    triangle._v0.color = glm::vec3(1.0f, 0.0f, 0.0f);
+
+    triangle._v1 = render::Vertex();
+    triangle._v1.pos = glm::vec3(0.0f, 5.0f, 0.0f);
+    triangle._v1.color = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    triangle._v2 = render::Vertex();
+    triangle._v2.pos = glm::vec3(2.0f, 2.0f, 0.0f);
+    triangle._v2.color = glm::vec3(0.0f, 0.0f, 1.0f);
+
+    _vkRenderer.debugDrawTriangle(std::move(triangle));
+  }
+
+  {
+    // Model, with and without wireframe
+    {
+      render::debug::Geometry geom{};
+      geom._meshId = _vkRenderer.getSphereMeshId();
+      geom._tint = glm::vec3(1.0f, 0.0f, 0.0f);
+      geom._modelToWorld = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 20.0f, 15.0f));
+      geom._wireframe = false;
+
+      _vkRenderer.debugDrawGeometry(std::move(geom));
+    }
+    {
+      render::debug::Geometry geom{};
+      geom._meshId = _vkRenderer.getSphereMeshId();
+      geom._tint = glm::vec3(1.0f, 0.5f, 0.5f);
+      geom._modelToWorld = glm::translate(glm::mat4(1.0f), glm::vec3(17.0f, 20.0f, 15.0f));
+      geom._wireframe = false;
+
+      _vkRenderer.debugDrawGeometry(std::move(geom));
+    }
+    {
+      render::debug::Geometry geom{};
+      geom._meshId = _vkRenderer.getSphereMeshId();
+      geom._tint = glm::vec3(0.0f, 0.0f, 1.0f);
+      geom._modelToWorld = glm::translate(glm::mat4(1.0f), glm::vec3(13.0f, 20.0f, 15.0f));
+      geom._wireframe = true;
+
+      _vkRenderer.debugDrawGeometry(std::move(geom));
+    }
+    {
+      render::debug::Geometry geom{};
+      geom._meshId = _vkRenderer.getSphereMeshId();
+      geom._tint = glm::vec3(0.0f, 1.0f, 1.0f);
+      geom._modelToWorld = glm::translate(glm::mat4(1.0f), glm::vec3(13.0f, 20.0f, 17.0f));
+      geom._wireframe = true;
+
+      _vkRenderer.debugDrawGeometry(std::move(geom));
+    }
+  }
+
   // For now always request a world pos
   _vkRenderer.requestWorldPosition(MousePosInput::getPosition(),
     [this](glm::vec3 worldPos) {

@@ -125,7 +125,7 @@ void FXAARenderPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
       vkCmdSetViewport(*exeParams.cmdBuffer, 0, 1, &viewport);
       vkCmdSetScissor(*exeParams.cmdBuffer, 0, 1, &scissor);
 
-      exeParams.rc->drawMeshId(exeParams.cmdBuffer, _meshId, 6, 1);
+      exeParams.rc->drawMeshId(exeParams.cmdBuffer, _meshId, 1);
 
       vkCmdEndRendering(*exeParams.cmdBuffer);
     });

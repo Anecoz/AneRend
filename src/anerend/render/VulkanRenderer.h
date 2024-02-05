@@ -30,7 +30,6 @@
 #include "internal/InternalTerrain.h"
 #include "internal/InternalLight.h"
 #include "internal/GigaBuffer.h"
-//#include "internal/AnimationThread.h"
 #include "internal/BufferMemoryInterface.h"
 #include "internal/DeletionQueue.h"
 #include "internal/InternalTexture.h"
@@ -156,7 +155,7 @@ public:
   void drawGigaBufferIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount) override final;
   void drawGigaBufferIndirectCount(VkCommandBuffer*, VkBuffer drawCalls, VkBuffer count, uint32_t maxDrawCount) override final;
   void drawNonIndexIndirect(VkCommandBuffer*, VkBuffer drawCalls, uint32_t drawCount, uint32_t stride) override final;
-  void drawMeshId(VkCommandBuffer*, util::Uuid, uint32_t vertCount, uint32_t instanceCount) override final;
+  void drawMeshId(VkCommandBuffer*, util::Uuid, uint32_t instanceCount) override final;
 
   VkImage& getCurrentSwapImage() override final;
   int getCurrentMultiBufferIdx() override final;
@@ -200,6 +199,7 @@ public:
   void stopTimer(const std::string& name, VkCommandBuffer cmdBuffer) override final;
 
   internal::InternalMesh& getSphereMesh() override final;
+  util::Uuid getSphereMeshId() const { return _debugSphereMeshId; }
 
   size_t getNumIrradianceProbesXZ() override final;
   size_t getNumIrradianceProbesY() override final;
@@ -213,6 +213,16 @@ public:
   AccelerationStructure& getTLAS() override final;
 
   VkFormat getHDRFormat() override final;
+
+  // Immediate mode debug draw functions.
+  void debugDrawLine(debug::Line line) override final;
+  void debugDrawTriangle(debug::Triangle triangle) override final;
+  void debugDrawGeometry(debug::Geometry geometry) override final;
+
+  std::vector<debug::Line> takeCurrentDebugLines() override final { return std::move(_currentDebugLines); }
+  std::vector<debug::Triangle> takeCurrentDebugTriangles() override final { return std::move(_currentDebugTriangles); }
+  std::vector<debug::Geometry> takeCurrentDebugGeometry() override final { return std::move(_currentDebugGeometries); }
+  std::vector<debug::Geometry> takeCurrentDebugGeometryWireframe() override final { return std::move(_currentDebugGeometriesWireframe); }
 
   // Hack for testing
   std::vector<Particle>& getParticles() override final;
@@ -235,7 +245,7 @@ private:
   static const std::size_t NUM_CLUSTER_DEPTH_SLIZES = 7;
   static const std::size_t MAX_NUM_LIGHTS = 32*32;
   static const std::size_t MAX_BINDLESS_RESOURCES = 16536;
-  static const std::size_t MAX_TIMESTAMP_QUERIES = 100;
+  static const std::size_t MAX_TIMESTAMP_QUERIES = 150;
   static const std::size_t NUM_IRRADIANCE_PROBES_XZ = 64;
   static const std::size_t NUM_IRRADIANCE_PROBES_Y = 8;
   static const std::size_t MAX_NUM_JOINTS = 50;
@@ -538,7 +548,6 @@ private:
   bool createCommandBuffers();
   bool createSyncObjects();
   bool createDescriptorPool();
-  //bool initLights();
   bool initImgui();
   bool initGigaMeshBuffer();
   bool initGpuBuffers();
@@ -614,5 +623,10 @@ private:
   std::uint32_t _currentFrame = 0;
   internal::DeletionQueue _delQ;
   internal::UploadQueue _uploadQ;
+
+  std::vector<debug::Line> _currentDebugLines;
+  std::vector<debug::Triangle> _currentDebugTriangles;
+  std::vector<debug::Geometry> _currentDebugGeometriesWireframe;
+  std::vector<debug::Geometry> _currentDebugGeometries;
 };
 }

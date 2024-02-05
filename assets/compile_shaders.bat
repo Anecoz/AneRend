@@ -86,3 +86,8 @@ REM %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/standard_instanced_shadow.
 %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/terrain_shadow.vert -o %2/terrain_shadow_vert.spv
 
 %VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/grass_gen.comp -o %2/grass_gen_comp.spv
+
+%VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/debug_lines.vert -o %2/debug_lines_vert.spv
+%VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/debug_lines.frag -o %2/debug_lines_frag.spv
+
+%VULKAN_SDK%/Bin/glslc.exe --target-spv=spv1.4 %1/debug_geometry.vert -o %2/debug_geometry_vert.spv
