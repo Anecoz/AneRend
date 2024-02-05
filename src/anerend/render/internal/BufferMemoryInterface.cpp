@@ -70,7 +70,7 @@ void BufferMemoryInterface::removeData(BufferMemoryInterface::Handle handle)
 void BufferMemoryInterface::recalculateFirstFreeOffset()
 {
   for (auto& fb : _freeBlocks) {
-    if (fb._offset > _firstFreeOffset) {
+    if (fb._offset > (int64_t)_firstFreeOffset) {
       _firstFreeOffset = fb._offset;
     }
   }
