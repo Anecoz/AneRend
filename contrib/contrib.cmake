@@ -65,6 +65,7 @@ if (WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MDd ")  
   endif()
   
+  add_definitions(-DJPH_DEBUG_RENDERER)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/JoltPhysics/Build)
 
 else()  

@@ -19,6 +19,7 @@
 #include <render/scene/ScenePager.h>
 #include <render/cinematic/CinematicPlayer.h>
 #include <render/animation/AnimationUpdater.h>
+#include <physics/PhysicsSystem.h>
 #include <terrain/TerrainSystem.h>
 #include "WindSystem.h"
 
@@ -108,6 +109,7 @@ private:
 
   render::anim::AnimationUpdater _animUpdater;
   terrain::TerrainSystem _terrainSystem;
+  physics::PhysicsSystem _physicsSystem;
 
   glm::vec3 _latestWorldPosition = glm::vec3(0.0f);
 

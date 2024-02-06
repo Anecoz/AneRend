@@ -148,6 +148,11 @@ struct Terrain
   float _uvScale = 0.25f; // Scale applied to uv coordinates
 };
 
+struct RigidBody
+{
+  bool _dummy;
+};
+
 // Struct that holds potential components used by e.g. prefabs
 struct PotentialComponents
 {
@@ -157,6 +162,7 @@ struct PotentialComponents
   std::optional<Skeleton> _skeleton;
   std::optional<Animator> _animator;
   std::optional<Terrain> _terrain;
+  std::optional<RigidBody> _rigidBody;
 };
 
 }

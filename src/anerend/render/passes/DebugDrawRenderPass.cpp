@@ -68,7 +68,6 @@ void DebugDrawRenderPass::registerLineDrawToGraph(FrameGraphBuilder& fgb, Render
   param.colorFormats = { format };
   param.cullMode = VK_CULL_MODE_NONE;
   param.normalLoc = -1;
-  //param.polygonMode = VK_POLYGON_MODE_LINE;
   param.vertexBinding = 1; // Use our own vertex buffer index
   param.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
   info._graphicsParams = param;
