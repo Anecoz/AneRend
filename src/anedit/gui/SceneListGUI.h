@@ -21,6 +21,7 @@ private:
   void saveSceneClicked(logic::AneditContext* c);
   void loadSceneClicked(logic::AneditContext* c);
 
+  void addEmptyClicked(logic::AneditContext* c);
   void addLightClicked(logic::AneditContext* c);
   void addNodeClicked(logic::AneditContext* c);
   void addCinematicClicked(logic::AneditContext* c);

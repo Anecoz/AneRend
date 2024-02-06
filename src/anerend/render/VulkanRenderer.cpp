@@ -201,6 +201,9 @@ VulkanRenderer::~VulkanRenderer()
   // Let logical device finish operations first
   vkDeviceWaitIdle(_device);
 
+  // Let deletion queue flush
+  _delQ.flush();
+
   vmaDestroyBuffer(_vmaAllocator, _gigaVtxBuffer._buffer._buffer, _gigaVtxBuffer._buffer._allocation);
   vmaDestroyBuffer(_vmaAllocator, _gigaIdxBuffer._buffer._buffer, _gigaIdxBuffer._buffer._allocation);
   

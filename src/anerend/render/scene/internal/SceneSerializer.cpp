@@ -168,6 +168,18 @@ void serialize(S& s, component::Terrain& p)
 }
 
 template <typename S>
+void serialize(S& s, component::RigidBody& p)
+{
+  s.value1b(p._motionType);
+  s.value4b(p._friction);
+  s.value4b(p._restitution);
+  s.value4b(p._linearDamping);
+  s.value4b(p._angularDamping);
+  s.value4b(p._gravityFactor);
+  s.value4b(p._mass);
+}
+
+template <typename S>
 void serialize(S& s, component::PotentialComponents& p)
 {
   s.object(p._trans);
@@ -176,6 +188,7 @@ void serialize(S& s, component::PotentialComponents& p)
   s.ext(p._animator, bitsery::ext::StdOptional{});
   s.ext(p._skeleton, bitsery::ext::StdOptional{});
   s.ext(p._terrain, bitsery::ext::StdOptional{});
+  s.ext(p._rigidBody, bitsery::ext::StdOptional{});
 }
 
 template <typename S>
@@ -309,10 +322,8 @@ void serialize(S& s, std::vector<render::anim::Animation>& a)
 template <typename S>
 void serialize(S& s, component::Renderable& r)
 {
-  //s.object(r._id);
   s.text1b(r._name, 100);
   s.object(r._model);
-  //s.object(r._skeleton);
   s.container(r._materials, 2048);
   s.object(r._tint);
   s.object(r._boundingSphere);
@@ -328,7 +339,6 @@ void serialize(S& s, std::vector<component::Renderable>& r)
 template <typename S>
 void serialize(S& s, component::Light& l)
 {
-  //s.object(l._id);
   s.text1b(l._name, 100);
   s.object(l._color);
   s.value4b(l._range);
@@ -587,6 +597,9 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
         if (scene.registry().hasComponent<component::Terrain>(node._id)) {
           imn._comps._terrain = scene.registry().getComponent<component::Terrain>(node._id);
         }
+        if (scene.registry().hasComponent<component::RigidBody>(node._id)) {
+          imn._comps._rigidBody = scene.registry().getComponent<component::RigidBody>(node._id);
+        }
 
         imNodes.emplace_back(std::move(imn));
       }
@@ -809,6 +822,12 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
           auto& c = outputData._scene->registry().addComponent<component::Terrain>(id);
           c = imn._comps._terrain.value();
           outputData._scene->registry().patchComponent<component::Terrain>(id);
+        }
+
+        if (imn._comps._rigidBody) {
+          auto& c = outputData._scene->registry().addComponent<component::RigidBody>(id);
+          c = imn._comps._rigidBody.value();
+          outputData._scene->registry().patchComponent<component::RigidBody>(id);
         }
       }
 

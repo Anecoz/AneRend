@@ -64,17 +64,6 @@ void PhysicsJoltImpl::remove(util::Uuid node)
 {
 }
 
-namespace {
-
-inline float convertUint16ToFloat(std::uint16_t v, float scale = 5.0f)
-{
-	float zeroToOne = (float)v / (float)65535;
-
-	return zeroToOne * scale;
-}
-
-}
-
 void PhysicsJoltImpl::addHeightfield(const render::asset::Mesh& mesh, util::Uuid node)
 {
 	auto& bi = _physicsSystem.GetBodyInterface();

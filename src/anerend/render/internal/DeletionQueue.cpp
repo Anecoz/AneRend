@@ -22,6 +22,13 @@ DeletionQueue::~DeletionQueue()
   }
 }
 
+void DeletionQueue::flush()
+{
+  while (!_items.empty()) {
+    execute();
+  }
+}
+
 // This is expected to be called once per frame
 void DeletionQueue::execute()
 {

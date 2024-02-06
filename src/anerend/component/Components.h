@@ -150,7 +150,18 @@ struct Terrain
 
 struct RigidBody
 {
-  bool _dummy;
+  enum MotionType : std::uint8_t {
+    Dynamic,
+    Static,
+    Kinematic
+  } _motionType = MotionType::Dynamic;
+
+  float _friction = 0.2f;
+  float _restitution = 0.0f;
+  float _linearDamping = 0.05f;
+  float _angularDamping = 0.05f;
+  float _gravityFactor = 1.0f;
+  float _mass = 1.0f; // kg
 };
 
 // Struct that holds potential components used by e.g. prefabs

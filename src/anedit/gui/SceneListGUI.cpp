@@ -36,6 +36,9 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
       if (ImGui::MenuItem("Add light...")) {
         addLightClicked(c);
       }
+      if (ImGui::MenuItem("Add empty node...")) {
+        addEmptyClicked(c);
+      }
       if (ImGui::MenuItem("Save scene as...")) {
         saveSceneAsClicked(c);
       }
@@ -200,6 +203,17 @@ void SceneListGUI::loadSceneClicked(logic::AneditContext* c)
   else {
     printf("Could not load scene!\n");
   }
+}
+
+void SceneListGUI::addEmptyClicked(logic::AneditContext* c)
+{
+  // Add a default node
+  render::scene::Node node{};
+  node._name = "EmptyNode";
+  auto id = c->scene().addNode(std::move(node));
+
+  c->scene().registry().addComponent<component::Transform>(id, glm::mat4(1.0f), glm::mat4(1.0f));
+  c->scene().registry().patchComponent<component::Transform>(id);
 }
 
 void SceneListGUI::addLightClicked(logic::AneditContext* c)

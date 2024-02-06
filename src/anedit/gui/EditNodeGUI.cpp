@@ -8,6 +8,7 @@
 #include "component/EditRenderableGUI.h"
 #include "component/EditAnimatorGUI.h"
 #include "component/EditTerrainGUI.h"
+#include "component/EditRigidBodyGUI.h"
 
 #include <imgui.h>
 
@@ -34,6 +35,7 @@ EditNodeGUI::EditNodeGUI()
   _componentGUIs[typeid(component::Light)] = new EditLightGUI();
   _componentGUIs[typeid(component::Animator)] = new EditAnimatorGUI();
   _componentGUIs[typeid(component::Terrain)] = new EditTerrainGUI();
+  _componentGUIs[typeid(component::RigidBody)] = new EditRigidBodyGUI();
 }
 
 EditNodeGUI::~EditNodeGUI()
@@ -69,12 +71,14 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
   bool hasLight = false;
   bool hasAnimator = false;
   bool hasTerrain = false;
+  bool hasRigidBody = false;
 
   DRAW_COMP(Transform);
   DRAW_COMP(Renderable);
   DRAW_COMP(Light);
   DRAW_COMP(Animator);
   DRAW_COMP(Terrain);
+  DRAW_COMP(RigidBody);
 
   // Add new components
   if (ImGui::BeginPopupContextWindow()) {
@@ -96,6 +100,12 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
       if (ImGui::MenuItem("Add terrain...")) {
         c->scene().registry().addComponent<component::Terrain>(id);
         c->scene().registry().patchComponent<component::Terrain>(id);
+      }
+    }
+    if (!hasRigidBody) {
+      if (ImGui::MenuItem("Add rigid body...")) {
+        c->scene().registry().addComponent<component::RigidBody>(id);
+        c->scene().registry().patchComponent<component::RigidBody>(id);
       }
     }
 

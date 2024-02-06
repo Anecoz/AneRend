@@ -15,6 +15,9 @@ public:
   DeletionQueue(std::size_t maxNumFrames, VmaAllocator vmaAllocator, VkDevice device);
   ~DeletionQueue();
 
+  // Don't care about any max frames
+  void flush();
+
   // This is expected to be called once per frame
   void execute();
 
