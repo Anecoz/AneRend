@@ -21,6 +21,7 @@ Anerend is a Vulkan renderer where I prototype state-of-the-art rendering techni
 + Component based design using EnTT
 + Physics simulation using Jolt (WIP)
 + Simple terrain support, including material painting
++ Cinematic support, with keyframes for nodes (entities), camera, materials and more
 
 The repo also contains (currently unused) stubs of surfel-based global illumination techniques.
 
