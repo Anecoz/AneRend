@@ -1,9 +1,9 @@
-# AneRend
+# Anerend
 
 ![Image](screenshots/emissive_fox.png)
 _Global illumination showcase: Fox with emissive material, rendered in a dark corridor of the Sponza scene_
 
-![Image](screenshots/sponza_contrast_.png)
+![Image](screenshots/sponza_contrast.png)
 _PBR Sponza example scene with global illumination (DDGI) and ray traced hard shadows turned on_
 
 AneRend is a Vulkan renderer where I prototype state-of-the-art rendering techniques. Among those currently implemented in some form are:
