@@ -1,6 +1,9 @@
 # AneRend
 
-![Image](screenshots/screenshot1.png)
+![Image](screenshots/emissive_fox.png)
+_Global illumination showcase: Fox with emissive material, rendered in a dark corridor of the Sponza scene_
+
+![Image](screenshots/sponza_contrast_.png)
 _PBR Sponza example scene with global illumination (DDGI) and ray traced hard shadows turned on_
 
 AneRend is a Vulkan renderer where I prototype state-of-the-art rendering techniques. Among those currently implemented in some form are:
@@ -8,11 +11,15 @@ AneRend is a Vulkan renderer where I prototype state-of-the-art rendering techni
 + Ray-traced specular Global Illumination
 + Ray-traced hard shadows
 + Hierarchical Z occlussion culling (HiZ)
++ Call of Duty-style temporally stable Bloom
 + Bindless GPU-driven rendering 
 + Cook-Torrance BRDF PBR lighting
 + Deferred tiled rendering for many lights
 + Ghost of Tsushima-inspired procedural grass
 + Frame graph
++ Component based design using EnTT
++ Physics simulation using Jolt (WIP)
++ Simple terrain support, including material painting
 
 The repo also contains (currently unused) stubs of surfel-based global illumination techniques.
 
@@ -42,23 +49,7 @@ In order to allow the GI to work for large scenes, the probes will move with the
 world space coordinate. A probe "translation" pass makes sure that probe data is appropriately copied when this happens, to 
 ensure that probe data does not have to be recalculated.
 
-Below are some screenshots of the impact of the global illumination on the scene.
-
-|![Image](screenshots/ddgi/flat_ambient.png)|
-|:--:|
-|_Using flat ambient (albedo) term for indirect lighting_|
-
-|![Image](screenshots/ddgi/single_bounce_ddgi.png)|
-|:--:|
-|_Using single bounce DDGI for indirect lighting_|
-
-|![Image](screenshots/ddgi/multi_bounce_ddgi.png)|
-|:--:|
-|_Using multi bounce DDGI for indirect lighting_|
-
-|![Image](screenshots/ddgi/multi_bounce_and_specular.png)|
-|:--:|
-|_Adding specular GI to the multi bounce DDGI_|
+Screenshots coming.
 
 There is an excellent talk by one of the paper authors here: [DDGI talk](https://www.youtube.com/watch?v=KufJBCTdn_o).
 
@@ -138,26 +129,10 @@ looks up a level where each pixel roughly corresponds to the current renderables
 The trick is to use a special sampler for sampling the depth buffer when generating the mips, that always chooses the maximum value of
 the region it is sampling from. This way a conservative depth mip is achieved.
 
-Here is an example of how this mip may look like (rendered scene, 64x64, 32x32 and 4x4 mips shown):
+Screenshots coming.
 
-| ![Image](screenshots/hiz/hiz_source.png) |
-|:--:|
-| _Source for the hiz mips_ |
-
-| ![Image](screenshots/hiz/hiz64.png) |
-|:--:|
-| _64x64 'max-sampled' mip_ |
-
-|![Image](screenshots/hiz/hiz32.png)|
-|:--:|
-|_32x32 'max-sampled' mip_|
-
-|![Image](screenshots/hiz/hiz4.png)|
-|:--:|
-|_4x4 'max-sampled' mip_|
-
-References: 
-https://interplayoflight.wordpress.com/2017/11/15/experiments-in-gpu-based-occlusion-culling/
+References:  
+https://interplayoflight.wordpress.com/2017/11/15/experiments-in-gpu-based-occlusion-culling/  
 
 ### Cull
 The culling pass actually generates draw calls directly on the GPU. For rendering the geometry (non-procedurally generated meshes)
@@ -173,9 +148,9 @@ this quickly yields near-optimal draw calls only for meshes that are currently v
 In addition to geometry, procedural grass blade data is also generated in each invocation. See the 
 grass render pass further down for details on that.
 
-References: 
-https://vkguide.dev/docs/gpudriven/gpu_driven_engines/
-https://vkguide.dev/docs/gpudriven/compute_culling/
+References:   
+https://vkguide.dev/docs/gpudriven/gpu_driven_engines/  
+https://vkguide.dev/docs/gpudriven/compute_culling/  
 
 ### IrradianceProbeTrans
 This pass relates to the diffuse global illumination. 
@@ -213,9 +188,9 @@ The reason that this pass runs on a fixed time basis is because it can be expens
 either light changes, or geometry changes. Therefore, it is generally not noticable that this pass runs on a subset of frames,
 and the performance gain is substantial.
 
-References: 
-https://www.youtube.com/watch?v=KufJBCTdn_o
-https://www.jcgt.org/published/0008/02/01/paper-lowres.pdf
+References:  
+https://www.youtube.com/watch?v=KufJBCTdn_o  
+https://www.jcgt.org/published/0008/02/01/paper-lowres.pdf  
 
 ### IrradianceProbeConvolve
 This pass relates to the diffuse global illumination.
@@ -225,9 +200,9 @@ that depends on the incoming angles. This happens by convoluting the octahedral 
 radiance. A compute shader runs this in a brute-force fashion, where each invocation of the shader corresponds to
 one octahedral sample direction.
 
-References: 
-https://www.youtube.com/watch?v=KufJBCTdn_o
-https://www.jcgt.org/published/0008/02/01/paper-lowres.pdf
+References:   
+https://www.youtube.com/watch?v=KufJBCTdn_o  
+https://www.jcgt.org/published/0008/02/01/paper-lowres.pdf  
 
 ### Geometry
 To render geometry, this pass issues a single indirect draw command, referencing the buffer that was filled in by the
@@ -253,8 +228,8 @@ This generation results in a vast amount of individually animated grass blades a
 |:--:|
 |_Individually animated, procedurally generated grass blades_|
 
-References:
-https://www.youtube.com/watch?v=Ibe1JBF5i5Y
+References:  
+https://www.youtube.com/watch?v=Ibe1JBF5i5Y  
 
 ### ShadowRT
 To generate ray-traced hard shadows, this pass launches one shadow ray per pixel at full resolution. The depth buffer is used
@@ -265,7 +240,7 @@ The result of this pass is essentially a screen-space shadow _mask_, as opposed 
 
 |![Image](screenshots/shadow/shadow_source.png)|
 |:--:|
-|_The finished frame (pre-gamma correction) showing the hard shadows_|
+|_The finished frame showing the hard shadows_|
 
 |![Image](screenshots/shadow/shadow.png)|
 |:--:|
@@ -278,9 +253,7 @@ this pass needs to shade each hit point) it is done at quarter resolution, half 
 hit points takes the diffuse indirect lighting into account aswell, meaning infinite bounce indirect specular reflections 
 are possible.
 
-|![Image](screenshots/specular_gi/specular.png)|
-|:--:|
-|_The quarter resolution perfect reflections outputted by this render pass_|
+Screenshots coming.
 
 ### SpecularGIMipGen
 The perfect reflections from the previous pass are only usable on perfect mirror surfaces, since the specular lobe
@@ -288,9 +261,7 @@ distribution gets bigger the rougher a material is. In order to allow specular r
 perfect reflections are crunched down to a mip chain. While downsampling, a [bilateral filter](https://en.wikipedia.org/wiki/Bilateral_filter)
 is used, to preserve edges. The bilateral filter uses the depth buffer as an edge-preserving weight.
 
-|![Image](screenshots/specular_gi/specular_mip.png)|
-|:--:|
-|_Mip chain of the perfect reflection image, blurred using a bilateral filter_|
+Screenshots coming.
 
 When shading specular indirect light later on, a mip level is chosen based on the roughness of the material. This approximately
 corresponds to 'tracing' a wider specular lobe the rougher the material is.
@@ -299,15 +270,8 @@ corresponds to 'tracing' a wider specular lobe the rougher the material is.
 This is a naive SSAO pass. Some care has been taken to choose an appropriate radius when randomly sampling the depth buffer,
 in order to improve cache coherency.
 
-|![Image](screenshots/pp/no_ssao.png)|
-|:--:|
-|_Without SSAO_|
-
-|![Image](screenshots/pp/with_ssao.png)|
-|:--:|
-|_With SSAO_|
-
-References: https://learnopengl.com/Advanced-Lighting/SSAO
+References:  
+https://learnopengl.com/Advanced-Lighting/SSAO
 
 ### FXAA
 A simple FXAA implementation.
@@ -320,7 +284,8 @@ A simple FXAA implementation.
 |:--:|
 |_With FXAA_|
 
-References: https://github.com/mattdesl/glsl-fxaa/blob/master/fxaa.glsl
+References:  
+https://github.com/mattdesl/glsl-fxaa/blob/master/fxaa.glsl  
 
 ### DeferredLighting
 This pass implements a cache-optimised tiled deferred lighting pass, to deal with many dynamic lights.
@@ -336,10 +301,6 @@ is used to only traverse the lights that may affect the current pixel. The light
 PBR implementation, that also calculates GI using the methods described in earlier passes.
 
 This method ensures an excellent cache-friendly and fast way to support many lights.
-
-|![Image](screenshots/deferred/many_dynamic_lights.png)|
-|:--:|
-|_1024 dynamic point lights_|
 
 ### DebugBoundingSpheres and DebugView
 These are debug passes that allow inspection of bounding volumes and textures.
@@ -357,34 +318,6 @@ many objects, while also freeing up the CPU for other work.
 
 The passes related to global illumination remain expensive, but it is a worthwhile tradeoff for the visual quality they yield.
 
-Below is a table of the average frame times for each render pass. The test scene can be seen in the first screenshot. 
-The following hardware was used:
 
-CPU: AMD Ryzen 5900X
-GPU: Nvidia RTX 3080
-Resolution: 1920x1080
-
-Note that the engine is heavily GPU-bound, by design.
-
-|![Image](screenshots/screenshot1.png)|
-|:--:|
-|_Test render for frame times_|
-
-| Pass      | Avg. frame time (ms)|
-| ----------- | ----------- |
-| HiZ      | 0.018       |
-| Cull   | 0.055        |
-| IrradianceProbeRT   | 0.29 |
-| IrradianceProbeConvolve   | 0.036 |
-| Geometry   | 1.09 |
-| Grass (no grass visible)   | 0.045 |
-| ShadowRT   | 0.35 |
-| SpecularGIRT   | 0.66 |
-| SpecularGIMipGen   | 0.24 |
-| SSAO   | 0.67 |
-| DeferredPBRLight   | 0.20 |
-| FXAA   | 0.06 |
-| UI   | 0.019 |
-| Present   | 0.016 |
 
 
