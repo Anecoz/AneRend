@@ -33,6 +33,7 @@ bool shouldBePatched(const util::Uuid& node, component::Registry& reg)
 {
   if (reg.hasComponent<component::Renderable>(node)) return true;
   if (reg.hasComponent<component::Light>(node)) return true;
+  if (reg.hasComponent<component::RigidBody>(node)) return true;
 
   return false;
 }
@@ -112,6 +113,7 @@ void Scene::update()
       }
 
       // Everything should have had the chance to page out and disassociate itself with the node by now (one full update cycle)
+      _registry.unregisterNode(it->_node);
       _nodes.erase(it->_node);
       _nodeVec.erase(std::remove_if(_nodeVec.begin(), _nodeVec.end(), [id = it->_node](auto& a) {return a._id == id; }), _nodeVec.end());
       _nodeTileMap.erase(it->_node);
@@ -696,7 +698,7 @@ void Scene::updateChildrenTransforms(Node& node)
   }
 }
 
-util::Uuid Scene::findRoot(Node& node)
+util::Uuid Scene::findRoot(const Node& node)
 {
   if (!node._parent) {
     return node._id;

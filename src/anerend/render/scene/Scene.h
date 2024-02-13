@@ -153,6 +153,7 @@ public:
   void removeNodeChild(util::Uuid& node, util::Uuid& child);
   std::vector<util::Uuid> getNodeChildren(util::Uuid& node);
   component::PotentialComponents nodeToPotComps(util::Uuid& node);
+  util::Uuid findRoot(const Node& node);
 
   void setDDGIAtlas(util::Uuid texId, scene::TileIndex idx);
 
@@ -206,8 +207,6 @@ private:
   void addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx = TileIndex());
   void updateDependentTransforms(Node& node);
   void updateChildrenTransforms(Node& node);
-
-  util::Uuid findRoot(Node& node);
 };
 
 }

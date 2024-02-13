@@ -164,6 +164,36 @@ struct RigidBody
   float _mass = 1.0f; // kg
 };
 
+struct SphereCollider
+{
+  float _radius = .5f;
+};
+
+struct MeshCollider
+{
+  // Nothing is needed in here since the Collider is created from the renderable comp
+  // But for serialisation purposes the struct cannot be empty...
+  bool _dummy; 
+};
+
+struct BoxCollider
+{
+  glm::vec3 _halfExtent = {0.5f, 0.5f, 0.5f};
+};
+
+struct CapsuleCollider
+{
+  float _halfHeight = 1.0f;
+  float _radius = 0.3f;
+};
+
+struct CharacterController
+{
+  glm::vec3 _desiredLinearVelocity;
+  float _speed = 1.0f;
+  float _jumpSpeed = 2.0f;
+};
+
 // Struct that holds potential components used by e.g. prefabs
 struct PotentialComponents
 {
@@ -174,6 +204,11 @@ struct PotentialComponents
   std::optional<Animator> _animator;
   std::optional<Terrain> _terrain;
   std::optional<RigidBody> _rigidBody;
+  std::optional<SphereCollider> _sphereColl;
+  std::optional<MeshCollider> _meshColl;
+  std::optional<BoxCollider> _boxColl;
+  std::optional<CapsuleCollider> _capsuleColl;
+  std::optional<CharacterController> _charCon;
 };
 
 }

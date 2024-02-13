@@ -1,9 +1,11 @@
 #pragma once
 
+#include "../component/Components.h"
 #include "../render/asset/Texture.h" // For heightfields
 #include "../render/asset/Mesh.h"
 
 #include <Jolt/Jolt.h>
+#include <Jolt/Core/Memory.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
@@ -12,10 +14,20 @@
 #include <Jolt/Core/JobSystemThreadPool.h>
 #include <Jolt/Renderer/DebugRenderer.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Character/Character.h>
 
+#include <glm/glm.hpp>
+
+#include <unordered_map>
 #include <iostream>
 
 namespace physics {
+
+struct TransformSyncInfo
+{
+	util::Uuid _node;
+	glm::mat4 _global;
+};
 
 namespace Layers
 {
@@ -78,18 +90,16 @@ public:
 		return mObjectToBroadPhase[inLayer];
 	}
 
-#if 0
-#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
-	virtual const char* GetBroadPhaseLayerName(BroadPhaseLayer inLayer) const override
+#if defined(_DEBUG)
+	virtual const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer inLayer) const override
 	{
-		switch ((BroadPhaseLayer::Type)inLayer)
+		switch ((JPH::BroadPhaseLayer::Type)inLayer)
 		{
-		case (BroadPhaseLayer::Type)BroadPhaseLayers::NON_MOVING:	return "NON_MOVING";
-		case (BroadPhaseLayer::Type)BroadPhaseLayers::MOVING:		return "MOVING";
+		case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::NON_MOVING:	return "NON_MOVING";
+		case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::MOVING:		return "MOVING";
 		default:													JPH_ASSERT(false); return "INVALID";
 		}
 	}
-#endif // JPH_EXTERNAL_PROFILE || JPH_PROFILE_ENABLED
 #endif
 
 private:
@@ -122,7 +132,7 @@ public:
 	// See: ContactListener
 	virtual JPH::ValidateResult	OnContactValidate(const JPH::Body& inBody1, const JPH::Body& inBody2, JPH::RVec3Arg inBaseOffset, const JPH::CollideShapeResult& inCollisionResult) override
 	{
-		std::cout << "Contact validate callback" << std::endl;
+		//std::cout << "Contact validate callback" << std::endl;
 
 		// Allows you to ignore a contact before it is created (using layers to not make objects collide is cheaper!)
 		return JPH::ValidateResult::AcceptAllContactsForThisBodyPair;
@@ -130,17 +140,17 @@ public:
 
 	virtual void OnContactAdded(const JPH::Body& inBody1, const JPH::Body& inBody2, const JPH::ContactManifold& inManifold, JPH::ContactSettings& ioSettings) override
 	{
-		std::cout << "A contact was added" << std::endl;
+		//std::cout << "A contact was added" << std::endl;
 	}
 
 	virtual void OnContactPersisted(const JPH::Body& inBody1, const JPH::Body& inBody2, const JPH::ContactManifold& inManifold, JPH::ContactSettings& ioSettings) override
 	{
-		std::cout << "A contact was persisted" << std::endl;
+		//std::cout << "A contact was persisted" << std::endl;
 	}
 
 	virtual void OnContactRemoved(const JPH::SubShapeIDPair& inSubShapePair) override
 	{
-		std::cout << "A contact was removed" << std::endl;
+		//std::cout << "A contact was removed" << std::endl;
 	}
 };
 
@@ -150,12 +160,12 @@ class MyBodyActivationListener : public JPH::BodyActivationListener
 public:
 	virtual void OnBodyActivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override
 	{
-		std::cout << "A body got activated" << std::endl;
+		//std::cout << "A body got activated" << std::endl;
 	}
 
 	virtual void OnBodyDeactivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override
 	{
-		std::cout << "A body went to sleep" << std::endl;
+		//std::cout << "A body went to sleep" << std::endl;
 	}
 };
 
@@ -170,19 +180,71 @@ public:
   PhysicsJoltImpl(PhysicsJoltImpl&&) = delete;
   PhysicsJoltImpl& operator=(PhysicsJoltImpl&&) = delete;
 
+	static void staticInit();
   void init();
 
+	void preUpdate(double delta);
+
+	// Steps the simulation
 	void update(double delta);
+
+	void postUpdate(double delta);
+
+	// Upstream: Syncs the physics world for all known and active bodies
+	std::vector<TransformSyncInfo> retrieveCurrentTransforms();
+
+	// Draws as much debug information as possible about the current state (immediate mode)
 	void debugDraw(JPH::DebugRenderer* renderer);
+
+	// Returns if we have a body the given node
+	bool isBodyKnown(util::Uuid node) const;
+
+	// Returns if we have a shape for the given node
+	bool isShapeKnown(util::Uuid node) const;
+
+	// Do we have a character controller for this node
+	bool isCharKnown(util::Uuid node) const;
 
 	// Will remove shape and body for the given node
 	void remove(util::Uuid node);
 
-	void addHeightfield(const render::asset::Mesh& mesh, util::Uuid node);
+	// Will remove the character completely
+	void removeChar(util::Uuid node);
+
+	// Add colliders
+	void addSphere(float radius, util::Uuid node);
+	void addBox(const glm::vec3& halfExtent, util::Uuid node);
+	void addCapsule(float halfHeight, float radius, util::Uuid node);
+	void addMesh(const render::asset::Mesh& mesh, util::Uuid node);
+
+	// Add body
+	void addRigidBody(const component::RigidBody& rigidComp, const glm::mat4& transform, util::Uuid node);
+
+	// Add character controllers.
+	void addCharacterController(const component::CharacterController& comp, float sphereRadius, const glm::mat4& transform, util::Uuid node);
+
+	// Update colliders
+	void updateSphere(float radius, util::Uuid node);
+	void updateBox(const glm::vec3& halfExtent, util::Uuid node);
+
+	// Update bodies
+	void updateRigidBody(const component::RigidBody& rigidComp, util::Uuid node);
+
+	// Downstream: Syncs a given body with a new orientation and translation.
+	void setPositionAndOrientation(const util::Uuid& node, glm::quat rot, glm::vec3 trans);
+
+	// Sets desired velocity of a char. Needs to be called before stepping the simulation!
+	void setDesiredVelocity(const glm::vec3& desiredVel, float jumpSpeed, float speed, const util::Uuid& node);
 
 	void debugSphere();
 
 private:
+	void setShapeBodyOrChar(const util::Uuid& node);
+
+	std::unordered_map<util::Uuid, JPH::BodyID> _bodyMap;
+	std::unordered_map<util::Uuid, JPH::Ref<JPH::Shape>> _shapeMap;
+	std::unordered_map<util::Uuid, JPH::Ref<JPH::Character>> _charMap;
+
 	JPH::TempAllocatorImpl* _tempAllocator = nullptr;
 	JPH::JobSystemThreadPool* _jobSystem = nullptr;
 
@@ -205,7 +267,7 @@ private:
 	const unsigned _maxContactConstraints = 1024;
 
 	// Create mapping table from object layer to broadphase layer
-	BPLayerInterfaceImpl _broadPhaseLayerIF;
+	physics::BPLayerInterfaceImpl _broadPhaseLayerIF;
 
 	// Create class that filters object vs broadphase layers
 	ObjectVsBroadPhaseLayerFilterImpl _objectVsBroadPhaseLayerFilter;

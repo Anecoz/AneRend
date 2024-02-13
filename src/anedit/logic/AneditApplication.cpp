@@ -136,6 +136,9 @@ void AneditApplication::update(double delta)
   }
 
   _terrainSystem.update();
+  _physicsSystem.downstreamTransformSync();
+  _physicsSystem.update(delta, _drawPhysicsDebug);
+  _physicsSystem.upstreamTransformSync();
 
   {
     auto now = std::chrono::system_clock::now();
@@ -154,8 +157,6 @@ void AneditApplication::update(double delta)
 
   //_windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));
-
-  _physicsSystem.update(delta);
 
   // For now always request a world pos
   _vkRenderer.requestWorldPosition(MousePosInput::getPosition(),
@@ -332,6 +333,9 @@ void AneditApplication::oldUI()
         _camera.setPosition(origPos);
       }
     }
+
+    ImGui::Checkbox("Run physics sim", &_physicsSystem.simulationRunning());
+    ImGui::Checkbox("Draw physics debug", &_drawPhysicsDebug);
 
     // Test physics sphere
     if (ImGui::Button("Debug sphere")) {

@@ -9,6 +9,10 @@
 #include "component/EditAnimatorGUI.h"
 #include "component/EditTerrainGUI.h"
 #include "component/EditRigidBodyGUI.h"
+#include "component/EditSphereColliderGUI.h"
+#include "component/EditMeshColliderGUI.h"
+#include "component/EditBoxColliderGUI.h"
+#include "component/EditCharacterControllerGUI.h"
 
 #include <imgui.h>
 
@@ -36,6 +40,10 @@ EditNodeGUI::EditNodeGUI()
   _componentGUIs[typeid(component::Animator)] = new EditAnimatorGUI();
   _componentGUIs[typeid(component::Terrain)] = new EditTerrainGUI();
   _componentGUIs[typeid(component::RigidBody)] = new EditRigidBodyGUI();
+  _componentGUIs[typeid(component::SphereCollider)] = new EditSphereColliderGUI();
+  _componentGUIs[typeid(component::MeshCollider)] = new EditMeshColliderGUI();
+  _componentGUIs[typeid(component::BoxCollider)] = new EditBoxColliderGUI();
+  _componentGUIs[typeid(component::CharacterController)] = new EditCharacterControllerGUI();
 }
 
 EditNodeGUI::~EditNodeGUI()
@@ -72,6 +80,10 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
   bool hasAnimator = false;
   bool hasTerrain = false;
   bool hasRigidBody = false;
+  bool hasSphereCollider = false;
+  bool hasMeshCollider = false;
+  bool hasBoxCollider = false;
+  bool hasCharacterController = false;
 
   DRAW_COMP(Transform);
   DRAW_COMP(Renderable);
@@ -79,6 +91,10 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
   DRAW_COMP(Animator);
   DRAW_COMP(Terrain);
   DRAW_COMP(RigidBody);
+  DRAW_COMP(SphereCollider);
+  DRAW_COMP(MeshCollider);
+  DRAW_COMP(BoxCollider);
+  DRAW_COMP(CharacterController);
 
   // Add new components
   if (ImGui::BeginPopupContextWindow()) {
@@ -106,6 +122,30 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
       if (ImGui::MenuItem("Add rigid body...")) {
         c->scene().registry().addComponent<component::RigidBody>(id);
         c->scene().registry().patchComponent<component::RigidBody>(id);
+      }
+    }
+    if (!hasSphereCollider) {
+      if (ImGui::MenuItem("Add sphere collider...")) {
+        c->scene().registry().addComponent<component::SphereCollider>(id);
+        c->scene().registry().patchComponent<component::SphereCollider>(id);
+      }
+    }
+    if (!hasMeshCollider) {
+      if (ImGui::MenuItem("Add mesh collider...")) {
+        c->scene().registry().addComponent<component::MeshCollider>(id);
+        c->scene().registry().patchComponent<component::MeshCollider>(id);
+      }
+    }
+    if (!hasBoxCollider) {
+      if (ImGui::MenuItem("Add box collider...")) {
+        c->scene().registry().addComponent<component::BoxCollider>(id);
+        c->scene().registry().patchComponent<component::BoxCollider>(id);
+      }
+    }
+    if (!hasCharacterController) {
+      if (ImGui::MenuItem("Add character controller...")) {
+        c->scene().registry().addComponent<component::CharacterController>(id);
+        c->scene().registry().patchComponent<component::CharacterController>(id);
       }
     }
 

@@ -180,6 +180,24 @@ void serialize(S& s, component::RigidBody& p)
 }
 
 template <typename S>
+void serialize(S& s, component::SphereCollider& p)
+{
+  s.value4b(p._radius);
+}
+
+template <typename S>
+void serialize(S& s, component::MeshCollider& p)
+{
+  s.value1b(p._dummy);
+}
+
+template <typename S>
+void serialize(S& s, component::BoxCollider& p)
+{
+  s.object(p._halfExtent);
+}
+
+template <typename S>
 void serialize(S& s, component::PotentialComponents& p)
 {
   s.object(p._trans);
@@ -189,6 +207,9 @@ void serialize(S& s, component::PotentialComponents& p)
   s.ext(p._skeleton, bitsery::ext::StdOptional{});
   s.ext(p._terrain, bitsery::ext::StdOptional{});
   s.ext(p._rigidBody, bitsery::ext::StdOptional{});
+  s.ext(p._sphereColl, bitsery::ext::StdOptional{});
+  s.ext(p._meshColl, bitsery::ext::StdOptional{});
+  s.ext(p._boxColl, bitsery::ext::StdOptional{});
 }
 
 template <typename S>
@@ -600,6 +621,15 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
         if (scene.registry().hasComponent<component::RigidBody>(node._id)) {
           imn._comps._rigidBody = scene.registry().getComponent<component::RigidBody>(node._id);
         }
+        if (scene.registry().hasComponent<component::SphereCollider>(node._id)) {
+          imn._comps._sphereColl = scene.registry().getComponent<component::SphereCollider>(node._id);
+        }
+        if (scene.registry().hasComponent<component::MeshCollider>(node._id)) {
+          imn._comps._meshColl = scene.registry().getComponent<component::MeshCollider>(node._id);
+        }
+        if (scene.registry().hasComponent<component::BoxCollider>(node._id)) {
+          imn._comps._boxColl = scene.registry().getComponent<component::BoxCollider>(node._id);
+        }
 
         imNodes.emplace_back(std::move(imn));
       }
@@ -828,6 +858,24 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
           auto& c = outputData._scene->registry().addComponent<component::RigidBody>(id);
           c = imn._comps._rigidBody.value();
           outputData._scene->registry().patchComponent<component::RigidBody>(id);
+        }
+
+        if (imn._comps._sphereColl) {
+          auto& c = outputData._scene->registry().addComponent<component::SphereCollider>(id);
+          c = imn._comps._sphereColl.value();
+          outputData._scene->registry().patchComponent<component::SphereCollider>(id);
+        }
+
+        if (imn._comps._meshColl) {
+          auto& c = outputData._scene->registry().addComponent<component::MeshCollider>(id);
+          c = imn._comps._meshColl.value();
+          outputData._scene->registry().patchComponent<component::MeshCollider>(id);
+        }
+
+        if (imn._comps._boxColl) {
+          auto& c = outputData._scene->registry().addComponent<component::BoxCollider>(id);
+          c = imn._comps._boxColl.value();
+          outputData._scene->registry().patchComponent<component::BoxCollider>(id);
         }
       }
 

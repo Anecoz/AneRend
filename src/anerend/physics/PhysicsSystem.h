@@ -2,6 +2,8 @@
 
 #include <entt/entt.hpp>
 
+#include "../util/Uuid.h"
+
 namespace component {
   class Registry;
 }
@@ -17,6 +19,7 @@ namespace render::scene {
 namespace physics {
 
 class JoltDebugRenderer;
+class PhysicsJoltImpl;
 
 class PhysicsSystem
 {
@@ -34,17 +37,42 @@ public:
 
   void init();
 
+  // Sync transforms from hierarchy to physics simulation.
+  void downstreamTransformSync();
+
+  // Creates bodies and colliders, and steps the simulation if it is currently running.
   void update(double delta, bool debugDraw = true);
+
+  // Sync transforms from physics simulation to hierarchy.
+  void upstreamTransformSync();
+
+  bool& simulationRunning() { return _simulationRunning; }
 
   void debugSphere();
 
 private:
+  void connectObserver();
+  void checkIfCreate(const util::Uuid& node);
+
+  void onCharContCreated(entt::registry& reg, entt::entity entity);
+  void onRemoved(entt::registry& reg, entt::entity entity);
+
+  void syncCharacters();
+
+  // Debugging, acts as an AI script
+  void debugUpdateCharacters(double delta);
+
+  PhysicsJoltImpl* _joltImpl = nullptr;
   JoltDebugRenderer* _debugRenderer = nullptr;
   component::Registry* _registry = nullptr;
   render::scene::Scene* _scene = nullptr;
+  render::RenderContext* _rc = nullptr;
 
-  entt::observer _terrainObserver;
+  entt::observer _rigidObserver;
+  entt::observer _transformObserver;
+  entt::observer _colliderObserver;
   bool _goThroughEverything = false;
+  bool _simulationRunning = false;
 };
 
 }

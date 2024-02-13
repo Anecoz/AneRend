@@ -78,7 +78,9 @@ void EditRigidBodyGUI::immediateDraw(logic::AneditContext* c)
   if (ImGui::InputFloat("Gravity Factor", &rigidBodyComp._gravityFactor)) changed = true;
   if (ImGui::InputFloat("Mass", &rigidBodyComp._mass)) changed = true;
 
-
+  if (changed) {
+    c->scene().registry().patchComponent<component::RigidBody>(id);
+  }
 }
 
 }

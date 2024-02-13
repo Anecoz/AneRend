@@ -113,6 +113,8 @@ private:
 
   glm::vec3 _latestWorldPosition = glm::vec3(0.0f);
 
+  bool _drawPhysicsDebug = true;
+
   // Test bake
   bool _baking = false;
 
