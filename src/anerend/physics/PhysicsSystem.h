@@ -71,6 +71,7 @@ private:
   entt::observer _rigidObserver;
   entt::observer _transformObserver;
   entt::observer _colliderObserver;
+  entt::observer _pagingObserver;
   bool _goThroughEverything = false;
   bool _simulationRunning = false;
 };

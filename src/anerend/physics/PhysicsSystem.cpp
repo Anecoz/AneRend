@@ -90,24 +90,6 @@ void PhysicsSystem::update(double delta, bool debugDraw)
     }
   };
 
-  auto colliderLambda = [this](util::Uuid node) {
-    checkIfCreate(node);
-
-    if (!_joltImpl->isShapeKnown(node)) return;
-
-    // Check for all colliders
-    if (_registry->hasComponent<component::MeshCollider>(node)) {
-    }
-    else if (_registry->hasComponent<component::SphereCollider>(node)) {
-      float radius = _registry->getComponent<component::SphereCollider>(node)._radius;
-      _joltImpl->updateSphere(radius, node);
-    }
-    else if (_registry->hasComponent<component::BoxCollider>(node)) {
-      auto halfExtent = _registry->getComponent<component::BoxCollider>(node)._halfExtent;
-      _joltImpl->updateBox(halfExtent, node);
-    }
-  };
-
   // Check rigidbodies (softbodies TODO) and check if they have colliders
   // If they are known already, update parameters of the body and/or collider
   if (_goThroughEverything) {
@@ -127,7 +109,26 @@ void PhysicsSystem::update(double delta, bool debugDraw)
 
     for (auto entity : _colliderObserver) {
       auto node = _registry->reverseLookup(entity);
-      colliderLambda(node);
+      checkIfCreate(node);
+
+      if (!_joltImpl->isShapeKnown(node)) return;
+
+      // Check for all colliders
+      if (_registry->hasComponent<component::MeshCollider>(node)) {
+      }
+      else if (_registry->hasComponent<component::SphereCollider>(node)) {
+        float radius = _registry->getComponent<component::SphereCollider>(node)._radius;
+        _joltImpl->updateSphere(radius, node);
+      }
+      else if (_registry->hasComponent<component::BoxCollider>(node)) {
+        auto halfExtent = _registry->getComponent<component::BoxCollider>(node)._halfExtent;
+        _joltImpl->updateBox(halfExtent, node);
+      }
+      else if (_registry->hasComponent<component::CapsuleCollider>(node)) {
+        auto halfHeight = _registry->getComponent<component::CapsuleCollider>(node)._halfHeight;
+        auto radius = _registry->getComponent<component::CapsuleCollider>(node)._radius;
+        _joltImpl->updateCapsule(halfHeight, radius, node);
+      }
     }
   }
 
@@ -193,28 +194,38 @@ void PhysicsSystem::debugSphere()
 
 void PhysicsSystem::connectObserver()
 {
+  // To be able to reflect the component changes to the physics impl.
   _rigidObserver.connect(_registry->getEnttRegistry(), 
     entt::collector.
     update<component::RigidBody>()
   );
 
+  // This is mainly for editing, to sync changes made in editor to physics.
   _transformObserver.connect(_registry->getEnttRegistry(),
     entt::collector.
     update<component::Transform>().where<component::RigidBody, component::MeshCollider>().
     update<component::Transform>().where<component::RigidBody, component::BoxCollider>().
     update<component::Transform>().where<component::RigidBody, component::SphereCollider>().
+    update<component::Transform>().where<component::RigidBody, component::CapsuleCollider>().
     update<component::Transform>().where<component::CharacterController, component::BoxCollider>().
-    update<component::Transform>().where<component::CharacterController, component::SphereCollider>()
+    update<component::Transform>().where<component::CharacterController, component::SphereCollider>().
+    update<component::Transform>().where<component::CharacterController, component::CapsuleCollider>()
   );
 
+  // To reflect changes to physics impl.
   _colliderObserver.connect(_registry->getEnttRegistry(),
     entt::collector.
-    update<component::MeshCollider>().where<component::RigidBody>().
-    update<component::BoxCollider>().where<component::RigidBody>().
-    update<component::SphereCollider>().where<component::RigidBody>().
-    update<component::MeshCollider>().where<component::CharacterController>().
-    update<component::BoxCollider>().where<component::CharacterController>().
-    update<component::SphereCollider>().where<component::CharacterController>()
+    update<component::MeshCollider>().
+    update<component::BoxCollider>().
+    update<component::SphereCollider>().
+    update<component::CapsuleCollider>()
+  );
+
+  // To detect if something is paged out or in.
+  _pagingObserver.connect(_registry->getEnttRegistry(),
+    entt::collector.
+    update<component::PageStatus>().where<component::RigidBody>().
+    update<component::PageStatus>().where<component::CharacterController>()
   );
 
   _registry->getEnttRegistry().on_destroy<component::RigidBody>().connect<&PhysicsSystem::onRemoved>(this);
@@ -224,10 +235,8 @@ void PhysicsSystem::connectObserver()
 
 void PhysicsSystem::checkIfCreate(const util::Uuid& node)
 {
-  if (!_registry->hasComponent<component::RigidBody>(node)) return;
-
   auto& transComp = _registry->getComponent<component::Transform>(node);
-  auto& rigidComp = _registry->getComponent<component::RigidBody>(node);
+  bool hasRigidComp = _registry->hasComponent<component::RigidBody>(node);
   auto& globalTrans = transComp._globalTransform;
 
   // Check for all colliders
@@ -255,9 +264,17 @@ void PhysicsSystem::checkIfCreate(const util::Uuid& node)
       _joltImpl->addBox(halfExtent, node);
     }
   }
+  else if (_registry->hasComponent<component::CapsuleCollider>(node)) {
+    if (!_joltImpl->isShapeKnown(node)) {
+      auto halfHeight = _registry->getComponent<component::CapsuleCollider>(node)._halfHeight;
+      auto radius = _registry->getComponent<component::CapsuleCollider>(node)._radius;
+      _joltImpl->addCapsule(halfHeight, radius, node);
+    }
+  }
 
   // Check if rigidbody is known, do last since it needs a shape
-  if (!_joltImpl->isBodyKnown(node)) {
+  if (!_joltImpl->isBodyKnown(node) && hasRigidComp) {
+    auto& rigidComp = _registry->getComponent<component::RigidBody>(node);
     _joltImpl->addRigidBody(rigidComp, globalTrans, node);
   }
 }
@@ -265,12 +282,11 @@ void PhysicsSystem::checkIfCreate(const util::Uuid& node)
 void PhysicsSystem::onCharContCreated(entt::registry& reg, entt::entity entity)
 {
   auto node = _registry->reverseLookup(entity);
-  if (!_joltImpl->isCharKnown(node)) {
+  if (!_joltImpl->isCharKnown(node) && _joltImpl->isShapeKnown(node)) {
     auto& charComp = _registry->getComponent<component::CharacterController>(node);
     auto& transComp = _registry->getComponent<component::Transform>(node);
-    auto& sphereComp = _registry->getComponent<component::SphereCollider>(node);
 
-    _joltImpl->addCharacterController(charComp, sphereComp._radius, transComp._globalTransform, node);
+    _joltImpl->addCharacterController(charComp, transComp._globalTransform, node);
   }
 }
 

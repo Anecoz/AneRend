@@ -221,11 +221,12 @@ public:
 	void addRigidBody(const component::RigidBody& rigidComp, const glm::mat4& transform, util::Uuid node);
 
 	// Add character controllers.
-	void addCharacterController(const component::CharacterController& comp, float sphereRadius, const glm::mat4& transform, util::Uuid node);
+	void addCharacterController(const component::CharacterController& comp, const glm::mat4& transform, util::Uuid node);
 
 	// Update colliders
 	void updateSphere(float radius, util::Uuid node);
 	void updateBox(const glm::vec3& halfExtent, util::Uuid node);
+	void updateCapsule(float halfHeight, float radius, util::Uuid node);
 
 	// Update bodies
 	void updateRigidBody(const component::RigidBody& rigidComp, util::Uuid node);

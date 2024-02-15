@@ -198,6 +198,21 @@ void serialize(S& s, component::BoxCollider& p)
 }
 
 template <typename S>
+void serialize(S& s, component::CapsuleCollider& p)
+{
+  s.value4b(p._halfHeight);
+  s.value4b(p._radius);
+}
+
+template <typename S>
+void serialize(S& s, component::CharacterController& p)
+{
+  s.object(p._desiredLinearVelocity);
+  s.value4b(p._speed);
+  s.value4b(p._jumpSpeed);
+}
+
+template <typename S>
 void serialize(S& s, component::PotentialComponents& p)
 {
   s.object(p._trans);
@@ -210,6 +225,8 @@ void serialize(S& s, component::PotentialComponents& p)
   s.ext(p._sphereColl, bitsery::ext::StdOptional{});
   s.ext(p._meshColl, bitsery::ext::StdOptional{});
   s.ext(p._boxColl, bitsery::ext::StdOptional{});
+  s.ext(p._capsuleColl, bitsery::ext::StdOptional{});
+  s.ext(p._charCon, bitsery::ext::StdOptional{});
 }
 
 template <typename S>
@@ -630,6 +647,12 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
         if (scene.registry().hasComponent<component::BoxCollider>(node._id)) {
           imn._comps._boxColl = scene.registry().getComponent<component::BoxCollider>(node._id);
         }
+        if (scene.registry().hasComponent<component::CapsuleCollider>(node._id)) {
+          imn._comps._capsuleColl= scene.registry().getComponent<component::CapsuleCollider>(node._id);
+        }
+        if (scene.registry().hasComponent<component::CharacterController>(node._id)) {
+          imn._comps._charCon = scene.registry().getComponent<component::CharacterController>(node._id);
+        }
 
         imNodes.emplace_back(std::move(imn));
       }
@@ -876,6 +899,18 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
           auto& c = outputData._scene->registry().addComponent<component::BoxCollider>(id);
           c = imn._comps._boxColl.value();
           outputData._scene->registry().patchComponent<component::BoxCollider>(id);
+        }
+
+        if (imn._comps._capsuleColl) {
+          auto& c = outputData._scene->registry().addComponent<component::CapsuleCollider>(id);
+          c = imn._comps._capsuleColl.value();
+          outputData._scene->registry().patchComponent<component::CapsuleCollider>(id);
+        }
+
+        if (imn._comps._charCon) {
+          auto& c = outputData._scene->registry().addComponent<component::CharacterController>(id);
+          c = imn._comps._charCon.value();
+          outputData._scene->registry().patchComponent<component::CharacterController>(id);
         }
       }
 

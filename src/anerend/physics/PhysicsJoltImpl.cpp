@@ -293,12 +293,9 @@ void PhysicsJoltImpl::addRigidBody(const component::RigidBody& rigidComp, const 
 	_bodyMap[node] = bi.CreateAndAddBody(settings, JPH::EActivation::Activate);
 }
 
-void PhysicsJoltImpl::addCharacterController(const component::CharacterController& comp, float sphereRadius, const glm::mat4& transform, util::Uuid node)
+void PhysicsJoltImpl::addCharacterController(const component::CharacterController& comp, const glm::mat4& transform, util::Uuid node)
 {
-	auto shape = new JPH::SphereShape(sphereRadius);
-	_shapeMap[node] = shape;
-
-	if (_shapeMap.find(node) == _shapeMap.end()) {
+	if (!isShapeKnown(node)) {
 		printf("Physics cannot add a character without a shape!\n");
 		return;
 	}
@@ -330,6 +327,14 @@ void PhysicsJoltImpl::updateBox(const glm::vec3& halfExtent, util::Uuid node)
 	if (!isShapeKnown(node)) return;
 
 	_shapeMap[node] = new JPH::BoxShape(JPH::Vec3(halfExtent.x, halfExtent.y, halfExtent.z));
+	setShapeBodyOrChar(node);
+}
+
+void PhysicsJoltImpl::updateCapsule(float halfHeight, float radius, util::Uuid node)
+{
+	if (!isShapeKnown(node)) return;
+
+	_shapeMap[node] = new JPH::CapsuleShape(halfHeight, radius);
 	setShapeBodyOrChar(node);
 }
 

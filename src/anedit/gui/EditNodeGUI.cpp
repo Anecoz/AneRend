@@ -13,6 +13,7 @@
 #include "component/EditMeshColliderGUI.h"
 #include "component/EditBoxColliderGUI.h"
 #include "component/EditCharacterControllerGUI.h"
+#include "component/EditCapsuleColliderGUI.h"
 
 #include <imgui.h>
 
@@ -44,6 +45,7 @@ EditNodeGUI::EditNodeGUI()
   _componentGUIs[typeid(component::MeshCollider)] = new EditMeshColliderGUI();
   _componentGUIs[typeid(component::BoxCollider)] = new EditBoxColliderGUI();
   _componentGUIs[typeid(component::CharacterController)] = new EditCharacterControllerGUI();
+  _componentGUIs[typeid(component::CapsuleCollider)] = new EditCapsuleColliderGUI();
 }
 
 EditNodeGUI::~EditNodeGUI()
@@ -84,6 +86,7 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
   bool hasMeshCollider = false;
   bool hasBoxCollider = false;
   bool hasCharacterController = false;
+  bool hasCapsuleCollider = false;
 
   DRAW_COMP(Transform);
   DRAW_COMP(Renderable);
@@ -95,6 +98,7 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
   DRAW_COMP(MeshCollider);
   DRAW_COMP(BoxCollider);
   DRAW_COMP(CharacterController);
+  DRAW_COMP(CapsuleCollider);
 
   // Add new components
   if (ImGui::BeginPopupContextWindow()) {
@@ -140,6 +144,12 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
       if (ImGui::MenuItem("Add box collider...")) {
         c->scene().registry().addComponent<component::BoxCollider>(id);
         c->scene().registry().patchComponent<component::BoxCollider>(id);
+      }
+    }
+    if (!hasCapsuleCollider) {
+      if (ImGui::MenuItem("Add capsule collider...")) {
+        c->scene().registry().addComponent<component::CapsuleCollider>(id);
+        c->scene().registry().patchComponent<component::CapsuleCollider>(id);
       }
     }
     if (!hasCharacterController) {
