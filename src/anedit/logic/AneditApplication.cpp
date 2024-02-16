@@ -555,30 +555,12 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, g
   _scene.registry().addComponent<component::Transform>(id, globalTransform, localTransform);
   _scene.registry().patchComponent<component::Transform>(id);
 
-  if (prefab._comps._rend) {
-    auto& prefabRend = prefab._comps._rend.value();
-    auto& rendComp = _scene.registry().addComponent<component::Renderable>(id);
-    rendComp = prefabRend;
-    _scene.registry().patchComponent<component::Renderable>(id);
-  }
-  if (prefab._comps._light) {
-    auto& prefabComp = prefab._comps._light.value();
-    auto& comp = _scene.registry().addComponent<component::Light>(id);
-    comp = prefabComp;
-    _scene.registry().patchComponent<component::Light>(id);
-  }
-  if (prefab._comps._animator) {
-    auto& prefabComp = prefab._comps._animator.value();
-    auto& comp = _scene.registry().addComponent<component::Animator>(id);
-    comp = prefabComp;
-    _scene.registry().patchComponent<component::Animator>(id);
-  }
-  if (prefab._comps._skeleton) {
-    auto& prefabComp = prefab._comps._skeleton.value();
-    auto& comp = _scene.registry().addComponent<component::Skeleton>(id);
-    comp = prefabComp;
-    _scene.registry().patchComponent<component::Skeleton>(id);
-  }
+  auto compsCopy = prefab._comps;
+  component::forEachExistingPotComp([id, this]<typename T>(T& comp) {
+    auto& addedComp = _scene.registry().addComponent<T>(id);
+    addedComp = comp;
+    _scene.registry().patchComponent<T>(id);
+  }, compsCopy);
 
   instantiatedNodes[prefab._id] = id;
 

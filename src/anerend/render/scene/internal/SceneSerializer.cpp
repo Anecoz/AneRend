@@ -628,39 +628,11 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
         // Components
         imn._comps._trans = scene.registry().getComponent<component::Transform>(node._id);
 
-        if (scene.registry().hasComponent<component::Renderable>(node._id)) {
-          imn._comps._rend = scene.registry().getComponent<component::Renderable>(node._id);
-        }
-        if (scene.registry().hasComponent<component::Light>(node._id)) {
-          imn._comps._light = scene.registry().getComponent<component::Light>(node._id);
-        }
-        if (scene.registry().hasComponent<component::Skeleton>(node._id)) {
-          imn._comps._skeleton = scene.registry().getComponent<component::Skeleton>(node._id);
-        }
-        if (scene.registry().hasComponent<component::Animator>(node._id)) {
-          imn._comps._animator = scene.registry().getComponent<component::Animator>(node._id);
-        }
-        if (scene.registry().hasComponent<component::Terrain>(node._id)) {
-          imn._comps._terrain = scene.registry().getComponent<component::Terrain>(node._id);
-        }
-        if (scene.registry().hasComponent<component::RigidBody>(node._id)) {
-          imn._comps._rigidBody = scene.registry().getComponent<component::RigidBody>(node._id);
-        }
-        if (scene.registry().hasComponent<component::SphereCollider>(node._id)) {
-          imn._comps._sphereColl = scene.registry().getComponent<component::SphereCollider>(node._id);
-        }
-        if (scene.registry().hasComponent<component::MeshCollider>(node._id)) {
-          imn._comps._meshColl = scene.registry().getComponent<component::MeshCollider>(node._id);
-        }
-        if (scene.registry().hasComponent<component::BoxCollider>(node._id)) {
-          imn._comps._boxColl = scene.registry().getComponent<component::BoxCollider>(node._id);
-        }
-        if (scene.registry().hasComponent<component::CapsuleCollider>(node._id)) {
-          imn._comps._capsuleColl= scene.registry().getComponent<component::CapsuleCollider>(node._id);
-        }
-        if (scene.registry().hasComponent<component::CharacterController>(node._id)) {
-          imn._comps._charCon = scene.registry().getComponent<component::CharacterController>(node._id);
-        }
+        component::forEachPotCompOpt([id = node._id, &scene]<typename T>(std::optional<T>& compOpt) {
+          if (scene.registry().hasComponent<T>(id)) {
+            compOpt = scene.registry().getComponent<T>(id);
+          }
+        }, imn._comps);
 
         imNodes.emplace_back(std::move(imn));
       }
@@ -739,12 +711,6 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
 
       g_DeserialisedVersion = ver;
       printf("Deserialised version %hu, serialisation version is %hu\n", g_DeserialisedVersion, version);
-
-      /*if (ver != version) {
-        printf("Cannot deserialise wrong version!\n");
-        p.set_value(DeserialisedSceneData());
-        return;
-      }*/
 
       uint32_t* header4BytePtr = reinterpret_cast<uint32_t*>(header.data() + 2);
       uint32_t prefabIdx = header4BytePtr[0];
@@ -859,71 +825,11 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         c = imn._comps._trans;
         outputData._scene->registry().patchComponent<component::Transform>(id);
 
-        if (imn._comps._rend) {
-          auto& c = outputData._scene->registry().addComponent<component::Renderable>(id);
-          c = imn._comps._rend.value();
-          outputData._scene->registry().patchComponent<component::Renderable>(id);
-        }
-
-        if (imn._comps._light) {
-          auto& c = outputData._scene->registry().addComponent<component::Light>(id);
-          c = imn._comps._light.value();
-          outputData._scene->registry().patchComponent<component::Light>(id);
-        }
-
-        if (imn._comps._animator) {
-          auto& c = outputData._scene->registry().addComponent<component::Animator>(id);
-          c = imn._comps._animator.value();
-          outputData._scene->registry().patchComponent<component::Animator>(id);
-        }
-
-        if (imn._comps._skeleton) {
-          auto& c = outputData._scene->registry().addComponent<component::Skeleton>(id);
-          c = imn._comps._skeleton.value();
-          outputData._scene->registry().patchComponent<component::Skeleton>(id);
-        }
-
-        if (imn._comps._terrain) {
-          auto& c = outputData._scene->registry().addComponent<component::Terrain>(id);
-          c = imn._comps._terrain.value();
-          outputData._scene->registry().patchComponent<component::Terrain>(id);
-        }
-
-        if (imn._comps._rigidBody) {
-          auto& c = outputData._scene->registry().addComponent<component::RigidBody>(id);
-          c = imn._comps._rigidBody.value();
-          outputData._scene->registry().patchComponent<component::RigidBody>(id);
-        }
-
-        if (imn._comps._sphereColl) {
-          auto& c = outputData._scene->registry().addComponent<component::SphereCollider>(id);
-          c = imn._comps._sphereColl.value();
-          outputData._scene->registry().patchComponent<component::SphereCollider>(id);
-        }
-
-        if (imn._comps._meshColl) {
-          auto& c = outputData._scene->registry().addComponent<component::MeshCollider>(id);
-          c = imn._comps._meshColl.value();
-          outputData._scene->registry().patchComponent<component::MeshCollider>(id);
-        }
-
-        if (imn._comps._boxColl) {
-          auto& c = outputData._scene->registry().addComponent<component::BoxCollider>(id);
-          c = imn._comps._boxColl.value();
-          outputData._scene->registry().patchComponent<component::BoxCollider>(id);
-        }
-
-        if (imn._comps._capsuleColl) {
-          auto& c = outputData._scene->registry().addComponent<component::CapsuleCollider>(id);
-          c = imn._comps._capsuleColl.value();
-          outputData._scene->registry().patchComponent<component::CapsuleCollider>(id);
-        }
-
-        if (imn._comps._charCon) {
-          auto& c = outputData._scene->registry().addComponent<component::CharacterController>(id);
-          c = imn._comps._charCon.value();
-          outputData._scene->registry().patchComponent<component::CharacterController>(id);
-        }
+        component::forEachExistingPotComp([&outputData, &id]<typename T>(const T& comp) {
+          auto& c = outputData._scene->registry().addComponent<T>(id);
+          c = comp;
+          outputData._scene->registry().patchComponent<T>(id);
+        }, imn._comps);
       }
 
       p.set_value(std::move(outputData));

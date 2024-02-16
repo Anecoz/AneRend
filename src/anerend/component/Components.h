@@ -211,4 +211,54 @@ struct PotentialComponents
   std::optional<CharacterController> _charCon;
 };
 
+/* Helper function for executing something for every potential component optional
+  * Call like this:
+  *
+  * component::forEachPotComp([]<typename T>(std::optional<T>& compOpt) {
+  *   // Do stuff
+  * }, comps);
+  *
+*/
+template <typename F>
+void forEachPotCompOpt(F func, PotentialComponents& potComps, bool includeTransform = false)
+{
+  /*if (includeTransform) {
+    func(potComps._trans);
+  }*/
+
+  func(potComps._rend);
+  func(potComps._light);
+  func(potComps._skeleton);
+  func(potComps._animator);
+  func(potComps._terrain);
+  func(potComps._rigidBody);
+  func(potComps._sphereColl);
+  func(potComps._meshColl);
+  func(potComps._boxColl);
+  func(potComps._capsuleColl);
+  func(potComps._charCon);
+}
+
+/* Helper function for executing something for every potential component that has a value
+  * Call like this:
+  * 
+  * component::forEachExistingPotComp([]<typename T>(const T& comp) {
+  *   // Do stuff
+  * }, comps);
+  * 
+*/
+template <typename F>
+void forEachExistingPotComp(F func, PotentialComponents& potComps, bool includeTransform = false)
+{
+  if (includeTransform) {
+    func(potComps._trans);
+  }
+
+  forEachPotCompOpt([&]<typename T>(std::optional<T>& compOpt) {
+    if (compOpt) {
+      func(compOpt.value());
+    }
+  }, potComps);
+}
+
 }
