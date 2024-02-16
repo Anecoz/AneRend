@@ -9,6 +9,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <unordered_map>
 
 #include <imgui.h>
 #include <nfd.hpp>
@@ -331,30 +332,65 @@ void SceneAssetGUI::loadRGBATextureClicked(logic::AneditContext* c)
   }
 }
 
+namespace {
+
+// Returns prefab id
+util::Uuid prefabFromNodeRecurse(
+  logic::AneditContext* c, 
+  util::Uuid node, util::Uuid parent, 
+  std::vector<render::asset::Prefab>& out,
+  std::unordered_map<util::Uuid, util::Uuid>& prefabMapOut) // <node, prefab>
+{
+  auto nodeP = c->scene().getNode(node);
+
+  if (!nodeP) {
+    return {};
+  }
+
+  auto parentPrefab = c->prefabFromNode(node);
+  parentPrefab._parent = parent;
+
+  prefabMapOut[node] = parentPrefab._id;
+
+  for (auto& child : nodeP->_children) {
+    parentPrefab._children.emplace_back(
+      prefabFromNodeRecurse(c, child, node, out, prefabMapOut)
+    );    
+  }
+
+  auto idOut = parentPrefab._id;
+  out.emplace_back(std::move(parentPrefab));
+  return idOut;
+}
+
+}
+
 void SceneAssetGUI::nodeDroppedOnPrefab(logic::AneditContext* c, util::Uuid node)
 {
   // This means we want to create prefabs from the given node.
-
   auto nodeP = c->scene().getNode(node);
 
   if (!nodeP) {
     return;
   }
 
-  // Create prefabs from node and all its children
+  // Create prefabs from node and all its children recursively
   std::vector<render::asset::Prefab> prefabs;
-  auto parentPrefab = c->prefabFromNode(node);
+  std::unordered_map<util::Uuid, util::Uuid> nodePrefabMap;
+  prefabFromNodeRecurse(c, node, {}, prefabs, nodePrefabMap);
 
-  for (auto& child : nodeP->_children) {
-    auto childPrefab = c->prefabFromNode(child);
+  // If there was a skeleton component somewhere, update the joint refs to point to the prefabs instead
+  for (auto& p : prefabs) {
+    if (p._comps._skeleton) {
 
-    childPrefab._parent = parentPrefab._id;
-    parentPrefab._children.emplace_back(childPrefab._id);
+      auto& skeleComp = p._comps._skeleton.value();
+      for (auto& jr : skeleComp._jointRefs) {
+        assert(nodePrefabMap.find(jr._node) != nodePrefabMap.end() && "Can't update skeleton, something really wrong!");
 
-    prefabs.emplace_back(std::move(childPrefab));
+        jr._node = nodePrefabMap[jr._node];
+      }
+    }
   }
-
-  prefabs.emplace_back(std::move(parentPrefab));
 
   for (auto& p : prefabs) {
     c->scene().addPrefab(std::move(p));

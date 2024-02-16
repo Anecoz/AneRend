@@ -220,7 +220,7 @@ struct PotentialComponents
   *
 */
 template <typename F>
-void forEachPotCompOpt(F func, PotentialComponents& potComps, bool includeTransform = false)
+void forEachPotCompOpt(F func, PotentialComponents& potComps)
 {
   /*if (includeTransform) {
     func(potComps._trans);
