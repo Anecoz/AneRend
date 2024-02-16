@@ -205,7 +205,7 @@ public:
 	// Do we have a character controller for this node
 	bool isCharKnown(util::Uuid node) const;
 
-	// Will remove shape and body for the given node
+	// Will remove shape and body/char for the given node
 	void remove(util::Uuid node);
 
 	// Will remove the character completely

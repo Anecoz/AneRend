@@ -54,7 +54,6 @@ private:
   void connectObserver();
   void checkIfCreate(const util::Uuid& node);
 
-  void onCharContCreated(entt::registry& reg, entt::entity entity);
   void onRemoved(entt::registry& reg, entt::entity entity);
 
   void syncCharacters();
@@ -69,6 +68,7 @@ private:
   render::RenderContext* _rc = nullptr;
 
   entt::observer _rigidObserver;
+  entt::observer _charObserver;
   entt::observer _transformObserver;
   entt::observer _colliderObserver;
   entt::observer _pagingObserver;

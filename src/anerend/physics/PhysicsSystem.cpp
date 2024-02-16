@@ -90,6 +90,16 @@ void PhysicsSystem::update(double delta, bool debugDraw)
     }
   };
 
+  auto charNodeLambda = [this](util::Uuid node) {
+    checkIfCreate(node);
+
+    // Check if we are known, and in that case update controller
+    // TODO: Currently nothing to update here
+    //if (_joltImpl->isCharKnown(node)) {
+      //auto& charComp = _registry->getComponent<component::CharacterController>(node);
+    //}
+  };
+
   // Check rigidbodies (softbodies TODO) and check if they have colliders
   // If they are known already, update parameters of the body and/or collider
   if (_goThroughEverything) {
@@ -100,11 +110,22 @@ void PhysicsSystem::update(double delta, bool debugDraw)
       auto node = _registry->reverseLookup(ent);
       rigidNodeLambda(node);
     }
+
+    auto charView = _registry->getEnttRegistry().view<component::CharacterController>();
+    for (auto ent : charView) {
+      auto node = _registry->reverseLookup(ent);
+      charNodeLambda(node);
+    }
   }
   else {
     for (auto entity : _rigidObserver) {
       auto node = _registry->reverseLookup(entity);
       rigidNodeLambda(node);
+    }
+
+    for (auto entity : _charObserver) {
+      auto node = _registry->reverseLookup(entity);
+      charNodeLambda(node);
     }
 
     for (auto entity : _colliderObserver) {
@@ -132,6 +153,21 @@ void PhysicsSystem::update(double delta, bool debugDraw)
     }
   }
 
+  // Go through paging
+  for (auto entity : _pagingObserver) {
+    auto node = _registry->reverseLookup(entity);
+    bool paged = _registry->getComponent<component::PageStatus>(node)._paged;
+
+    // If paged, check if we should create a physics representation again
+    if (paged) {
+      checkIfCreate(node);
+    }
+    // Not paged, remove from physics world
+    else {
+      _joltImpl->remove(node);
+    }
+  }
+
   // Step the physics simulation
   if (_simulationRunning) {
     debugUpdateCharacters(delta);
@@ -148,7 +184,9 @@ void PhysicsSystem::update(double delta, bool debugDraw)
   }
 
   _rigidObserver.clear();
+  _charObserver.clear();
   _colliderObserver.clear();
+  _pagingObserver.clear();
 }
 
 void PhysicsSystem::upstreamTransformSync()
@@ -194,10 +232,16 @@ void PhysicsSystem::debugSphere()
 
 void PhysicsSystem::connectObserver()
 {
-  // To be able to reflect the component changes to the physics impl.
+  // To be able to create aswell as reflect the component changes to the physics impl.
   _rigidObserver.connect(_registry->getEnttRegistry(), 
     entt::collector.
     update<component::RigidBody>()
+  );
+
+  // To be able to create and change a character controller
+  _charObserver.connect(_registry->getEnttRegistry(),
+    entt::collector.
+    update<component::CharacterController>()
   );
 
   // This is mainly for editing, to sync changes made in editor to physics.
@@ -230,14 +274,14 @@ void PhysicsSystem::connectObserver()
 
   _registry->getEnttRegistry().on_destroy<component::RigidBody>().connect<&PhysicsSystem::onRemoved>(this);
   _registry->getEnttRegistry().on_destroy<component::CharacterController>().connect<&PhysicsSystem::onRemoved>(this);
-  _registry->getEnttRegistry().on_construct<component::CharacterController>().connect<&PhysicsSystem::onCharContCreated>(this);
 }
 
 void PhysicsSystem::checkIfCreate(const util::Uuid& node)
 {
   auto& transComp = _registry->getComponent<component::Transform>(node);
-  bool hasRigidComp = _registry->hasComponent<component::RigidBody>(node);
   auto& globalTrans = transComp._globalTransform;
+  bool hasRigidComp = _registry->hasComponent<component::RigidBody>(node);
+  bool hasCharComp = _registry->hasComponent<component::CharacterController>(node);
 
   // Check for all colliders
   if (_registry->hasComponent<component::MeshCollider>(node)) {
@@ -277,16 +321,11 @@ void PhysicsSystem::checkIfCreate(const util::Uuid& node)
     auto& rigidComp = _registry->getComponent<component::RigidBody>(node);
     _joltImpl->addRigidBody(rigidComp, globalTrans, node);
   }
-}
 
-void PhysicsSystem::onCharContCreated(entt::registry& reg, entt::entity entity)
-{
-  auto node = _registry->reverseLookup(entity);
-  if (!_joltImpl->isCharKnown(node) && _joltImpl->isShapeKnown(node)) {
+  // Same for character
+  if (!_joltImpl->isCharKnown(node) && hasCharComp) {
     auto& charComp = _registry->getComponent<component::CharacterController>(node);
-    auto& transComp = _registry->getComponent<component::Transform>(node);
-
-    _joltImpl->addCharacterController(charComp, transComp._globalTransform, node);
+    _joltImpl->addCharacterController(charComp, globalTrans, node);
   }
 }
 
@@ -302,11 +341,14 @@ void PhysicsSystem::onRemoved(entt::registry& reg, entt::entity entity)
 
 void PhysicsSystem::syncCharacters()
 {
-  auto view = _registry->getEnttRegistry().view<component::CharacterController>();
+  auto view = _registry->getEnttRegistry().view<component::CharacterController, component::PageStatus>();
 
   for (auto ent : view) {
     auto node = _registry->reverseLookup(ent);
     auto& charComp = _registry->getComponent<component::CharacterController>(node);
+    auto& pageComp = _registry->getComponent<component::PageStatus>(node);
+
+    if (!pageComp._paged) continue;
 
     _joltImpl->setDesiredVelocity(charComp._desiredLinearVelocity, charComp._jumpSpeed, charComp._speed, node);
   }
@@ -319,7 +361,6 @@ void PhysicsSystem::debugUpdateCharacters(double delta)
   for (auto ent : view) {
     auto node = _registry->reverseLookup(ent);
 
-    auto& transComp = _registry->getComponent<component::Transform>(node);
     auto& charComp = _registry->getComponent<component::CharacterController>(node);
 
     charComp._desiredLinearVelocity = glm::vec3(1.0f, 0.0f, 0.0f);

@@ -34,6 +34,7 @@ bool shouldBePatched(const util::Uuid& node, component::Registry& reg)
   if (reg.hasComponent<component::Renderable>(node)) return true;
   if (reg.hasComponent<component::Light>(node)) return true;
   if (reg.hasComponent<component::RigidBody>(node)) return true;
+  if (reg.hasComponent<component::CharacterController>(node)) return true;
 
   return false;
 }
