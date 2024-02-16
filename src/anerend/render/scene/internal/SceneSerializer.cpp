@@ -15,6 +15,12 @@
 
 namespace {
 
+// The current version if serialising
+constexpr std::uint16_t g_CurrVersion = 1;
+
+// The currently deserialised version, set in runtime.
+std::uint16_t g_DeserialisedVersion = 0;
+
 // Intermediate representation for nodes
 struct IntermediateNode
 {
@@ -470,8 +476,6 @@ void serialize(S& s, std::vector<render::asset::Cinematic>& t)
 
 }
 
-static std::uint8_t g_CurrVersion = 1;
-
 namespace render::scene::internal {
 
 namespace {
@@ -529,7 +533,7 @@ private:
 std::uint32_t headerSize()
 {
   return
-    1 + // ver
+    2 + // ver
     4 + // prefab idx
     4 + // texture idx
     4 + // model idx
@@ -575,7 +579,7 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
         File structure (version 1):
 
         -- header--
-        1 byte  version         (uint8_t)
+        2 byte  version         (uint16_t)
         4 bytes prefab idx      (uint32_t)
         4 bytes tex idx         (uint32_t)
         4 bytes model idx       (uint32_t)
@@ -607,6 +611,10 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
       // Copy assets. scene is a reference here in order to avoid copying on calling thread,
       // but there currently is no real guarantee that scene is alive here.
       // TODO: Should probably add a mechanism to make sure that scene stays alive for this duration.
+
+      // Set the "deserialisation version" here aswell, so that the serialize() functions
+      // use the correct versioning.
+      g_DeserialisedVersion = version;
 
       // Translate all nodes into intermediate representation
       std::vector<IntermediateNode> imNodes;
@@ -726,15 +734,19 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
 
       assert(header.size() == headerSz && "Deserialised header is not correct size!");
 
-      uint8_t ver = header[0];
+      uint16_t ver = 0;
+      std::memcpy(&ver, header.data(), sizeof(std::uint16_t));
 
-      if (ver != version) {
+      g_DeserialisedVersion = ver;
+      printf("Deserialised version %hu, serialisation version is %hu\n", g_DeserialisedVersion, version);
+
+      /*if (ver != version) {
         printf("Cannot deserialise wrong version!\n");
         p.set_value(DeserialisedSceneData());
         return;
-      }
+      }*/
 
-      uint32_t* header4BytePtr = reinterpret_cast<uint32_t*>(header.data() + 1);
+      uint32_t* header4BytePtr = reinterpret_cast<uint32_t*>(header.data() + 2);
       uint32_t prefabIdx = header4BytePtr[0];
       uint32_t textureIdx = header4BytePtr[1];
       uint32_t modelIdx = header4BytePtr[2];
