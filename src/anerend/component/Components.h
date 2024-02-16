@@ -192,6 +192,7 @@ struct CharacterController
   glm::vec3 _desiredLinearVelocity = glm::vec3(0.0f);
   float _speed = 1.0f;
   float _jumpSpeed = 2.0f;
+  float _mass = 80.0f;
 };
 
 // Struct that holds potential components used by e.g. prefabs

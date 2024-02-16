@@ -308,6 +308,7 @@ void PhysicsJoltImpl::addCharacterController(const component::CharacterControlle
 	settings->mShape = _shapeMap[node];
 	settings->mFriction = 0.5f;
 	settings->mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -0.3f);
+	settings->mMass = comp._mass;
 	auto character = new JPH::Character(settings, trans, quat, 0, &_physicsSystem);
 	character->AddToPhysicsSystem();
 
@@ -346,11 +347,6 @@ void PhysicsJoltImpl::updateRigidBody(const component::RigidBody& rigidComp, uti
 	auto& bodyId = _bodyMap[node];
 	auto& bi = _physicsSystem.GetBodyInterface();
 
-	const JPH::Shape* shape = nullptr;
-	if (isShapeKnown(node)) {
-		shape = _shapeMap[node];
-	}
-
 	auto trans = bi.GetWorldTransform(bodyId);
 	glm::mat4 glmTrans = jphMatToGlm(trans);
 
@@ -358,6 +354,19 @@ void PhysicsJoltImpl::updateRigidBody(const component::RigidBody& rigidComp, uti
 	bi.RemoveBody(bodyId);
 
 	addRigidBody(rigidComp, glmTrans, node);
+}
+
+void PhysicsJoltImpl::updateCharacterController(const component::CharacterController& charComp, util::Uuid node)
+{
+	if (!isCharKnown(node)) return;
+
+	// Have to recreate it
+	auto trans = _charMap[node]->GetWorldTransform();
+	glm::mat4 glmTrans = jphMatToGlm(trans);
+
+	_charMap[node]->RemoveFromPhysicsSystem();
+
+	addCharacterController(charComp, glmTrans, node);
 }
 
 void PhysicsJoltImpl::setPositionAndOrientation(const util::Uuid& node, glm::quat rot, glm::vec3 trans)
@@ -426,7 +435,7 @@ void PhysicsJoltImpl::setShapeBodyOrChar(const util::Uuid& node)
 {
 	if (isBodyKnown(node)) {
 		auto& bi = _physicsSystem.GetBodyInterface();
-		bi.SetShape(_bodyMap[node], _shapeMap[node], true, JPH::EActivation::Activate);
+		bi.SetShape(_bodyMap[node], _shapeMap[node], false, JPH::EActivation::Activate);
 
 		if (!bi.IsAdded(_bodyMap[node])) {
 			bi.AddBody(_bodyMap[node], JPH::EActivation::Activate);

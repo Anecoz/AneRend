@@ -94,10 +94,10 @@ void PhysicsSystem::update(double delta, bool debugDraw)
     checkIfCreate(node);
 
     // Check if we are known, and in that case update controller
-    // TODO: Currently nothing to update here
-    //if (_joltImpl->isCharKnown(node)) {
-      //auto& charComp = _registry->getComponent<component::CharacterController>(node);
-    //}
+    if (_joltImpl->isCharKnown(node)) {
+      auto& charComp = _registry->getComponent<component::CharacterController>(node);
+      _joltImpl->updateCharacterController(charComp, node);
+    }
   };
 
   // Check rigidbodies (softbodies TODO) and check if they have colliders

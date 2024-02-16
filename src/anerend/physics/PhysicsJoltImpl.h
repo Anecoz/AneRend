@@ -228,8 +228,9 @@ public:
 	void updateBox(const glm::vec3& halfExtent, util::Uuid node);
 	void updateCapsule(float halfHeight, float radius, util::Uuid node);
 
-	// Update bodies
+	// Update bodies/chars
 	void updateRigidBody(const component::RigidBody& rigidComp, util::Uuid node);
+	void updateCharacterController(const component::CharacterController& charComp, util::Uuid node);
 
 	// Downstream: Syncs a given body with a new orientation and translation.
 	void setPositionAndOrientation(const util::Uuid& node, glm::quat rot, glm::vec3 trans);

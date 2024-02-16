@@ -16,7 +16,7 @@
 namespace {
 
 // The current version if serialising
-constexpr std::uint16_t g_CurrVersion = 1;
+constexpr std::uint16_t g_CurrVersion = 2;
 
 // The currently deserialised version, set in runtime.
 std::uint16_t g_DeserialisedVersion = 0;
@@ -216,6 +216,9 @@ void serialize(S& s, component::CharacterController& p)
   s.object(p._desiredLinearVelocity);
   s.value4b(p._speed);
   s.value4b(p._jumpSpeed);
+  if (g_DeserialisedVersion >= 2) {
+    s.value4b(p._mass);
+  }
 }
 
 template <typename S>
