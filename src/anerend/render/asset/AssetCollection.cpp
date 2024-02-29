@@ -3,6 +3,7 @@
 #include "../serialisation/Serialisation.h"
 
 #include <fstream>
+#include <future>
 
 namespace {
 
@@ -10,7 +11,8 @@ static std::uint16_t g_LocalDeserialisedVersion = 0;
 
 struct AssetIndexPair
 {
-  std::uint32_t _offset;
+  std::uint32_t _offset; // Index into main blob
+  std::uint32_t _size;   // Occupied size needed for deserialisation
   util::Uuid _id;
 };
 
@@ -22,6 +24,7 @@ template <typename S>
 void serialize(S& s, AssetIndexPair& p)
 {
   s.value4b(p._offset);
+  s.value4b(p._size);
   s.object(p._id);
 }
 
@@ -50,11 +53,7 @@ AssetCollection::AssetCollection(AssetCollection&& rhs)
   if (this != &rhs) {
     _fileIndex = std::move(rhs._fileIndex);
     _p = std::move(rhs._p);
-    _modelCachePtr = std::move(rhs._modelCachePtr);
-    _materialCachePtr = std::move(rhs._materialCachePtr);
-    _prefabCachePtr = std::move(rhs._prefabCachePtr);
-    _textureCachePtr = std::move(rhs._textureCachePtr);
-    _cinematicCachePtr = std::move(rhs._cinematicCachePtr);
+    _cachePtr = std::move(rhs._cachePtr);
     _cachedModels = std::move(rhs._cachedModels);
     _cachedMaterials = std::move(rhs._cachedMaterials);
     _cachedPrefabs = std::move(rhs._cachedPrefabs);
@@ -68,11 +67,7 @@ AssetCollection& AssetCollection::operator=(AssetCollection&& rhs)
   if (this != &rhs) {
     _fileIndex = std::move(rhs._fileIndex);
     _p = std::move(rhs._p);
-    _modelCachePtr = std::move(rhs._modelCachePtr);
-    _materialCachePtr = std::move(rhs._materialCachePtr);
-    _prefabCachePtr = std::move(rhs._prefabCachePtr);
-    _textureCachePtr = std::move(rhs._textureCachePtr);
-    _cinematicCachePtr = std::move(rhs._cinematicCachePtr);
+    _cachePtr = std::move(rhs._cachePtr);
     _cachedModels = std::move(rhs._cachedModels);
     _cachedMaterials = std::move(rhs._cachedMaterials);
     _cachedPrefabs = std::move(rhs._cachedPrefabs);
@@ -89,211 +84,325 @@ AssetCollection::operator bool() const
 
 void AssetCollection::add(Model a)
 {
-  if (_modelCachePtr.contains(a._id)) {
+  if (_cachePtr.contains(a._id)) {
     printf("AssetCollection will not add model, it already exists!\n");
     return;
   }
 
-  _modelCachePtr[a._id] = _cachedModels.size();
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachePtr[a._id] = _cachedModels.size();
   _cachedModels.emplace_back(std::move(a));
 }
 
 void AssetCollection::add(Material a)
 {
-  if (_materialCachePtr.contains(a._id)) {
+  if (_cachePtr.contains(a._id)) {
     printf("AssetCollection will not add material, it already exists!\n");
     return;
   }
 
-  _materialCachePtr[a._id] = _cachedMaterials.size();
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachePtr[a._id] = _cachedMaterials.size();
   _cachedMaterials.emplace_back(std::move(a));
 }
 
 void AssetCollection::add(Prefab a)
 {
-  if (_prefabCachePtr.contains(a._id)) {
+  if (_cachePtr.contains(a._id)) {
     printf("AssetCollection will not add prefab, it already exists!\n");
     return;
   }
 
-  _prefabCachePtr[a._id] = _cachedPrefabs.size();
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachePtr[a._id] = _cachedPrefabs.size();
   _cachedPrefabs.emplace_back(std::move(a));
 }
 
 void AssetCollection::add(Texture a)
 {
-  if (_textureCachePtr.contains(a._id)) {
+  if (_cachePtr.contains(a._id)) {
     printf("AssetCollection will not add texture, it already exists!\n");
     return;
   }
 
-  _textureCachePtr[a._id] = _cachedTextures.size();
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachePtr[a._id] = _cachedTextures.size();
   _cachedTextures.emplace_back(std::move(a));
 }
 
 void AssetCollection::add(Cinematic a)
 {
-  if (_cinematicCachePtr.contains(a._id)) {
+  if (_cachePtr.contains(a._id)) {
     printf("AssetCollection will not add cinematic, it already exists!\n");
     return;
   }
 
-  _cinematicCachePtr[a._id] = _cachedCinematics.size();
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachePtr[a._id] = _cachedCinematics.size();
   _cachedCinematics.emplace_back(std::move(a));
 }
 
 void AssetCollection::updateMaterial(Material a)
 {
-  if (!_materialCachePtr.contains(a._id)) {
+  if (!_cachePtr.contains(a._id)) {
     printf("AssetCollection cannot update material, it doesn't exist in cache!\n");
     return;
   }
 
-  _cachedMaterials[_modelCachePtr[a._id]] = std::move(a);
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachedMaterials[_cachePtr[a._id]] = std::move(a);
 }
 
 void AssetCollection::updatePrefab(Prefab a)
 {
-  if (!_prefabCachePtr.contains(a._id)) {
+  if (!_cachePtr.contains(a._id)) {
     printf("AssetCollection cannot update prefab, it doesn't exist in cache!\n");
     return;
   }
 
-  _cachedPrefabs[_prefabCachePtr[a._id]] = std::move(a);
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachedPrefabs[_cachePtr[a._id]] = std::move(a);
 }
 
 void AssetCollection::updateTexture(Texture a)
 {
-  if (!_textureCachePtr.contains(a._id)) {
+  if (!_cachePtr.contains(a._id)) {
     printf("AssetCollection cannot update texture, it doesn't exist in cache!\n");
     return;
   }
 
-  _cachedTextures[_textureCachePtr[a._id]] = std::move(a);
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachedTextures[_cachePtr[a._id]] = std::move(a);
 }
 
 void AssetCollection::updateCinematic(Cinematic a)
 {
-  if (!_cinematicCachePtr.contains(a._id)) {
+  if (!_cachePtr.contains(a._id)) {
     printf("AssetCollection cannot update cinematic, it doesn't exist in cache!\n");
     return;
   }
 
-  _cachedCinematics[_cinematicCachePtr[a._id]] = std::move(a);
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachedCinematics[_cachePtr[a._id]] = std::move(a);
 }
 
 void AssetCollection::removeModel(const util::Uuid& id)
 {
-  if (!_modelCachePtr.contains(id)) {
+  if (!_cachePtr.contains(id)) {
     printf("AssetCollection cannot remove model, it's not in cache!\n");
     return;
   }
 
-  _cachedModels.erase(_cachedModels.begin() + _modelCachePtr[id]);
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachedModels.erase(_cachedModels.begin() + _cachePtr[id]);
 
   // Rebuild cache ptr
-  _modelCachePtr.clear();
+  _cachePtr.clear();
   for (std::size_t i = 0; i < _cachedModels.size(); ++i) {
-    _modelCachePtr[_cachedModels[i]._id] = i;
+    _cachePtr[_cachedModels[i]._id] = i;
   }
 }
 
 void AssetCollection::removeMaterial(const util::Uuid& id)
 {
-  if (!_materialCachePtr.contains(id)) {
+  if (!_cachePtr.contains(id)) {
     printf("AssetCollection cannot remove material, it's not in cache!\n");
     return;
   }
 
-  _cachedMaterials.erase(_cachedMaterials.begin() + _materialCachePtr[id]);
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachedMaterials.erase(_cachedMaterials.begin() + _cachePtr[id]);
 
   // Rebuild cache ptr
-  _materialCachePtr.clear();
+  _cachePtr.clear();
   for (std::size_t i = 0; i < _cachedMaterials.size(); ++i) {
-    _materialCachePtr[_cachedMaterials[i]._id] = i;
+    _cachePtr[_cachedMaterials[i]._id] = i;
   }
 }
 
 void AssetCollection::removePrefab(const util::Uuid& id)
 {
-  if (!_prefabCachePtr.contains(id)) {
+  if (!_cachePtr.contains(id)) {
     printf("AssetCollection cannot remove prefab, it's not in cache!\n");
     return;
   }
 
-  _cachedPrefabs.erase(_cachedPrefabs.begin() + _prefabCachePtr[id]);
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachedPrefabs.erase(_cachedPrefabs.begin() + _cachePtr[id]);
 
   // Rebuild cache ptr
-  _prefabCachePtr.clear();
+  _cachePtr.clear();
   for (std::size_t i = 0; i < _cachedPrefabs.size(); ++i) {
-    _prefabCachePtr[_cachedPrefabs[i]._id] = i;
+    _cachePtr[_cachedPrefabs[i]._id] = i;
   }
 }
 
 void AssetCollection::removeTexture(const util::Uuid& id)
 {
-  if (!_textureCachePtr.contains(id)) {
+  if (!_cachePtr.contains(id)) {
     printf("AssetCollection cannot remove texture, it's not in cache!\n");
     return;
   }
 
-  _cachedTextures.erase(_cachedTextures.begin() + _textureCachePtr[id]);
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachedTextures.erase(_cachedTextures.begin() + _cachePtr[id]);
 
   // Rebuild cache ptr
-  _textureCachePtr.clear();
+  _cachePtr.clear();
   for (std::size_t i = 0; i < _cachedTextures.size(); ++i) {
-    _textureCachePtr[_cachedTextures[i]._id] = i;
+    _cachePtr[_cachedTextures[i]._id] = i;
   }
 }
 
 void AssetCollection::removeCinematic(const util::Uuid& id)
 {
-  if (!_cinematicCachePtr.contains(id)) {
+  if (!_cachePtr.contains(id)) {
     printf("AssetCollection cannot remove cinematic, it's not in cache!\n");
     return;
   }
 
-  _cachedCinematics.erase(_cachedCinematics.begin() + _cinematicCachePtr[id]);
+  std::lock_guard<std::mutex> lock(_cacheMtx);
+  _cachedCinematics.erase(_cachedCinematics.begin() + _cachePtr[id]);
 
   // Rebuild cache ptr
-  _cinematicCachePtr.clear();
+  _cachePtr.clear();
   for (std::size_t i = 0; i < _cachedCinematics.size(); ++i) {
-    _cinematicCachePtr[_cachedCinematics[i]._id] = i;
+    _cachePtr[_cachedCinematics[i]._id] = i;
   }
+}
+
+template <typename T>
+bool AssetCollection::readIndex(const util::Uuid& id, std::function<void(T)> cb, std::vector<T>& cache)
+{
+  if (!_fileIndex._map.contains(id)) {
+    printf("AssetCollection cannot get asset %s, it doesn't exist in cache or on disk!\n", id.str().c_str());
+    return false;
+  }
+
+  auto metaInfo = _fileIndex._map[id];
+  std::async(std::launch::async, [this, id, &cache, cb, meta = std::move(metaInfo)]() {
+
+    std::ifstream ifs(_p, std::ios::binary);
+
+    std::vector<std::uint8_t> data;
+    data.resize(meta._sizeOnDisk);
+
+    ifs.seekg(meta._offset);
+    ifs.read((char*)data.data(), meta._sizeOnDisk);
+    ifs.close();
+
+    auto m = serialisation::deserializeVector<T>(data);
+
+    if (m) {
+      {
+        std::lock_guard<std::mutex> lock(_cacheMtx);
+        _cachePtr[id] = cache.size();
+        cache.emplace_back(m.value());
+      }
+
+      cb(std::move(m.value()));
+    }
+  });
+
+  return true;
 }
 
 void AssetCollection::getModel(const util::Uuid& id, ModelRetrievedCallback cb)
 {
+  if (_cachePtr.contains(id)) {
+    // In cache, return it
+    Model m;
+    {
+      std::lock_guard<std::mutex> lock(_cacheMtx);
+      m = _cachedModels[_cachePtr[id]];
+    }
+    cb(std::move(m));
+  }
+  else {
+    // Not in cache, request a file read.
+    readIndex<Model>(id, cb, _cachedModels);
+  }
 }
 
 void AssetCollection::getMaterial(const util::Uuid& id, MaterialRetrievedCallback cb)
 {
+  if (_cachePtr.contains(id)) {
+    // In cache, return it
+    Material m;
+    {
+      std::lock_guard<std::mutex> lock(_cacheMtx);
+      m = _cachedMaterials[_cachePtr[id]];
+    }
+    cb(std::move(m));
+  }
+  else {
+    // Not in cache, request a file read.
+    readIndex<Material>(id, cb, _cachedMaterials);
+  }
 }
 
 void AssetCollection::getPrefab(const util::Uuid& id, PrefabRetrievedCallback cb)
 {
+  if (_cachePtr.contains(id)) {
+    // In cache, return it
+    Prefab p;
+    {
+      std::lock_guard<std::mutex> lock(_cacheMtx);
+      p = _cachedPrefabs[_cachePtr[id]];
+    }
+    cb(std::move(p));
+  }
+  else {
+    // Not in cache, request a file read.
+    readIndex<Prefab>(id, cb, _cachedPrefabs);
+  }
 }
 
 void AssetCollection::getTexture(const util::Uuid& id, TextureRetrievedCallback cb)
 {
+  if (_cachePtr.contains(id)) {
+    // In cache, return it
+    Texture t;
+    {
+      std::lock_guard<std::mutex> lock(_cacheMtx);
+      t = _cachedTextures[_cachePtr[id]];
+    }
+    cb(std::move(t));
+  }
+  else {
+    // Not in cache, request a file read.
+    readIndex<Texture>(id, cb, _cachedTextures);
+  }
 }
 
 void AssetCollection::getCinematic(const util::Uuid& id, CinematicRetrievedCallback cb)
 {
+  if (_cachePtr.contains(id)) {
+    // In cache, return it
+    Cinematic c;
+    {
+      std::lock_guard<std::mutex> lock(_cacheMtx);
+      c = _cachedCinematics[_cachePtr[id]];
+    }
+    cb(std::move(c));
+  }
+  else {
+    // Not in cache, request a file read.
+    readIndex<Cinematic>(id, cb, _cachedCinematics);
+  }
 }
 
 namespace {
 
 struct InternalSerialiser
 {
-
   template <typename T>
   void add(const std::vector<T>& vec)
   {
     for (auto& t : vec) {
       auto data = serialisation::serializeToVector(t);
 
-      _indices.emplace_back(AssetIndexPair{ _currOffset, t._id });
+      _indices.emplace_back(AssetIndexPair{ _currOffset, (std::uint32_t)data.size(), t._id });
       _assetData.insert(_assetData.end(), data.begin(), data.end());
 
       _currOffset += (std::uint32_t)data.size();
@@ -391,7 +500,8 @@ void AssetCollection::readIndices()
   _fileIndex._map.clear();
 
   for (auto& pair : opt.value()) {
-    _fileIndex._map[pair._id] = pair._offset;
+    AssetMetaInfo meta{ pair._offset, pair._size };
+    _fileIndex._map[pair._id] = std::move(meta);
   }
 }
 

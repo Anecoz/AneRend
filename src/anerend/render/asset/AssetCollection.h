@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -69,23 +70,32 @@ public:
   void printDebugInfo();
 
 private:
+  // Meta info for assets stored on disk.
+  struct AssetMetaInfo
+  {
+    std::size_t _offset;
+    std::size_t _sizeOnDisk;
+  };
+
   struct FileIndex
   {
     // The size_t:s are offsets into the file on disk.
-    std::unordered_map<util::Uuid, std::size_t> _map;
+    std::unordered_map<util::Uuid, AssetMetaInfo> _map;
   } _fileIndex;
+
+  template <typename T>
+  bool readIndex(const util::Uuid& id, std::function<void(T)> cb, std::vector<T>& cache);
 
   // Builds an index from the file located at _p.
   void readIndices();
 
   std::filesystem::path _p;
 
+  // Needs to be held whenever accessing non-const functions of _cachePtr or the cache vectors.
+  std::mutex _cacheMtx;
+
   // Contains index into the vectors below, if the asset is cached.
-  std::unordered_map<util::Uuid, std::size_t> _modelCachePtr;
-  std::unordered_map<util::Uuid, std::size_t> _materialCachePtr;
-  std::unordered_map<util::Uuid, std::size_t> _prefabCachePtr;
-  std::unordered_map<util::Uuid, std::size_t> _textureCachePtr;
-  std::unordered_map<util::Uuid, std::size_t> _cinematicCachePtr;
+  std::unordered_map<util::Uuid, std::size_t> _cachePtr;
 
   // Holds the actual cached assets.
   std::vector<Model> _cachedModels;
