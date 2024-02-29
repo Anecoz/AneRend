@@ -79,12 +79,23 @@ private:
 
   struct FileIndex
   {
-    // The size_t:s are offsets into the file on disk.
     std::unordered_map<util::Uuid, AssetMetaInfo> _map;
   } _fileIndex;
 
   template <typename T>
   bool readIndex(const util::Uuid& id, std::function<void(T)> cb, std::vector<T>& cache);
+
+  template <typename T>
+  void getAsset(const util::Uuid& id, std::function<void(T)> cb, std::vector<T>& cache);
+
+  template <typename T>
+  void addAsset(T asset, std::vector<T>& cache);
+
+  template <typename T>
+  void removeAsset(const util::Uuid& id, std::vector<T>& cache);
+
+  template <typename T>
+  void updateAsset(T asset, std::vector<T>& cache);
 
   // Builds an index from the file located at _p.
   void readIndices();
