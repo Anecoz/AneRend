@@ -65,8 +65,8 @@ void UpdateBlasPass::registerToGraph(FrameGraphBuilder& fgb, RenderContext* rc)
           continue;
         }
 
-        assert(renderable->_meshes.size() == dynamicPair.second.size() &&
-          "Dynamic blas and stored renderable don't match number of meshes!");
+        /*assert(renderable->_meshes.size() == dynamicPair.second.size() &&
+          "Dynamic blas and stored renderable don't match number of meshes!");*/
 
         assert(!renderable->_dynamicMeshes.empty() &&
           "Dynamic blas update cannot run on a renderable without dynamic mesh id set!");

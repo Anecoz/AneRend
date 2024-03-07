@@ -4,6 +4,7 @@
 #include "../../tool/ImageManipulator.h"
 
 #include <render/scene/Scene.h>
+#include <render/asset/AssetCollection.h>
 
 #include <glm/glm.hpp>
 #include <imgui.h>
@@ -33,6 +34,19 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
   std::string baseMat2 = "Mat2: ";
   std::string baseMat3 = "Mat3: ";
 
+  if (terrainComp._baseMaterials[0]) {
+    baseMat0 += c->assetCollection().getMaterialBlocking(terrainComp._baseMaterials[0])._name;
+  }
+  if (terrainComp._baseMaterials[1]) {
+    baseMat1 += c->assetCollection().getMaterialBlocking(terrainComp._baseMaterials[1])._name;
+  }
+  if (terrainComp._baseMaterials[2]) {
+    baseMat2 += c->assetCollection().getMaterialBlocking(terrainComp._baseMaterials[2])._name;
+  }
+  if (terrainComp._baseMaterials[3]) {
+    baseMat3 += c->assetCollection().getMaterialBlocking(terrainComp._baseMaterials[3])._name;
+  }
+#if 0
   if (auto* mat = c->scene().getMaterial(terrainComp._baseMaterials[0])) {
     baseMat0 += mat->_name;
   }
@@ -45,6 +59,7 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
   if (auto* mat = c->scene().getMaterial(terrainComp._baseMaterials[3])) {
     baseMat3 += mat->_name;
   }
+#endif
 
   ImGui::Text("Tile index");
   if (ImGui::InputInt2("##tileindex", (int*)&terrainComp._tileIndex)) {
@@ -221,7 +236,8 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
     float u = (worldPos.x - (float)ts * (float)ti.x) / (float)ts;
     float v = (worldPos.z - (float)ts * (float)ti.y) / (float)ts;
 
-    auto blendTex = *c->scene().getTexture(terrainComp._blendMap);
+    //auto blendTex = *c->scene().getTexture(terrainComp._blendMap);
+    auto blendTex = c->assetCollection().getTextureBlocking(terrainComp._blendMap);
 
     glm::u8vec4 val = { 0, 0, 0, 0 };
     val[_paintMatIndex] = _eraser ? 0 : (uint8_t)(_paintOpacity * 255.0f);
@@ -285,7 +301,8 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
       }
     });
 
-    c->scene().updateTexture(std::move(blendTex));
+    //c->scene().updateTexture(std::move(blendTex));
+    c->assetCollection().updateTexture(std::move(blendTex));
   }
 
   if (_paintingVeg && ImGui::IsMouseDown(ImGuiMouseButton_Left) && overViewport) {
@@ -305,7 +322,8 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
     float u = (worldPos.x - (float)ts * (float)ti.x) / (float)ts;
     float v = (worldPos.z - (float)ts * (float)ti.y) / (float)ts;
 
-    auto vegTex = *c->scene().getTexture(terrainComp._vegetationMap);
+    //auto vegTex = *c->scene().getTexture(terrainComp._vegetationMap);
+    auto vegTex = c->assetCollection().getTextureBlocking(terrainComp._vegetationMap);
 
     tool::ImageManipulator imip(_brush);
     imip.paintR8(vegTex, (int)(vegTex._width* u), (int)(vegTex._height* v),
@@ -313,7 +331,8 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
         *val = e ? 0: 255;
       });
 
-    c->scene().updateTexture(std::move(vegTex));
+    //c->scene().updateTexture(std::move(vegTex));
+    c->assetCollection().updateTexture(std::move(vegTex));
   }
 }
 

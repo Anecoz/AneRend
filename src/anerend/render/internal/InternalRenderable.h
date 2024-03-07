@@ -11,7 +11,7 @@ struct InternalRenderable
   util::Uuid _id;
 
   // Convenience
-  std::vector<util::Uuid> _meshes;
+  //std::vector<util::Uuid> _meshes;
 
   glm::mat4 _globalTransform;
   glm::mat4 _invGlobalTransform;

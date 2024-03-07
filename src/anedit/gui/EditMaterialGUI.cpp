@@ -2,6 +2,7 @@
 
 #include "../logic/AneditContext.h"
 #include <render/scene/Scene.h>
+#include <render/asset/AssetCollection.h>
 
 #include <imgui.h>
 #include <glm/glm.hpp>
@@ -39,18 +40,19 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
     ImGui::BeginDisabled();
   }
   else {
-    auto* mat = c->scene().getMaterial(id);
+    //auto* mat = c->scene().getMaterial(id);
+    auto mat = c->assetCollection().getMaterialBlocking(id);
 
-    emissive = mat->_emissive;
-    baseColFac = mat->_baseColFactor;
-    roughness = mat->_roughnessFactor;
-    metallic = mat->_metallicFactor;
-    strcpy_s(name, mat->_name.c_str());
+    emissive = mat._emissive;
+    baseColFac = mat._baseColFactor;
+    roughness = mat._roughnessFactor;
+    metallic = mat._metallicFactor;
+    strcpy_s(name, mat._name.c_str());
 
-    metRoughTex = mat->_metallicRoughnessTex;
-    albedoTex = mat->_albedoTex;
-    normalTex = mat->_normalTex;
-    emissiveTex = mat->_emissiveTex;
+    metRoughTex = mat._metallicRoughnessTex;
+    albedoTex = mat._albedoTex;
+    normalTex = mat._normalTex;
+    emissiveTex = mat._emissiveTex;
   }
 
   ImGui::Text("Name");
@@ -175,7 +177,8 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   }
 
   if (changed && id) {
-    auto matCopy = *c->scene().getMaterial(id);
+    //auto matCopy = *c->scene().getMaterial(id);
+    auto matCopy = c->assetCollection().getMaterialBlocking(id);
     matCopy._name = name;
     matCopy._emissive = emissive;
     matCopy._baseColFactor = baseColFac;
@@ -186,7 +189,8 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
     matCopy._albedoTex = albedoTex;
     matCopy._normalTex = normalTex;
     matCopy._emissiveTex = emissiveTex;
-    c->scene().updateMaterial(std::move(matCopy));
+    //c->scene().updateMaterial(std::move(matCopy));
+    c->assetCollection().updateMaterial(std::move(matCopy));
   }
 }
 

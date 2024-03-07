@@ -8,6 +8,7 @@
 #include <render/asset/Texture.h>
 
 namespace render::scene { class Scene; }
+namespace render::asset { class AssetCollection; }
 
 namespace logic {
 
@@ -16,6 +17,7 @@ struct AneditContext
   virtual ~AneditContext() {}
 
   virtual render::scene::Scene& scene() = 0;
+  virtual render::asset::AssetCollection& assetCollection() = 0;
   virtual void serializeScene() = 0;
   virtual void loadSceneFrom(std::filesystem::path p) = 0;
   virtual void setScenePath(std::filesystem::path p) = 0;

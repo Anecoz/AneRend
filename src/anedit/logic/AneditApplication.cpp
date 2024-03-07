@@ -27,21 +27,24 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
 
 AneditApplication::AneditApplication(std::string title)
   : Application(std::move(title))
+  , _scenePath(std::filesystem::current_path() / "scene.anescene")
+  , _assPath(std::filesystem::current_path() / "assets.anecoll")
   , _sunDir(glm::vec3(0.7f, -0.7f, 0.7f))
   , _camera(glm::vec3(-17.0, 6.0, 4.0), render::ProjectionType::Perspective)
   , _windDir(glm::vec2(-1.0, 0.0))
   , _shadowCamera(glm::vec3(-20.0f, 15.0f, -20.0f), render::ProjectionType::Orthogonal)
   , _scene()
+  , _assColl(_assPath)
   , _vkRenderer(_window, _camera, &_scene.registry())
   , _scenePager(&_vkRenderer)
-  , _animUpdater(&_scene)
-  , _terrainSystem(&_scene)
-  , _physicsSystem(&_scene.registry(), &_scene, &_vkRenderer)
+  , _animUpdater(&_scene, &_assColl)
+  , _terrainSystem(&_scene, &_assColl)
+  , _physicsSystem(&_scene.registry(), &_scene, &_assColl, &_vkRenderer)
 {
   _scenePager.setScene(&_scene);
-
-  auto cd = std::filesystem::current_path();
-  _scenePath = cd/"scene.anerend";
+  _scenePager.setAssetCollection(&_assColl);
+  _vkRenderer.setAssetCollection(&_assColl);
+  _assColl.readIndices();
 }
 
 AneditApplication::~AneditApplication()
@@ -80,6 +83,10 @@ bool AneditApplication::init()
 
   if (!_config._scenePath.empty()) {
     _scenePath = _config._scenePath;
+    _assPath = _config._assPath;
+
+    _assColl = render::asset::AssetCollection(_assPath);
+    _assColl.readIndices();
     loadSceneFrom(_scenePath);
   }
 
@@ -111,11 +118,16 @@ void AneditApplication::update(double delta)
       auto scenePtr = dat._scene.get();
       _scene = std::move(*scenePtr);
       _scenePager.setScene(&_scene);
+      _scenePager.setAssetCollection(&_assColl);
       _animUpdater.setScene(&_scene);
+      _animUpdater.setAssetCollection(&_assColl);
       _terrainSystem.setScene(&_scene);
+      _terrainSystem.setAssetCollection(&_assColl);
       _physicsSystem.setScene(&_scene);
+      _physicsSystem.setAssetCollection(&_assColl);
       _physicsSystem.setRegistry(&_scene.registry());
       _vkRenderer.setRegistry(&_scene.registry());
+      _vkRenderer.setAssetCollection(&_assColl);
       scenePtr = nullptr;
     }
   }
@@ -150,6 +162,7 @@ void AneditApplication::update(double delta)
 
   _scenePager.update(_camera.getPosition());
   _scene.resetEvents();
+  _assColl.clearEventLog();
 
   for (auto it = _cinePlayers.begin(); it != _cinePlayers.end(); ++it) {
     it->second.update(delta);
@@ -224,6 +237,7 @@ void AneditApplication::setupGuis()
 void AneditApplication::updateConfig()
 {
   _config._scenePath = _scenePath;
+  _config._assPath = _assPath;
 }
 
 void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData> data)
@@ -245,27 +259,23 @@ void AneditApplication::addGltfDataToScene(std::unique_ptr<logic::LoadedGLTFData
   auto prefabsCopy = data->_prefabs;
   
   for (auto& model : data->_models) {
-    _scene.addModel(std::move(model));
+    _assColl.add(std::move(model));
   }
 
   for (auto& prefab : data->_prefabs) {
-    _scene.addPrefab(std::move(prefab));
+    _assColl.add(std::move(prefab));
   }
 
-  /*for (auto& skeleton : data->_skeletons) {
-    _scene.addSkeleton(std::move(skeleton));
-  }*/
-
   for (auto& anim : data->_animations) {
-    _scene.addAnimation(std::move(anim));
+    _assColl.add(std::move(anim));
   }
 
   for (auto& tex : data->_textures) {
-    _scene.addTexture(std::move(tex));
+    _assColl.add(std::move(tex));
   }
 
   for (auto& mat : data->_materials) {
-    _scene.addMaterial(std::move(mat));
+    _assColl.add(std::move(mat));
   }
 
   // TESTING: Instantiate _everything_
@@ -325,7 +335,9 @@ void AneditApplication::oldUI()
         auto origPos = _vkRenderer.stopBake(
           [this](render::asset::Texture bakedDDGITex) {
             // Add to the scene
-            auto id = _scene.addTexture(std::move(bakedDDGITex));
+            auto id = bakedDDGITex._id;
+            _assColl.add(std::move(bakedDDGITex));
+            //auto id = _scene.addTexture(std::move(bakedDDGITex));
 
             render::scene::TileIndex idx(idxX, idxY);
             _scene.setDDGIAtlas(id, idx);
@@ -537,15 +549,17 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, g
   auto localTransform = prefab._comps._trans._localTransform;
 
   // Instantiate children
-  auto& prefabs = _scene.getPrefabs();
+  //auto& prefabs = _scene.getPrefabs();
+  //auto& prefabMetas = _assColl.getMetaInfos(render::asset::AssetMetaInfo::Type::Prefab);
   for (auto& childPrefabId : prefab._children) {
-    for (auto& p : prefabs) {
-      if (p._id == childPrefabId) {
-        auto childId = instantiate(p, globalTransform, instantiatedNodes);
+    //for (auto& p : prefabMetas) {
+      //if (p._id == childPrefabId) {
+        auto pAss = _assColl.getPrefabBlocking(childPrefabId);
+        auto childId = instantiate(pAss, globalTransform, instantiatedNodes);
         _scene.addNodeChild(id, childId);
-        break;
-      }
-    }
+        //break;
+      //}
+    //}
   }
 
   if (!prefab._parent) {
@@ -577,19 +591,45 @@ render::scene::Scene& AneditApplication::scene()
   return _scene;
 }
 
+render::asset::AssetCollection& AneditApplication::assetCollection()
+{
+  return _assColl;
+}
+
+namespace {
+
+std::filesystem::path assetPathFromScenePath(const std::filesystem::path& scenePath)
+{
+  return scenePath.parent_path() / "assets.anecoll";
+}
+
+}
+
 void AneditApplication::serializeScene()
 {
   _scene.serializeAsync(_scenePath);
+
+  // Just save asset collection aswell.
+  _assColl.serialiseToPath(_assPath);
 }
 
 void AneditApplication::loadSceneFrom(std::filesystem::path p)
 {
+  // Load assets first
+  _assPath = assetPathFromScenePath(p);
+  _assColl = render::asset::AssetCollection(_assPath);
+  _assColl.readIndices();
+
   _sceneFut = _scene.deserializeAsync(p);
 }
 
 void AneditApplication::setScenePath(std::filesystem::path p)
 {
   _scenePath = p;
+  
+  // Update asset path aswell, will be used when deserialising/serialising
+  _assPath = assetPathFromScenePath(_scenePath);
+
   updateConfig();
 }
 
@@ -602,9 +642,9 @@ void AneditApplication::spawnFromPrefabAtMouse(const util::Uuid& prefab)
 {
   auto trans = glm::translate(glm::mat4(1.0f), _latestWorldPosition);
 
-  auto* p = _scene.getPrefab(prefab);
+  auto p = _assColl.getPrefabBlocking(prefab);
   std::unordered_map<util::Uuid, util::Uuid> prefabNodeMap;
-  auto id = instantiate(*p, trans, prefabNodeMap);
+  auto id = instantiate(p, trans, prefabNodeMap);
   updateSkeletons(prefabNodeMap);
 
   // Also select it
@@ -662,13 +702,7 @@ void AneditApplication::generateMipMaps(render::asset::Texture& tex)
 void AneditApplication::createCinematicPlayer(util::Uuid& id)
 {
   if (_cinePlayers.find(id) == _cinePlayers.end()) {
-    auto* cinematic = _scene.getCinematic(id);
-    if (!cinematic) {
-      printf("Cannot play cinematic %s, does not exist\n", id.str().c_str());
-      return;
-    }
-
-    _cinePlayers[id] = render::cinematic::CinematicPlayer(cinematic, &_scene, &_camera);
+    _cinePlayers[id] = render::cinematic::CinematicPlayer(_assColl.getCinematicBlocking(id), &_assColl, &_scene, &_camera);
   }
 }
 

@@ -17,9 +17,10 @@ namespace logic {
 
 struct AneditConfig
 {
-  const std::uint8_t currentVersion = 1;
+  const std::uint8_t currentVersion = 2;
 
   std::filesystem::path _scenePath;
+  std::filesystem::path _assPath;
   glm::vec3 _lastCamPos;
 
   void saveToPath(std::filesystem::path p)
@@ -97,8 +98,11 @@ namespace bitsery {
   void serialize(S& s, logic::AneditConfig& conf)
   {
     auto string = conf._scenePath.string();
-    s.text1b(string, 40);
+    auto assString = conf._assPath.string();
+    s.text1b(string, 255);
+    s.text1b(assString, 255);
     conf._scenePath = std::filesystem::path(string);
+    conf._assPath = std::filesystem::path(assString);
 
     s.object(conf._lastCamPos);
   }

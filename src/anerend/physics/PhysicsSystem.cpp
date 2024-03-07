@@ -2,6 +2,8 @@
 
 #include "../render/scene/Scene.h"
 
+#include "../render/asset/AssetCollection.h"
+
 #include "../util/TransformHelpers.h"
 
 #include "../component/Components.h"
@@ -12,10 +14,15 @@
 
 namespace physics {
 
-PhysicsSystem::PhysicsSystem(component::Registry* registry, render::scene::Scene* scene, render::RenderContext* rc)
+PhysicsSystem::PhysicsSystem(
+  component::Registry* registry,
+  render::scene::Scene* scene,
+  render::asset::AssetCollection* assColl,
+  render::RenderContext* rc)
   : _debugRenderer(nullptr)
   , _registry(registry)
   , _scene(scene)
+  , _assColl(assColl)
   , _rc(rc)
 {
   connectObserver();
@@ -38,6 +45,11 @@ void PhysicsSystem::setScene(render::scene::Scene* scene)
 {
   _scene = scene;
   _goThroughEverything = true;
+}
+
+void PhysicsSystem::setAssetCollection(render::asset::AssetCollection* assColl)
+{
+  _assColl = assColl;
 }
 
 void PhysicsSystem::init()
@@ -290,9 +302,10 @@ void PhysicsSystem::checkIfCreate(const util::Uuid& node)
         // For now just take the last mesh...? TODO
 
         auto& rendComp = _registry->getComponent<component::Renderable>(node);
-        auto* model = _scene->getModel(rendComp._model);
+        //auto* model = _scene->getModel(rendComp._model);
+        auto model = _assColl->getModelBlocking(rendComp._model);
 
-        _joltImpl->addMesh(model->_meshes.back(), node);
+        _joltImpl->addMesh(model._meshes.back(), node);
       }
     }
   }

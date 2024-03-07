@@ -1,12 +1,14 @@
 #include "AnimationUpdater.h"
 
 #include "../scene/Scene.h"
+#include "../asset/AssetCollection.h"
 
 namespace render::anim
 {
 
-AnimationUpdater::AnimationUpdater(render::scene::Scene* scene)
+AnimationUpdater::AnimationUpdater(render::scene::Scene* scene, render::asset::AssetCollection* assColl)
   : _scene(scene)
+  , _assColl(assColl)
 {}
 
 void AnimationUpdater::update(double delta)
@@ -25,11 +27,11 @@ void AnimationUpdater::update(double delta)
 
     auto& animatorComp = _scene->registry().getComponent<component::Animator>(nodeId);
 
-    auto* animation = _scene->getAnimationMut(animatorComp._currentAnimation);
-
-    if (!animation) {
-      continue;
+    if (!_cachedAnimations.contains(animatorComp._currentAnimation)) {
+      _cachedAnimations[animatorComp._currentAnimation] = _assColl->getAnimationBlocking(animatorComp._currentAnimation);
     }
+
+    Animation& animation = _cachedAnimations[animatorComp._currentAnimation];
 
     // should assert this
     auto& skeleComp = _scene->registry().getComponent<component::Skeleton>(nodeId);
@@ -37,8 +39,8 @@ void AnimationUpdater::update(double delta)
     // Do we not have an animator yet?
     if (_animators.find(nodeId) == _animators.end()) {
       internal::Animator animator{};
-      animator.init(*animation, skeleComp);
-      animator.precalculateAnimationFrames(_scene, *animation, skeleComp);
+      animator.init(animation, skeleComp);
+      animator.precalculateAnimationFrames(_scene, animation, skeleComp);
       _animators[nodeId] = std::move(animator);
     }
 
@@ -53,11 +55,11 @@ void AnimationUpdater::update(double delta)
 
     if (animator.initedAnimation() != animatorComp._currentAnimation) {
       // Reinit
-      animator.init(*animation, skeleComp);
-      animator.precalculateAnimationFrames(_scene, *animation, skeleComp);
+      animator.init(animation, skeleComp);
+      animator.precalculateAnimationFrames(_scene, animation, skeleComp);
     }
 
-    animator.update(_scene, *animation, skeleComp, delta);
+    animator.update(_scene, animation, skeleComp, delta);
   }
 }
 

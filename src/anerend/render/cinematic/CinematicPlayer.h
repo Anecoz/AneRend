@@ -1,7 +1,9 @@
 #pragma once
 
-namespace render::asset { struct Cinematic; }
+#include "../asset/Cinematic.h"
+
 namespace render::scene { class Scene; }
+namespace render::asset { class AssetCollection; }
 namespace render { class Camera; }
 
 namespace render::cinematic {
@@ -9,7 +11,7 @@ namespace render::cinematic {
 class CinematicPlayer
 {
 public:
-  CinematicPlayer(const asset::Cinematic* cinematic, scene::Scene* scene, Camera* camera);
+  CinematicPlayer(asset::Cinematic cinematic, asset::AssetCollection* assColl, scene::Scene* scene, Camera* camera);
   CinematicPlayer() = default;
   ~CinematicPlayer() = default;
 
@@ -35,8 +37,9 @@ private:
     Stopped
   } _state = State::Stopped;
 
-  const asset::Cinematic* _cinematic = nullptr;
+  asset::Cinematic _cinematic;
   scene::Scene* _scene = nullptr;
+  asset::AssetCollection* _assColl = nullptr;
   Camera* _camera = nullptr;
   double _currentTime = 0.0;
   bool _finished = false;

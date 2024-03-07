@@ -15,6 +15,7 @@
 #include <render/RenderDebugOptions.h>
 #include <render/RenderOptions.h>
 #include <render/asset/Model.h>
+#include <render/asset/AssetCollection.h>
 #include <render/scene/Scene.h>
 #include <render/scene/ScenePager.h>
 #include <render/cinematic/CinematicPlayer.h>
@@ -41,6 +42,7 @@ public:
   // AneditContext begin
 
   render::scene::Scene& scene() override final;
+  render::asset::AssetCollection& assetCollection() override final;
   void serializeScene() override final;
   void loadSceneFrom(std::filesystem::path p) override final;
   void setScenePath(std::filesystem::path p) override final;
@@ -86,6 +88,7 @@ private:
   std::unordered_map<util::Uuid, render::cinematic::CinematicPlayer> _cinePlayers;
 
   std::filesystem::path _scenePath;
+  std::filesystem::path _assPath;
   logic::AneditConfig _config;
 
   logic::GLTFImporter _gltfImporter;
@@ -103,6 +106,7 @@ private:
   render::Camera _shadowCamera;
 
   render::scene::Scene _scene;
+  render::asset::AssetCollection _assColl;
   render::VulkanRenderer _vkRenderer;
   std::future<render::scene::DeserialisedSceneData> _sceneFut;
   render::scene::ScenePager _scenePager;

@@ -16,6 +16,10 @@ namespace render::scene {
   class Scene;
 }
 
+namespace render::asset {
+  class AssetCollection;
+}
+
 namespace physics {
 
 class JoltDebugRenderer;
@@ -24,11 +28,16 @@ class PhysicsJoltImpl;
 class PhysicsSystem
 {
 public:
-  PhysicsSystem(component::Registry* registry, render::scene::Scene* scene, render::RenderContext* rc);
+  PhysicsSystem(
+    component::Registry* registry,
+    render::scene::Scene* scene,
+    render::asset::AssetCollection* assColl,
+    render::RenderContext* rc);
   ~PhysicsSystem();
 
   void setRegistry(component::Registry* registry);
   void setScene(render::scene::Scene* scene);
+  void setAssetCollection(render::asset::AssetCollection* assColl);
 
   PhysicsSystem(const PhysicsSystem&) = delete;
   PhysicsSystem& operator=(const PhysicsSystem&) = delete;
@@ -65,6 +74,7 @@ private:
   JoltDebugRenderer* _debugRenderer = nullptr;
   component::Registry* _registry = nullptr;
   render::scene::Scene* _scene = nullptr;
+  render::asset::AssetCollection* _assColl = nullptr;
   render::RenderContext* _rc = nullptr;
 
   entt::observer _rigidObserver;

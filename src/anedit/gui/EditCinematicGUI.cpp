@@ -2,6 +2,7 @@
 
 #include "../logic/AneditContext.h"
 #include <render/scene/Scene.h>
+#include <render/asset/AssetCollection.h>
 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -26,9 +27,9 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
     return;
   }
 
-  if (!c->scene().getCinematic(id)) {
-    return;
-  }
+  //if (!c->scene().getCinematic(id)) {
+  //  return;
+  //}
 
   ImGui::Begin("Edit cinematic");
 
@@ -38,7 +39,8 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
   // Name field for the cinematic
   char name[100];
   name[0] = '\0';
-  auto cinematic = *c->scene().getCinematic(id);
+  //auto cinematic = *c->scene().getCinematic(id);
+  auto cinematic = c->assetCollection().getCinematicBlocking(id);
   strcpy_s(name, cinematic._name.c_str());
 
   _selectedKFType = None;
@@ -46,7 +48,8 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
   ImGui::Text("Name");
   if (ImGui::InputText("##cinematic_name", name, 100) && id) {
     cinematic._name = name;
-    c->scene().updateCinematic(cinematic);
+    //c->scene().updateCinematic(cinematic);
+    c->assetCollection().updateCinematic(cinematic);
   }
   ImGui::Separator();
 
@@ -73,7 +76,8 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
 
   if (!verifyNodesExist(cinematic, c)) {
     // Update immediately
-    c->scene().updateCinematic(cinematic);
+    //c->scene().updateCinematic(cinematic);
+    c->assetCollection().updateCinematic(cinematic);
   }
 
   // Fill in keys
@@ -383,7 +387,8 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
   if (changed) {
     recalculateMaxTime(cinematic);
     c->setCinematicTime(id, translateKeyToTime(currentFrame));
-    c->scene().updateCinematic(std::move(cinematic));
+    //c->scene().updateCinematic(std::move(cinematic));
+    c->assetCollection().updateCinematic(std::move(cinematic));
   }
 }
 
@@ -430,7 +435,8 @@ void EditCinematicGUI::fillMatKeys(render::asset::Cinematic& cinematic, logic::A
     // Just peek into first element of vector to get uuid
     if (!v.empty()) {
       auto uuid = v[0]._id;
-      _matNames[uuid] = c->scene().getMaterial(uuid)->_name;
+      //_matNames[uuid] = c->scene().getMaterial(uuid)->_name;
+      _matNames[uuid] = c->assetCollection().getMaterialBlocking(uuid)._name;
       _matIndices[uuid] = i;
 
       for (auto& kf : v) {
@@ -505,7 +511,8 @@ void EditCinematicGUI::addCameraKeyframePressed(render::asset::Cinematic& cinema
   // Redo cam keys
   fillCamKeys(cinematic);
 
-  c->scene().updateCinematic(cinematic);
+  //c->scene().updateCinematic(cinematic);
+  c->assetCollection().updateCinematic(cinematic);
 }
 
 void EditCinematicGUI::addNodeKeyframePressed(render::asset::Cinematic& cinematic, util::Uuid node, logic::AneditContext* c)
@@ -535,24 +542,21 @@ void EditCinematicGUI::addNodeKeyframePressed(render::asset::Cinematic& cinemati
   // Redo cache
   fillNodeKeys(cinematic, c);
 
-  c->scene().updateCinematic(cinematic);
+  //c->scene().updateCinematic(cinematic);
+  c->assetCollection().updateCinematic(cinematic);
 }
 
 void EditCinematicGUI::addMaterialKeyframePressed(render::asset::Cinematic& cinematic, util::Uuid material, logic::AneditContext* c)
 {
-  auto* matP = c->scene().getMaterial(material);
-
-  if (!matP) {
-    return;
-  }
+  auto mat = c->assetCollection().getMaterialBlocking(material);
 
   printf("Adding material keyframe at time %f\n", _time);
 
   render::asset::MaterialKeyframe kf{};
   kf._time = _time;
   kf._id = material;
-  kf._emissive = matP->_emissive;
-  kf._baseColFactor = matP->_baseColFactor;
+  kf._emissive = mat._emissive;
+  kf._baseColFactor = mat._baseColFactor;
 
   auto idx = _matIndices[material];
   cinematic._materialKeyframes[idx].emplace_back(std::move(kf));
@@ -566,7 +570,7 @@ void EditCinematicGUI::addMaterialKeyframePressed(render::asset::Cinematic& cine
   // Redo cache
   fillMatKeys(cinematic, c);
 
-  c->scene().updateCinematic(cinematic);
+  c->assetCollection().updateCinematic(cinematic);
 }
 
 bool EditCinematicGUI::nodeDroppedInList(util::Uuid node, render::asset::Cinematic& cinematic, logic::AneditContext* c)
@@ -607,20 +611,21 @@ bool EditCinematicGUI::materialDroppedInList(util::Uuid material, render::asset:
   }
 
   // Add this material and a kf at time 0
-  const auto* matP = c->scene().getMaterial(material);
-  if (!matP) {
-    return false;
-  }
+  //const auto* matP = c->scene().getMaterial(material);
+  const auto mat = c->assetCollection().getMaterialBlocking(material);
+  //if (!matP) {
+  //  return false;
+  //}
 
   render::asset::MaterialKeyframe kf{};
   kf._time = 0.0f;
   kf._id = material;
-  kf._emissive = matP->_emissive;
-  kf._baseColFactor = matP->_baseColFactor;
+  kf._emissive = mat._emissive;
+  kf._baseColFactor = mat._baseColFactor;
 
   // Also add to cache
   _matIndices[material] = cinematic._materialKeyframes.size();
-  _matNames[material] = matP->_name;
+  _matNames[material] = mat._name;
   _cachedMatKeys[material].emplace_back(0);
 
   // Assume this material not already here
@@ -765,9 +770,9 @@ bool EditCinematicGUI::drawMatKeyframeEditor(render::asset::MaterialKeyframe& kf
 
   // Just sets new parameters
   if (ImGui::Button("Patch")) {
-    auto* matP = c->scene().getMaterial(kf._id);
-    kf._emissive = matP->_emissive;
-    kf._baseColFactor = matP->_baseColFactor;
+    auto mat = c->assetCollection().getMaterialBlocking(kf._id);
+    kf._emissive = mat._emissive;
+    kf._baseColFactor = mat._baseColFactor;
 
     changed = true;
   }

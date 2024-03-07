@@ -3,6 +3,7 @@
 #include "Scene.h"
 #include "Tile.h"
 #include "../RenderContext.h"
+#include "../asset/AssetCollection.h"
 
 #include <algorithm>
 
@@ -26,41 +27,31 @@ void ScenePager::setScene(Scene* scene)
   _scene = scene;
 }
 
+void ScenePager::setAssetCollection(asset::AssetCollection* assColl)
+{
+  _assColl = assColl;
+}
+
 void ScenePager::update(const glm::vec3& pos)
 {
   if (!_rc || !_scene) return;
 
   AssetUpdate upd{};
+  std::vector<util::Uuid> nodesToPage;
+  std::vector<util::Uuid> nodesToUnpage;
 
-  // Check event log of Scene to see if any materials, models, anims etc have been added
-  const auto& log = _scene->getEvents();
-  for (auto& event : log._events) {
-    if (event._type == SceneEventType::ModelAdded) {
-      auto copy = *_scene->getModel(event._id);
-      upd._addedModels.emplace_back(std::move(copy));
-    }
-    else if (event._type == SceneEventType::TextureAdded) {
-      auto copy = *_scene->getTexture(event._id);
-      upd._addedTextures.emplace_back(std::move(copy));
-    }
-    else if (event._type == SceneEventType::TextureUpdated) {
-      auto copy = *_scene->getTexture(event._id);
-      upd._updatedTextures.emplace_back(std::move(copy));
-    }
-    else if (event._type == SceneEventType::MaterialAdded) {
-      auto copy = *_scene->getMaterial(event._id);
-      upd._addedMaterials.emplace_back(std::move(copy));
-    }
-    else if (event._type == SceneEventType::MaterialUpdated) {
-      auto copy = *_scene->getMaterial(event._id);
-      upd._updatedMaterials.emplace_back(std::move(copy));
-    }
-    else if (event._type == SceneEventType::AnimationAdded) {
-      auto copy = *_scene->getAnimation(event._id);
-      upd._addedAnimations.emplace_back(std::move(copy));
-    }
+  const auto& sceneLog = _scene->getEvents();
+  const auto& assetLog = _assColl->getEventLog();
 
-    // TODO: Removal of assets
+  // Check for asset udpates.
+  // Note: We just assume that it is in cache at this point and do the blocking call to get the asset.
+  for (const auto& event : assetLog._events) {
+    if (event._type == asset::AssetEventType::MaterialUpdated) {
+      upd._updatedMaterials.emplace_back(_assColl->getMaterialBlocking(event._id));
+    }
+    else if (event._type == asset::AssetEventType::TextureUpdated) {
+      upd._updatedTextures.emplace_back(_assColl->getTextureBlocking(event._id));
+    }
   }
 
   // Page this tile + _pageRadius tiles around it
@@ -82,7 +73,7 @@ void ScenePager::update(const glm::vec3& pos)
       if (std::find(_pagedTiles.begin(), _pagedTiles.end(), currIdx) != _pagedTiles.end()) {
 
         // Go through events to see if anything changed on this already paged tile
-        for (const auto& event : log._events) {
+        for (const auto& event : sceneLog._events) {
           if (event._tileIdx && event._tileIdx == currIdx) {
             if (event._type == SceneEventType::DDGIAtlasAdded) {
               asset::TileInfo ti{};
@@ -115,22 +106,13 @@ void ScenePager::update(const glm::vec3& pos)
       if (dirty) {
         for (auto& node : tile->getRemovedNodes()) {
           if (_scene->registry().hasComponent<component::PageStatus>(node)) {
-            auto& pagedComp = _scene->registry().getComponent<component::PageStatus>(node);
-            pagedComp._paged = false;
-            _scene->registry().patchComponent<component::PageStatus>(node);
+            nodesToUnpage.emplace_back(node);
           }
         }
       }
 
       for (auto& nodeId : *nodes) {
-        if (!_scene->registry().hasComponent<component::PageStatus>(nodeId)) {
-          _scene->registry().addComponent<component::PageStatus>(nodeId, true);
-        }
-        else {
-          auto& pagedComp = _scene->registry().getComponent<component::PageStatus>(nodeId);
-          pagedComp._paged = true;
-        }
-        _scene->registry().patchComponent<component::PageStatus>(nodeId);
+        nodesToPage.emplace_back(nodeId);
       }
 
       // Do DDGI Atlas if present
@@ -149,7 +131,7 @@ void ScenePager::update(const glm::vec3& pos)
       tile->getRemovedNodes().clear();
       pagedTiles.emplace_back(currIdx);
     }
-  }  
+  }
 
   // Page out if _pagedTiles contains tiles that should no longer be paged
   std::vector<render::scene::TileIndex> diff;
@@ -168,9 +150,7 @@ void ScenePager::update(const glm::vec3& pos)
       // Terrain is always paged
       if (_scene->registry().hasComponent<component::Terrain>(nodeId)) continue;
 
-      auto& pagedComp = _scene->registry().getComponent<component::PageStatus>(nodeId);
-      pagedComp._paged = false;
-      _scene->registry().patchComponent<component::PageStatus>(nodeId);
+      nodesToUnpage.emplace_back(nodeId);
     }
 
     // Remove tile info
@@ -181,16 +161,44 @@ void ScenePager::update(const glm::vec3& pos)
   auto terrainView = _scene->registry().getEnttRegistry().view<component::Terrain>(entt::exclude<component::PageStatus>);
   for (auto ent : terrainView) {
     auto id = _scene->registry().reverseLookup(ent);
-    _scene->registry().addComponent<component::PageStatus>(id, true);
-    _scene->registry().patchComponent<component::PageStatus>(id);
+    nodesToPage.emplace_back(id);
   }
 
   _pagedTiles = std::move(pagedTiles);
+
+  // Do the page/unpage for all collected nodes
+  for (auto& node : nodesToPage) {
+    page(node);
+  }
+
+  for (auto& node : nodesToUnpage) {
+    unpage(node);
+  }
 
   // Do the asset update via rc
   if (upd) {
     _rc->assetUpdate(std::move(upd));
   }
+}
+
+void ScenePager::page(const util::Uuid& node)
+{
+
+  if (!_scene->registry().hasComponent<component::PageStatus>(node)) {
+    _scene->registry().addComponent<component::PageStatus>(node, true);
+  }
+  else {
+    auto& pagedComp = _scene->registry().getComponent<component::PageStatus>(node);
+    pagedComp._paged = true;
+  }
+  _scene->registry().patchComponent<component::PageStatus>(node);
+}
+
+void ScenePager::unpage(const util::Uuid& node)
+{
+  auto& pagedComp = _scene->registry().getComponent<component::PageStatus>(node);
+  pagedComp._paged = false;
+  _scene->registry().patchComponent<component::PageStatus>(node);
 }
 
 }

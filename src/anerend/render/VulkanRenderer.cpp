@@ -1261,6 +1261,7 @@ void VulkanRenderer::update(
 
   updateNodes();
   updateSkeletons();
+  updateAssetFetches();
 }
 
 AccelerationStructure VulkanRenderer::registerBottomLevelAS(
@@ -2143,9 +2144,16 @@ void VulkanRenderer::updateNodes()
           internalRend._globalTransform = transComp._globalTransform;
           internalRend._invGlobalTransform = glm::inverse(transComp._globalTransform);
 
-          // Fill in meshids
-          auto& model = _currentModels[_modelIdMap[rend._model]];
-          internalRend._meshes = model._meshes;
+          // Do we need to fetch any assets?
+          if (!_modelIdMap.contains(rend._model)) {
+            _assetFetcher.startFetchModel(rend._model);
+          }
+          for (auto& mat : rend._materials) {
+            if (!_materialIdMap.contains(mat)) {
+              // Will also start fetching textures.
+              _assetFetcher.startFetchMaterial(mat);
+            }
+          }
 
           // Skeleton
           if (_registry->hasComponent<component::Skeleton>(internalId)) {
@@ -2186,6 +2194,30 @@ void VulkanRenderer::updateNodes()
             internalTerrain._mpp = terrainComp._mpp;
             internalTerrain._heightScale = terrainComp._heightScale;
             internalTerrain._uvScale = terrainComp._uvScale;
+
+            // Any assets to fetch?
+            if (terrainComp._baseMaterials[0] && !_materialIdMap.contains(terrainComp._baseMaterials[0])) {
+              _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[0]);
+            }
+            if (terrainComp._baseMaterials[1] && !_materialIdMap.contains(terrainComp._baseMaterials[1])) {
+              _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[1]);
+            }
+            if (terrainComp._baseMaterials[2] && !_materialIdMap.contains(terrainComp._baseMaterials[2])) {
+              _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[2]);
+            }
+            if (terrainComp._baseMaterials[3] && !_materialIdMap.contains(terrainComp._baseMaterials[3])) {
+              _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[3]);
+            }
+
+            if (!_textureIdMap.contains(terrainComp._heightMap)) {
+              _assetFetcher.startFetchTexture(terrainComp._heightMap);
+            }
+            if (!_textureIdMap.contains(terrainComp._blendMap)) {
+              _assetFetcher.startFetchTexture(terrainComp._blendMap);
+            }
+            if (!_textureIdMap.contains(terrainComp._vegetationMap)) {
+              _assetFetcher.startFetchTexture(terrainComp._vegetationMap);
+            }
 
             _currentTerrains.emplace_back(std::move(internalTerrain));
             auto idx = _currentTerrains.size() - 1;
@@ -2238,7 +2270,8 @@ void VulkanRenderer::updateNodes()
               if (_dynamicBlases.count(remId) > 0) {
                 auto& dynamicBlas = _dynamicBlases[remId];
 
-                for (std::size_t i = 0; i < it->_meshes.size(); ++i) {
+                auto& meshes = _currentModels[_modelIdMap[it->_renderable._model]]._meshes;
+                for (std::size_t i = 0; i < meshes.size(); ++i) {
                   auto& mesh = it->_dynamicMeshes[i];
 
                   for (auto meshIt = _currentMeshes.begin(); meshIt != _currentMeshes.end();) {
@@ -2305,6 +2338,9 @@ void VulkanRenderer::updateNodes()
               terrainIdMapUpdate = true;
               terrainChanged = true;
             }
+
+            // Remove assets if not used by anyone else.
+            derefAssets(*it);
 
             _currentRenderables.erase(it);
             break;
@@ -2504,6 +2540,21 @@ void VulkanRenderer::updateSkeletons()
   }
 }
 
+void VulkanRenderer::updateAssetFetches()
+{
+  // Go through any pending assets.
+  auto models = _assetFetcher.takeModels();
+  auto textures = _assetFetcher.takeTextures();
+  auto mats = _assetFetcher.takeMaterials();
+
+  AssetUpdate upd{};
+  upd._addedModels.insert(upd._addedModels.end(), models.begin(), models.end());
+  upd._addedTextures.insert(upd._addedTextures.end(), textures.begin(), textures.end());
+  upd._addedMaterials.insert(upd._addedMaterials.end(), mats.begin(), mats.end());
+
+  assetUpdate(std::move(upd));
+}
+
 bool VulkanRenderer::arePrerequisitesUploaded(internal::InternalModel& model)
 {
   // Check that model is uploaded (by checking that it has an internal id)
@@ -2585,6 +2636,52 @@ bool VulkanRenderer::arePrerequisitesUploaded(internal::InternalTerrain& terrain
   }
 
   return true;
+}
+
+void VulkanRenderer::derefAssets(internal::InternalRenderable& rend)
+{
+  AssetUpdate upd{};
+
+  // Model
+  if (_assetFetcher.deref(rend._renderable._model) == 0) {
+    upd._removedModels.emplace_back(rend._renderable._model);
+  }
+
+  // Mats
+  for (auto& mat : rend._renderable._materials) {
+    if (_assetFetcher.deref(mat) == 0) {
+      upd._removedMaterials.emplace_back(mat);
+    }
+
+    // Textures
+    if (_materialIdMap.contains(mat)) {
+      auto& intMat = _currentMaterials[_materialIdMap[mat]];
+      if (intMat._albedoTex) {
+        if (_assetFetcher.deref(intMat._albedoTex) == 0) {
+          upd._removedTextures.emplace_back(intMat._albedoTex);
+        }
+      }
+      if (intMat._emissiveTex) {
+        if (_assetFetcher.deref(intMat._emissiveTex) == 0) {
+          upd._removedTextures.emplace_back(intMat._emissiveTex);
+        }
+      }
+      if (intMat._normalTex) {
+        if (_assetFetcher.deref(intMat._normalTex) == 0) {
+          upd._removedTextures.emplace_back(intMat._normalTex);
+        }
+      }
+      if (intMat._metRoughTex) {
+        if (_assetFetcher.deref(intMat._metRoughTex) == 0) {
+          upd._removedTextures.emplace_back(intMat._metRoughTex);
+        }
+      }
+    }
+  }
+
+  if (upd) {
+    assetUpdate(std::move(upd));
+  }
 }
 
 asset::Texture VulkanRenderer::downloadDDGIAtlas()
@@ -3096,6 +3193,7 @@ bool VulkanRenderer::prefillGPURendMatIdxBuffer(VkCommandBuffer& commandBuffer)
   std::size_t dataSize = (currentIndex + 1) * sizeof(uint32_t);
 
   if (!sb.canFit(dataSize, true)) {
+    vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
     return false;
   }
 
@@ -3158,7 +3256,8 @@ bool VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
 
     rend._modelBufferOffset = currIdx;
 
-    for (auto& mesh : rend._meshes) {
+    auto& meshes = _currentModels[_modelIdMap[rend._renderable._model]]._meshes;
+    for (auto& mesh : meshes) {
       auto idx = _meshIdMap[mesh];
       mappedData[currIdx] = (uint32_t)idx;
       currIdx++;
@@ -3184,7 +3283,8 @@ bool VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
 
     rend._modelBufferOffset = currIdx;
 
-    for (auto& mesh: rend._meshes) {
+    auto& meshes = _currentModels[_modelIdMap[rend._renderable._model]]._meshes;
+    for (auto& mesh: meshes) {
       auto idx = _meshIdMap[mesh];
       mappedData[currIdx] = (uint32_t)idx;
       currIdx++;
@@ -3204,6 +3304,7 @@ bool VulkanRenderer::prefillGPUModelBuffer(VkCommandBuffer& commandBuffer)
   std::size_t dataSize = (currIdx + 1) * sizeof(uint32_t);
 
   if (!sb.canFit(dataSize, true)) {
+    vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
     return false;
   }
 
@@ -3666,6 +3767,7 @@ bool VulkanRenderer::prefillGPUTerrainInfoBuffer(VkCommandBuffer& commandBuffer)
     auto& t = _currentTerrains[i];
 
     if (!arePrerequisitesUploaded(t)) {
+      vmaUnmapMemory(_vmaAllocator, sb._buf._allocation);
       return false;
     }
 
@@ -5060,6 +5162,11 @@ void VulkanRenderer::setRegistry(component::Registry* registry)
   _terrainObserver.connect(_registry->getEnttRegistry(), entt::collector
     .update<component::Terrain>()
     .where<component::PageStatus, component::Renderable>());
+}
+
+void VulkanRenderer::setAssetCollection(asset::AssetCollection* assetCollection)
+{
+  _assetFetcher.setAssetCollection(assetCollection);
 }
 
 glm::vec3 VulkanRenderer::stopBake(BakeTextureCallback callback)

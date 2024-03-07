@@ -2,6 +2,7 @@
 
 #include "../../logic/AneditContext.h"
 #include <render/scene/Scene.h>
+#include <render/asset/AssetCollection.h>
 
 #include <imgui.h>
 
@@ -24,18 +25,16 @@ void EditAnimatorGUI::immediateDraw(logic::AneditContext* c)
   auto& animatorComp = c->scene().registry().getComponent<component::Animator>(id);
 
   std::vector<std::string> animations;
-  std::string currentAnimationStr = c->scene().getAnimation(animatorComp._currentAnimation)->_name;
+  std::string currentAnimationStr = c->assetCollection().getAnimationBlocking(animatorComp._currentAnimation)._name;
   component::Animator::State state = animatorComp._state;
   std::size_t selectedAnimIdx = 0;
   for (std::size_t i = 0; i < animatorComp._animations.size(); ++i) {
     auto& anim = animatorComp._animations[i];
-    animations.emplace_back(c->scene().getAnimation(anim)->_name);
+    animations.emplace_back(c->assetCollection().getAnimationBlocking(anim)._name);
     if (anim == animatorComp._currentAnimation) {
       selectedAnimIdx = i;
     }
-  }
-
-  
+  }  
 
   bool changed = false;
   

@@ -4,6 +4,7 @@
 
 #include "../logic/AneditContext.h"
 #include <render/scene/Scene.h>
+#include <render/asset/AssetCollection.h>
 #include <render/ImageHelpers.h>
 #include <util/TextureHelpers.h>
 
@@ -159,7 +160,15 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
   bool dummy;
   util::Uuid dummyUuid;
   auto currSelection = c->getFirstSelection();
-  if (drawAssetList(size, _matFilter, "Materials", c->scene().getMaterials(), currSelection, dummyUuid, dummy, "material_id")) {
+  
+  /*auto matIds = c->assetCollection().getCachedMaterials();
+  std::vector<render::asset::Material> mats;
+  for (auto& id : matIds) {
+    mats.emplace_back(c->assetCollection().getMaterialBlocking(id));
+  }*/
+
+  auto& mats = c->assetCollection().getMetaInfos(render::asset::AssetMetaInfo::Type::Material);
+  if (drawAssetList(size, _matFilter, "Materials", mats, currSelection, dummyUuid, dummy, "material_id")) {
     c->selection().clear();
     c->selection().emplace_back(currSelection);
     c->selectionType() = logic::AneditContext::SelectionType::Material;
@@ -168,21 +177,39 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
   ImGui::SameLine();
 
   // Models
-  if (drawAssetList(size, _modelFilter, "Models", c->scene().getModels(), currSelection, dummyUuid, dummy)) {
+  /*auto modelIds = c->assetCollection().getCachedModels();
+  std::vector<render::asset::Model> models;
+  for (auto& id : modelIds) {
+    models.emplace_back(c->assetCollection().getModelBlocking(id));
+  }*/
+  auto& models = c->assetCollection().getMetaInfos(render::asset::AssetMetaInfo::Type::Model);
+  if (drawAssetList(size, _modelFilter, "Models", models, currSelection, dummyUuid, dummy)) {
     // select model in context
   }
 
   ImGui::SameLine();
 
   // Animations
-  if (drawAssetList(size, _animationFilter, "Animations", c->scene().getAnimations(), currSelection, dummyUuid, dummy)) {
+  /*auto animIds = c->assetCollection().getCachedAnimations();
+  std::vector<render::anim::Animation> animations;
+  for (auto& id : animIds) {
+    animations.emplace_back(c->assetCollection().getAnimationBlocking(id));
+  }*/
+  auto& animations = c->assetCollection().getMetaInfos(render::asset::AssetMetaInfo::Type::Animation);
+  if (drawAssetList(size, _animationFilter, "Animations", animations, currSelection, dummyUuid, dummy)) {
 
   }
 
   ImGui::SameLine();
 
   // Textures
-  if (drawAssetList(size, _textureFilter, "Textures", c->scene().getTextures(), currSelection, dummyUuid, dummy, "texture_id")) {
+  /*auto texIds = c->assetCollection().getCachedTextures();
+  std::vector<render::asset::Texture> textures;
+  for (auto& id : texIds) {
+    textures.emplace_back(c->assetCollection().getTextureBlocking(id));
+  }*/
+  auto& textures = c->assetCollection().getMetaInfos(render::asset::AssetMetaInfo::Type::Texture);
+  if (drawAssetList(size, _textureFilter, "Textures", textures, currSelection, dummyUuid, dummy, "texture_id")) {
     c->selection().clear();
     c->selection().emplace_back(currSelection);
     c->selectionType() = logic::AneditContext::SelectionType::Texture;
@@ -192,18 +219,29 @@ void SceneAssetGUI::immediateDraw(logic::AneditContext* c)
 
   // Prefabs
   {
-    auto deleteLambda = [c](util::Uuid id) { c->scene().removePrefab(id); c->selection().clear(); };
+    auto deleteLambda = [c](util::Uuid id) {
+      //c->scene().removePrefab(id); c->selection().clear(); 
+      c->assetCollection().removePrefab(id);
+      c->selection().clear();
+    };
 
     std::vector<std::string> menuItems = { "Delete" };
     std::vector<std::function<void(util::Uuid)>> cbs = { deleteLambda };
     std::vector<std::uint8_t> dropData;
 
+    /*auto prefabIds = c->assetCollection().getCachedPrefabs();
+    std::vector<render::asset::Prefab> prefabs;
+    for (auto& id : prefabIds) {
+      prefabs.emplace_back(c->assetCollection().getPrefabBlocking(id));
+    }*/
+
+    auto& prefabs = c->assetCollection().getMetaInfos(render::asset::AssetMetaInfo::Type::Prefab);
     bool draggedThisFrame = false;
     if (drawAssetList(
       size, 
       _prefabFilter, 
       "Prefabs", 
-      c->scene().getPrefabs(), 
+      prefabs,
       currSelection, 
       _draggedPrefab,
       draggedThisFrame,
@@ -293,7 +331,8 @@ void addTextureToScene(logic::AneditContext* c, render::imageutil::TextureData&&
     util::TextureHelpers::convertRG8ToBC5(tex);
   }
 
-  c->scene().addTexture(std::move(tex));
+  //c->scene().addTexture(std::move(tex));
+  c->assetCollection().add(std::move(tex));
 }
 
 }
@@ -316,7 +355,8 @@ void SceneAssetGUI::createMaterialClicked(logic::AneditContext* c)
   // Just create an empty default material
   render::asset::Material mat{};
   mat._name = "NewMaterial";
-  c->scene().addMaterial(std::move(mat));
+  //c->scene().addMaterial(std::move(mat));
+  c->assetCollection().add(std::move(mat));
 }
 
 void SceneAssetGUI::loadRGBATextureClicked(logic::AneditContext* c)
@@ -393,7 +433,8 @@ void SceneAssetGUI::nodeDroppedOnPrefab(logic::AneditContext* c, util::Uuid node
   }
 
   for (auto& p : prefabs) {
-    c->scene().addPrefab(std::move(p));
+    //c->scene().addPrefab(std::move(p));
+    c->assetCollection().add(std::move(p));
   }
 }
 

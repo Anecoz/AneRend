@@ -2,6 +2,7 @@
 
 #include "../../logic/AneditContext.h"
 #include <render/scene/Scene.h>
+#include <render/asset/AssetCollection.h>
 
 #include <glm/glm.hpp>
 #include <imgui.h>
@@ -51,11 +52,10 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
       visible = rendComp._visible;
       materials = rendComp._materials;
 
-      auto modelName = c->scene().getModel(rendComp._model)->_name;
-      //auto skeletonName = rendComp._skeleton ? c->scene().getSkeleton(rendComp._skeleton)->_name : "(None)";
+      //auto modelName = c->scene().getModel(rendComp._model)->_name;
+      auto modelName = c->assetCollection().getModelBlocking(rendComp._model)._name;
 
       strcpy_s(model, modelName.c_str());
-      //strcpy_s(skeleton, skeletonName.c_str());
     }
 
     // Name
@@ -70,17 +70,13 @@ void EditRenderableGUI::immediateDraw(logic::AneditContext* c)
     ImGui::Text("Model");
     ImGui::Text(model);
 
-    // Skeleton name
-    /*ImGui::Separator();
-    ImGui::Text("Skeleton");
-    ImGui::Text(skeleton);*/
-
     // Materials (potentially many, so put in a collapsible header)
     ImGui::Separator();
     if (ImGui::CollapsingHeader("Material(s)")) {
       for (auto& mat : materials) {
-        auto p = c->scene().getMaterial(mat);
-        ImGui::Selectable(p->_name.c_str(), false);
+        //auto p = c->scene().getMaterial(mat);
+        auto p = c->assetCollection().getMaterialBlocking(mat);
+        ImGui::Selectable(p._name.c_str(), false);
       }
     }
 

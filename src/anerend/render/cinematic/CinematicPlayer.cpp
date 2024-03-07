@@ -1,6 +1,7 @@
 #include "CinematicPlayer.h"
 
 #include "../asset/Cinematic.h"
+#include "../asset/AssetCollection.h"
 #include "../Camera.h"
 #include "../scene/Scene.h"
 #include "../../util/Interpolation.h"
@@ -118,9 +119,10 @@ render::asset::MaterialKeyframe lerp(const render::asset::MaterialKeyframe& kf0,
 
 }
 
-CinematicPlayer::CinematicPlayer(const asset::Cinematic* cinematic, scene::Scene* scene, Camera* camera)
-  : _cinematic(cinematic)
+CinematicPlayer::CinematicPlayer(asset::Cinematic cinematic, asset::AssetCollection* assColl, scene::Scene* scene, Camera* camera)
+  : _cinematic(std::move(cinematic))
   , _scene(scene)
+  , _assColl(assColl)
   , _camera(camera)
 {}
 
@@ -128,6 +130,7 @@ CinematicPlayer::CinematicPlayer(CinematicPlayer&& rhs)
 {
   std::swap(_cinematic, rhs._cinematic);
   std::swap(_scene, rhs._scene);
+  std::swap(_assColl, rhs._assColl);
   std::swap(_camera, rhs._camera);
   std::swap(_state, rhs._state);
   std::swap(_currentTime, rhs._currentTime);
@@ -139,6 +142,7 @@ CinematicPlayer& CinematicPlayer::operator=(CinematicPlayer&& rhs)
   if (this != &rhs) {
     std::swap(_cinematic, rhs._cinematic);
     std::swap(_scene, rhs._scene);
+    std::swap(_assColl, rhs._assColl);
     std::swap(_camera, rhs._camera);
     std::swap(_state, rhs._state);
     std::swap(_currentTime, rhs._currentTime);
@@ -157,7 +161,7 @@ void CinematicPlayer::update(double delta)
   // Go through keyframes and find closest one to current time
   {
     // Camera
-    auto [kf0, kf1, factor] = findClosestKfs<asset::CameraKeyframe>(_cinematic->_camKeyframes, _currentTime);
+    auto [kf0, kf1, factor] = findClosestKfs<asset::CameraKeyframe>(_cinematic._camKeyframes, _currentTime);
 
     if (!kf0 || !kf1) {
       return;
@@ -175,7 +179,7 @@ void CinematicPlayer::update(double delta)
 
   {
     // nodes
-    for (auto& v : _cinematic->_nodeKeyframes) {
+    for (auto& v : _cinematic._nodeKeyframes) {
       auto [kf0, kf1, factor] = findClosestKfs<asset::NodeKeyframe>(v, _currentTime);
 
       if (!kf0 || !kf1) {
@@ -209,7 +213,7 @@ void CinematicPlayer::update(double delta)
 
   {
     // materials
-    for (auto& v : _cinematic->_materialKeyframes) {
+    for (auto& v : _cinematic._materialKeyframes) {
       auto [kf0, kf1, factor] = findClosestKfs<asset::MaterialKeyframe>(v, _currentTime);
 
       if (!kf0 || !kf1) {
@@ -219,12 +223,15 @@ void CinematicPlayer::update(double delta)
       if (kf0 && kf1) {
         auto lerped = lerp(*kf0, *kf1, factor);
 
-        auto matCopy = *_scene->getMaterial(kf0->_id);
+        //auto matCopy = *_scene->getMaterial(kf0->_id);
+        auto matCopy = _assColl->getMaterialBlocking(kf0->_id);
 
         matCopy._emissive = lerped._emissive;
         matCopy._baseColFactor = lerped._baseColFactor;
 
-        _scene->updateMaterial(std::move(matCopy));}
+        //_scene->updateMaterial(std::move(matCopy));
+        _assColl->updateMaterial(std::move(matCopy));
+      }
     }
 
   }
@@ -247,7 +254,7 @@ void CinematicPlayer::update(double delta)
   _currentTime += delta;
 
   // TODO: What do? Just done?
-  if (_currentTime >= _cinematic->_maxTime) {
+  if (_currentTime >= _cinematic._maxTime) {
     _finished = true;
     stop();
   }

@@ -104,14 +104,8 @@ std::uint32_t headerSize()
 {
   return
     2 + // ver
-    4 + // prefab idx
-    4 + // texture idx
-    4 + // model idx
-    4 + // mat idx
-    4 + // anim idx
     4 + // tile info idx
-    4 + // nodes idx
-    4;  // cinematic idx
+    4;  // nodes idx
 }
 
 }
@@ -150,30 +144,12 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
 
         -- header--
         2 byte  version         (uint16_t)
-        4 bytes prefab idx      (uint32_t)
-        4 bytes tex idx         (uint32_t)
-        4 bytes model idx       (uint32_t)
-        4 bytes material idx    (uint32_t)
-        4 bytes animation idx   (uint32_t)
         4 bytes tileInfo   idx  (uint32_t)
         4 bytes nodes      idx  (uint32_t)
-        4 bytes cinematic  idx  (uint32_t)
-
-        -- prefabs --
-
-        -- textures --
-
-        -- models --
-
-        -- materials --
-
-        -- animations --
 
         -- tile infos --
 
         -- nodes --
-
-        -- cinematics --
 
         EOF
       */
@@ -209,14 +185,14 @@ void SceneSerializer::serialize(Scene& scene, const std::filesystem::path& path)
       }
 
       InternalSerializer ser;
-      ser.add(scene._prefabs);
-      ser.add(scene._textures);
-      ser.add(scene._models);
-      ser.add(scene._materials);
-      ser.add(scene._animations);
+      //ser.add(scene._prefabs);
+      //ser.add(scene._textures);
+      //ser.add(scene._models);
+      //ser.add(scene._materials);
+      //ser.add(scene._animations);
       ser.add(scene._tileInfos);
       ser.add(imNodes);
-      ser.add(scene._cinematics);
+      //ser.add(scene._cinematics);
 
       ser.serializeToFile(path.string());
 
@@ -285,23 +261,23 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       printf("Deserialised version %hu, serialisation version is %hu\n", g_LocalDeserialisedVersion, version);
 
       uint32_t* header4BytePtr = reinterpret_cast<uint32_t*>(header.data() + 2);
-      uint32_t prefabIdx = header4BytePtr[0];
-      uint32_t textureIdx = header4BytePtr[1];
-      uint32_t modelIdx = header4BytePtr[2];
-      uint32_t materialIdx = header4BytePtr[3];
-      uint32_t animationIdx = header4BytePtr[4];
-      uint32_t tiIdx = header4BytePtr[5];
-      uint32_t nodesIdx = header4BytePtr[6];
-      uint32_t cineIdx = header4BytePtr[7];
+      //uint32_t prefabIdx = header4BytePtr[0];
+      //uint32_t textureIdx = header4BytePtr[1];
+      //uint32_t modelIdx = header4BytePtr[2];
+      //uint32_t materialIdx = header4BytePtr[3];
+      //uint32_t animationIdx = header4BytePtr[4];
+      uint32_t tiIdx = header4BytePtr[0];
+      uint32_t nodesIdx = header4BytePtr[1];
+      //uint32_t cineIdx = header4BytePtr[7];
 
-      std::vector<std::uint8_t> serialisedPrefabs(textureIdx - prefabIdx);
+      /*std::vector<std::uint8_t> serialisedPrefabs(textureIdx - prefabIdx);
       std::vector<std::uint8_t> serialisedTextures(modelIdx - textureIdx);
       std::vector<std::uint8_t> serialisedModels(materialIdx - modelIdx);
       std::vector<std::uint8_t> serialisedMats(animationIdx - materialIdx);
-      std::vector<std::uint8_t> serialisedAnimations(tiIdx - animationIdx);
+      std::vector<std::uint8_t> serialisedAnimations(tiIdx - animationIdx);*/
       std::vector<std::uint8_t> serialisedTis(nodesIdx - tiIdx);
-      std::vector<std::uint8_t> serialisedNodes(cineIdx - nodesIdx);
-      std::vector<std::uint8_t> serialisedCinematics(fileSize - cineIdx);
+      std::vector<std::uint8_t> serialisedNodes(fileSize - nodesIdx);
+      //std::vector<std::uint8_t> serialisedCinematics(fileSize - cineIdx);
 
       // We need these here so that we can add them properly to the scene.
       std::vector<render::asset::Prefab> prefabs;
@@ -313,6 +289,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       std::vector<IntermediateNode> imNodes;
       std::vector<render::asset::Cinematic> cinematics;
 
+#if 0
       // Read prefabs
       if (!desHelper(file, prefabIdx, serialisedPrefabs, prefabs)) {
         p.set_value(DeserialisedSceneData());
@@ -342,6 +319,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         p.set_value(DeserialisedSceneData());
         return;
       }
+#endif
 
       // Read tile infos
       if (!desHelper(file, tiIdx, serialisedTis, tis)) {
@@ -357,6 +335,7 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         //return;
       }
 
+#if 0
       // Read cinematics
       if (!desHelper(file, cineIdx, serialisedCinematics, cinematics)) {
         printf("Failed deserialising cinematics\n");
@@ -364,8 +343,9 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
         //p.set_value(DeserialisedSceneData());
         //return;
       }
+#endif
 
-      for (auto& p : prefabs) {
+      /*for (auto& p : prefabs) {
         outputData._scene->addPrefab(std::move(p));
       }
       for (auto& t : textures) {
@@ -379,15 +359,15 @@ std::future<DeserialisedSceneData> SceneSerializer::deserialize(const std::files
       }
       for (auto& anim : animations) {
         outputData._scene->addAnimation(std::move(anim));
-      }
+      }*/
       for (auto& ti : tis) {
         if (ti._ddgiAtlas) {
           outputData._scene->setDDGIAtlas(ti._ddgiAtlas, ti._idx);
         }
       }
-      for (auto& cinematic : cinematics) {
+      /*for (auto& cinematic : cinematics) {
         outputData._scene->addCinematic(std::move(cinematic));
-      }
+      }*/
 
       // Translate intermediate node representation to actual nodes
       for (auto& imn : imNodes) {

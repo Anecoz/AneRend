@@ -1,14 +1,16 @@
 #include "TerrainSystem.h"
 
 #include "../render/scene/Scene.h"
+#include "../render/asset/AssetCollection.h"
 #include "../component/Components.h"
 #include "../util/TangentGenerator.h"
 #include "../util/TextureHelpers.h"
 
 namespace terrain {
 
-TerrainSystem::TerrainSystem(render::scene::Scene* scene)
+TerrainSystem::TerrainSystem(render::scene::Scene* scene, render::asset::AssetCollection* assColl)
   : _scene(scene)
+  , _assColl(assColl)
 {
   _observer.connect(_scene->registry().getEnttRegistry(), entt::collector.update<component::Terrain>());
 }
@@ -17,6 +19,11 @@ void TerrainSystem::setScene(render::scene::Scene* scene)
 {
   _scene = scene;
   _observer.connect(_scene->registry().getEnttRegistry(), entt::collector.update<component::Terrain>());
+}
+
+void TerrainSystem::setAssetCollection(render::asset::AssetCollection* assColl)
+{
+  _assColl = assColl;
 }
 
 void TerrainSystem::update()
@@ -134,15 +141,16 @@ inline glm::vec3 calcAvgNormal(
 void TerrainSystem::generateModel(util::Uuid& node)
 {
   auto& terrainComp = _scene->registry().getComponent<component::Terrain>(node);
-  auto* tex = _scene->getTexture(terrainComp._heightMap);
+  //auto* tex = _scene->getTexture(terrainComp._heightMap);
+  auto tex = _assColl->getTextureBlocking(terrainComp._heightMap);
 
   // TODO: Do R8 version
-  if (tex->_format != render::asset::Texture::Format::R16_UNORM) {
+  if (tex._format != render::asset::Texture::Format::R16_UNORM) {
     printf("Unsupported height map format!\n");
     return;
   }
 
-  if (tex->_width != tex->_height) {
+  if (tex._width != tex._height) {
     printf("Only support square heightmaps!\n");
     return;
   }
@@ -155,13 +163,13 @@ void TerrainSystem::generateModel(util::Uuid& node)
   float ppm = 1.0f / mpp;
   int startX = (int)(tileIdx.x * gridWidthMeters * ppm);
   int startY = (int)(tileIdx.y * gridHeightMeters * ppm);
-  unsigned texW = tex->_width;
-  unsigned texH = tex->_height;
+  unsigned texW = tex._width;
+  unsigned texH = tex._height;
   unsigned w = (unsigned)(gridWidthMeters * ppm);
   unsigned h = (unsigned)(gridHeightMeters * ppm);
   float vertScale = (float)w / (float)gridWidthMeters;
   float vertStepMeters = 1.0f / vertScale;
-  auto* p = reinterpret_cast<const std::uint16_t*>(tex->_data[0].data());
+  auto* p = reinterpret_cast<const std::uint16_t*>(tex._data[0].data());
 
   // Generate verts
   render::asset::Model model{};
@@ -218,7 +226,9 @@ void TerrainSystem::generateModel(util::Uuid& node)
   model._meshes.emplace_back(std::move(mesh));
   util::TangentGenerator::generateTangents(model._meshes.back());
 
-  auto modelId = _scene->addModel(std::move(model));
+  //auto modelId = _scene->addModel(std::move(model));
+  auto modelId = model._id;
+  _assColl->add(std::move(model));
 
   // Add renderable component
   auto& rendComp = _scene->registry().addComponent<component::Renderable>(node);
@@ -236,7 +246,9 @@ void TerrainSystem::generateModel(util::Uuid& node)
   blendTex._name = "TerrainBlendTex";
   blendTex._clampToEdge = true;
   
-  auto blendId = _scene->addTexture(std::move(blendTex));
+  //auto blendId = _scene->addTexture(std::move(blendTex));
+  auto blendId = blendTex._id;
+  _assColl->add(std::move(blendTex));
   terrainComp._blendMap = blendId;
 
   // Generate a vegetation mask
@@ -244,7 +256,9 @@ void TerrainSystem::generateModel(util::Uuid& node)
   vegTex._name = "TerrainVegTex";
   vegTex._clampToEdge = true;
 
-  auto vegId = _scene->addTexture(std::move(vegTex));
+  //auto vegId = _scene->addTexture(std::move(vegTex));
+  auto vegId = vegTex._id;
+  _assColl->add(std::move(vegTex));
   terrainComp._vegetationMap = vegId;
 
   terrainComp._heightScale = 5.0f;

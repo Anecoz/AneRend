@@ -39,6 +39,7 @@
 #include "AccelerationStructure.h"
 #include "scene/TileIndex.h"
 #include "../component/Registry.h"
+#include "asset/AssetFetcher.h"
 
 //#include "../logic/WindSystem.h"
 
@@ -120,6 +121,9 @@ public:
 
   // Update which registry to use for observing components.
   void setRegistry(component::Registry* registry);
+
+  // Update which asset collection to use.
+  void setAssetCollection(asset::AssetCollection* assetCollection);
 
   // Warning! This return value may not be valid the entire time. It is up to caller to make sure that update() and drawFrame() are called
   // in such a way that this remains valid.
@@ -253,17 +257,22 @@ private:
   static const std::size_t MAX_NUM_POINT_LIGHT_SHADOWS = 4;
   static const std::size_t MAX_PAGE_TILE_RADIUS = 2;
 
+  asset::AssetFetcher _assetFetcher;
+
   component::Registry* _registry = nullptr;
   entt::observer _nodeObserver;
   entt::observer _terrainObserver;
 
   void updateNodes();
   void updateSkeletons();
+  void updateAssetFetches();
 
   bool arePrerequisitesUploaded(internal::InternalModel& model);
   bool arePrerequisitesUploaded(internal::InternalRenderable& rend);
   bool arePrerequisitesUploaded(internal::InternalMaterial& mat);
   bool arePrerequisitesUploaded(internal::InternalTerrain& terrain);
+
+  void derefAssets(internal::InternalRenderable& rend);
 
   std::unordered_map<std::string, std::any> _blackboard;
 

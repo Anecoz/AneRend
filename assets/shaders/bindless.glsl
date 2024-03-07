@@ -1,7 +1,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
 
-#define TILE_PAGE_RADIUS 2
+#define TILE_PAGE_RADIUS 10
 #define TILE_SIZE 32
 
 struct Renderable
