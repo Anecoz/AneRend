@@ -2148,11 +2148,15 @@ void VulkanRenderer::updateNodes()
           if (!_modelIdMap.contains(rend._model)) {
             _assetFetcher.startFetchModel(rend._model);
           }
+          _assetFetcher.ref(rend._model);
+
           for (auto& mat : rend._materials) {
             if (!_materialIdMap.contains(mat)) {
               // Will also start fetching textures.
               _assetFetcher.startFetchMaterial(mat);
             }
+            // Always ref
+            _assetFetcher.ref(mat);
           }
 
           // Skeleton
@@ -2196,28 +2200,44 @@ void VulkanRenderer::updateNodes()
             internalTerrain._uvScale = terrainComp._uvScale;
 
             // Any assets to fetch?
-            if (terrainComp._baseMaterials[0] && !_materialIdMap.contains(terrainComp._baseMaterials[0])) {
-              _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[0]);
+            if (terrainComp._baseMaterials[0]) {
+              if (!_materialIdMap.contains(terrainComp._baseMaterials[0])) {
+                _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[0]);
+              }
+              _assetFetcher.ref(terrainComp._baseMaterials[0]);
             }
-            if (terrainComp._baseMaterials[1] && !_materialIdMap.contains(terrainComp._baseMaterials[1])) {
-              _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[1]);
+            if (terrainComp._baseMaterials[1]) {
+              if (!_materialIdMap.contains(terrainComp._baseMaterials[1])) {
+                _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[1]);
+              }
+              _assetFetcher.ref(terrainComp._baseMaterials[1]);
             }
-            if (terrainComp._baseMaterials[2] && !_materialIdMap.contains(terrainComp._baseMaterials[2])) {
-              _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[2]);
+            if (terrainComp._baseMaterials[2]) {
+              if (!_materialIdMap.contains(terrainComp._baseMaterials[2])) {
+                _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[2]);
+              }
+              _assetFetcher.ref(terrainComp._baseMaterials[2]);
             }
-            if (terrainComp._baseMaterials[3] && !_materialIdMap.contains(terrainComp._baseMaterials[3])) {
-              _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[3]);
+            if (terrainComp._baseMaterials[3]) {
+              if (!_materialIdMap.contains(terrainComp._baseMaterials[3])) {
+                _assetFetcher.startFetchMaterial(terrainComp._baseMaterials[3]);
+              }
+              _assetFetcher.ref(terrainComp._baseMaterials[3]);
             }
 
             if (!_textureIdMap.contains(terrainComp._heightMap)) {
-              _assetFetcher.startFetchTexture(terrainComp._heightMap);
+              _assetFetcher.startFetchTexture(terrainComp._heightMap, false);
             }
             if (!_textureIdMap.contains(terrainComp._blendMap)) {
-              _assetFetcher.startFetchTexture(terrainComp._blendMap);
+              _assetFetcher.startFetchTexture(terrainComp._blendMap, false);
             }
             if (!_textureIdMap.contains(terrainComp._vegetationMap)) {
-              _assetFetcher.startFetchTexture(terrainComp._vegetationMap);
+              _assetFetcher.startFetchTexture(terrainComp._vegetationMap, false);
             }
+
+            _assetFetcher.ref(terrainComp._heightMap);
+            _assetFetcher.ref(terrainComp._blendMap);
+            _assetFetcher.ref(terrainComp._vegetationMap);
 
             _currentTerrains.emplace_back(std::move(internalTerrain));
             auto idx = _currentTerrains.size() - 1;
@@ -2651,29 +2671,28 @@ void VulkanRenderer::derefAssets(internal::InternalRenderable& rend)
   for (auto& mat : rend._renderable._materials) {
     if (_assetFetcher.deref(mat) == 0) {
       upd._removedMaterials.emplace_back(mat);
-    }
-
-    // Textures
-    if (_materialIdMap.contains(mat)) {
-      auto& intMat = _currentMaterials[_materialIdMap[mat]];
-      if (intMat._albedoTex) {
-        if (_assetFetcher.deref(intMat._albedoTex) == 0) {
-          upd._removedTextures.emplace_back(intMat._albedoTex);
+      // Textures
+      if (_materialIdMap.contains(mat)) {
+        auto& intMat = _currentMaterials[_materialIdMap[mat]];
+        if (intMat._albedoTex) {
+          if (_assetFetcher.deref(intMat._albedoTex) == 0) {
+            upd._removedTextures.emplace_back(intMat._albedoTex);
+          }
         }
-      }
-      if (intMat._emissiveTex) {
-        if (_assetFetcher.deref(intMat._emissiveTex) == 0) {
-          upd._removedTextures.emplace_back(intMat._emissiveTex);
+        if (intMat._emissiveTex) {
+          if (_assetFetcher.deref(intMat._emissiveTex) == 0) {
+            upd._removedTextures.emplace_back(intMat._emissiveTex);
+          }
         }
-      }
-      if (intMat._normalTex) {
-        if (_assetFetcher.deref(intMat._normalTex) == 0) {
-          upd._removedTextures.emplace_back(intMat._normalTex);
+        if (intMat._normalTex) {
+          if (_assetFetcher.deref(intMat._normalTex) == 0) {
+            upd._removedTextures.emplace_back(intMat._normalTex);
+          }
         }
-      }
-      if (intMat._metRoughTex) {
-        if (_assetFetcher.deref(intMat._metRoughTex) == 0) {
-          upd._removedTextures.emplace_back(intMat._metRoughTex);
+        if (intMat._metRoughTex) {
+          if (_assetFetcher.deref(intMat._metRoughTex) == 0) {
+            upd._removedTextures.emplace_back(intMat._metRoughTex);
+          }
         }
       }
     }

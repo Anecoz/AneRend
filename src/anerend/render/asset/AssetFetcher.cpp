@@ -14,11 +14,13 @@ AssetFetcher::AssetFetcher(AssetCollection* assColl)
 
 int AssetFetcher::ref(const util::Uuid& id)
 {
+  std::lock_guard<std::mutex> lock(_refMtx);
   return ++_ref[id];
 }
 
 int AssetFetcher::checkRef(const util::Uuid& id)
 {
+  std::lock_guard<std::mutex> lock(_refMtx);
   int ref = -1;
   if (_ref.contains(id)) {
     ref = _ref[id];
@@ -29,6 +31,7 @@ int AssetFetcher::checkRef(const util::Uuid& id)
 
 int AssetFetcher::deref(const util::Uuid& id)
 {
+  std::lock_guard<std::mutex> lock(_refMtx);
   int ref = -1;
   if (_ref.contains(id)) {
     ref = --_ref[id];
@@ -41,14 +44,18 @@ int AssetFetcher::deref(const util::Uuid& id)
   return ref;
 }
 
-void AssetFetcher::startFetchTexture(const util::Uuid& id)
+void AssetFetcher::startFetchTexture(const util::Uuid& id, bool doRef)
 {
   if (checkRef(id) > 0) {
-    ref(id);
+    if (doRef) {
+      ref(id);
+    }
     return;
   }
 
-  ref(id);
+  if (doRef) {
+    ref(id);
+  }
 
   _assColl->getTexture(id, [this](Texture tex) {
     std::lock_guard<std::mutex> lock(_mtx);
@@ -56,28 +63,23 @@ void AssetFetcher::startFetchTexture(const util::Uuid& id)
   });
 }
 
-void AssetFetcher::startFetchMaterial(const util::Uuid& id)
+void AssetFetcher::startFetchMaterial(const util::Uuid& id, bool autoRefTextures)
 {
-  if (checkRef(id) > 0) {
-    ref(id);
-    return;
-  }
+  if (checkRef(id) > 0) return;
 
-  ref(id);
-
-  _assColl->getMaterial(id, [this](Material mat) {
+  _assColl->getMaterial(id, [this, autoRef = autoRefTextures](Material mat) {
     // Start loading the associated textures.
     if (mat._albedoTex) {
-      startFetchTexture(mat._albedoTex);
+      startFetchTexture(mat._albedoTex, autoRef);
     }
     if (mat._metallicRoughnessTex) {
-      startFetchTexture(mat._metallicRoughnessTex);
+      startFetchTexture(mat._metallicRoughnessTex, autoRef);
     }
     if (mat._normalTex) {
-      startFetchTexture(mat._normalTex);
+      startFetchTexture(mat._normalTex, autoRef);
     }
     if (mat._emissiveTex) {
-      startFetchTexture(mat._emissiveTex);
+      startFetchTexture(mat._emissiveTex, autoRef);
     }
 
     std::lock_guard<std::mutex> lock(_mtx);
@@ -87,12 +89,7 @@ void AssetFetcher::startFetchMaterial(const util::Uuid& id)
 
 void AssetFetcher::startFetchModel(const util::Uuid& id)
 {
-  if (checkRef(id) > 0) {
-    ref(id);
-    return;
-  }
-
-  ref(id);
+  if (checkRef(id) > 0) return;
 
   _assColl->getModel(id, [this](Model model) {
     std::lock_guard<std::mutex> lock(_mtx);

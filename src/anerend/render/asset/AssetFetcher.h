@@ -32,10 +32,9 @@ public:
   int checkRef(const util::Uuid& id);
   int deref(const util::Uuid& id);
 
-  // These will automatically ref, so don't do that before calling.
-  // If already refed, they will not start fetching.
-  void startFetchTexture(const util::Uuid& id);
-  void startFetchMaterial(const util::Uuid& id);
+  // If already refed, these will not start fetching.
+  void startFetchTexture(const util::Uuid& id, bool doRef = true);
+  void startFetchMaterial(const util::Uuid& id, bool autoRefTextures = true);
   void startFetchModel(const util::Uuid& id);
 
   std::vector<Texture> takeTextures();
@@ -46,6 +45,7 @@ private:
   AssetCollection* _assColl = nullptr;
 
   std::mutex _mtx;
+  std::mutex _refMtx;
 
   std::unordered_map<util::Uuid, int> _ref;
 
