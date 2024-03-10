@@ -87,7 +87,14 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
       float texFactor = 0.75f;
       auto maxRegion = ImGui::GetWindowContentRegionMax();
       ImVec2 texSize{ texFactor * maxRegion.x , texFactor * maxRegion.x };
-      ImGui::Image((ImTextureID)c->getImguiTexId(terrainComp._heightMap), texSize);
+      auto* texId = c->getImguiTexId(terrainComp._heightMap);
+      if (!texId) {
+        // Request it so that it's hopefully in cache next time.
+        c->assetCollection().getTexture(terrainComp._heightMap, [](render::asset::Texture) {});
+      }
+      else {
+        ImGui::Image((ImTextureID)c->getImguiTexId(terrainComp._heightMap), texSize);
+      }
     }
 
     if (ImGui::InputFloat("MPP", &terrainComp._mpp)) {

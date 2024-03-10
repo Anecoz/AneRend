@@ -26,7 +26,6 @@ void EditTextureGUI::immediateDraw(logic::AneditContext* c)
   char name[100];
   name[0] = '\0';
 
-  //const auto* tex = c->scene().getTexture(id);
   auto tex = c->assetCollection().getTextureBlocking(id);
   std::string texName = tex._name.empty() ? id.str() : tex._name;
 
@@ -34,10 +33,7 @@ void EditTextureGUI::immediateDraw(logic::AneditContext* c)
 
   ImGui::Text("Name");
   if (ImGui::InputText("##texname", name, 100) && id) {
-    // This is an extremely expensive operation
-    //auto copy = *tex;
     tex._name = name;
-    //c->scene().updateTexture(std::move(copy));
     c->assetCollection().updateTexture(std::move(tex));
   }
   ImGui::Separator();
@@ -46,7 +42,14 @@ void EditTextureGUI::immediateDraw(logic::AneditContext* c)
   auto maxRegion = ImGui::GetWindowContentRegionMax();
   ImVec2 texSize{ texFactor * maxRegion.x , texFactor * maxRegion.x };
 
-  ImGui::Image((ImTextureID)c->getImguiTexId(id), texSize);
+  auto* texId = c->getImguiTexId(id);
+  if (!texId) {
+    // Request it so that it's hopefully in cache next time.
+    c->assetCollection().getTexture(id, [](render::asset::Texture) {});
+  }
+  else {
+    ImGui::Image((ImTextureID)c->getImguiTexId(id), texSize);
+  }
 }
 
 }

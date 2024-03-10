@@ -40,7 +40,6 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
     ImGui::BeginDisabled();
   }
   else {
-    //auto* mat = c->scene().getMaterial(id);
     auto mat = c->assetCollection().getMaterialBlocking(id);
 
     emissive = mat._emissive;
@@ -106,7 +105,14 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   }
 
   if (metRoughTex) {
-    ImGui::Image((ImTextureID)c->getImguiTexId(metRoughTex), texSize);
+    auto* texId = c->getImguiTexId(metRoughTex);
+    if (!texId) {
+      // Request it so that it's hopefully in cache next time.
+      c->assetCollection().getTexture(metRoughTex, [](render::asset::Texture) {});
+    }
+    else {
+      ImGui::Image((ImTextureID)c->getImguiTexId(metRoughTex), texSize);
+    }
   }
 
   ImGui::Separator();
@@ -127,7 +133,14 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   }
 
   if (albedoTex) {
-    ImGui::Image((ImTextureID)c->getImguiTexId(albedoTex), texSize);
+    auto* texId = c->getImguiTexId(albedoTex);
+    if (!texId) {
+      // Request it so that it's hopefully in cache next time.
+      c->assetCollection().getTexture(albedoTex, [](render::asset::Texture) {});
+    }
+    else {
+      ImGui::Image((ImTextureID)c->getImguiTexId(albedoTex), texSize);
+    }
   }
 
   ImGui::Separator();
@@ -148,7 +161,14 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   }
 
   if (normalTex) {
-    ImGui::Image((ImTextureID)c->getImguiTexId(normalTex), texSize);
+    auto* texId = c->getImguiTexId(normalTex);
+    if (!texId) {
+      // Request it so that it's hopefully in cache next time.
+      c->assetCollection().getTexture(normalTex, [](render::asset::Texture) {});
+    }
+    else {
+      ImGui::Image((ImTextureID)c->getImguiTexId(normalTex), texSize);
+    }
   }
 
   ImGui::Separator();
@@ -169,7 +189,14 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   }
 
   if (emissiveTex) {
-    ImGui::Image((ImTextureID)c->getImguiTexId(emissiveTex), texSize);
+    auto* texId = c->getImguiTexId(emissiveTex);
+    if (!texId) {
+      // Request it so that it's hopefully in cache next time.
+      c->assetCollection().getTexture(emissiveTex, [](render::asset::Texture) {});
+    }
+    else {
+      ImGui::Image((ImTextureID)c->getImguiTexId(emissiveTex), texSize);
+    }
   }
 
   if (!id) {
@@ -177,7 +204,6 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   }
 
   if (changed && id) {
-    //auto matCopy = *c->scene().getMaterial(id);
     auto matCopy = c->assetCollection().getMaterialBlocking(id);
     matCopy._name = name;
     matCopy._emissive = emissive;
@@ -189,7 +215,6 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
     matCopy._albedoTex = albedoTex;
     matCopy._normalTex = normalTex;
     matCopy._emissiveTex = emissiveTex;
-    //c->scene().updateMaterial(std::move(matCopy));
     c->assetCollection().updateMaterial(std::move(matCopy));
   }
 }
