@@ -160,13 +160,22 @@ void AneditApplication::update(double delta)
     //printf("Scene update took %lld us\n", std::chrono::duration_cast<std::chrono::microseconds>(after - now).count());
   }
 
+  // Update cinematics. Check event log of asset collection if any cinematic has been touched.
+  const auto& assLog = _assColl.getEventLog();
+  for (auto it = _cinePlayers.begin(); it != _cinePlayers.end(); ++it) {
+    for (auto& event : assLog._events) {
+      if (event._type == render::asset::AssetEventType::CinematicUpdated &&
+        event._id == it->second.cinematicId()) {
+        it->second.updateCinematic(_assColl.getCinematicBlocking(event._id));
+        break;
+      }
+    }
+    it->second.update(delta);
+  }
+
   _scenePager.update(_camera.getPosition());
   _scene.resetEvents();
   _assColl.clearEventLog();
-
-  for (auto it = _cinePlayers.begin(); it != _cinePlayers.end(); ++it) {
-    it->second.update(delta);
-  }
 
   //_windSystem.update(delta);
   _windSystem.setWindDir(glm::normalize(_windDir));

@@ -20,7 +20,10 @@ public:
   CinematicPlayer& operator=(const CinematicPlayer&) = delete;
   CinematicPlayer& operator=(CinematicPlayer&&);
 
+  const util::Uuid& cinematicId() const;
+
   void update(double delta);
+  void updateCinematic(asset::Cinematic cinematic);
 
   void setCurrentTime(double time) { _currentTime = time; _dirty = true; }
   double getCurrentTime() const { return _currentTime; }

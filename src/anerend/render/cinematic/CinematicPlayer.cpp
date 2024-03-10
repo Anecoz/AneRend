@@ -152,6 +152,11 @@ CinematicPlayer& CinematicPlayer::operator=(CinematicPlayer&& rhs)
   return *this;
 }
 
+const util::Uuid& CinematicPlayer::cinematicId() const
+{
+  return _cinematic._id;
+}
+
 void CinematicPlayer::update(double delta)
 {
   if (_state != State::Playing && !_dirty) {
@@ -260,6 +265,11 @@ void CinematicPlayer::update(double delta)
   }
 
   _dirty = false;
+}
+
+void CinematicPlayer::updateCinematic(asset::Cinematic cinematic)
+{
+  _cinematic = std::move(cinematic);
 }
 
 void CinematicPlayer::play()

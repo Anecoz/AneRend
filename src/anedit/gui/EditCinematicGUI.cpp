@@ -27,10 +27,6 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
     return;
   }
 
-  //if (!c->scene().getCinematic(id)) {
-  //  return;
-  //}
-
   ImGui::Begin("Edit cinematic");
 
   // Lazy create
@@ -39,7 +35,6 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
   // Name field for the cinematic
   char name[100];
   name[0] = '\0';
-  //auto cinematic = *c->scene().getCinematic(id);
   auto cinematic = c->assetCollection().getCinematicBlocking(id);
   strcpy_s(name, cinematic._name.c_str());
 
@@ -48,7 +43,6 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
   ImGui::Text("Name");
   if (ImGui::InputText("##cinematic_name", name, 100) && id) {
     cinematic._name = name;
-    //c->scene().updateCinematic(cinematic);
     c->assetCollection().updateCinematic(cinematic);
   }
   ImGui::Separator();
@@ -58,6 +52,10 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
   auto savedCurrentFrame = currentFrame;
   int32_t startFrame = 0;
   int32_t endFrame = translateTimeToKey(cinematic._maxTime);
+
+  if (endFrame == 0) {
+    endFrame = 1;
+  }
 
   bool changed = false;
 
@@ -387,7 +385,6 @@ void EditCinematicGUI::immediateDraw(logic::AneditContext* c)
   if (changed) {
     recalculateMaxTime(cinematic);
     c->setCinematicTime(id, translateKeyToTime(currentFrame));
-    //c->scene().updateCinematic(std::move(cinematic));
     c->assetCollection().updateCinematic(std::move(cinematic));
   }
 }
@@ -435,7 +432,6 @@ void EditCinematicGUI::fillMatKeys(render::asset::Cinematic& cinematic, logic::A
     // Just peek into first element of vector to get uuid
     if (!v.empty()) {
       auto uuid = v[0]._id;
-      //_matNames[uuid] = c->scene().getMaterial(uuid)->_name;
       _matNames[uuid] = c->assetCollection().getMaterialBlocking(uuid)._name;
       _matIndices[uuid] = i;
 
@@ -511,7 +507,6 @@ void EditCinematicGUI::addCameraKeyframePressed(render::asset::Cinematic& cinema
   // Redo cam keys
   fillCamKeys(cinematic);
 
-  //c->scene().updateCinematic(cinematic);
   c->assetCollection().updateCinematic(cinematic);
 }
 
@@ -542,7 +537,6 @@ void EditCinematicGUI::addNodeKeyframePressed(render::asset::Cinematic& cinemati
   // Redo cache
   fillNodeKeys(cinematic, c);
 
-  //c->scene().updateCinematic(cinematic);
   c->assetCollection().updateCinematic(cinematic);
 }
 
@@ -611,11 +605,7 @@ bool EditCinematicGUI::materialDroppedInList(util::Uuid material, render::asset:
   }
 
   // Add this material and a kf at time 0
-  //const auto* matP = c->scene().getMaterial(material);
   const auto mat = c->assetCollection().getMaterialBlocking(material);
-  //if (!matP) {
-  //  return false;
-  //}
 
   render::asset::MaterialKeyframe kf{};
   kf._time = 0.0f;
