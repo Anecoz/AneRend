@@ -55,6 +55,7 @@ public:
   render::asset::Prefab prefabFromNode(const util::Uuid& node) override final;
 
   void* getImguiTexId(util::Uuid& tex) override final;
+  void forceLoadTex(const util::Uuid& tex) override final;
   void generateMipMaps(render::asset::Texture& tex) override final;
 
   void createCinematicPlayer(util::Uuid& id) override final;
@@ -122,6 +123,10 @@ private:
   // Test bake
   bool _baking = false;
 
-  // Test debug lines
+  // For force loaded textures (typically so that GUI can draw textures)
+  std::mutex _forcedTexMtx;
+  std::vector<render::asset::Texture> _loadedForcedTextures;
+  std::unordered_map<util::Uuid, int> _pendingForcedTextures;
 
+  void updateForcedTextures();
 };

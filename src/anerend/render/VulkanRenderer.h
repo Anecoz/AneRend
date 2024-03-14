@@ -129,6 +129,15 @@ public:
   // in such a way that this remains valid.
   void* getImGuiTexId(util::Uuid& texId);
 
+  // This is needed to support the editor, will force a ref of asset with id.
+  int ref(const util::Uuid& id);
+
+  // This is needed to support the editor, will check a ref of asset with id.
+  int checkRef(const util::Uuid& id);
+
+  // This is needed to support the editor, will force a deref of asset with id.
+  int deref(const util::Uuid& id);
+
   // Upload context interface
   internal::StagingBuffer& getStagingBuffer() override final;
   internal::GigaBuffer& getVtxBuffer() override final;

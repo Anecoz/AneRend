@@ -138,6 +138,9 @@ void AneditApplication::update(double delta)
     addGltfDataToScene(std::move(gltfData));
   }
 
+  // Check if any forced textures should be added to renderer.
+  updateForcedTextures();
+
   _camera.update(delta);
   {
     auto now = std::chrono::system_clock::now();
@@ -547,6 +550,36 @@ void AneditApplication::updateSkeletons(std::unordered_map<util::Uuid, util::Uui
   }
 }
 
+void AneditApplication::updateForcedTextures()
+{
+  // Big ol lock
+  std::lock_guard<std::mutex> lock(_forcedTexMtx);
+
+  render::AssetUpdate upd{};
+
+  for (auto& tex : _loadedForcedTextures) {
+
+    // If already refed, move on
+    if (_vkRenderer.checkRef(tex._id) > 0) {
+      continue;
+    }
+
+    auto idCopy = tex._id;
+    upd._addedTextures.emplace_back(std::move(tex));
+    _vkRenderer.ref(idCopy);
+
+    if (_pendingForcedTextures.contains(idCopy)) {
+      _pendingForcedTextures.erase(idCopy);
+    }
+  }
+
+  _loadedForcedTextures.clear();
+
+  if (upd) {
+    _vkRenderer.assetUpdate(std::move(upd));
+  }
+}
+
 util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, glm::mat4 parentGlobalTransform, std::unordered_map<util::Uuid, util::Uuid>& instantiatedNodes)
 {
   render::scene::Node node{};
@@ -701,6 +734,25 @@ render::asset::Prefab AneditApplication::prefabFromNode(const util::Uuid& node)
 void* AneditApplication::getImguiTexId(util::Uuid& tex)
 {
   return _vkRenderer.getImGuiTexId(tex);
+}
+
+void AneditApplication::forceLoadTex(const util::Uuid& tex)
+{
+  // Check so that it's not already being loaded.
+  {
+    std::lock_guard<std::mutex> lock(_forcedTexMtx);
+    if (_pendingForcedTextures.contains(tex)) {
+      return;
+    }
+
+    // Add, under lock.
+    _pendingForcedTextures[tex] = 1;
+  }
+
+  _assColl.getTexture(tex, [this](render::asset::Texture tex) {
+    std::lock_guard<std::mutex> lock(_forcedTexMtx);
+    _loadedForcedTextures.emplace_back(std::move(tex));
+  });
 }
 
 void AneditApplication::generateMipMaps(render::asset::Texture& tex)

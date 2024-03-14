@@ -44,8 +44,7 @@ void EditTextureGUI::immediateDraw(logic::AneditContext* c)
 
   auto* texId = c->getImguiTexId(id);
   if (!texId) {
-    // Request it so that it's hopefully in cache next time.
-    c->assetCollection().getTexture(id, [](render::asset::Texture) {});
+    c->forceLoadTex(id);
   }
   else {
     ImGui::Image((ImTextureID)c->getImguiTexId(id), texSize);

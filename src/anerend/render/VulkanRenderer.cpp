@@ -5207,6 +5207,21 @@ void* VulkanRenderer::getImGuiTexId(util::Uuid& texId)
   return nullptr;
 }
 
+int VulkanRenderer::ref(const util::Uuid& id)
+{
+  return _assetFetcher.ref(id);
+}
+
+int VulkanRenderer::checkRef(const util::Uuid& id)
+{
+  return _assetFetcher.checkRef(id);
+}
+
+int VulkanRenderer::deref(const util::Uuid& id)
+{
+  return _assetFetcher.deref(id);
+}
+
 internal::StagingBuffer& VulkanRenderer::getStagingBuffer()
 {
   return _gpuStagingBuffer[_currentFrame];

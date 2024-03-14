@@ -89,8 +89,7 @@ void EditTerrainGUI::immediateDraw(logic::AneditContext* c)
       ImVec2 texSize{ texFactor * maxRegion.x , texFactor * maxRegion.x };
       auto* texId = c->getImguiTexId(terrainComp._heightMap);
       if (!texId) {
-        // Request it so that it's hopefully in cache next time.
-        c->assetCollection().getTexture(terrainComp._heightMap, [](render::asset::Texture) {});
+        c->forceLoadTex(terrainComp._heightMap);
       }
       else {
         ImGui::Image((ImTextureID)c->getImguiTexId(terrainComp._heightMap), texSize);

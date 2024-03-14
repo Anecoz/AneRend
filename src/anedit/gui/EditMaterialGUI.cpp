@@ -107,8 +107,7 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   if (metRoughTex) {
     auto* texId = c->getImguiTexId(metRoughTex);
     if (!texId) {
-      // Request it so that it's hopefully in cache next time.
-      c->assetCollection().getTexture(metRoughTex, [](render::asset::Texture) {});
+      c->forceLoadTex(metRoughTex);
     }
     else {
       ImGui::Image((ImTextureID)c->getImguiTexId(metRoughTex), texSize);
@@ -135,8 +134,7 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   if (albedoTex) {
     auto* texId = c->getImguiTexId(albedoTex);
     if (!texId) {
-      // Request it so that it's hopefully in cache next time.
-      c->assetCollection().getTexture(albedoTex, [](render::asset::Texture) {});
+      c->forceLoadTex(albedoTex);
     }
     else {
       ImGui::Image((ImTextureID)c->getImguiTexId(albedoTex), texSize);
@@ -163,8 +161,7 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   if (normalTex) {
     auto* texId = c->getImguiTexId(normalTex);
     if (!texId) {
-      // Request it so that it's hopefully in cache next time.
-      c->assetCollection().getTexture(normalTex, [](render::asset::Texture) {});
+      c->forceLoadTex(normalTex);
     }
     else {
       ImGui::Image((ImTextureID)c->getImguiTexId(normalTex), texSize);
@@ -191,8 +188,7 @@ void EditMaterialGUI::immediateDraw(logic::AneditContext* c)
   if (emissiveTex) {
     auto* texId = c->getImguiTexId(emissiveTex);
     if (!texId) {
-      // Request it so that it's hopefully in cache next time.
-      c->assetCollection().getTexture(emissiveTex, [](render::asset::Texture) {});
+      c->forceLoadTex(emissiveTex);
     }
     else {
       ImGui::Image((ImTextureID)c->getImguiTexId(emissiveTex), texSize);

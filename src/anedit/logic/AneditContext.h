@@ -28,6 +28,7 @@ struct AneditContext
   virtual render::asset::Prefab prefabFromNode(const util::Uuid& node) = 0;
 
   virtual void* getImguiTexId(util::Uuid& tex) = 0;
+  virtual void forceLoadTex(const util::Uuid& tex) = 0;
   virtual void generateMipMaps(render::asset::Texture& tex) = 0;
 
   virtual void createCinematicPlayer(util::Uuid& id) = 0;
