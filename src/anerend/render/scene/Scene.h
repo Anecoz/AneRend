@@ -63,6 +63,12 @@ public:
   // and then asynchronously serialize to path.
   void serializeAsync(const std::filesystem::path& path);
 
+  // Store whatever node state is current into the initial state.
+  void updateInitialState();
+
+  // Reset nodes to the currently stored initial state.
+  void reset();
+
   std::future<DeserialisedSceneData> deserializeAsync(const std::filesystem::path& path);
 
   const SceneEventLog& getEvents() const;
@@ -129,6 +135,15 @@ private:
   void addEvent(SceneEventType type, util::Uuid id, TileIndex tileIdx = TileIndex());
   void updateDependentTransforms(Node& node);
   void updateChildrenTransforms(Node& node);
+
+  // For resetting to some initial state.
+  struct NodeState
+  {
+    Node _node;
+    component::PotentialComponents _potComps;
+  };
+
+  std::unordered_map<util::Uuid, NodeState> _initialStateMap;
 };
 
 }

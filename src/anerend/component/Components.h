@@ -215,7 +215,7 @@ struct PotentialComponents
 /* Helper function for executing something for every potential component optional
   * Call like this:
   *
-  * component::forEachPotComp([]<typename T>(std::optional<T>& compOpt) {
+  * component::forEachPotCompOpt([]<typename T>(std::optional<T>& compOpt) {
   *   // Do stuff
   * }, comps);
   *

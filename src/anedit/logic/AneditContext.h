@@ -31,6 +31,18 @@ struct AneditContext
   virtual void forceLoadTex(const util::Uuid& tex) = 0;
   virtual void generateMipMaps(render::asset::Texture& tex) = 0;
 
+  // Edit state.
+  enum class EditorState
+  {
+    Playing,
+    Paused,
+    Stopped
+  };
+  virtual void playEditor() = 0;
+  virtual void pauseEditor() = 0;
+  virtual void stopEditor() = 0;
+  virtual EditorState getState() = 0;
+
   virtual void createCinematicPlayer(util::Uuid& id) = 0;
   virtual void destroyCinematicPlayer(util::Uuid& id) = 0;
   virtual void playCinematic(util::Uuid& id) = 0;

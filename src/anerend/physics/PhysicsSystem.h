@@ -46,6 +46,9 @@ public:
 
   void init();
 
+  // Will reset velocities of all known bodies to 0.
+  void resetVelocities();
+
   // Sync transforms from hierarchy to physics simulation.
   void downstreamTransformSync();
 

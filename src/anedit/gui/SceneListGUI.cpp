@@ -9,6 +9,24 @@
 
 namespace gui {
 
+namespace {
+
+std::string editorStateToString(logic::AneditContext::EditorState state)
+{
+  switch (state) {
+  case logic::AneditContext::EditorState::Playing:
+    return "Playing";
+  case logic::AneditContext::EditorState::Paused:
+    return "Paused";
+  case logic::AneditContext::EditorState::Stopped:
+    return "Stopped";
+  }
+
+  return "";
+}
+
+}
+
 SceneListGUI::SceneListGUI()
   : IGUI()
 {}
@@ -55,6 +73,28 @@ void SceneListGUI::immediateDraw(logic::AneditContext* c)
     }
 
     ImGui::EndMenuBar();
+  }
+
+  // Play, pause and stop buttons
+  {
+    auto stateStr = editorStateToString(c->getState());
+
+    std::string str = "State: " + stateStr;
+    ImGui::Text(str.c_str());
+
+    if (ImGui::Button("Play")) {
+      c->playEditor();
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Pause")) {
+      c->pauseEditor();
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Stop")) {
+      c->stopEditor();
+    }
   }
 
   // nodes

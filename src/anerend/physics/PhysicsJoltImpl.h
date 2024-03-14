@@ -190,6 +190,9 @@ public:
 
 	void postUpdate(double delta);
 
+	// Set velocities of all known bodies (and character controllers) to 0.
+	void resetVelocities();
+
 	// Upstream: Syncs the physics world for all known and active bodies
 	std::vector<TransformSyncInfo> retrieveCurrentTransforms();
 

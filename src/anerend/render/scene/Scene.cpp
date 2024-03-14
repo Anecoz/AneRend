@@ -126,7 +126,6 @@ void Scene::update()
   }
 
   auto lambda = [this](Node& node) {
-    //updateDependentTransforms(node);
 
     // Add to correct tile
     auto& trans = _registry.getComponent<component::Transform>(node._id);
@@ -211,6 +210,52 @@ void Scene::update()
 
   _transformObserver.clear();
   _atomicPatchIndex.store(0);
+}
+
+void Scene::updateInitialState()
+{
+  // Go through all nodes and store in map for future reference.
+  _initialStateMap.clear();
+
+  for (auto& node : _nodeVec) {
+    NodeState nodeState{};
+    nodeState._node = node;
+    nodeState._potComps = nodeToPotComps(node._id);
+    _initialStateMap[node._id] = std::move(nodeState);
+  }
+}
+
+void Scene::reset()
+{
+  // Go through initial state map and reset components to initial state.
+  // Remove any nodes that aren't in initial state.
+
+  for (auto& [id, nodeState] : _initialStateMap) {
+
+    // Does it exist still?
+    if (!_nodes.contains(id)) {
+      // Create the node from the stored state.
+      addNode(nodeState._node);
+    }
+
+    component::forEachExistingPotComp([&id, this]<typename T>(const T& comp) {
+      // Possibly the component was removed, in that case add it.
+      if (!_registry.hasComponent<T>(id)) {
+        _registry.addComponent<T>(id);
+      }
+
+      T& oldComp = _registry.getComponent<T>(id);
+      oldComp = comp;
+      _registry.patchComponent<T>(id);
+    }, nodeState._potComps, true);
+  }
+
+  // Check if we have any nodes hanging that weren't in initial state, in that case remove them.
+  for (auto& node : _nodeVec) {
+    if (!_initialStateMap.contains(node._id)) {
+      removeNode(node._id);
+    }
+  }
 }
 
 void Scene::serializeAsync(const std::filesystem::path& path)
@@ -352,6 +397,13 @@ component::PotentialComponents Scene::nodeToPotComps(util::Uuid& node)
   // Always transform
   out._trans = _registry.getComponent<component::Transform>(node);
 
+  component::forEachPotCompOpt([this, id = node]<typename T>(std::optional<T>& compOpt) {
+    if (_registry.hasComponent<T>(id)) {
+      compOpt = _registry.getComponent<T>(id);
+    }
+  }, out);
+
+#if 0
   if (_registry.hasComponent<component::Renderable>(node)) {
     out._rend = _registry.getComponent<component::Renderable>(node);
   }
@@ -385,6 +437,7 @@ component::PotentialComponents Scene::nodeToPotComps(util::Uuid& node)
   if (_registry.hasComponent<component::CharacterController>(node)) {
     out._charCon = _registry.getComponent<component::CharacterController>(node);
   }
+#endif
 
   return out;
 }

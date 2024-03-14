@@ -61,6 +61,11 @@ void PhysicsSystem::init()
   _debugRenderer->init();
 }
 
+void PhysicsSystem::resetVelocities()
+{
+  _joltImpl->resetVelocities();
+}
+
 void PhysicsSystem::downstreamTransformSync()
 {
   // Update only static and kinematic objects, but allow dynamic aswell if simulation is paused

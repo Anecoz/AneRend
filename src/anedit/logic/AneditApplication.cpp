@@ -117,6 +117,9 @@ void AneditApplication::update(double delta)
       // Update the scene
       auto scenePtr = dat._scene.get();
       _scene = std::move(*scenePtr);
+      _scene.updateInitialState();
+
+      // Update pointers to all the systems that need it.
       _scenePager.setScene(&_scene);
       _scenePager.setAssetCollection(&_assColl);
       _animUpdater.setScene(&_scene);
@@ -128,6 +131,7 @@ void AneditApplication::update(double delta)
       _physicsSystem.setRegistry(&_scene.registry());
       _vkRenderer.setRegistry(&_scene.registry());
       _vkRenderer.setAssetCollection(&_assColl);
+
       scenePtr = nullptr;
     }
   }
@@ -142,7 +146,7 @@ void AneditApplication::update(double delta)
   updateForcedTextures();
 
   _camera.update(delta);
-  {
+  if (_state == State::Playing) {
     auto now = std::chrono::system_clock::now();
     _animUpdater.update(delta);
     auto after = std::chrono::system_clock::now();
@@ -150,7 +154,11 @@ void AneditApplication::update(double delta)
     //printf("Anim took %lld us\n", std::chrono::duration_cast<std::chrono::microseconds>(after - now).count());
   }
 
+  // Terrain
   _terrainSystem.update();
+
+  // Physics
+  _physicsSystem.simulationRunning() = _state == State::Playing;
   _physicsSystem.downstreamTransformSync();
   _physicsSystem.update(delta, _drawPhysicsDebug);
   _physicsSystem.upstreamTransformSync();
@@ -349,7 +357,6 @@ void AneditApplication::oldUI()
             // Add to the scene
             auto id = bakedDDGITex._id;
             _assColl.add(std::move(bakedDDGITex));
-            //auto id = _scene.addTexture(std::move(bakedDDGITex));
 
             render::scene::TileIndex idx(idxX, idxY);
             _scene.setDDGIAtlas(id, idx);
@@ -358,7 +365,7 @@ void AneditApplication::oldUI()
       }
     }
 
-    ImGui::Checkbox("Run physics sim", &_physicsSystem.simulationRunning());
+    //ImGui::Checkbox("Run physics sim", &_physicsSystem.simulationRunning());
     ImGui::Checkbox("Draw physics debug", &_drawPhysicsDebug);
 
     // Test physics sphere
@@ -591,17 +598,10 @@ util::Uuid AneditApplication::instantiate(const render::asset::Prefab& prefab, g
   auto localTransform = prefab._comps._trans._localTransform;
 
   // Instantiate children
-  //auto& prefabs = _scene.getPrefabs();
-  //auto& prefabMetas = _assColl.getMetaInfos(render::asset::AssetMetaInfo::Type::Prefab);
   for (auto& childPrefabId : prefab._children) {
-    //for (auto& p : prefabMetas) {
-      //if (p._id == childPrefabId) {
-        auto pAss = _assColl.getPrefabBlocking(childPrefabId);
-        auto childId = instantiate(pAss, globalTransform, instantiatedNodes);
-        _scene.addNodeChild(id, childId);
-        //break;
-      //}
-    //}
+    auto pAss = _assColl.getPrefabBlocking(childPrefabId);
+    auto childId = instantiate(pAss, globalTransform, instantiatedNodes);
+    _scene.addNodeChild(id, childId);
   }
 
   if (!prefab._parent) {
@@ -758,6 +758,43 @@ void AneditApplication::forceLoadTex(const util::Uuid& tex)
 void AneditApplication::generateMipMaps(render::asset::Texture& tex)
 {
   _vkRenderer.generateMipMaps(tex);
+}
+
+void AneditApplication::playEditor()
+{
+  // If we go from stopped to playing, save initial state.
+  if (_state == State::Stopped) {
+    _scene.updateInitialState();
+  }
+
+  _state = State::Playing;
+}
+
+void AneditApplication::pauseEditor()
+{
+  _state = State::Paused;
+}
+
+void AneditApplication::stopEditor()
+{
+  _state = State::Stopped;
+
+  _scene.reset();
+  _physicsSystem.resetVelocities();
+}
+
+logic::AneditContext::EditorState AneditApplication::getState()
+{
+  switch (_state) {
+  case State::Playing:
+    return logic::AneditContext::EditorState::Playing;
+  case State::Paused:
+    return logic::AneditContext::EditorState::Paused;
+  case State::Stopped:
+    return logic::AneditContext::EditorState::Stopped;
+  }
+
+  return logic::AneditContext::EditorState::Stopped;
 }
 
 void AneditApplication::createCinematicPlayer(util::Uuid& id)

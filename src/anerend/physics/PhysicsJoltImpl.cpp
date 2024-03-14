@@ -130,6 +130,20 @@ void PhysicsJoltImpl::postUpdate(double delta)
 	}
 }
 
+void PhysicsJoltImpl::resetVelocities()
+{
+	auto& bi = _physicsSystem.GetBodyInterface(); // locks
+	JPH::Vec3 zeroVec(0.0f, 0.0f, 0.0f);
+
+	for (auto& [id, bodyId] : _bodyMap) {
+		bi.SetLinearAndAngularVelocity(bodyId, zeroVec, zeroVec);
+	}
+
+	for (auto& [id, character] : _charMap) {
+		character->SetLinearAndAngularVelocity(zeroVec, zeroVec);
+	}
+}
+
 std::vector<TransformSyncInfo> PhysicsJoltImpl::retrieveCurrentTransforms()
 {
 	std::vector<TransformSyncInfo> out;

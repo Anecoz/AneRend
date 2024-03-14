@@ -58,6 +58,12 @@ public:
   void forceLoadTex(const util::Uuid& tex) override final;
   void generateMipMaps(render::asset::Texture& tex) override final;
 
+  // Edit state.
+  void playEditor() override final;
+  void pauseEditor() override final;
+  void stopEditor() override final;
+  logic::AneditContext::EditorState getState() override final;
+
   void createCinematicPlayer(util::Uuid& id) override final;
   void destroyCinematicPlayer(util::Uuid& id) override final;
   void playCinematic(util::Uuid& id) override final;
@@ -83,6 +89,14 @@ private:
   // The map is <prefab, node>
   util::Uuid instantiate(const render::asset::Prefab& prefab, glm::mat4 parentGlobalTransform, std::unordered_map<util::Uuid, util::Uuid>& instantiatedNodes);
   void updateSkeletons(std::unordered_map<util::Uuid, util::Uuid>& prefabNodeMap);
+
+  // Keep track of which state we're in. This controls what systems get updated each frame.
+  enum class State
+  {
+    Playing,
+    Paused,
+    Stopped
+  } _state = State::Stopped;
 
   std::vector<gui::IGUI*> _guis;
 
