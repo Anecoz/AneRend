@@ -63,10 +63,15 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
     return;
   }
 
+  const auto* node = c->scene().getNode(id);
+
+  if (!node) {
+    return;
+  }
+
   // Name field for the node itself
   char name[100];
   name[0] = '\0';
-  const auto* node = c->scene().getNode(id);
   strcpy_s(name, node->_name.c_str());
 
   ImGui::Text("Name");
