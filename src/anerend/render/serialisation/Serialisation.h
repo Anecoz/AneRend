@@ -21,7 +21,7 @@
 namespace {
 
 // The current version if serialising
-constexpr std::uint16_t g_CurrVersion = 2;
+constexpr std::uint16_t g_CurrVersion = 4;
 
 std::uint16_t g_DeserialisedVersion = 0;
 
@@ -218,6 +218,12 @@ namespace bitsery {
   }
 
   template <typename S>
+  void serialize(S& s, component::Camera& p)
+  {
+    s.value4b(p._fov);
+  }
+
+  template <typename S>
   void serialize(S& s, component::PotentialComponents& p)
   {
     s.object(p._trans);
@@ -232,6 +238,9 @@ namespace bitsery {
     s.ext(p._boxColl, bitsery::ext::StdOptional{});
     s.ext(p._capsuleColl, bitsery::ext::StdOptional{});
     s.ext(p._charCon, bitsery::ext::StdOptional{});
+    if (g_DeserialisedVersion >= 4) {
+      s.ext(p._cam, bitsery::ext::StdOptional{});
+    }
   }
 
   template <typename S>

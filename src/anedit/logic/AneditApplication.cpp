@@ -145,7 +145,9 @@ void AneditApplication::update(double delta)
   // Check if any forced textures should be added to renderer.
   updateForcedTextures();
 
-  _camera.update(delta);
+  // Camera
+  updateCamera(delta);
+
   if (_state == State::Playing) {
     auto now = std::chrono::system_clock::now();
     _animUpdater.update(delta);
@@ -555,6 +557,40 @@ void AneditApplication::updateSkeletons(std::unordered_map<util::Uuid, util::Uui
       }
     }
   }
+}
+
+void AneditApplication::updateCamera(double delta)
+{
+  if (_state != State::Playing) {
+    _camera.update(delta);
+    return;
+  }
+
+  glm::mat4 trans(1.0f);
+
+  // If we don't have a node, try to find it.
+  if (!_cameraNode) {
+    findCameraNode();
+  }
+
+  // Guard again, in case we couldn't find a node.
+  if (_cameraNode) {
+    auto& transComp = _scene.registry().getComponent<component::Transform>(_cameraNode);
+    trans = transComp._globalTransform;
+  }
+
+  _camera.setViewMatrix(glm::inverse(trans));
+}
+
+void AneditApplication::findCameraNode()
+{
+  auto view = _scene.registry().getEnttRegistry().view<component::Camera>();
+
+  if (view.empty()) {
+    return;
+  }
+
+  _cameraNode = _scene.registry().reverseLookup(view.front());
 }
 
 void AneditApplication::updateForcedTextures()

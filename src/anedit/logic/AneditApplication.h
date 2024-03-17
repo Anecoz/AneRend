@@ -89,6 +89,8 @@ private:
   // The map is <prefab, node>
   util::Uuid instantiate(const render::asset::Prefab& prefab, glm::mat4 parentGlobalTransform, std::unordered_map<util::Uuid, util::Uuid>& instantiatedNodes);
   void updateSkeletons(std::unordered_map<util::Uuid, util::Uuid>& prefabNodeMap);
+  void updateCamera(double delta);
+  void findCameraNode();
 
   // Keep track of which state we're in. This controls what systems get updated each frame.
   enum class State
@@ -119,6 +121,7 @@ private:
 
   render::Camera _camera;
   render::Camera _shadowCamera;
+  util::Uuid _cameraNode; // Used in play mode, currently we support one main camera.
 
   render::scene::Scene _scene;
   render::asset::AssetCollection _assColl;

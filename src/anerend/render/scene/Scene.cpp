@@ -403,42 +403,6 @@ component::PotentialComponents Scene::nodeToPotComps(util::Uuid& node)
     }
   }, out);
 
-#if 0
-  if (_registry.hasComponent<component::Renderable>(node)) {
-    out._rend = _registry.getComponent<component::Renderable>(node);
-  }
-  if (_registry.hasComponent<component::Light>(node)) {
-    out._light = _registry.getComponent<component::Light>(node);
-  }
-  if (_registry.hasComponent<component::Skeleton>(node)) {
-    out._skeleton = _registry.getComponent<component::Skeleton>(node);
-  }
-  if (_registry.hasComponent<component::Animator>(node)) {
-    out._animator = _registry.getComponent<component::Animator>(node);
-  }
-  if (_registry.hasComponent<component::Terrain>(node)) {
-    out._terrain = _registry.getComponent<component::Terrain>(node);
-  }
-  if (_registry.hasComponent<component::RigidBody>(node)) {
-    out._rigidBody = _registry.getComponent<component::RigidBody>(node);
-  }
-  if (_registry.hasComponent<component::SphereCollider>(node)) {
-    out._sphereColl = _registry.getComponent<component::SphereCollider>(node);
-  }
-  if (_registry.hasComponent<component::MeshCollider>(node)) {
-    out._meshColl = _registry.getComponent<component::MeshCollider>(node);
-  }
-  if (_registry.hasComponent<component::BoxCollider>(node)) {
-    out._boxColl = _registry.getComponent<component::BoxCollider>(node);
-  }
-  if (_registry.hasComponent<component::CapsuleCollider>(node)) {
-    out._capsuleColl = _registry.getComponent<component::CapsuleCollider>(node);
-  }
-  if (_registry.hasComponent<component::CharacterController>(node)) {
-    out._charCon = _registry.getComponent<component::CharacterController>(node);
-  }
-#endif
-
   return out;
 }
 

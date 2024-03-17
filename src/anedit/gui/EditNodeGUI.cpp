@@ -14,6 +14,7 @@
 #include "component/EditBoxColliderGUI.h"
 #include "component/EditCharacterControllerGUI.h"
 #include "component/EditCapsuleColliderGUI.h"
+#include "component/EditCameraGUI.h"
 
 #include <imgui.h>
 
@@ -46,6 +47,7 @@ EditNodeGUI::EditNodeGUI()
   _componentGUIs[typeid(component::BoxCollider)] = new EditBoxColliderGUI();
   _componentGUIs[typeid(component::CharacterController)] = new EditCharacterControllerGUI();
   _componentGUIs[typeid(component::CapsuleCollider)] = new EditCapsuleColliderGUI();
+  _componentGUIs[typeid(component::Camera)] = new EditCameraGUI();
 }
 
 EditNodeGUI::~EditNodeGUI()
@@ -92,6 +94,7 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
   bool hasBoxCollider = false;
   bool hasCharacterController = false;
   bool hasCapsuleCollider = false;
+  bool hasCamera = false;
 
   DRAW_COMP(Transform);
   DRAW_COMP(Renderable);
@@ -104,6 +107,7 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
   DRAW_COMP(BoxCollider);
   DRAW_COMP(CharacterController);
   DRAW_COMP(CapsuleCollider);
+  DRAW_COMP(Camera);
 
   // Add new components
   if (ImGui::BeginPopupContextWindow()) {
@@ -161,6 +165,12 @@ void EditNodeGUI::immediateDraw(logic::AneditContext* c)
       if (ImGui::MenuItem("Add character controller...")) {
         c->scene().registry().addComponent<component::CharacterController>(id);
         c->scene().registry().patchComponent<component::CharacterController>(id);
+      }
+    }
+    if (!hasCamera) {
+      if (ImGui::MenuItem("Add camera...")) {
+        c->scene().registry().addComponent<component::Camera>(id);
+        c->scene().registry().patchComponent<component::Camera>(id);
       }
     }
 

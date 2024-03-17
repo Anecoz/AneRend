@@ -195,6 +195,12 @@ struct CharacterController
   float _mass = 80.0f;
 };
 
+struct Camera
+{
+  float _fov;
+  // TODO: More params?
+};
+
 // Struct that holds potential components used by e.g. prefabs
 struct PotentialComponents
 {
@@ -210,6 +216,7 @@ struct PotentialComponents
   std::optional<BoxCollider> _boxColl;
   std::optional<CapsuleCollider> _capsuleColl;
   std::optional<CharacterController> _charCon;
+  std::optional<Camera> _cam;
 };
 
 /* Helper function for executing something for every potential component optional
@@ -238,6 +245,7 @@ void forEachPotCompOpt(F func, PotentialComponents& potComps)
   func(potComps._boxColl);
   func(potComps._capsuleColl);
   func(potComps._charCon);
+  func(potComps._cam);
 }
 
 /* Helper function for executing something for every potential component that has a value
