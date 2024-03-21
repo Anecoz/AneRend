@@ -187,7 +187,7 @@ void PhysicsSystem::update(double delta, bool debugDraw)
 
   // Step the physics simulation
   if (_simulationRunning) {
-    debugUpdateCharacters(delta);
+    //debugUpdateCharacters(delta);
 
     syncCharacters();
 

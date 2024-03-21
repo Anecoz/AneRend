@@ -22,6 +22,7 @@
 #include <render/animation/AnimationUpdater.h>
 #include <physics/PhysicsSystem.h>
 #include <terrain/TerrainSystem.h>
+#include <behaviour/BehaviourSystem.h>
 #include "WindSystem.h"
 
 #include <filesystem>
@@ -91,6 +92,7 @@ private:
   void updateSkeletons(std::unordered_map<util::Uuid, util::Uuid>& prefabNodeMap);
   void updateCamera(double delta);
   void findCameraNode();
+  void registerBehaviours();
 
   // Keep track of which state we're in. This controls what systems get updated each frame.
   enum class State
@@ -132,6 +134,7 @@ private:
   render::anim::AnimationUpdater _animUpdater;
   terrain::TerrainSystem _terrainSystem;
   physics::PhysicsSystem _physicsSystem;
+  behaviour::BehaviourSystem _behaviourSystem;
 
   glm::vec3 _latestWorldPosition = glm::vec3(0.0f);
 

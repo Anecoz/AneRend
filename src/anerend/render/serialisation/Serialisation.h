@@ -21,7 +21,7 @@
 namespace {
 
 // The current version if serialising
-constexpr std::uint16_t g_CurrVersion = 4;
+constexpr std::uint16_t g_CurrVersion = 5;
 
 std::uint16_t g_DeserialisedVersion = 0;
 
@@ -224,6 +224,12 @@ namespace bitsery {
   }
 
   template <typename S>
+  void serialize(S& s, component::Behaviour& p)
+  {
+    s.text1b(p._name, 255);
+  }
+
+  template <typename S>
   void serialize(S& s, component::PotentialComponents& p)
   {
     s.object(p._trans);
@@ -240,6 +246,9 @@ namespace bitsery {
     s.ext(p._charCon, bitsery::ext::StdOptional{});
     if (g_DeserialisedVersion >= 4) {
       s.ext(p._cam, bitsery::ext::StdOptional{});
+    }
+    if (g_DeserialisedVersion >= 5) {
+      s.ext(p._behaviour, bitsery::ext::StdOptional{});
     }
   }
 

@@ -7,6 +7,8 @@
 #include <render/ImageHelpers.h>
 #include <render/cinematic/CinematicPlayer.h>
 
+#include "../behaviour/PlayerBehaviour.h"
+
 #include "../gui/SceneAssetGUI.h"
 #include "../gui/SceneListGUI.h"
 #include "../gui/EditSelectionGUI.h"
@@ -45,6 +47,8 @@ AneditApplication::AneditApplication(std::string title)
   _scenePager.setAssetCollection(&_assColl);
   _vkRenderer.setAssetCollection(&_assColl);
   _assColl.readIndices();
+  _behaviourSystem.setScene(&_scene);
+  _behaviourSystem.setRegistry(&_scene.registry());
 }
 
 AneditApplication::~AneditApplication()
@@ -99,6 +103,8 @@ bool AneditApplication::init()
 
   _lastCamPos = _camera.getPosition();
 
+  registerBehaviours();
+
   return true;
 }
 
@@ -131,6 +137,8 @@ void AneditApplication::update(double delta)
       _physicsSystem.setRegistry(&_scene.registry());
       _vkRenderer.setRegistry(&_scene.registry());
       _vkRenderer.setAssetCollection(&_assColl);
+      _behaviourSystem.setScene(&_scene);
+      _behaviourSystem.setRegistry(&_scene.registry());
 
       scenePtr = nullptr;
     }
@@ -154,6 +162,11 @@ void AneditApplication::update(double delta)
     auto after = std::chrono::system_clock::now();
 
     //printf("Anim took %lld us\n", std::chrono::duration_cast<std::chrono::microseconds>(after - now).count());
+  }
+
+  // Behaviours
+  if (_state == State::Playing) {
+    _behaviourSystem.update(delta);
   }
 
   // Terrain
@@ -591,6 +604,13 @@ void AneditApplication::findCameraNode()
   }
 
   _cameraNode = _scene.registry().reverseLookup(view.front());
+}
+
+void AneditApplication::registerBehaviours()
+{
+  _behaviourSystem.registerBehaviour("Player", []() {
+    return new behaviour::PlayerBehaviour();
+  });
 }
 
 void AneditApplication::updateForcedTextures()

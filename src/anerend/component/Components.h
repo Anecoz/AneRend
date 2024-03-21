@@ -201,6 +201,11 @@ struct Camera
   // TODO: More params?
 };
 
+struct Behaviour
+{
+  std::string _name;
+};
+
 // Struct that holds potential components used by e.g. prefabs
 struct PotentialComponents
 {
@@ -217,6 +222,7 @@ struct PotentialComponents
   std::optional<CapsuleCollider> _capsuleColl;
   std::optional<CharacterController> _charCon;
   std::optional<Camera> _cam;
+  std::optional<Behaviour> _behaviour;
 };
 
 /* Helper function for executing something for every potential component optional
@@ -246,6 +252,7 @@ void forEachPotCompOpt(F func, PotentialComponents& potComps)
   func(potComps._capsuleColl);
   func(potComps._charCon);
   func(potComps._cam);
+  func(potComps._behaviour);
 }
 
 /* Helper function for executing something for every potential component that has a value
